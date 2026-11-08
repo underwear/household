@@ -27,10 +27,10 @@ export class FakeRuntime implements ContainerRuntime {
     this.calls.push("cancel");
   }
 
-  async buildImage(tag: string): Promise<string> {
+  async prepareImage(tag: string): Promise<{ ref: string; id: string }> {
     this.calls.push(`build ${tag}`);
     await this.gate;
-    return `sha256:${tag}-${this.imageVersion}`;
+    return { ref: tag, id: `sha256:${tag}-${this.imageVersion}` };
   }
 
   async runContainer(spec: ContainerSpec): Promise<void> {

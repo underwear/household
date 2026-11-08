@@ -93,7 +93,7 @@ export interface PetTransport {
   tokenFor(pet: { house: string; pet: string }): string;
 }
 
-type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "buildImage">;
+type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "prepareImage">;
 
 /**
  * One isolated VM per pet, labelled with house, pet and the hashes of its identity and launch configuration; what a
@@ -102,7 +102,7 @@ type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "buildImage">;
  */
 export class PetPlane {
   /** Agent name → image id, built once per daemon run. */
-  private readonly images = new Map<string, string>();
+  private readonly images = new Map<string, { ref: string; id: string }>();
   private waiting = true;
   private readonly terminalReads = new Map<string, Promise<{ text: string } | undefined>>();
 
@@ -336,10 +336,10 @@ export class PetPlane {
 
   private async vm(placed: PlacedPet): Promise<PetVm> {
     const { house, pet, agent, model, reasoningEffort, mode, settings, keyUse, secrets = [] } = placed;
-    let imageId = this.images.get(agent.name);
-    if (!imageId) {
-      imageId = await this.runtime.buildImage(agentImage(agent), agent.imageContext);
-      this.images.set(agent.name, imageId);
+    let image = this.images.get(agent.name);
+    if (!image) {
+      image = await this.runtime.prepareImage(agentImage(agent), agent.imageContext);
+      this.images.set(agent.name, image);
     }
     const name = petContainer(house, pet);
     const { host, proxyPort, relayPort } = this.transport;
@@ -374,11 +374,11 @@ export class PetPlane {
       { type: "disk", source: petDockerDisk(house, pet), target: "/var/lib/docker", size: DOCKER_DISK_SIZE },
     ];
     // Resource allocations are staged on the same VM, outside its identity.
-    const identity = hash({ image: agentImage(agent), imageId, labels, mounts, gateway: { host, proxyPort, relayPort } });
+    const identity = hash({ image: image.ref, imageId: image.id, labels, mounts, gateway: { host, proxyPort, relayPort } });
     const launch = hash(env);
     const { cpus, memoryMiB } = petResources(placed);
     const spec: ContainerSpec = {
-      name, image: agentImage(agent), env, labels: { ...labels, [LABEL.identity]: identity, [LABEL.launch]: launch }, mounts,
+      name, image: image.ref, env, labels: { ...labels, [LABEL.identity]: identity, [LABEL.launch]: launch }, mounts,
       cpus, limits: { ...PET_LIMITS, memory: `${memoryMiB}M` },
       ...(placed.environment?.onStart === undefined ? {} : { environmentOnStart: placed.environment.onStart }),
       ...(placed.scout?.setup !== undefined ? { environmentSetup: placed.scout.setup } : placed.environment?.setup === undefined ? {} : { environmentSetup: placed.environment.setup }),

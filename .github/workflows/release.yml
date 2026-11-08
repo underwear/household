@@ -1,7 +1,7 @@
 name: Release
 
-# Push a tag `vX.Y.Z` whose version is package.json's: the tests run, then a GitHub release with notes from the
-# commits since the last tag (GitHub attaches the source archives).
+# Push a tag `vX.Y.Z` whose version is package.json's: the tests run, the agents' images are published (images.yml),
+# then a GitHub release with notes from the commits since the last tag (GitHub attaches the source archives).
 
 on:
   push:
@@ -27,8 +27,17 @@ jobs:
     needs: version
     uses: ./.github/workflows/ci.yml
 
-  release:
+  images:
     needs: test
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images.yml
+    with:
+      tag: ${{ github.ref_name }}
+
+  release:
+    needs: images
     runs-on: ubuntu-latest
     permissions:
       contents: write

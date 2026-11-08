@@ -5,8 +5,9 @@ and credentials under your control.
 
 ## Requirements
 
-Bun, [microsandbox](https://microsandbox.dev) 0.7.13, Docker, openssl, python3. macOS on Apple
-silicon, or Linux with `/dev/kvm`.
+Bun, [microsandbox](https://microsandbox.dev) 0.7.13, openssl, python3. macOS on Apple
+silicon, or Linux with `/dev/kvm`. The agents' images come prebuilt with each release; Docker is needed only
+to build changed ones yourself (`HOUSEHOLD_BUILD_IMAGES=1` forces it).
 
 ## Quick start
 

@@ -49,7 +49,13 @@ export interface MicrosandboxOptions {
   relayPort: number;
   cpus?: number;
   run?: MicrosandboxRun;
+  /** The registry reference of the released image for a build context, or undefined to build it here. */
+  released?: (tag: string, contextDir: string) => Promise<string | undefined>;
+  /** The wait before a pull's second try, doubled before its third. */
+  pullRetryMs?: number;
 }
+
+const PULL_ATTEMPTS = 3;
 
 /** Detached per-pet microVMs. No guest has direct internet, LAN, or arbitrary host-port access. */
 export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
@@ -97,6 +103,41 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
     // Create args contain per-pet authentication env. Never include command lines or raw stderr in failures.
     if (!result.ok) throw new Error(`microsandbox ${args[0]} failed`);
     return result.stdout;
+  }
+
+  /**
+   * The image a VM boots from: the release's, pulled from its registry, when `released` names one, else built here
+   * (also when the pull fails, so a release with no published images still runs where Docker is).
+   */
+  async prepareImage(tag: string, contextDir: string): Promise<{ ref: string; id: string }> {
+    await this.ready();
+    const released = await this.options.released?.(tag, contextDir);
+    if (!released) return { ref: tag, id: await this.buildImage(tag, contextDir) };
+    let pullError: string;
+    try { return { ref: released, id: await this.pull(released) }; }
+    catch (error) { pullError = (error as Error).message; }
+    try { return { ref: tag, id: await this.buildImage(tag, contextDir) }; }
+    catch (error) { throw new Error(`${pullError}; building it here failed too: ${(error as Error).message}`); }
+  }
+
+  /** Pulls a registry image unless cached (release tags are not moved), retrying a registry's passing refusals. */
+  private async pull(ref: string): Promise<string> {
+    const digest = async () => {
+      const cached = await this.msb(["image", "inspect", ref, "--format", "json"]);
+      return cached.ok ? this.json(cached.stdout).config?.digest as string | undefined : undefined;
+    };
+    const have = await digest();
+    if (have) return have;
+    let reason = "";
+    for (let attempt = 0; attempt < PULL_ATTEMPTS; attempt++) {
+      if (attempt) await Bun.sleep((this.options.pullRetryMs ?? 3000) * attempt);
+      const result = await this.msb(["pull", "--quiet", ref], { timeoutMs: 30 * 60_000 });
+      const pulled = result.ok ? await digest() : undefined;
+      if (pulled) return pulled;
+      reason = result.stderr.trim().split("\n")[0] ?? "";
+      if (this.running.signal.aborted) break;
+    }
+    throw new Error(`could not pull ${ref}${reason ? ` (${reason})` : ""}`);
   }
 
   async buildImage(tag: string, contextDir: string): Promise<string> {

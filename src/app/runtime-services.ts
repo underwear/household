@@ -2,6 +2,7 @@ import { PetInstructions } from "../infra/pet-instructions";
 import { HouseSkills, houseSkillsRoot } from "../infra/house-skills";
 import { join } from "node:path";
 import { DockerCli } from "../infra/docker-cli";
+import { releasedImageFor } from "./agent-images";
 import { MicrosandboxRuntime } from "../infra/microsandbox-runtime";
 import { PetTokenRegistry } from "../infra/pet-token-registry";
 import type { Paths } from "../infra/paths";
@@ -13,7 +14,10 @@ import { instanceId, PetPlane } from "./pet-plane";
 export const homesDirectory = (paths: Paths) => join(paths.stateDir, "homes");
 export function microvmRuntime(paths: Paths) {
   const ports = gatewayPorts(paths.stateDir);
-  return new MicrosandboxRuntime({ builder: new DockerCli(), homesDir: homesDirectory(paths), proxyPort: ports.proxy, relayPort: ports.relay });
+  return new MicrosandboxRuntime({
+    builder: new DockerCli(), released: (tag, contextDir) => releasedImageFor(tag, contextDir),
+    homesDir: homesDirectory(paths), proxyPort: ports.proxy, relayPort: ports.relay,
+  });
 }
 
 /** The pets' microVMs, the host-side egress gateway they reach through, and the plane that runs them. */

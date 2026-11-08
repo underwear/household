@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { knownAgents } from "../../src/app/agents";
 import { doctor, type DoctorDeps } from "../../src/app/doctor";
+import { VERSION } from "../../src/app/version";
 import { ConfigStore } from "../../src/infra/config-store";
 import { resolvePaths } from "../../src/infra/paths";
 import { fakeTelegram } from "../fake-telegram";
@@ -12,10 +13,10 @@ const GOOD = "4242:good-token-of-the-house-bot-0001";
 const telegram = fakeTelegram(GOOD);
 afterAll(() => telegram.stop());
 
-async function setup(run: DoctorDeps["run"]) {
+async function setup(run: DoctorDeps["run"], released?: DoctorDeps["released"]) {
   const paths = resolvePaths({ HOUSEHOLD_CONFIG_DIR: tempDir(), HOUSEHOLD_STATE_DIR: tempDir() });
   const config = new ConfigStore(paths.configFile);
-  const check = () => doctor({ paths, config, agents: knownAgents(), run, telegramApi: telegram.url });
+  const check = () => doctor({ paths, config, agents: knownAgents(), run, telegramApi: telegram.url, ...(released ? { released } : {}) });
   return { paths, config, check };
 }
 
@@ -112,4 +113,14 @@ test("a token that is no bot token is a failure, and is never sent to Telegram",
   const before = telegram.calls.length;
   expect(await check()).toContainEqual({ ok: false, text: "bot of house work, channel Telegram Bot DM (threaded): its token is not a bot token (one looks like 123456789:AAH4x…, from @BotFather); not sent to Telegram" });
   expect(telegram.calls.length).toBe(before);
+});
+
+test("with every image released, Docker is not asked for; one built here needs it", async () => {
+  const commands: string[] = [];
+  const recording: DoctorDeps["run"] = async (command) => { commands.push(command[0]!); return healthy(command); };
+  const { check } = await setup(recording, async (tag) => `ghcr.io/underwear/${tag}:v${VERSION}`);
+  expect((await check())[0]).toEqual({ ok: true, text: `images: release v${VERSION} from ghcr.io/underwear, no Docker needed` });
+  expect(commands).not.toContain("docker");
+  const partly = await setup(async () => ({ ok: false, stdout: "", stderr: "no docker" }), async (tag) => tag.endsWith("codex-app-server") ? undefined : `ghcr.io/underwear/${tag}:v${VERSION}`);
+  expect((await partly.check())[0]).toEqual({ ok: false, text: "docker: not reachable (no docker); start OrbStack (or Docker)" });
 });

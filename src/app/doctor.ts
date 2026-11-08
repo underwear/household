@@ -9,6 +9,9 @@ import type { Paths } from "../infra/paths";
 import { placePets, type Agents, type PlacedPet } from "./agents";
 import { assertOwners, knownChannelKinds } from "./kinds";
 import type { StatusReport } from "./daemon";
+import { IMAGE_REGISTRY } from "./agent-images";
+import { agentImage } from "./pet-plane";
+import { VERSION } from "./version";
 
 /** One line of `house doctor`. */
 export interface Finding {
@@ -26,22 +29,29 @@ export interface DoctorDeps {
   run: (command: string[]) => Promise<{ ok: boolean; stdout: string; stderr: string }>;
   /** Bot API base URL; the real one when absent. */
   telegramApi?: string;
+  /** The released image of an agent's build context, or undefined when it is built here; all are built here when absent. */
+  released?: (tag: string, contextDir: string) => Promise<string | undefined>;
 }
 
 const firstLine = (text: string) => text.split("\n")[0]!.trim();
 
 /**
- * Checks what Household needs, in plain words: Docker, openssl, the config (only its owner may read it: it holds
+ * Checks what Household needs, in plain words: Docker (only to build images the release does not publish), openssl, the config (only its owner may read it: it holds
  * the keys and bot tokens; each pet has a key), each bot's token with Telegram (the only network call), the daemon.
  */
-export async function doctor({ paths, config, agents, run, telegramApi }: DoctorDeps): Promise<Finding[]> {
+export async function doctor({ paths, config, agents, run, telegramApi, released }: DoctorDeps): Promise<Finding[]> {
   const findings: Finding[] = [];
-  const docker = await run(["docker", "info", "--format", "{{.OperatingSystem}}, Docker {{.ServerVersion}}"]);
-  findings.push(
-    docker.ok
-      ? { ok: true, text: `docker: ${docker.stdout}` }
-      : { ok: false, text: `docker: not reachable (${firstLine(docker.stderr)}); start OrbStack (or Docker)` },
-  );
+  const built: string[] = [];
+  for (const agent of agents.values()) if (!(await released?.(agentImage(agent), agent.imageContext))) built.push(agent.name);
+  if (built.length === 0) findings.push({ ok: true, text: `images: release v${VERSION} from ${IMAGE_REGISTRY}, no Docker needed` });
+  else {
+    const docker = await run(["docker", "info", "--format", "{{.OperatingSystem}}, Docker {{.ServerVersion}}"]);
+    findings.push(
+      docker.ok
+        ? { ok: true, text: `docker: ${docker.stdout}` }
+        : { ok: false, text: `docker: not reachable (${firstLine(docker.stderr)}); start OrbStack (or Docker)` },
+    );
+  }
   const msb = await run(["msb", "--version"]);
   const expected = `msb ${MICROSANDBOX_VERSION}`;
   if (!msb.ok || msb.stdout.trim() !== expected) findings.push({ ok: false, text: `microsandbox: requires ${MICROSANDBOX_VERSION}; install the pinned runtime` });

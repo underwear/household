@@ -3,8 +3,11 @@ import type { EnvironmentSetupResult } from "./environment-setup";
 
 /** What Household does with a pet's VM and its storage (MicrosandboxRuntime, host home storage); faked in tests. */
 export interface ContainerRuntime {
-  /** Resolves to the image id, which changes whenever the image content does. */
-  buildImage(tag: string, contextDir: string): Promise<string>;
+  /**
+   * Makes an agent's image ready to boot: resolves to the reference VMs boot from (the release's in its registry,
+   * or `tag` when built here) and its id, which changes whenever the image content does.
+   */
+  prepareImage(tag: string, contextDir: string): Promise<{ ref: string; id: string }>;
   /** Starts detached, unprivileged; the container is removed when it exits. */
   runContainer(spec: ContainerSpec): Promise<void>;
   /** No-op when the container does not exist. */

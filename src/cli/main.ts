@@ -12,6 +12,7 @@ import { DEFAULT_AGENT, keyKind, knownAgents, placePets } from "../app/agents";
 import { configCheck, knownChannelKinds } from "../app/kinds";
 import { channelChecks, checkFields } from "../app/channel-fields";
 import { doctor } from "../app/doctor";
+import { releasedImageFor } from "../app/agent-images";
 import { exportHousehold } from "../app/export";
 import { importHousehold } from "../app/import";
 import { backupRuntime } from "../app/backup-runtime";
@@ -110,7 +111,10 @@ async function dashboard(paths: Paths, open: boolean): Promise<void> {
 }
 
 async function checkUp(paths: Paths, config: ConfigStore): Promise<void> {
-  const findings = await doctor({ paths, config, agents: knownAgents(), run: runCommand, telegramApi: process.env.HOUSEHOLD_TELEGRAM_API });
+  const findings = await doctor({
+    paths, config, agents: knownAgents(), run: runCommand, telegramApi: process.env.HOUSEHOLD_TELEGRAM_API,
+    released: (tag, contextDir) => releasedImageFor(tag, contextDir),
+  });
   for (const { ok, text, warning } of findings) console.log(`${warning ? "!" : ok ? "✓" : "✗"} ${text}`);
   process.exitCode = findings.every((finding) => finding.ok) ? 0 : 1;
 }

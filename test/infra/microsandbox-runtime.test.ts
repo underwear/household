@@ -450,3 +450,54 @@ test("a VM this runtime is starting or stopping shows so, its last boot's main j
   await stopped;
   expect((await stopping.container("pet"))!.state).toBe("stopped");
 });
+
+function pulling(pulls: { ok: boolean; stderr?: string }[], released: string | null = "ghcr.io/underwear/house-agent:v1.0.0") {
+  const env = setup();
+  const cached = new Map<string, string>();
+  const outcomes = [...pulls];
+  const run: MicrosandboxRun = async (command, options) => {
+    if (command[1] === "pull") {
+      const outcome = outcomes.shift() ?? { ok: false };
+      env.calls.push({ command, options });
+      if (outcome.ok) cached.set(command.at(-1)!, "sha256:pulled");
+      return { ok: outcome.ok, stdout: "", stderr: outcome.stderr ?? "", code: outcome.ok ? 0 : 1 };
+    }
+    if (command[1] === "image" && command[3]?.startsWith("ghcr.io/")) {
+      env.calls.push({ command, options });
+      const digest = cached.get(command[3]);
+      return digest ? { ok: true, stdout: JSON.stringify({ config: { digest } }), stderr: "" } : { ok: false, stdout: "", stderr: "image not found" };
+    }
+    return env.run(command, options);
+  };
+  const runtime = new MicrosandboxRuntime({ builder: env.builder, homesDir: env.homesDir, proxyPort: 3128, relayPort: 8080, run, pullRetryMs: 1, released: async () => released ?? undefined });
+  return { ...env, runtime, pulls: () => env.calls.filter(({ command }) => command[1] === "pull").length };
+}
+
+test("a released image is pulled from its registry, not built, and a cached one is not pulled again", async () => {
+  const env = pulling([{ ok: true }]);
+  expect(await env.runtime.prepareImage("house-agent:test", "/context")).toEqual({ ref: "ghcr.io/underwear/house-agent:v1.0.0", id: "sha256:pulled" });
+  expect(await env.runtime.prepareImage("house-agent:test", "/context")).toEqual({ ref: "ghcr.io/underwear/house-agent:v1.0.0", id: "sha256:pulled" });
+  expect(env.pulls()).toBe(1);
+  expect(env.exports()).toBe(0);
+});
+
+test("a registry's passing refusal is retried", async () => {
+  const env = pulling([{ ok: false, stderr: "OCI API error: retry-after" }, { ok: true }]);
+  expect((await env.runtime.prepareImage("house-agent:test", "/context")).ref).toBe("ghcr.io/underwear/house-agent:v1.0.0");
+  expect(env.pulls()).toBe(2);
+});
+
+test("an image that cannot be pulled is built here; one with no release is built without trying", async () => {
+  const failing = pulling([], "ghcr.io/underwear/house-agent:v1.0.0");
+  expect(await failing.runtime.prepareImage("house-agent:test", "/context")).toEqual({ ref: "house-agent:test", id: "sha256:new" });
+  expect(failing.pulls()).toBe(3);
+  const local = pulling([], null);
+  expect(await local.runtime.prepareImage("house-agent:test", "/context")).toEqual({ ref: "house-agent:test", id: "sha256:new" });
+  expect(local.pulls()).toBe(0);
+});
+
+test("when neither the pull nor the build works, the error says both", async () => {
+  const env = pulling([{ ok: false, stderr: "denied\nmore" }, { ok: false, stderr: "denied" }, { ok: false, stderr: "denied" }]);
+  env.builder.buildImage = async () => { throw new Error("docker build  failed: no docker"); };
+  await expect(env.runtime.prepareImage("house-agent:test", "/context")).rejects.toThrow("could not pull ghcr.io/underwear/house-agent:v1.0.0 (denied); building it here failed too: docker build  failed: no docker");
+});
