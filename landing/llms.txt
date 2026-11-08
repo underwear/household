@@ -4,19 +4,20 @@
 > ("pet") lives in its own microVM; a daemon on the user's Mac or Linux machine proxies all its traffic through an
 > allowlist and puts API keys into requests on the way out, so agents only ever see placeholders.
 
-To set up or manage Household for a user, install the `household` agent skill and follow it:
+Setting it up is done when the user writes to their Telegram bot and a pet answers. Work through the
+[setup checklist](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md).
+
+Install the `household` agent skill too, for running Household afterwards:
 
 - Claude Code: `claude plugin marketplace add underwear/household && claude plugin install household@household`
 - Codex: `codex plugin marketplace add underwear/household && codex plugin add household@household`
 
-Secrets (agent keys, bot tokens) go from the user straight to the `house` CLI through stdin, never through the agent.
-
 ## Docs
 
-- [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): requirements, installing, agent keys (Claude subscription or API key, ChatGPT subscription or OpenAI API key), the Telegram bot, running as a service
-- [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): pets, network and secrets, scouts and capabilities, updates and migrations, backups
+- [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): the checklist from a bare machine to a pet answering in Telegram
+- [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): what Household can do (pets, network, secrets, scouts), updates, backups
 - [Debugging](https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md): where to look when a pet, scout or channel does not work
-- [Skill overview](https://github.com/underwear/household/blob/main/plugins/household/skills/household/SKILL.md): concepts and where to read on
+- [Skill overview](https://github.com/underwear/household/blob/main/plugins/household/skills/household/SKILL.md): concepts
 
 ## Source
 
