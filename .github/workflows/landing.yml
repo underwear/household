@@ -1,0 +1,47 @@
+name: Landing
+
+# landing/ is agents-household.dev, on Cloudflare Pages: every push that changes it deploys it. The first run also
+# creates the Pages project and puts the domain on it.
+# Repository secrets: CLOUDFLARE_API_TOKEN (Account · Cloudflare Pages · Edit, Zone · DNS · Edit for the domain)
+# and CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  push:
+    branches: [main]
+    paths: ["landing/**", ".github/workflows/landing.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landing
+  cancel-in-progress: true
+
+env:
+  PROJECT: agents-household
+  DOMAIN: agents-household.dev
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The Pages project and its domain
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+          if ! curl -fsS "${auth[@]}" "$api/$PROJECT" >/dev/null; then
+            curl -fsS "${auth[@]}" -X POST "$api" -d "{\"name\":\"$PROJECT\",\"production_branch\":\"main\"}" >/dev/null
+            echo "created Pages project $PROJECT"
+          fi
+          if ! curl -fsS "${auth[@]}" "$api/$PROJECT/domains" | jq -e --arg d "$DOMAIN" '.result[] | select(.name == $d)' >/dev/null; then
+            curl -fsS "${auth[@]}" -X POST "$api/$PROJECT/domains" -d "{\"name\":\"$DOMAIN\"}" >/dev/null
+            echo "added $DOMAIN to $PROJECT"
+          fi
+
+      - name: Deploy
+        run: npx --yes wrangler@3 pages deploy landing --project-name "$PROJECT" --branch main
