@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "household": {
+      "type": "http",
+      "url": "${HOUSEHOLD_MCP_URL}",
+      "headers": { "x-household-token": "${HOUSEHOLD_PET_TOKEN}" }
+    }
+  }
+}

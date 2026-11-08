@@ -1,0 +1,11 @@
+{
+ "session_id": "685ada48-d32f-4d10-8dd2-c516668293d2",
+ "cwd": "/home/agent/work",
+ "permission_mode": "plan",
+ "hook_event_name": "PermissionRequest",
+ "tool_name": "ExitPlanMode",
+ "tool_input": {
+  "plan": "# Add a README\n\n1. Write README.md\n2. Commit",
+  "planFilePath": "/home/agent/.claude/plans/plan.md"
+ }
+}

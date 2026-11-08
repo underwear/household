@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Household: a house on the sidebar's warm dark, its door open; the dot is a pet at home (the "running" green). -->
+  <rect width="32" height="32" rx="8" fill="#1f1d1a"/>
+  <path d="M16 6.5 26 15v9.5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V15Z" fill="#f2f0eb"/>
+  <rect x="13.25" y="18.5" width="5.5" height="8" rx="1.25" fill="#1f1d1a"/>
+  <circle cx="24.5" cy="8" r="4.25" fill="#72c191" stroke="#1f1d1a" stroke-width="2"/>
+</svg>

@@ -1,0 +1,15 @@
+{
+ "session_id": "685ada48-d32f-4d10-8dd2-c516668293d2",
+ "transcript_path": "/home/agent/.claude/projects/-home-agent-work/685ada48-d32f-4d10-8dd2-c516668293d2.jsonl",
+ "cwd": "/home/agent/work",
+ "prompt_id": "812e2206-73e1-49a0-92b3-5007fe777b12",
+ "permission_mode": "bypassPermissions",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "Stop",
+ "stop_hook_active": false,
+ "last_assistant_message": "I ran the command, which wrote `hello` to `note.txt`, and Read showed the file contains `hello`. You picked green when I asked whether you prefer red or green.",
+ "background_tasks": [],
+ "session_crons": []
+}

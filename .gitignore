@@ -1,0 +1,10 @@
+node_modules/
+*.env
+.env*
+secrets/
+*.log
+.DS_Store
+.idea/
+
+# Local working notes, never published
+.notes/

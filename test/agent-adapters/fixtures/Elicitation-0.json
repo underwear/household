@@ -1,0 +1,9 @@
+{
+ "session_id": "685ada48-d32f-4d10-8dd2-c516668293d2",
+ "cwd": "/home/agent/work",
+ "hook_event_name": "Elicitation",
+ "mcp_server_name": "elic",
+ "message": "Who are you?",
+ "mode": "form",
+ "requested_schema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
+}

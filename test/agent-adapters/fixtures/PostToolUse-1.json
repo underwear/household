@@ -1,0 +1,27 @@
+{
+ "session_id": "685ada48-d32f-4d10-8dd2-c516668293d2",
+ "transcript_path": "/home/agent/.claude/projects/-home-agent-work/685ada48-d32f-4d10-8dd2-c516668293d2.jsonl",
+ "cwd": "/home/agent/work",
+ "prompt_id": "812e2206-73e1-49a0-92b3-5007fe777b12",
+ "permission_mode": "bypassPermissions",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Read",
+ "tool_input": {
+  "file_path": "/home/agent/work/note.txt"
+ },
+ "tool_response": {
+  "type": "text",
+  "file": {
+   "filePath": "/home/agent/work/note.txt",
+   "content": "hello\n",
+   "numLines": 2,
+   "startLine": 1,
+   "totalLines": 2
+  }
+ },
+ "tool_use_id": "toolu_01WAQ8t8M141SoYLmZamswGZ",
+ "duration_ms": 7
+}

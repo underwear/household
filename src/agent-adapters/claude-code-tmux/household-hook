@@ -1,0 +1,9 @@
+#!/bin/sh
+# Claude Code hook: posts the event JSON from stdin to Household and prints the answer (a decision, or `{}`).
+# $1: seconds to wait for the answer; none for PermissionRequest, whose answer may wait for the person (claude's
+# own timeout for it, in claude-settings.json, is longer than Household's wait, so Household answers first).
+# Must never block claude: it fails fast when Household is unreachable (connect timeout), and never exits 2,
+# which claude would treat as "block this action" — curl itself exits 2 on a failed init, hence `|| exit 1`.
+curl --silent --fail --connect-timeout 2 ${1:+--max-time "$1"} --header 'content-type: application/json' \
+  --header "x-household-token: ${HOUSEHOLD_PET_TOKEN:-}" \
+  --data-binary @- "$HOUSEHOLD_EVENTS_URL" || exit 1

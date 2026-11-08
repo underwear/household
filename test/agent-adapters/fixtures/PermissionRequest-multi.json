@@ -1,0 +1,30 @@
+{
+ "session_id": "685ada48-d32f-4d10-8dd2-c516668293d2",
+ "cwd": "/home/agent/work",
+ "permission_mode": "bypassPermissions",
+ "hook_event_name": "PermissionRequest",
+ "tool_name": "AskUserQuestion",
+ "tool_input": {
+  "questions": [
+   {
+    "question": "Which colors do you like?",
+    "header": "Colors",
+    "options": [
+     { "label": "Red", "description": "Warm" },
+     { "label": "Green", "description": "Natural" },
+     { "label": "Blue", "description": "Cool" }
+    ],
+    "multiSelect": true
+   },
+   {
+    "question": "Which size?",
+    "header": "Size",
+    "options": [
+     { "label": "M" },
+     { "label": "L" }
+    ],
+    "multiSelect": false
+   }
+  ]
+ }
+}

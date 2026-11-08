@@ -1,0 +1,3 @@
+import {test,expect} from "bun:test";
+import {decide,type SubjectRule} from "../../src/core/egress";
+test("scout policy overrides house access instead of widening it",()=>{const rules:SubjectRule[]=[{subject:{kind:"house",name:"work"},policy:{kind:"allowlist",allow:[{host:"*",port:"*"}]},intercept:[]},{subject:{kind:"scout",name:"work",pet:"sc-a"},policy:{kind:"allowlist",allow:[{host:"allowed.example.com",port:443}]},intercept:[]}];expect(decide(rules,{house:"work",pet:"sc-a"},{host:"evil.example.com",port:443}).verdict).toBe("deny");expect(decide(rules,{house:"work",pet:"sc-a"},{host:"allowed.example.com",port:443}).verdict).toBe("allow");expect(decide(rules,{house:"work",pet:"sibling"},{host:"evil.example.com",port:443}).verdict).toBe("allow");});
