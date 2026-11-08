@@ -159,12 +159,12 @@
       background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
       box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.08);
     }
-    .thread-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .thread-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
     .thread-head .avatar { width: 38px; height: 38px; border-radius: 11px; background: var(--tile); display: grid; place-items: center; font-size: 20px; }
     .thread-head b { display: block; font-weight: 600; font-size: 16px; line-height: 1.2; }
     .thread-head small { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
     .live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
-    .replay { margin-left: auto; height: 30px; padding: 0 10px; font: 500 13px/1 var(--font-sans); color: var(--muted);
+    .replay { margin-left: auto; flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; font: 500 13px/1 var(--font-sans); color: var(--muted);
       background: none; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; opacity: 0; transition: opacity .3s; }
     .replay.show { opacity: 1; }
     .lines { padding: 16px; display: flex; flex-direction: column; gap: 9px; height: 540px; overflow: hidden; justify-content: flex-end;
@@ -183,6 +183,35 @@
     .typing { align-self: flex-start; display: flex; gap: 4px; padding: 13px 14px; background: var(--tile); border-radius: 16px; border-bottom-left-radius: 5px; }
     .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1s infinite; }
     .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+    .tabs { display: flex; gap: 6px; min-width: 0; }
+    .tab { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border: 1px solid transparent; border-radius: 13px;
+      background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; opacity: .55; transition: opacity .2s, background-color .2s, border-color .2s; }
+    .tab:hover { opacity: .85; }
+    .tab.on { opacity: 1; background: var(--bg); border-color: var(--line); }
+    .tab .avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--tile); display: grid; place-items: center; font-size: 18px; flex: none; }
+    .tab b { display: block; font-weight: 600; font-size: 15px; line-height: 1.2; }
+    .tab small { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #e5534b; color: #fff;
+      font: 600 11px/18px var(--font-sans); text-align: center; transform: scale(0); transition: transform .2s; }
+    .badge.show { transform: scale(1); animation: ping 1.2s ease-out 2; }
+    @keyframes ping { 0% { box-shadow: 0 0 0 0 rgb(229 83 75 / .6) } 100% { box-shadow: 0 0 0 10px rgb(229 83 75 / 0) } }
+    .lines[hidden] { display: none; }
+    .cmd { align-self: flex-start; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); padding: 0 4px; }
+    .cmd::before { content: "$ "; color: var(--green); }
+    .alert { align-self: stretch; text-align: center; font-size: 13px; color: #f0a39d; background: rgb(229 83 75 / .1); border: 1px solid rgb(229 83 75 / .3); border-radius: 10px; padding: 6px 10px; }
+    .ok { color: var(--green); }
+    @media (width < 600px) { .tab small { display: none; } .tab { padding-right: 10px; } }
+    .gf { align-self: flex-start; width: min(330px, 92%); border: 1px solid var(--line); border-left: 3px solid #e5534b; border-radius: 12px; background: var(--bg); padding: 10px 12px; font-size: 13.5px; }
+    .gf.resolved { border-left-color: var(--green); }
+    .gf-top { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .gf-top svg { width: 16px; height: 16px; flex: none; }
+    .gf-top time { margin-left: auto; }
+    .pill { font: 700 10px/1 var(--font-sans); letter-spacing: .06em; padding: 4px 6px; border-radius: 5px; background: rgb(229 83 75 / .15); color: #f0a39d; }
+    .resolved .pill { background: rgb(114 193 145 / .15); color: var(--green); }
+    .gf-title { font-weight: 600; margin: 6px 0 4px; }
+    .gf-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .gf-facts b { color: var(--fg); font-weight: 500; }
+    .gf svg.spark { display: block; width: 100%; height: 34px; margin-top: 8px; }
     @keyframes blink { 0%, 60%, 100% { opacity: .25 } 30% { opacity: 1 } }
     @media (prefers-reduced-motion: reduce) { .line { transition: none; } .typing i { animation: none; } }
   </style>
@@ -203,13 +232,16 @@
         <a class="btn" href="docs/"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>Read the docs</a>
       </div>
       </div>
-      <div class="thread" aria-label="A pet at work">
+      <div class="thread" aria-label="Two pets at work">
         <div class="thread-head">
-          <span class="avatar">🦉</span>
-          <div><b>Assistant</b><small><span class="live"></span>in its microVM</small></div>
-          <button class="replay" type="button">Replay</button>
+          <div class="tabs" role="tablist">
+            <button class="tab on" type="button" role="tab" data-t="assistant"><span class="avatar">🦉</span><span class="who"><b>Assistant</b><small><span class="live"></span>in its microVM</small></span><span class="badge"></span></button>
+            <button class="tab" type="button" role="tab" data-t="ops"><span class="avatar">🛠️</span><span class="who"><b>Ops</b><small><span class="live"></span>watching the servers</small></span><span class="badge"></span></button>
+          </div>
+          <button class="replay" type="button" aria-label="Replay" title="Replay"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
         </div>
-        <div class="lines" aria-live="polite"></div>
+        <div class="lines" data-t="assistant" aria-live="polite"></div>
+        <div class="lines" data-t="ops" aria-live="polite" hidden></div>
       </div>
     </div>
 
@@ -280,41 +312,91 @@ Read <span class="md-link">https://agents-household.dev/llms.txt</span> and help
       });
     }
 
-    // The demo thread: plays once it is on screen, again on Replay.
-    const SCRIPT = [
-      { me: "Find me a flat in Barcelona: 2 rooms, a balcony, under €1,500. No ground floors, I've suffered enough." },
-      { pet: "On it. I'll send a scout to look around." },
-      { sys: "🕵️ scout flat-hunter started" },
-      { ask: "<b>flat-hunter</b> wants to reach <b>idealista.com</b>", press: "Allow" },
-      { sys: "✓ allowed for this house" },
-      { pet: "Found 3. The best: Gràcia, 3rd floor, balcony with a plant that looks emotionally available. €1,420." },
-      { me: "Book a viewing for Saturday" },
-      { pet: "Done: Saturday 11:00. I put it in your calendar and told the plant." },
-    ];
-    const lines = document.querySelector(".lines"), replay = document.querySelector(".replay");
+    // The demo: two pets' threads. Assistant hunts a flat; then Ops' tab lights up and the night's incident plays there.
+    const STORIES = {
+      assistant: [
+        { me: "Find me a flat in Barcelona: 2 rooms, a balcony, under €1,500. No ground floors, I've suffered enough." },
+        { pet: "On it. I'll send a scout to look around." },
+        { sys: "🕵️ scout flat-hunter started" },
+        { ask: "<b>flat-hunter</b> wants to reach <b>idealista.com</b>" },
+        { sys: "✓ allowed for this house" },
+        { pet: "Found 3. The best: Gràcia, 3rd floor, balcony with a plant that looks emotionally available. €1,420." },
+        { me: "Book a viewing for Saturday" },
+        { pet: "Done: Saturday 11:00. I put it in your calendar and told the plant." },
+      ],
+      ops: [
+        { grafana: "firing" },
+        { pet: "Up before you. api-2 is out of disk." },
+        { cmd: "du -sh /var/log/app  →  41G" },
+        { pet: "Logs grew 41 GB overnight. Rotating them and restarting the API." },
+        { cmd: "logrotate -f /etc/logrotate.d/app" },
+        { cmd: "systemctl restart api" },
+        { grafana: "resolved" },
+        { me: "Morning. Anything happen?" },
+        { pet: "A small fire at 3 am. Put it out, wrote the postmortem, opened a PR that caps the log size. You slept through it, as planned." },
+      ],
+    };
+    const GRAFANA_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#f46800"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff" stroke-width="2.2"/><path d="M12 6.8V3.5M17.2 12h3.3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
+    const SPARK = { firing: "0,28 20,27 40,28 60,26 80,27 100,25 120,22 140,14 160,6 180,4 200,5 220,3", resolved: "0,6 20,4 40,5 60,7 80,14 100,22 120,26 140,27 160,28 180,27 200,28 220,27" };
+    function grafana(state) {
+      const firing = state === "firing", color = firing ? "#e5534b" : "var(--green)";
+      return `<div class="gf-top">${GRAFANA_LOGO}<span>Grafana</span><span class="pill">${firing ? "FIRING" : "RESOLVED"}</span><time>${firing ? "03:12" : "03:16"}</time></div>
+        <div class="gf-title">${firing ? "API latency high" : "API latency back to normal"}</div>
+        <div class="gf-facts"><span>p95 <b>${firing ? "4.8 s" : "180 ms"}</b></span><span>5xx <b>${firing ? "12%" : "0%"}</b></span><span>host <b>api-2</b></span></div>
+        <svg class="spark" viewBox="0 0 220 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${SPARK[state]}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+    }
+    const thread = document.querySelector(".thread"), replay = thread.querySelector(".replay");
+    const tabs = Object.fromEntries([...thread.querySelectorAll(".tab")].map((t) => [t.dataset.t, t]));
+    const boxes = Object.fromEntries([...thread.querySelectorAll(".lines")].map((l) => [l.dataset.t, l]));
+    let shown = "assistant", run = 0;
+    const unread = { assistant: 0, ops: 0 };
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const add = (node) => { lines.append(node); void node.offsetHeight; node.classList.add("in"); return node; };
     const el = (cls, html) => { const n = document.createElement("div"); n.className = `line ${cls}`; n.innerHTML = html; return n; };
-    let run = 0;
-    async function play() {
-      const mine = ++run; lines.replaceChildren(); replay.classList.remove("show");
-      for (const step of SCRIPT) {
+    function badge(t) { const b = tabs[t].querySelector(".badge"); b.textContent = unread[t]; b.classList.toggle("show", unread[t] > 0); }
+    function show(t) {
+      shown = t;
+      for (const [k, tab] of Object.entries(tabs)) { tab.classList.toggle("on", k === t); tab.setAttribute("aria-selected", k === t); boxes[k].hidden = k !== t; }
+      unread[t] = 0; badge(t);
+    }
+    function add(t, node) {
+      boxes[t].append(node); void node.offsetHeight; node.classList.add("in");
+      if (t !== shown && !node.classList.contains("typing")) { unread[t]++; badge(t); }
+      return node;
+    }
+    async function story(t, mine, fast = false) {
+      for (const step of STORIES[t]) {
         if (mine !== run) return;
         if (step.pet) {
-          const t = add(el("typing", "<i></i><i></i><i></i>")); await wait(900 + step.pet.length * 12); t.remove();
-          add(el("bubble pet", step.pet));
-        } else if (step.me) add(el("bubble me", step.me));
-        else if (step.sys) add(el("sys", step.sys));
+          if (!fast) { const dots = add(t, el("typing", "<i></i><i></i><i></i>")); await wait(900 + step.pet.length * 12); dots.remove(); }
+          add(t, el("bubble pet", step.pet));
+        } else if (step.me) add(t, el("bubble me", step.me));
+        else if (step.sys) add(t, el("sys", step.sys));
+        else if (step.cmd) add(t, el("cmd", step.cmd));
+        else if (step.grafana) add(t, el(`gf ${step.grafana}`, grafana(step.grafana)));
         else if (step.ask) {
-          const a = add(el("ask", `${step.ask}<div class="btns"><button type="button" tabindex="-1">Allow</button><button type="button" tabindex="-1">Deny</button></div>`));
-          await wait(1400); a.querySelector("button").classList.add("pressed");
+          const a = add(t, el("ask", `${step.ask}<div class="btns"><button type="button" tabindex="-1">Allow</button><button type="button" tabindex="-1">Deny</button></div>`));
+          await wait(fast ? 0 : 1400); a.querySelector("button").classList.add("pressed");
         }
-        await wait(step.me ? 1100 : 900);
+        await wait(fast ? 0 : step.me ? 1100 : 900);
       }
-      replay.classList.add("show");
     }
+    async function play() {
+      const mine = ++run;
+      for (const t in boxes) { boxes[t].replaceChildren(); unread[t] = 0; badge(t); }
+      replay.classList.remove("show"); show("assistant");
+      await story("assistant", mine);
+      if (mine !== run) return;
+      // The night's alert lands in Ops' thread; its tab lights up, then the view goes there.
+      add("ops", el("gf firing", grafana("firing")));
+      await wait(1600);
+      if (mine !== run) return;
+      boxes.ops.replaceChildren(); show("ops");
+      await story("ops", mine);
+      if (mine === run) replay.classList.add("show");
+    }
+    for (const [t, tab] of Object.entries(tabs)) tab.addEventListener("click", () => show(t));
     replay.addEventListener("click", play);
-    new IntersectionObserver((entries, obs) => { if (entries[0].isIntersecting) { obs.disconnect(); play(); } }, { threshold: 0.4 }).observe(lines);
+    new IntersectionObserver((entries, obs) => { if (entries[0].isIntersecting) { obs.disconnect(); play(); } }, { threshold: 0.4 }).observe(thread);
   </script>
 </body>
 </html>
