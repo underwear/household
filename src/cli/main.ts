@@ -22,6 +22,7 @@ import { resolvePaths, type Paths } from "../infra/paths";
 import { MORE_USAGE, runMore } from "./commands";
 import { connectCodex, importCodex, localCodexLogin } from "./codex-login";
 import { onboard } from "./onboard";
+import { update } from "./update";
 import { consoleTerminal } from "./terminal";
 import { firstPrivateContact, getMe } from "../channel-adapters/telegram";
 import { hostCapacity } from "../infra/host";
@@ -30,6 +31,8 @@ import { CAPABILITY_USAGE, FEATURES_USAGE, SCOUT_USAGE, groupUsage, runScouts } 
 import { MIGRATE_USAGE, runMigrate } from "./migrate";
 import { formatHosts } from "../core/secrets";
 import { DEFAULT_LIFECYCLE } from "../core/lifecycle";
+import { msbCommand } from "../infra/release";
+import { HISTORY_PROCESS_COMMAND, runHistoryProcess } from "../infra/history-process";
 
 const USAGE = `usage:
   house --version                Household's version (and the commit, from a git checkout)
@@ -38,6 +41,7 @@ const USAGE = `usage:
   house status                   daemon state and network subjects
   house dashboard [--no-open]    sign in to the web UI: prints a one-time link (60 s) and opens it in the browser
   house reload                   check the config, then apply it to the running daemon
+  house update [<tag>]           install the newest release (or that one) where install.sh put Household; restart to run it
   house doctor                   check images, microsandbox, openssl, the config, the keys, bots and the daemon
   house ls                       keys, houses and pets from the config (no values)
   house key add <name> --provider anthropic|openai [--value <value>] [--note <text>]
@@ -135,7 +139,7 @@ async function startOnboarding(paths: Paths, config: ConfigStore): Promise<void>
     },
     async missing() {
       const problems: string[] = [];
-      const msb = await runCommand(["msb", "--version"]);
+      const msb = await runCommand([msbCommand(), "--version"]);
       if (msb.stdout.trim() !== `msb ${MICROSANDBOX_VERSION}`) problems.push(`microsandbox ${MICROSANDBOX_VERSION} is not installed: pets cannot start until it is (https://microsandbox.dev)`);
       for (const tool of ["python3", "openssl"]) if (!(await runCommand([tool, "--version"])).ok && !(await runCommand([tool, "version"])).ok) problems.push(`${tool} is not installed: Household needs it to run`);
       return problems;
@@ -319,6 +323,7 @@ async function main(argv: string[]): Promise<void> {
 
   if (command === "start" && args.length === 0) return runDaemon(paths);
   if (command === "onboard" && args.length === 0) return startOnboarding(paths, config);
+  if (command === "update" && args.length <= 1) { await update({ tag: args[0] }); return; }
   if (command === "status" && args.length === 0) return status(paths);
   if (command === "dashboard" && args.length === 0) return dashboard(paths, !values["no-open"]);
   if (command === "doctor" && args.length === 0) return checkUp(paths, config);
@@ -489,7 +494,9 @@ function resources(cpus: string | undefined, memory: string | undefined): { cpus
   };
 }
 
-main(Bun.argv.slice(2)).catch((error) => {
+// A compiled house is also its own history process (infra/history-runner.ts).
+if (Bun.argv[2] === HISTORY_PROCESS_COMMAND) runHistoryProcess(Bun.argv[3]!);
+else main(Bun.argv.slice(2)).catch((error) => {
   console.error(error instanceof HouseholdError ? error.message : error);
   process.exit(1);
 });

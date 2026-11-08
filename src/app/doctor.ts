@@ -12,6 +12,7 @@ import type { StatusReport } from "./daemon";
 import { IMAGE_REGISTRY } from "./agent-images";
 import { agentImage } from "./pet-plane";
 import { VERSION } from "./version";
+import { msbCommand } from "../infra/release";
 
 /** One line of `house doctor`. */
 export interface Finding {
@@ -52,11 +53,11 @@ export async function doctor({ paths, config, agents, run, telegramApi, released
         : { ok: false, text: `docker: not reachable (${firstLine(docker.stderr)}); start OrbStack (or Docker)` },
     );
   }
-  const msb = await run(["msb", "--version"]);
+  const msb = await run([msbCommand(), "--version"]);
   const expected = `msb ${MICROSANDBOX_VERSION}`;
   if (!msb.ok || msb.stdout.trim() !== expected) findings.push({ ok: false, text: `microsandbox: requires ${MICROSANDBOX_VERSION}; install the pinned runtime` });
   else {
-    const ready = await run(["msb", "doctor"]);
+    const ready = await run([msbCommand(), "doctor"]);
     findings.push(ready.ok ? { ok: true, text: `microsandbox: ${MICROSANDBOX_VERSION}, virtualization ready` } : { ok: false, text: "microsandbox: virtualization unavailable; run msb doctor (Linux requires /dev/kvm)" });
   }
   const python = await run(["python3", "--version"]);

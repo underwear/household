@@ -7,6 +7,7 @@ import { isAbsolute, join } from "node:path";
 import type { ContainerInfo, ContainerSpec, ImageBuilder, PetRuntime } from "./runtime";
 import { ENVIRONMENT_SETUP_HOST_TIMEOUT_MS, environmentScript, type EnvironmentSetupResult } from "./environment-setup";
 import { GUEST_SERVICES_INSTALL, GUEST_SERVICES_READY, GUEST_SERVICES_SCRIPT } from "./guest-services";
+import { msbCommand } from "./release";
 
 export const MICROSANDBOX_VERSION = "0.7.13";
 export const MAIN_JOB_LABEL = "household.main-job";
@@ -87,7 +88,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
 
   private async ready(): Promise<void> {
     if (!this.version) this.version = (async () => {
-      const result = await this.run(["msb", "--version"], { timeoutMs: 5000, signal: this.running.signal });
+      const result = await this.run([msbCommand(), "--version"], { timeoutMs: 5000, signal: this.running.signal });
       if (!result.ok || result.stdout.trim() !== `msb ${MICROSANDBOX_VERSION}`) throw new Error(`Household requires microsandbox ${MICROSANDBOX_VERSION}`);
     })().catch((error) => { this.version = undefined; throw error; });
     return this.version;
@@ -95,7 +96,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
 
   private async msb(args: string[], options: RunOptions = {}): Promise<RunResult> {
     await this.ready();
-    return this.run(["msb", ...args], { timeoutMs: 60_000, ...options, signal: this.running.signal });
+    return this.run([msbCommand(), ...args], { timeoutMs: 60_000, ...options, signal: this.running.signal });
   }
 
   private async checked(args: string[], options: RunOptions = {}): Promise<string> {

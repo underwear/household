@@ -8,3 +8,4 @@ secrets/
 
 # Local working notes, never published
 .notes/
+dist/

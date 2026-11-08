@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
+import helper from "./pet-outbox-files.py" with { type: "text" };
 
-const helper = readFileSync(new URL("./pet-outbox-files.py", import.meta.url), "utf8");
 
 /** Reads finished files in a pet's mounted home, without following guest-controlled links. */
 export class PetOutboxFiles {

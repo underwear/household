@@ -53,7 +53,7 @@ import type { HistorySearch } from "../infra/history-store";
 import type { Paths } from "../infra/paths";
 import { ownAddresses, screenHost, systemResolve, type Resolve } from "../infra/public-resolve";
 import { SqliteStore, type ChatIds, type ChatRecords, type KeyValueStore, type MessageStore, type SessionStore } from "../infra/sqlite-store";
-import { buildWebBundle } from "../infra/web-bundle";
+import { buildWebBundle, readWebBundle } from "../infra/web-bundle";
 import { serveWeb, type WebAssets } from "../infra/web-server";
 import { AgentModels } from "./agent-models";
 import { agentRoutes } from "./agent-routes";
@@ -73,6 +73,7 @@ import { runtimeServices } from "./runtime-services";
 import { NetworkRequests } from "./network-requests";
 import { PetPlane, type PetStatus } from "./pet-plane";
 import { REPO_ROOT, VERSION } from "./version";
+import { COMPILED, releaseShare } from "../infra/release";
 import { WebAuth } from "./web-auth";
 import { webRoutes, type ApiHandler } from "./web-routes";
 import { readPetLog } from "./pet-logs";
@@ -738,7 +739,7 @@ export async function runDaemon(paths: Paths, services: () => DaemonServices = (
       openChannels: openChannels({ state: store, events, telegramApi }),
       channelChecks: channelChecks(telegramApi),
       sessions: store,
-      webAssets: () => buildWebBundle(WEB_ENTRY),
+      webAssets: () => (COMPILED ? readWebBundle(join(releaseShare(), "web")) : buildWebBundle(WEB_ENTRY)),
     });
   } catch (error) {
     history.stop();

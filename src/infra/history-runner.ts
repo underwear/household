@@ -1,9 +1,12 @@
 import type { Subprocess } from "bun";
 import { join } from "node:path";
 import { HouseholdError } from "../core/errors";
+import { COMPILED } from "./release";
+import { HISTORY_PROCESS_COMMAND } from "./history-process";
 import type { HistoryFilter, HistoryPage, HistorySearch } from "./history-store";
 
-const PROCESS = join(import.meta.dir, "history-process.ts");
+/** The history process: its source run by Bun, or, for a compiled house, the binary itself told to be one. */
+const PROCESS = COMPILED ? [process.execPath, HISTORY_PROCESS_COMMAND] : [process.execPath, join(import.meta.dir, "history-process.ts")];
 
 /** How many searches may be running or waiting at once, of all pets (one each at most). */
 export const MAX_SEARCHES = 4;
@@ -38,7 +41,7 @@ export class HistoryRunner implements HistorySearch {
     private readonly database: string,
     private readonly timeoutMs: number,
     /** What runs the process; the database's path is its last argument. */
-    private readonly command = [process.execPath, PROCESS],
+    private readonly command = PROCESS,
   ) {}
 
   search(filter: HistoryFilter): Promise<HistoryPage> {

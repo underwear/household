@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import { assertName, assertPetName } from "../core/names";
 import { runCommand } from "./process";
 import { readFileSync, mkdirSync, lstatSync, realpathSync, readdirSync, existsSync } from "node:fs";
-const helper = readFileSync(new URL("./skills-files.py", import.meta.url), "utf8");
+import helper from "./skills-files.py" with { type: "text" };
+import { COMPILED, releaseShare } from "./release";
 
 export interface SkillEntry { path: string; kind: "file" | "directory" | "unsupported"; size: number }
 export interface SkillFile { path: string; content: string; revision: string }
@@ -12,8 +13,11 @@ export class SkillFileError extends Error {
 }
 export const houseSkillsRoot = (stateDir: string) => join(stateDir, "house-skills");
 export const GUEST_SKILLS = "/opt/household/skills";
-/** Household's own skills: in this repository, mounted read-only into every VM that has the house's skills. */
-export const BUILTIN_SKILLS = fileURLToPath(new URL("../builtin-skills", import.meta.url));
+/**
+ * Household's own skills, mounted read-only into every VM that has the house's skills: in this repository, or in a
+ * release's `share/` (a mount needs a real directory, not one inside a compiled binary).
+ */
+export const BUILTIN_SKILLS = COMPILED ? join(releaseShare(), "builtin-skills") : fileURLToPath(new URL("../builtin-skills", import.meta.url));
 export const GUEST_BUILTIN_SKILLS = "/opt/household/builtin-skills";
 /** Where a pet's personal skills are, in its home, whatever its agent: every harness's project skills link here. */
 export const PERSONAL_SKILLS = "work/.agents/skills";

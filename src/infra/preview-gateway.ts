@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createServer, request, Agent, type IncomingHttpHeaders } from "node:http";
 import { isIP } from "node:net";
 import { Duplex } from "node:stream";
+import { msbCommand } from "./release";
 
 export interface PreviewListener { url: string; close(): Promise<void> }
 export interface PreviewTarget { machine: string; port: number; bindAddress: string; publicHost: string; signal?: AbortSignal }
@@ -33,7 +34,7 @@ finally:
 
 /** Only a port in this named VM, via fixed loopback; no agent-provided upstream URL. */
 export const dialPreviewVm: PreviewDial = (machine, port) => new Promise((resolve, reject) => {
-  const child = spawn("msb", ["exec", "--quiet", "--stream", "--timeout", "15m", machine, "--", "python3", "-u", "-c", CONNECT, String(port)], { stdio: ["pipe", "pipe", "ignore"] });
+  const child = spawn(msbCommand(), ["exec", "--quiet", "--stream", "--timeout", "15m", machine, "--", "python3", "-u", "-c", CONNECT, String(port)], { stdio: ["pipe", "pipe", "ignore"] });
   let connected = false;
   const timer = setTimeout(() => fail(), 10_000);
   const fail = () => { clearTimeout(timer); child.kill("SIGKILL"); if (!connected) reject(new Error("Could not connect to the application inside the VM")); };

@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
 import { readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { runCommand } from "./process";
+import helper from "./pet-inbox-files.py" with { type: "text" };
 
-const helper = readFileSync(new URL("./pet-inbox-files.py", import.meta.url), "utf8");
 const validVolume = (name: string) => /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,200}$/.test(name);
 
 /**

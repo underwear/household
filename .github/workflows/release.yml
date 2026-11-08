@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag `vX.Y.Z` whose version is package.json's: the tests run, the agents' images are published (images.yml),
-# then a GitHub release with notes from the commits since the last tag (GitHub attaches the source archives).
+# Push a tag `vX.Y.Z` whose version is package.json's: the tests run, the agents' images are published (images.yml)
+# and Household is built for each platform (scripts/build-release.ts), then a GitHub release with those archives,
+# their SHA256SUMS (what install.sh and `house update` check) and notes from the commits since the last tag.
 
 on:
   push:
@@ -36,13 +37,45 @@ jobs:
     with:
       tag: ${{ github.ref_name }}
 
+  binaries:
+    needs: test
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # macOS signs what it builds (ad hoc): Apple silicon runs nothing unsigned.
+          - { platform: darwin-arm64, os: macos-latest }
+          - { platform: linux-x64, os: ubuntu-latest }
+          - { platform: linux-arm64, os: ubuntu-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile --cwd web
+      - run: bun scripts/build-release.ts ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: household-${{ matrix.platform }}
+          path: dist/household-*-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
+
   release:
-    needs: images
+    needs: [images, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: household-*
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum household-*.tar.gz > SHA256SUMS && cat SHA256SUMS
+      - run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME" dist/household-*.tar.gz dist/SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}

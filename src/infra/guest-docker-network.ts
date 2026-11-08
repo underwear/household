@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
+import source from "./guest-docker-proxy.py" with { type: "text" };
 
 /** An address owned by the guest, routable from Docker/BuildKit without container DNS. */
 export const GUEST_DOCKER_PROXY_URL = "http://169.254.254.1:3128";
-const source = readFileSync(new URL("./guest-docker-proxy.py", import.meta.url), "utf8");
 
 /**
  * Shell functions of the guest services (guest root, `note` theirs). `proxy_setup` installs the proxy and points the

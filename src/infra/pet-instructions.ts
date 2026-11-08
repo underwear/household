@@ -1,7 +1,8 @@
 import { join } from "node:path";
-import { readFileSync, mkdirSync, lstatSync, realpathSync } from "node:fs";
+import { mkdirSync, lstatSync, realpathSync } from "node:fs";
 import { assertName, assertPetName } from "../core/names";
 import { runCommand } from "./process";
+import helper from "./pet-instructions-files.py" with { type: "text" };
 
 export const DEFAULT_AGENT_INSTRUCTIONS = `# Agent instructions
 
@@ -18,7 +19,6 @@ export interface InstructionFile { content: string; revision: string; path: stri
 export class InstructionFileError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
-const helper = readFileSync(new URL("./pet-instructions-files.py", import.meta.url), "utf8");
 
 /** The home is already mounted into the VM. A native adapter path links to its one shared document. */
 export class PetInstructions {
