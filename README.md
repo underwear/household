@@ -5,7 +5,7 @@ and credentials under your control.
 
 ## Requirements
 
-Bun, [microsandbox](https://github.com/microsandbox/microsandbox) 0.7.13, Docker, openssl, python3. macOS on Apple
+Bun, [microsandbox](https://microsandbox.dev) 0.7.13, Docker, openssl, python3. macOS on Apple
 silicon, or Linux with `/dev/kvm`.
 
 ## Quick start

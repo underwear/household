@@ -1,0 +1,12 @@
+{
+  "name": "household",
+  "owner": { "name": "underwear", "url": "https://github.com/underwear" },
+  "description": "Household: Claude Code and Codex agents as personal assistants in microVMs.",
+  "plugins": [
+    {
+      "name": "household",
+      "source": "./plugins/household",
+      "description": "Install, set up, run, update and debug Household."
+    }
+  ]
+}
