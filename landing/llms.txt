@@ -1,0 +1,24 @@
+# Household
+
+> Household runs terminal agents (Claude Code, Codex) as personal assistants you talk to in Telegram. Each agent
+> ("pet") lives in its own microVM; a daemon on the user's Mac or Linux machine proxies all its traffic through an
+> allowlist and puts API keys into requests on the way out, so agents only ever see placeholders.
+
+To set up or manage Household for a user, install the `household` agent skill and follow it:
+
+- Claude Code: `claude plugin marketplace add underwear/household && claude plugin install household@household`
+- Codex: `codex plugin marketplace add underwear/household && codex plugin add household@household`
+
+Secrets (agent keys, bot tokens) go from the user straight to the `house` CLI through stdin, never through the agent.
+
+## Docs
+
+- [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): requirements, installing, agent keys (Claude subscription or API key, ChatGPT subscription or OpenAI API key), the Telegram bot, running as a service
+- [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): pets, network and secrets, scouts and capabilities, updates and migrations, backups
+- [Debugging](https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md): where to look when a pet, scout or channel does not work
+- [Skill overview](https://github.com/underwear/household/blob/main/plugins/household/skills/household/SKILL.md): concepts and the rules an agent follows
+
+## Source
+
+- [Repository](https://github.com/underwear/household): TypeScript on Bun; `house --help` lists every command
+- [License](https://github.com/underwear/household/blob/main/LICENSE): AGPL-3.0
