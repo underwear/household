@@ -421,3 +421,12 @@ button.memory-chevron:hover { color: var(--ink); }
 
 /* A scout's access: what its capabilities make (network, keys in its VM), beside the one Save. */
 .access-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-radius: var(--radius-lg); background: var(--side); }
+
+.inbox-card-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+.inbox-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.inbox-headers { display: flex; flex-direction: column; gap: 12px; }
+.inbox-header-row { display: flex; gap: 8px; align-items: end; }
+.inbox-header-row .field { min-width: 0; flex: 1; }
+.inbox-recent { margin-top: 16px; }
+.inbox-recent ul { list-style: none; padding: 0; }
+.inbox-recent li { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }

@@ -11,7 +11,7 @@ import { BATCH_TAG, block, CONTENT_TAG, MESSAGE_TAG, INTERNAL_TAG, tagFreeJson }
 export type MessageStatus = "received" | "dispatching" | "delivered" | "answered" | "failed" | "rejected";
 
 /** cli: `house pet send`. chat: the house's person, through its channel. */
-export type MessageOrigin = "cli" | "chat" | "cron" | "internal";
+export type MessageOrigin = "cli" | "chat" | "cron" | "internal" | "inbox";
 
 /** Who wrote a message of the chat: a person (as the channel names them), a pet, or Household itself (a notice, a card). */
 export type ChatSender = { kind: "person"; ref: SenderRef; name: string } | { kind: "pet"; name: string } | { kind: "household" };
@@ -92,7 +92,7 @@ export const batchable = (message: Message): message is NewChatMessage => messag
  */
 export function joins(first: Message, next: Message): boolean {
   if (!batchable(first) || !batchable(next)) return false;
-  return first.header.from.id === next.header.from.id && first.place === next.place;
+  return first.origin === next.origin && first.header.from.id === next.header.from.id && first.place === next.place;
 }
 
 /**

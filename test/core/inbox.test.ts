@@ -123,3 +123,12 @@ test("a batch is full at `max`; a boundary the queue does not show closes it", (
   inbox.observe(closed);
   expect(drain(inbox, 3)).toEqual([[[5], true], [[6], true], [[7], false]]);
 });
+
+test("polled events wait until idle and do not interrupt the current task", () => {
+  const inbox = new PetInbox();
+  inbox.observe({ kind: "prompt-accepted", text: "working" });
+  inbox.push({ id: 1, text: "new email", status: "received", origin: "inbox" });
+  expect(inbox.next(10).messages).toHaveLength(0);
+  inbox.observe({ kind: "turn-finished", text: "done" });
+  expect(inbox.next(10).messages).toHaveLength(1);
+});

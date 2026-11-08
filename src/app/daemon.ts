@@ -1,3 +1,4 @@
+import { HouseInboxes } from "./house-inboxes";
 import type { LiveNotice } from "./chat";
 import { askRedactedDialog, redactAgentEvent } from "./scout-redaction";
 import { ScoutSecretRequests } from "./scout-secrets";
@@ -308,6 +309,7 @@ export async function startDaemon(deps: DaemonDeps) {
   // What each subscription key has left, read off the gateway; a used-up key's requests stop there (keys.<k>.allowOverage lets them go on).
   const allowances = new KeyAllowances(records, (text) => events.info(text));
   let appliedHousehold: Household | undefined;
+  const houseInboxes = new HouseInboxes(records, { post: (h, i, e) => chat.postInbox(h, i, e), pet: (h, i, p, e) => chat.deliverInbox(h, i, p, e) });
   const crons = deps.crons ? new Crons(deps.crons, delivery,
     (house, pet) => placed.some((item) => item.house === house && item.pet === pet && !item.sideworker && !item.scout),
     (message) => events.info(message), undefined,
@@ -474,6 +476,7 @@ export async function startDaemon(deps: DaemonDeps) {
         if (pet.enabled === false) continue;
         if (!delivery.isSuspended(pet.house, pet.pet) || ready.some((start) => start.house === pet.house && start.pet === pet.pet && start.ready)) delivery.resume(pet.house, pet.pet);
       }
+      houseInboxes.setHouses(houses);
       return warnings;
     });
   /** A reload asked for (CLI, web UI): one that fails is logged. */
@@ -525,6 +528,7 @@ export async function startDaemon(deps: DaemonDeps) {
         sideworkers,
         previews,
         crons,
+        houseInboxes,
         memory,
         instructions: new PetInstructions(homesDirectory(paths)),
         skills: new HouseSkills(houseSkillsRoot(paths.stateDir)),
@@ -660,6 +664,7 @@ export async function startDaemon(deps: DaemonDeps) {
   scouts.start();
   monitoring?.start();
   crons?.start();
+  houseInboxes.start();
   lifecycles?.start();
   const stopSweeping = sweepInboxes(inboxes, events);
   state = "running";
@@ -672,6 +677,7 @@ export async function startDaemon(deps: DaemonDeps) {
       await scouts.stop();
       await monitoring?.stop();
       crons?.stop();
+      await houseInboxes.stop();
       lifecycles?.stop();
       stopSweeping();
       await networkRequests.stop();

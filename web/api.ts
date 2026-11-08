@@ -1,3 +1,5 @@
+import type { HouseInbox, InboxView } from "../src/core/house-inboxes";
+export type { HouseInbox, InboxView };
 export interface PreviewView { id: string; house: string; pet: string; port: number; title: string; status: "pending" | "opening" | "active"; url?: string; expires_at?: string; requested_at: string }
 import type { HouseFeatures, PreviewSettings } from "../src/core/house-features";
 import type { PetLifecycle } from "../src/core/lifecycle";
@@ -177,6 +179,12 @@ export const api = {
   allowHosts: (name: string, hosts: readonly string[]) => call<WriteView>("POST", `${housePath(name)}/allow/bulk`, { hosts }),
   disallowHost: (name: string, host: string) => call<WriteView>("DELETE", `${housePath(name)}/allow/${encodeURIComponent(host)}`),
   revokeTemporary: (name: string, pet: string, domain: string, port = 443) => call<WriteView>("DELETE", `${housePath(name)}/temporary/${encodeURIComponent(domain)}?port=${port}&pet=${encodeURIComponent(pet)}`),
+  inboxes: (house: string) => call<InboxView[]>("GET", `${housePath(house)}/inboxes`),
+  testInbox: (house: string, inbox: HouseInbox) => call<{ count: number; message: string }>("POST", `${housePath(house)}/inboxes/test`, inbox),
+  addInbox: (house: string, inbox: HouseInbox) => call<WriteView>("POST", `${housePath(house)}/inboxes`, inbox),
+  updateInbox: (house: string, inbox: HouseInbox) => call<WriteView>("PUT", under(house, "inboxes", inbox.name), inbox),
+  removeInbox: (house: string, name: string) => call<WriteView>("DELETE", under(house, "inboxes", name)),
+  pollInbox: (house: string, name: string) => call<InboxView>("POST", `${under(house, "inboxes", name)}/poll`),
   resolveSlack: (house: string, token: string, appToken: string, member: string) => call<{ chat: string; owner: string; url: string }>("POST", `${housePath(house)}/slack/resolve`, { token, appToken, member }),
   addChannel: (house: string, kind: string, { own, ...common }: ChannelFields) => call<WriteView>("POST", `${housePath(house)}/channels`, { kind, ...own, ...common }),
   updateChannel: (house: string, chat: string, { own, ...common }: ChannelFields) => call<WriteView>("PATCH", under(house, "channels", chat), { ...own, ...common }),

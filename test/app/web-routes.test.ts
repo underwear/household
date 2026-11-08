@@ -1,3 +1,4 @@
+import { HouseInboxes } from "../../src/app/house-inboxes";
 import { Sideworkers } from "../../src/app/sideworkers";
 import { PetInstructions } from "../../src/infra/pet-instructions";
 import { PetMemory } from "../../src/app/memory";
@@ -59,12 +60,16 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
   let applyError: Error | undefined;
   let statesError: Error | undefined;
   const store = new ConfigStore(configFile, configCheck(knownAgents(), HOST));
+  const inboxPosts: string[] = [];
+  const inboxPets: string[] = [];
+  const houseInboxes = new HouseInboxes(new SqliteStore(":memory:"), { post: async (_h, _i, event) => { inboxPosts.push(event.title); }, pet: (_h, _i, pet) => { inboxPets.push(pet); } });
   const problems = new Map<string, string>();
   const server = serveWeb({
     port: 0,
     assets: ASSETS,
     handle: webRoutes({
       auth,
+      houseInboxes,
       sideworkers,
       monitoring,
       crons,
@@ -84,6 +89,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
       checks: channelChecks(telegram.url),
       apply: async () => {
         applied.push("reload");
+        houseInboxes.setHouses((await store.load()).houses);
         if (applyError) throw applyError;
       },
       petStates: async () => {
@@ -111,6 +117,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
       ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
     });
   const signIn = async () => {
+    houseInboxes.setHouses((await store.load()).houses);
     const response = await call("GET", `/login?token=${auth.mintToken()}`);
     session = new RegExp(`${name}=([^;]+)`).exec(response.headers.get("set-cookie") ?? "")![1]!;
     return response;
@@ -118,7 +125,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
   const text = () => Bun.file(configFile).text();
   return {
     auth, origin, name, call, signIn, text, applied, logged, cookie, configFile, store, telegram, dir, added,
-    problems,
+    problems, inboxPosts, inboxPets, houseInboxes,
     failApply: (error: Error) => (applyError = error),
     failStates: (error: Error) => (statesError = error),
   };
@@ -1033,4 +1040,32 @@ test("Slack onboarding requires a session and rejects invalid credentials withou
   expect((await call("POST", "/api/houses/work/slack/resolve", fields)).status).toBe(400);
   expect((await call("POST", "/api/houses/missing/slack/resolve", fields)).status).toBe(404);
   expect(await text()).toBe(before);
+});
+
+test("inbox API creates, tests, polls, deduplicates, changes frequency and removes a host source", async () => {
+  const events: { id: string; title: string; text: string }[] = [];
+  const source = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => Response.json({ version: 1, items: events }) });
+  try {
+    const s = setup();
+    const body = { name: "incoming", title: "Incoming", enabled: true, intervalSeconds: 60, channel: "100200300", pets: ["sibling"], initial: "new", source: { kind: "http", url: `http://127.0.0.1:${source.port}/events`, headers: { Authorization: "Bearer test-only" } } };
+    const path = "/api/houses/work/inboxes";
+    expect((await s.call("GET", path)).status).toBe(401);
+    await s.signIn();
+    expect((await s.call("POST", path + "/test", body)).status).toBe(200);
+    expect(s.inboxPosts).toEqual([]);
+    expect((await s.call("POST", path, body)).status).toBe(201);
+    expect((await s.call("POST", path + "/incoming/poll")).status).toBe(200);
+    events.push({ id: "one", title: "New message", text: "body" });
+    expect((await s.call("POST", path + "/incoming/poll")).status).toBe(200);
+    expect((await s.call("POST", path + "/incoming/poll")).status).toBe(200);
+    expect(s.inboxPosts).toEqual(["New message"]);
+    expect(s.inboxPets).toEqual(["sibling"]);
+    expect((await s.call("PUT", path + "/incoming", { ...body, intervalSeconds: 900 })).status).toBe(200);
+    const list = await (await s.call("GET", path)).json();
+    expect(list[0].inbox.intervalSeconds).toBe(900);
+    expect(list[0].status.pendingCount).toBe(0);
+    expect((await s.call("PUT", path + "/incoming", { ...body, pets: ["missing"] })).status).toBe(400);
+    expect((await s.call("DELETE", path + "/incoming")).status).toBe(200);
+    expect(await (await s.call("GET", path)).json()).toEqual([]);
+  } finally { source.stop(true); }
 });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 /** A house's pages, in navigation order; capabilities sit beside scouts (a tab of the Scouts page). */
-export const HOUSE_TABS = ["overview", "pets", "channels", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "settings"] as const;
+export const HOUSE_TABS = ["overview", "pets", "channels", "inboxes", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "settings"] as const;
 export type HouseTab = (typeof HOUSE_TABS)[number];
 /** A pet's pages (tabs on its page), in order. */
 export const PET_TABS = ["overview", "agent", "instructions", "lifecycle", "channels", "tasks", "skills", "environment", "memory", "resources"] as const;

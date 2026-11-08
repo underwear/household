@@ -1,3 +1,4 @@
+import type { HouseInbox } from "./house-inboxes";
 import type { CapabilityDefinition, ScoutAgent, ScoutDefinition, ScoutLimits } from "./scouts";
 import type { HouseFeatures, PreviewSettings } from "./house-features";
 import type { Place, SenderRef } from "./channel";
@@ -80,6 +81,7 @@ export interface SideworkerProfile {
 export interface SideworkerLimits { maxWorkers: number; cpus: number; memoryMiB: number }
 
 export interface House {
+  inboxes?: HouseInbox[];
   capabilities?: CapabilityDefinition[];
   scouts?: ScoutDefinition[];
   scoutLimits?: Partial<ScoutLimits> & { maxScouts: number };

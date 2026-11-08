@@ -20,4 +20,6 @@ house start
 
 ## Slack prototype
 
-A Slack Bot DM adapter is available alongside Telegram: one thread per pet, progress and Stop, interactive decisions, and host-only tokens over Socket Mode. See [setup, local demo, and current limits](docs/slack.md).
+A Slack Bot DM adapter is available alongside Telegram: a default pet in Messages, helpers in threads, progress and Stop, interactive decisions, and host-only tokens over Socket Mode. See [setup, local demo, and current limits](docs/slack.md).
+
+House inboxes poll IMAP/POP3 mail, Grafana alerts, Datadog monitors or a custom HTTP endpoint on the host. Choose a schedule, a delivery channel and individual pet subscribers in the admin. See [setup and the HTTP contract](docs/inboxes.md).

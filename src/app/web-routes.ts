@@ -1,3 +1,5 @@
+import type { HouseInboxes } from "./house-inboxes";
+import { houseInboxSchema } from "../core/house-inboxes";
 import { resolveSlackDm } from "../channel-adapters/slack/setup";
 import type { Previews } from "./previews";
 import { houseFeatures, previewSettings, houseFeatureSettingsSchema } from "../core/house-features";
@@ -57,6 +59,7 @@ export interface WebRoutesDeps {
   skillAdded?(house: string, pet: string | undefined, name: string): void;
   instructions?: PetInstructions;
   crons?: Crons;
+  houseInboxes?: HouseInboxes;
   memory?: PetMemory;
   monitoring?: Pick<Monitoring, "history"> & Partial<Pick<Monitoring, "latest">>;
   config: ConfigStore;
@@ -603,6 +606,40 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     ["DELETE", at("/pets/([^/]+)/memory"), async ({ request, params: [house, pet] }) => {
       if (!deps.memory) return failure(503, "memory unavailable");
       return json(deps.memory.delete(house!,pet!,await bodyOf(request,memoryDelete),"owner"));
+    }],
+    ["GET", at("/inboxes"), async ({ params: [house] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      if (!findHouse(await config.load(), house!)) throw new NotFoundError("House not found");
+      return json(deps.houseInboxes.list(house!));
+    }],
+    ["POST", at("/inboxes/test"), async ({ request, params: [house] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      if (!findHouse(await config.load(), house!)) throw new NotFoundError("House not found");
+      return json(await deps.houseInboxes.test(await bodyOf(request, houseInboxSchema)));
+    }],
+    ["POST", at("/inboxes"), async ({ request, params: [house] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      const inbox = await bodyOf(request, houseInboxSchema);
+      return deps.houseInboxes.edit(house!, inbox.name, async () =>
+        written(await config.putInbox(house!, inbox, true), house!, `added inbox ${inbox.name}`, 201));
+    }],
+    ["PUT", at("/inboxes/([^/]+)"), async ({ request, params: [house, name] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      const inbox = await bodyOf(request, houseInboxSchema);
+      if (inbox.name !== name) throw new HouseholdError("An inbox's ID cannot be changed");
+      return deps.houseInboxes.edit(house!, name!, async () => {
+        deps.houseInboxes!.assertChange(house!, inbox);
+        return written(await config.putInbox(house!, inbox), house!, `updated inbox ${name}`);
+      });
+    }],
+    ["DELETE", at("/inboxes/([^/]+)"), async ({ params: [house, name] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      return deps.houseInboxes.edit(house!, name!, async () =>
+        written(await config.removeInbox(house!, name!), house!, `removed inbox ${name}`), true);
+    }],
+    ["POST", at("/inboxes/([^/]+)/poll"), async ({ params: [house, name] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      return json(await deps.houseInboxes.run(house!, name!));
     }],
     ["GET", at("/pets/([^/]+)/crons"), async ({ params: [house, pet] }) => {
       if (!deps.crons) return failure(503, "scheduler unavailable");

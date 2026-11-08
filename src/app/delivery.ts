@@ -507,7 +507,7 @@ export class Delivery {
         if (next.messages[0]?.origin === "cron" && box.awaiting.some(message => message.origin === "cron")) return;
         // A fresh mailbox cannot know whether the surviving VM is still working. Probe before
         // every cron, including restored ones; an unavailable/unknown session is retried safely.
-        if (next.messages[0]?.origin === "cron") {
+        if (next.messages[0]?.origin === "cron" || next.messages[0]?.origin === "inbox") {
           let idle = false;
           try { idle = await box.agent.isIdle?.(this.execIn(house, pet)) ?? false; } catch { /* retry */ }
           if (this.boxes.get(key(house, pet)) !== box || this.suspended.has(key(house, pet))) return;
@@ -537,7 +537,7 @@ export class Delivery {
         box.awaiting.push(...scheduled);
         let result: SendResult;
         try {
-          result = await box.agent.send(this.execIn(house, pet), typed.text, () => box.inbox.activity !== "dialog" && (scheduled.length === 0 || box.inbox.activity === "idle") && !this.suspended.has(key(house, pet)));
+          result = await box.agent.send(this.execIn(house, pet), typed.text, () => box.inbox.activity !== "dialog" && ((scheduled.length === 0 && !messages.some(m => m.origin === "inbox")) || box.inbox.activity === "idle") && !this.suspended.has(key(house, pet)));
         } catch (error) {
           if (!scheduled.length) throw error;
           result = { status: "stuck", reason: "scheduled submission failed; outcome uncertain" };

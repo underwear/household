@@ -17,6 +17,8 @@ Install the `household` agent skill too, for running Household afterwards:
 
 ## Docs
 
+- [Inboxes](https://agents-household.dev/docs/inboxes/): mail, Grafana, Datadog, per-pet subscriptions and the custom HTTP poller contract
+
 - [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): the checklist from a bare machine to a pet answering in Telegram
 - [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): what Household can do (pets, network, secrets, scouts), updates, backups
 - [Debugging](https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md): where to look when a pet, scout or channel does not work

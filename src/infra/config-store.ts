@@ -1,3 +1,4 @@
+import { houseInboxSchema, type HouseInbox } from "../core/house-inboxes";
 import type { CapabilityDefinition, ScoutAgent, ScoutDefinition, ScoutLimits } from "../core/scouts";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT } from "../builtin-capabilities";
 import { houseFeatureSettingsSchema, type HouseFeatures, type PreviewSettings } from "../core/house-features";
@@ -114,6 +115,29 @@ export class ConfigStore {
   async load(): Promise<Household> {
     if (!existsSync(dirname(this.path))) return (await this.read()).household;
     return withFileLock(this.path, async () => (await this.read()).household);
+  }
+
+  async putInbox(house: string, input: HouseInbox, create = false): Promise<Household> {
+    const inbox = houseInboxSchema.parse(input);
+    return this.edit((doc, household) => {
+      const h = knownHouse(household, house);
+      const current = h.inboxes ?? [];
+      const exists = current.some(item => item.name === inbox.name);
+      if (create && exists) throw new HouseholdError("An inbox with this name already exists");
+      if (!create && !exists) throw new NotFoundError("Inbox not found");
+      const channel = h.channels.find(c => c.chat === inbox.channel);
+      if (!channel) throw new HouseholdError("Choose a channel in this house");
+      if (inbox.pets.some(name => !h.pets.some(p => p.name === name && !p.scout && !p.sideworker) || !channel.pets.includes(name))) throw new HouseholdError("Subscribers must be pets placed in the selected channel");
+      setIn(doc, ["houses", house, "inboxes"], doc.createNode(exists ? current.map(i => i.name === inbox.name ? inbox : i) : [...current, inbox]));
+    });
+  }
+
+  async removeInbox(house: string, name: string): Promise<Household> {
+    return this.edit((doc, household) => {
+      const current = knownHouse(household, house).inboxes ?? [];
+      if (!current.some(i => i.name === name)) throw new NotFoundError("Inbox not found");
+      setIn(doc, ["houses", house, "inboxes"], doc.createNode(current.filter(i => i.name !== name)));
+    });
   }
 
   async setTimezone(timezone: string): Promise<Household> {

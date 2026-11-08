@@ -60,7 +60,7 @@ export class PetInbox {
   next(max: number): Next {
     const { waiting, closed } = this;
     const first = waiting[0];
-    if (this.current === "dialog" || !first || (first.origin === "cron" && this.current !== "idle")) return { messages: [], complete: true };
+    if (this.current === "dialog" || !first || ((first.origin === "cron" || first.origin === "inbox") && this.current !== "idle")) return { messages: [], complete: true };
     const ends = (i: number) => closed.has(waiting[i]!.id); // a boundary right after message i
     let count = 1;
     while (count < max && count < waiting.length && !ends(count - 1) && joins(first, waiting[count]!)) count += 1;

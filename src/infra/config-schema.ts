@@ -1,3 +1,4 @@
+import { houseInboxesSchema } from "../core/house-inboxes";
 import { houseFeaturesSchema, previewSettingsSchema } from "../core/house-features";
 import { petCpuSchema, petMemorySchema, sideworkerLimitsSchema } from "../core/resources";
 import { validTimezone } from "../core/timezone";
@@ -293,6 +294,7 @@ const legacyScout = (scout: Record<string, unknown>) => typeof scout.agent === "
 const withoutTimeout = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== "timeoutMinutes")) : value;
 const scoutsInput = z.preprocess((raw) => Array.isArray(raw) ? raw.map(scout => scout && typeof scout === "object" ? legacyScout(scout as Record<string, unknown>) : scout) : raw, scoutDefinitionsSchema);
 const house = z.strictObject({
+  inboxes: houseInboxesSchema.optional(),
   capabilities: capabilityDefinitionsSchema.optional(),
   scouts: scoutsInput.optional(),
   scoutLimits: z.preprocess(withoutTimeout, scoutLimitsSchema).optional(),
@@ -327,6 +329,7 @@ export function parseHousehold(raw: unknown, source: string): Household {
     secrets: Object.entries(result.data?.secrets ?? {}).map(([secretName, { value, hosts, header, env, houses, onlyForCapabilities, note: said }]) => ({ name: secretName, value, hosts, ...(onlyForCapabilities === undefined ? {} : { onlyForCapabilities }), header: header ?? DEFAULT_SECRET_HEADER, env, ...(houses === undefined ? {} : { houses }), ...(said === undefined ? {} : { note: said }) })),
     houses: Object.entries(result.data?.houses ?? {}).map(([houseName, value]) => ({
       name: houseName,
+      ...(value.inboxes ? { inboxes: value.inboxes } : {}),
       ...(value.capabilities ? { capabilities: value.capabilities } : {}),
       ...(value.scouts ? { scouts: value.scouts } : {}),
       ...(value.scoutLimits ? { scoutLimits: value.scoutLimits } : {}),
