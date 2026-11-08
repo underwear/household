@@ -22,7 +22,7 @@ export const MORE_USAGE = `  house show <house>             a house: its pets an
   house timezone [<zone>]        the Household timezone (IANA, e.g. Europe/Madrid): show it, or set it
   house key set <name> [--note <text>] [--value <value>]
                                  change a key's note or value (the value from stdin when neither is given)
-  house channel set <house> <chat> [--pets a,b] [--default a] [--name <name>] [--note <text>] [--token <token>]
+  house channel set <house> <chat> [--pets a,b] [--default a] [--name <name>] [--note <text>] [--token <token>] [--app-token <xapp-token>]
   house owner set <house> <platform> <id> --note <text>
   house pet show <house> <pet>   a pet: what runs it, its allocation, its state and what it uses now
   house pet enable <house> <pet>
@@ -60,6 +60,7 @@ export interface MoreValues {
   default?: string;
   name?: string;
   token?: string;
+  "app-token"?: string;
   now?: boolean;
   at?: string;
   cron?: string;
@@ -253,7 +254,7 @@ export async function runMore(paths: Paths, command: string | undefined, args: s
   }
   if (command === "channel" && a === "set" && args.length === 3) {
     const pets = values.pets?.split(",").map((pet) => pet.trim()).filter(Boolean);
-    const fields = { pets, default: values.default, name: values.name, note: values.note, token: values.token };
+    const fields = { pets, default: values.default, name: values.name, note: values.note, token: values.token, appToken: values["app-token"] };
     await api(paths, "PATCH", `${housePath(b!)}/channels/${enc(c!)}`, Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
     say(`house '${b}': channel of chat ${c} changed`);
     return true;

@@ -19,6 +19,8 @@ export interface SecretInput {
   relayed: boolean;
   sendRaw?(text: string): Promise<void>;
   remove(): Promise<void>;
+  /** Explicit channel limitation: accept managed secrets on the host without promising deletion. */
+  retainsIncomingSecrets?: boolean;
   notice(text: string): Promise<void>;
   choose(card: OwnerCard<SecretDecision>, signal: AbortSignal): Promise<SecretDecision | undefined>;
 }
@@ -36,7 +38,7 @@ export interface SecretRequestOptions {
 interface Request { house: string; pet: string; name: string; reason: string; id: string; env: string; hosts: string[]; expiresAt: number; controller: AbortController; cancelTimer(): void }
 interface Confirmation { house: string; pet?: string; name: string; env: string; value: string; controller: AbortController; cancelTimer(): void }
 const COMMAND = /^\s*\/secret(?:@\w+)?(?:\s|$)/i;
-const TOKEN = /(?:^|[^\p{L}\p{N}_])(?:ghp_[A-Za-z0-9_]{4,}|github_pat_[A-Za-z0-9_]{4,}|sk-[A-Za-z0-9_-]{4,}|xox[bp]-[A-Za-z0-9-]{4,}|AKIA[A-Z0-9]{4,}|-----BEGIN)/u;
+const TOKEN = /(?:^|[^\p{L}\p{N}_])(?:ghp_[A-Za-z0-9_]{4,}|github_pat_[A-Za-z0-9_]{4,}|sk-[A-Za-z0-9_-]{4,}|(?:xox[bp]|xapp)-[A-Za-z0-9-]{4,}|AKIA[A-Z0-9]{4,}|-----BEGIN)/u;
 const WAIT_MS = 10 * 60_000;
 const HOUR = 60 * 60_000;
 const MAX_REQUESTS = 10;
@@ -88,7 +90,7 @@ export class SecretRequests {
         title: `${html(safeText(member.title ?? member.name))} asks for a secret`,
         quote: { label: "Why", text: request.reason },
         facts: [`Secret: <code>${name}</code>`, `For: ${hostList(hosts)}`, `In: <code>$${env}</code>`, "Expires in: 10 minutes"],
-        note: "Reply <code>/secret &lt;value&gt;</code>. Household deletes your message at once; the pet never sees the value.",
+        note: "Reply <code>/secret &lt;value&gt;</code>. The pet never sees the value. Household removes your message where supported; otherwise delete it yourself.",
       });
       if (this.options.choose) {
         const task = this.options.choose(house, pet, {
@@ -116,7 +118,11 @@ export class SecretRequests {
     if (!command && !(input.owner && TOKEN.test(input.text))) return false;
     let raw = input.text;
     input.text = "";
-    try { await input.remove(); } catch {
+    if (input.retainsIncomingSecrets) {
+      await input.notice("This chat cannot remove your message. Delete it yourself; the value is withheld from the agent and its history.").catch(() => {});
+      // Raw-token forwarding is deliberately unavailable on a retaining channel.
+      if (!command) return true;
+    } else try { await input.remove(); } catch {
       await input.notice("Could not delete that message: delete it yourself. It was not sent to the agent or saved.").catch(() => {});
       return true;
     }

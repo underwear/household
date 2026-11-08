@@ -1,5 +1,7 @@
 import { MICROSANDBOX_VERSION } from "../infra/microsandbox-runtime";
 import { statSync } from "node:fs";
+import { SlackWebApi } from "../channel-adapters/slack/api";
+import { isSlackAppToken, isSlackBotToken } from "../channel-adapters/slack/kind";
 import { getMe, isBotToken, isRefusedToken } from "../channel-adapters/telegram";
 import { channelName, platformOf } from "../core/channels";
 import { sameOwner, type Household } from "../core/household";
@@ -89,9 +91,22 @@ export async function doctor({ paths, config, agents, run, telegramApi, released
     for (const { key, kind, pets: users } of keyUsers(pets)) findings.push({ ok: true, text: `key ${key} (${kind}): pets ${users.join(", ")}` });
     const bots = new Map<string, string>();
     for (const house of household.houses) {
-      for (const channel of house.channels) if (!bots.has(channel.token)) bots.set(channel.token, `house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}`);
+      for (const channel of house.channels) if (channel.kind === "telegram-private" && !bots.has(channel.token)) bots.set(channel.token, `house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}`);
     }
     for (const [token, where] of bots) findings.push(await checkBot(where, token, telegramApi));
+    for (const house of household.houses) for (const channel of house.channels.filter(channel => channel.kind === "slack-private")) {
+      const where = `house ${house.name}, Slack channel ${channel.name ?? channel.chat}`;
+      if (!isSlackBotToken(channel.token) || !channel.appToken || !isSlackAppToken(channel.appToken)) {
+        findings.push({ ok: false, text: `${where}: needs bot and Socket Mode app tokens` }); continue;
+      }
+      try {
+        const api = new SlackWebApi(channel.token);
+        const me = await api.call<{ team_id: string; bot_id?: string }>("auth.test");
+        if (!me.bot_id || me.team_id !== channel.chat.split(":")[0]) throw new Error("bot/workspace mismatch");
+        const info = await api.call<{ channel?: { is_im?: boolean } }>("conversations.info", { channel: channel.chat.split(":")[1] });
+        findings.push({ ok: !!info.channel?.is_im, text: `${where}: ${info.channel?.is_im ? "bot and private conversation verified; Socket Mode connects at daemon start" : "not a bot DM"}` });
+      } catch { findings.push({ ok: false, text: `${where}: bot or DM could not be verified; check token, workspace and scopes` }); }
+    }
   } catch (error) {
     findings.push({ ok: false, text: `config: ${(error as Error).message}` });
   }

@@ -93,7 +93,7 @@ export type PlaceKind = "pet-thread" | "house-inbox";
 
 /**
  * A place in a channel: where one pet (later: a scout) talks to people. An address inside Household and the
- * channel adapter: pets never see places, only channels (one channel is one chat to them). `id` is Household's
+ * channel adapter: tools expose public place addresses with Household channel ids. `id` is Household's
  * (its key, `petPlaceKey` / `inboxKey` in channels.ts: it names its channel), stable and unique in the house; `title` is shown to people as is (Household picks a
  * thread's, emoji included; the inbox's is the channel's own, `Channel.inbox`).
  */
@@ -112,6 +112,8 @@ export interface Place {
 export interface Channel {
   /** What the channel calls its inbox (Telegram: General). */
   readonly inbox: string;
+  /** This pet's place is shown directly in the inbox, so forwarding notices would duplicate the conversation. */
+  inInbox?(place: Place): boolean;
   /** Whether sender `ref` is the person the config names by `id` (in `people.owners`: a Telegram user id, …). */
   isSender(ref: SenderRef, id: string): boolean;
   /**
@@ -157,6 +159,8 @@ export interface Channel {
   dropStatus(ref: PostRef): Promise<void>;
   /** Refresh the native typing indicator, if supported. Abort when the turn ends. */
   typing?(place: Place, signal: AbortSignal): Promise<void>;
+  /** This platform cannot delete user messages; managed secrets may stay in the chat, never in a pet. */
+  readonly retainsIncomingSecrets?: true;
   /** Remove a sensitive incoming message before it enters Household history. */
   removeMessage?(ref: MessageRef): Promise<void>;
   /** The person's message `ref` reached its pet. */

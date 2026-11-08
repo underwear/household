@@ -506,15 +506,15 @@ test("the person's message reaches the pet's session; its reply through MCP reac
     await waitFor(() => channel.calls.includes("seen how's it going?"), 5_000); // after the batch window (1.2 s)
     // m1: the start notice, in sibling's thread; the person wrote in General: the same channel, c1; m3, m4: Household's notes about it.
     const header =
-      `{"event":{"kind":"message","id":"m2"},"from":{"id":"p1","name":"Oleg","trust":"owner"},"channel":{"id":"c1","kind":"telegram-private","name":"Telegram Bot DM (threaded)","audience":"private","replyFormat":${replyFormatJson},"meta":{"message":1}}}`;
+      `{"event":{"kind":"message","id":"m2"},"from":{"id":"p1","name":"Oleg","trust":"owner"},"channel":{"id":"c1","kind":"telegram-private","name":"Telegram Bot DM (threaded)","audience":"private","replyFormat":${replyFormatJson},"meta":{"message":1}},"place":{"id":"inbox@c1","kind":"house-inbox","title":"General"}}`;
     expect(runtime.execs).toContain(`household.work.sibling: tmux load-buffer -b household - < <household-message id="m2">\n<household-header>\n${header}\n</household-header>\n<household-content>\nhow's it going?\n</household-content>\n</household-message>`);
 
     const tools = await callMcp(paths, "sibling", { method: "tools/list" });
-    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "preview_open", "preview_list", "preview_close", "secret_request", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
+    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "preview_open", "preview_list", "preview_close", "secret_request", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "places", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
     const replyTo = (args: object) => callMcp(paths, "sibling", { method: "tools/call", params: { name: "reply", arguments: args } });
-    expect((await replyTo({ text: "fine" })).result).toEqual({ content: [{ type: "text", text: '{"id":"m5","channel":"c1"}' }] });
+    expect((await replyTo({ text: "fine" })).result).toEqual({ content: [{ type: "text", text: '{"id":"m5","channel":"c1","place":"pet:sibling@c1"}' }] });
     expect(channel.calls).toContain("post 🐾 Sibling: fine");
-    expect((await replyTo({ text: "and here", channel: "c1" })).result.content[0].text).toBe('{"id":"m6","channel":"c1"}');
+    expect((await replyTo({ text: "and here", channel: "c1" })).result.content[0].text).toBe('{"id":"m6","channel":"c1","place":"pet:sibling@c1"}');
     // Channels are Household's ids, and only the pet's own: a raw id is no way to post somewhere else.
     const refused = async (args: object) => {
       const { result } = await replyTo(args);
@@ -522,7 +522,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
       return result.content[0].text;
     };
     const raw = "is not a Household id: use an id from a header (event.id, from.id, channel.id)";
-    expect(await refused({ text: "x", chat_id: 1 })).toBe("unknown arguments: chat_id (reply takes: text, format, buttons, channel)");
+    expect(await refused({ text: "x", chat_id: 1 })).toBe("unknown arguments: chat_id (reply takes: place, text, format, buttons, channel)");
     expect(await refused({ text: "x", channel: 100200300 })).toBe(`100200300 ${raw}`);
     expect(await refused({ text: "x", channel: "General" })).toBe(`General ${raw}`);
     expect(await refused({ text: "x", channel: "c2" })).toBe("there is no channel c2 in your house (yours: c1): use one of them, or leave channel out");
@@ -576,7 +576,7 @@ test("a dialog hook waits for the person's press in the chat and gets claude's a
     runtime.execs = [];
     await channel.press(posted, 0, "Yes", { place: "c1" });
     await waitFor(() => runtime.execs.some((exec) => exec.includes("load-buffer")));
-    const header = `{"event":{"kind":"button","label":"Yes","on":{"id":"${id}","excerpt":"More?"}},"from":{"id":"p1","name":"Oleg","trust":"owner"},"channel":{"id":"c1","kind":"telegram-private","name":"Telegram Bot DM (threaded)","audience":"private","replyFormat":${replyFormatJson}}}`;
+    const header = `{"event":{"kind":"button","label":"Yes","on":{"id":"${id}","excerpt":"More?"}},"from":{"id":"p1","name":"Oleg","trust":"owner"},"channel":{"id":"c1","kind":"telegram-private","name":"Telegram Bot DM (threaded)","audience":"private","replyFormat":${replyFormatJson}},"place":{"id":"inbox@c1","kind":"house-inbox","title":"General"}}`;
     expect(runtime.execs).toContain(`household.work.sibling: tmux load-buffer -b household - < <household-message>\n<household-header>\n${header}\n</household-header>\n</household-message>`);
   } finally {
     await daemon.stop();
@@ -607,7 +607,7 @@ test("claude's permission card retires old progress, preserves its waiting state
     const hook = event({ hook_event_name: "PermissionRequest", permission_mode: "bypassPermissions", tool_name: "Bash", tool_input });
     await waitFor(() => channel.calls.some((call) => call.includes("Sibling asks for permission")));
     const permissionRef = `post-${channel.calls.length}`;
-    expect(channel.calls.at(-1)).toBe('notice 🐾 Sibling: 🐾 Sibling asks for permission (an action inside its VM):\n\nBash: rm "$x/$f.gz"\n(Remove the extracted archive)\n\nNo answer in 30 s means no. {Yes|No}');
+    expect(channel.calls.at(-1)).toBe('notice General: 🐾 Sibling asks for permission (an action inside its VM):\n\nBash: rm "$x/$f.gz"\n(Remove the extracted archive)\n\nNo answer in 30 s means no. {Yes|No}');
     await waitFor(() => channel.statuses.at(-1) === "drop status-1", 5_000);
     // The permission card remains answerable. Further work gets a new status below it,
     // retaining the real outstanding permission instead of completing that call.

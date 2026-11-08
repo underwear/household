@@ -37,7 +37,7 @@ import { petEnvironment } from "./environment";
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { channelKey, channelName } from "../core/channels";
+import { channelKey, channelName, parsePlaceKey } from "../core/channels";
 import type { Clock } from "../core/clock";
 import { Lifecycles } from "./lifecycle";
 import { HouseholdError } from "../core/errors";
@@ -180,9 +180,9 @@ export async function startDaemon(deps: DaemonDeps) {
   let placed: PlacedPet[] = [];
   let monitoring: Monitoring | undefined;
   const sideworkers = new Sideworkers({
-    store: records, agents, prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", true),
+    store: records, agents, place: (house, pet, place) => chat.spawnPlace(house, pet, place), prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", true),
     // In its parent's place: it was spawned, with a button to its own thread; once closed, that it is finished.
-    announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.name),
+    announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.placement === "same" ? undefined : worker.name, worker.originPlace),
     finished: (worker, notice) => chat.rewrite(worker.house, notice, sideworkerFinished(worker)),
     configured: () => config.load(), reload: () => applyConfig(),
     resolveDirectory: async (house, pet, cwd) => {
@@ -242,7 +242,9 @@ export async function startDaemon(deps: DaemonDeps) {
   const scoutPostedFiles = new Set<string>();
   const scouts = new Scouts({
     store: records, configured: () => config.load(),
-    choose: (caller,card,signal)=>chat.ownerCard(caller.house,caller.pet,card,signal),
+    place: (house,pet,place)=>chat.spawnPlace(house,pet,place),
+    channel: (house,pet)=>chat.targetChannel(house,pet),
+    choose: (caller,card,signal,channel,origin)=>chat.ownerCard(caller.house,caller.pet,card,signal,channel,origin),
     values: async run => {
       const current=await config.load();
       return scoutStorage.vmValues(run.house,run.definition,run.capabilities,current.secrets);
@@ -265,9 +267,17 @@ export async function startDaemon(deps: DaemonDeps) {
       return chat.liveNotice(run.house,run.id,shown);
     },
     send: (house,pet,text)=>{delivery.send(house,pet,{origin:"internal",text});},
-    rewrite: (run,notice,text,link)=>chat.rewrite(run.house,notice,scouts.redact(run.house,run.id,text),link?run.id:undefined),
+    rewrite: (run,notice,text,link)=>chat.rewrite(run.house,notice,scouts.redact(run.house,run.id,text),link && run.placement !== "same" ? run.id : undefined),
     // An ended run is no pet of the config any more: its thread is found as its pet's.
-    removeThread: run=>chat.removePlaces(run.house,run.parent,run.id),
+    canRemoveThread: run=>{
+      const origin=run.channel??parsePlaceKey(run.announcement?.place)?.channel;
+      return !!origin && chat.canRemovePlaces(run.house,run.parent,origin);
+    },
+    removeThread: run=>{
+      const origin=run.channel??parsePlaceKey(run.announcement?.place)?.channel;
+      if(!origin) throw new Error("The scout’s original channel is unknown; its thread was not deleted");
+      return chat.removePlaces(run.house,run.parent,run.id,origin);
+    },
     secret: async (run,key,value)=>{await scoutStorage.giveSecret(run.house,run.id,key,value);},
     collect: async (run,files)=>{const result=await scoutArtifacts.collect(run,files);for(const file of await scoutArtifacts.ownerFiles(run,result.map(f=>f.id))){const key=`${run.id}/${file.id}`;if(scoutPostedFiles.has(key))continue;await chat.sendAttachment(run.house,run.id,{kind:"document",name:file.name,bytes:file.bytes});scoutPostedFiles.add(key);}return result;},
     file: (run,name)=>scoutArtifacts.file(run,name),

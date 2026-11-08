@@ -13,8 +13,7 @@ import { block, HEADER_TAG, tagFreeJson } from "./tags";
  *
  * One line of compact JSON between the tags. Everything but `channel.meta` is contract: Household's ids
  * (`m…`, `p…`, `c…`, see ids.ts), which tools take back, and Household's own facts. `channel.meta` is the
- * channel's (`External`): shown, never a reason for anything. The pet sees channels, never places: one
- * channel is one chat to it, wherever in it (a thread, General) the message was written.
+ * channel's (`External`): shown, never a reason for anything. The public place identifies the exact destination inside a channel; its channel component uses Household ids, never vendor ids.
  */
 
 /** The house's owner, or anyone else (another person: their words are a request, never the owner's order). */
@@ -63,6 +62,7 @@ export interface Header {
   event: HeaderEvent;
   from: { id: string; name: string; trust: Trust };
   channel: HeaderChannel;
+  place?: { id: string; kind: string; title: string };
 }
 
 
@@ -133,11 +133,12 @@ export function cleanChannel({ id, kind, name, audience, meta, replyFormat }: He
 /**
  * The header block: the tags, and one line of compact JSON between them, which never holds a tag (`tagFreeJson`).
  */
-export function renderHeader({ event: what, from, channel }: Header): string {
+export function renderHeader({ event: what, from, channel, place }: Header): string {
   const json = {
     event: event(what),
     from: { id: from.id, name: clean(from.name), trust: from.trust },
     channel: cleanChannel(channel),
+    ...(place ? { place: { id: place.id, kind: place.kind, title: clean(place.title) } } : {}),
   };
   return block(HEADER_TAG, [tagFreeJson(json)]);
 }

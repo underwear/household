@@ -1,3 +1,4 @@
+import { channelKey, parsePlaceKey, petPlaceKey } from "../core/channels";
 import { houseFeatures } from "../core/house-features";
 import { agentOf, type Agents } from "./agents";
 import { randomBytes } from "node:crypto";
@@ -20,6 +21,10 @@ export interface SideworkerLaunch {
 }
 
 export interface SideworkerRecord {
+  channel?: string;
+  originPlace?: string;
+  place?: string;
+  placement?: "same" | "thread";
   house: string;
   name: string;
   parent: string;
@@ -53,6 +58,7 @@ export const SIDEWORKER_IDLE_MS = 30 * 60_000;
 export const SIDEWORKER_STATE_KEY = "sideworkers.v1";
 const STATE_KEY = SIDEWORKER_STATE_KEY;
 export interface SideworkerDeps {
+  place?(house: string, pet: string, place?: string): { channel: string; origin: string; publicOrigin: string };
   store: KeyValueStore;
   agents: Agents;
   /** Captured before it is removed, run after: its thread goes (or, where it cannot, a notice there says it stopped). */
@@ -107,11 +113,13 @@ export class Sideworkers {
         const parent = house.pets.find(pet => pet.name === worker.parent)!;
         return { ...parent, ...(worker.launch ? { ...worker.launch, reasoningEffort: worker.launch.reasoningEffort, mode: worker.launch.mode } : {}),
           enabled: parent.enabled !== false && houseFeatures(house).sideworkers,
+          originPlace: worker.originPlace,
+          ...(worker.placement === "same" ? { chatPlace: worker.originPlace } : {}),
           name: worker.name, title: worker.name, emoji: "⛏️", aliases: [], cpus: worker.cpus, memoryMiB: worker.memoryMiB,
           sideworker: { parent: worker.parent, cwd: worker.cwd, ...(worker.parentHome ? { parentHome: worker.parentHome } : {}), ...(worker.worktree ? { branch: worker.worktree.branch } : {}) } };
       });
       return { ...house, pets: [...house.pets, ...pets], channels: house.channels.map(channel => ({ ...channel,
-        pets: [...channel.pets, ...workers.filter(worker => channel.pets.includes(worker.parent)).map(worker => worker.name)],
+        pets: [...channel.pets, ...workers.filter(worker => channel.pets.includes(worker.parent) && channelKey(channel) === (worker.channel ?? parsePlaceKey(worker.announcement?.place)?.channel)).map(worker => worker.name)],
         // Adding a worker must never make an existing one-pet channel's default ambiguous.
         ...(channel.default || channel.pets.length !== 1 ? {} : { default: channel.pets[0] }),
       })) };
@@ -131,7 +139,11 @@ export class Sideworkers {
     return { inherited: this.launch(config, house.name, parent).launch,
       profiles: (house.sideworkerProfiles ?? []).map(profile => ({ name: profile.name, ...this.launch(config, house.name, profile).launch })) };
   }
-  spawn(caller: PetIdentity, input: { cwd: string; task: string; name?: string; profile?: string; worktree?: boolean }): Promise<SideworkerRecord> {
+  spawn(caller: PetIdentity, input: { cwd: string; task: string; name?: string; profile?: string; worktree?: boolean; place?: string; placement?: "same" | "thread" }): Promise<SideworkerRecord> {
+    if (input.place !== undefined && typeof input.place !== "string") return Promise.reject(new Error("place must be a place.id"));
+    if (input.placement !== undefined && !["same", "thread"].includes(input.placement)) return Promise.reject(new Error("placement must be same or thread"));
+    const destination = this.deps.place?.(caller.house, caller.pet, input.place);
+    if (input.place !== undefined && !destination) return Promise.reject(new Error("Explicit place routing is unavailable"));
     return this.serial(async () => {
       const config = await this.deps.configured();
       const house = config.houses.find(item => item.name === caller.house);
@@ -148,6 +160,9 @@ export class Sideworkers {
       if (this.list(caller.house).length >= limit) throw new Error(`House sideworker limit (${limit}) reached. Close an existing sideworker first.`);
       if (!house.channels.some(channel => channel.pets.includes(caller.pet))) throw new Error("Attach your pet to a channel before spawning a sideworker");
       if (typeof input.cwd !== "string" || !input.cwd.startsWith("/") || /[\x00-\x1f]/.test(input.cwd) || input.cwd.length > 4096) throw new Error("cwd must be an absolute guest directory path");
+      const channels = house.channels.filter(channel => channel.pets.includes(caller.pet));
+      const originChannel = destination?.channel ?? (channels.length === 1 ? channelKey(channels[0]!) : undefined);
+      if (!originChannel || !channels.some(channel => channelKey(channel) === originChannel)) throw new Error("Choose an explicit place for this sideworker");
       const requestedCwd = posix.normalize(input.cwd);
       if (typeof input.task !== "string" || !input.task.trim() || input.task.length > 32_000) throw new Error("task must contain 1–32000 characters");
       if (input.worktree !== undefined && typeof input.worktree !== "boolean") throw new Error("worktree must be true or false");
@@ -167,7 +182,7 @@ export class Sideworkers {
         throw new Error("The git worktree resolves outside the parent's shared home; keep the repository and .worktrees directory inside it, or use worktree: false.");
       }
       const cwd = worktreeCwd ?? resolved;
-      const record: SideworkerRecord = { house: caller.house, name, parent: caller.pet, parentHome, ...(input.profile === undefined ? {} : { profile: input.profile }), launch, cwd, ...(worktree ? { worktree: { branch: worktree.branch, base: worktree.base } } : {}), createdAt: this.now(), cpus: house.sideworkerLimits?.cpus ?? 2, memoryMiB: house.sideworkerLimits?.memoryMiB ?? 1024 };
+      const record: SideworkerRecord = { channel: originChannel, originPlace: destination?.origin ?? petPlaceKey(caller.pet, originChannel), placement: input.placement ?? "thread", ...(destination ? { place: input.placement === "same" ? destination.publicOrigin : petPlaceKey(name, parsePlaceKey(destination.publicOrigin)!.channel) } : {}), house: caller.house, name, parent: caller.pet, parentHome, ...(input.profile === undefined ? {} : { profile: input.profile }), launch, cwd, ...(worktree ? { worktree: { branch: worktree.branch, base: worktree.base } } : {}), createdAt: this.now(), cpus: house.sideworkerLimits?.cpus ?? 2, memoryMiB: house.sideworkerLimits?.memoryMiB ?? 1024 };
       this.records.push(record); this.save();
       try {
         await this.deps.reload();
@@ -239,18 +254,21 @@ export class Sideworkers {
   stop() { clearInterval(this.timer); }
 }
 
+/** Internal channel/notice handles stay on the host; tools return the public destination. */
+function publicWorker({ channel: _channel, originPlace: _origin, announcement: _notice, ...worker }: SideworkerRecord) { return worker; }
+
 export function sideworkerTools(workers: Sideworkers): McpTool<PetIdentity>[] {
   return [
-    { name: "sideworker_spawn", description: "Start a sideworker in a separate VM with shared project files. Choose a house-approved profile from sideworker_profiles for its harness/key/model/mode, or omit profile to inherit your own settings. Settings are captured at spawn. It has its own clean session and Telegram topic, your Household memory, and no scheduled tasks. Its cwd must resolve to an existing directory inside your shared home; fresh rootfs and private harness home are separate. In a git repository it gets its own worktree by default (repository/.worktrees/<name>, branch sideworker/<name> from your HEAD; your uncommitted changes are not in it): merge its branch when it is done. Pass worktree: false to share your live directory instead; then never let both of you bind-mount the same data directory into containers. You manage it with house_send and sideworker_close. The house enforces worker resource/count limits.",
-      inputSchema: { type: "object", additionalProperties: false, required: ["cwd", "task"], properties: { profile: { type: "string", description: "Optional house profile name from sideworker_profiles; omitted inherits your harness/key/model/mode" }, cwd: { type: "string" }, task: { type: "string", maxLength: 32000 }, name: { type: "string", description: "Optional sw-prefixed lowercase name, e.g. sw-tests" }, worktree: { type: "boolean", description: "In a git repository: its own worktree (default true) or your shared live directory (false)" } } },
+    { name: "sideworker_spawn", description: "Start a sideworker in a separate VM with shared project files. Choose a house-approved profile from sideworker_profiles for its harness/key/model/mode, or omit profile to inherit your own settings. Settings are captured at spawn. It has its own clean session; place selects its destination, placement chooses a dedicated thread or an existing shared place. It inherits your Household memory, and no scheduled tasks. Its cwd must resolve to an existing directory inside your shared home; fresh rootfs and private harness home are separate. In a git repository it gets its own worktree by default (repository/.worktrees/<name>, branch sideworker/<name> from your HEAD; your uncommitted changes are not in it): merge its branch when it is done. Pass worktree: false to share your live directory instead; then never let both of you bind-mount the same data directory into containers. You manage it with house_send and sideworker_close. The house enforces worker resource/count limits.",
+      inputSchema: { type: "object", additionalProperties: false, required: ["cwd", "task"], properties: { place: { type: "string", description: "Parent place.id from header or places; defaults to the current request place" }, placement: { type: "string", enum: ["same", "thread"], description: "thread (default): dedicated place; same: share the selected place" }, profile: { type: "string", description: "Optional house profile name from sideworker_profiles; omitted inherits your harness/key/model/mode" }, cwd: { type: "string" }, task: { type: "string", maxLength: 32000 }, name: { type: "string", description: "Optional sw-prefixed lowercase name, e.g. sw-tests" }, worktree: { type: "boolean", description: "In a git repository: its own worktree (default true) or your shared live directory (false)" } } },
       available: caller => !workers.worker(caller.house, caller.pet),
-      async call(caller, args) { return JSON.stringify(await workers.spawn(caller, args as { cwd: string; task: string; name?: string; profile?: string; worktree?: boolean })); } },
+      async call(caller, args) { return JSON.stringify(publicWorker(await workers.spawn(caller, args as { cwd: string; task: string; name?: string; profile?: string; worktree?: boolean; place?: string; placement?: "same" | "thread" }))); } },
     { name: "sideworker_profiles", description: "List house-approved sideworker profiles and your inherited defaults: adapter, model, effort, permission mode and credential reference name only. Pass a profile name to sideworker_spawn, or omit profile to use inherited settings.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       available: caller => !workers.worker(caller.house, caller.pet),
       async call(caller) { return JSON.stringify(await workers.profiles(caller)); } },
     { name: "sideworkers", description: "List the house's active or closing sideworkers, their parent pets, working directories and observed idle times.", inputSchema: { type: "object", additionalProperties: false, properties: {} },
-      async call(caller) { return JSON.stringify(workers.list(caller.house)); } },
+      async call(caller) { return JSON.stringify(workers.list(caller.house).map(publicWorker)); } },
     { name: "sideworker_close", description: "Stop and remove one of your sideworker VMs. Shared project files remain; the worker's private home is retained for inspection. Ends its session immediately, and its chat thread is deleted with all its messages (in Telegram): tell your human first what in it they may want to keep.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: { name: { type: "string" } } },
       available: caller => !workers.worker(caller.house, caller.pet),

@@ -212,3 +212,20 @@ test("multiple tokens share domains with unique names/env; env conflicts are che
   expect(s.saved).toHaveLength(1);
   await s.requests.stop();
 });
+
+test("a retaining chat accepts /secret on the host, never forwards raw tokens or claims deletion", async () => {
+  const s = setup();
+  const input = s.input("/secret weather ghp_RETAINED_SYNTHETIC api.example.com", { retainsIncomingSecrets: true });
+  expect(await s.requests.handle(input)).toBe(true);
+  expect(s.deletes()).toBe(0);
+  expect(input.text).toBe("");
+  expect(s.notices.join()).toContain("Delete it yourself");
+  s.decide("save"); await flush();
+  expect(s.saved[0]).toEqual(["work", "weather", "ghp_RETAINED_SYNTHETIC", ["api.example.com"], "SECRET_WEATHER"]);
+  expect(JSON.stringify([s.notifications, s.logs, s.notices])).not.toContain("ghp_RETAINED_SYNTHETIC");
+  let forwarded = false;
+  await s.requests.handle(s.input("xapp-SYNTHETIC-DO-NOT-FORWARD", { retainsIncomingSecrets: true, sendRaw: async () => { forwarded = true; } }));
+  expect(forwarded).toBe(false);
+  expect(s.deletes()).toBe(0);
+  await s.requests.stop();
+});

@@ -1,7 +1,7 @@
 import type { SecretRequests } from "./secret-requests";
 import { withFiles, type OutgoingAttachment, type Attachment } from "../core/attachment";
 import { DownloadRefused, type Channel, type Choices, type ReplyMode, type InboundMessage, type Place, type PostRef } from "../core/channel";
-import { channelKey, channelName, channelsOf, parsePlaceKey, petPlaceKey, type ChannelConfig } from "../core/channels";
+import { inboxKey, channelKey, channelName, channelsOf, parsePlaceKey, petPlaceKey, type ChannelConfig } from "../core/channels";
 import type { DialogAnswer, DialogQuestion } from "../core/dialog";
 import { HouseholdError } from "../core/errors";
 import { headAndTail } from "../core/excerpt";
@@ -9,7 +9,7 @@ import type { Header, HeaderEvent } from "../core/header";
 import { petDisplay, petPlace, petTitle, type House } from "../core/household";
 import { expectId } from "../core/ids";
 import { batchable, type ChannelFacts, type ChatRecord, type ChatSender, type Message, type NewChatMessage } from "../core/message";
-import { routedPet } from "../core/routing";
+import { addressee, routedPet } from "../core/routing";
 import { carriesHouseholdTag } from "../core/tags";
 import type { EventLog } from "../infra/event-log";
 import type { ChatIds, ChatRecords, KeyValueStore } from "../infra/sqlite-store";
@@ -180,7 +180,7 @@ export class Chat {
 
   /** Secret prompts must fail visibly when there is no channel, never silently become a log line. */
   async secretNotice(house: string, pet: string, text: string): Promise<void> {
-    const { spot, problem } = this.channels.target(house, pet);
+    const { spot, problem } = this.currentTarget(house, pet);
     if (problem || !spot?.channel) throw new HouseholdError("No chat is available for secret entry");
     const refs = await spot.channel.notice(spot.place, text, undefined, "html");
     this.posted(house, pet, spot.place, refs, { kind: "household" }, text);
@@ -258,8 +258,50 @@ export class Chat {
    * A House-owned card (`OwnerCard`): only owner button presses move it, never free text or an agent's reply.
    * Resolves to the state of its outcome; undefined when it closed first (abort, its channel gone, not posted).
    */
-  ownerCard<S>(house: string, pet: string, card: OwnerCard<S>, signal: AbortSignal): Promise<S | undefined> {
-    const { spot } = this.channels.target(house, pet);
+  private readonly turnPlaces = new Map<string, { turn?: string; place?: string }>();
+
+  private currentTarget(house: string, pet: string): Target {
+    if (!this.turnPlaces.has(`${house}/${pet}`)) return this.channels.target(house, pet);
+    try { return this.destination(house, pet); }
+    catch (error) { return { problem: (error as Error).message }; }
+  }
+
+  private destination(house: string, pet: string, channel?: string, place?: string): Target {
+    if (channel !== undefined && place !== undefined) throw new HouseholdError("Pass place or legacy channel, not both");
+    if (place !== undefined) return { spot: this.channels.chosenPlace(house, pet, place) };
+    if (channel !== undefined) return { spot: this.channels.chosen(house, this.channels.spotsOf(house, pet).spots, channel) };
+    const context = this.turnPlaces.get(`${house}/${pet}`);
+    if (context?.place) return { spot: this.channels.chosenPlace(house, pet, this.channels.publicPlace(house, { id: context.place, kind: "pet-thread", title: pet }).id) };
+    const spots = this.channels.spotsOf(house, pet).spots;
+    if (spots.length === 0) return {};
+    if (spots.length === 1) return { spot: spots[0]! };
+    return { problem: "No unambiguous request place; pass place explicitly (use places)" };
+  }
+
+  places(house: string, pet: string) {
+    return this.channels.spotsOf(house, pet).spots.flatMap(spot => {
+      const config = this.channels.house(house)!.channels.find(c => channelKey(c) === spot.key)!;
+      const channel = this.channels.headerChannel(house, config);
+      const places = [spot.place, this.channels.inbox(spot.key, spot.channel)];
+      return places.filter((p, i) => places.findIndex(other => other.id === p.id) === i).map(place => ({
+        ...this.channels.publicPlace(house, place), channel: channel.id, channelKind: channel.kind,
+        channelName: channel.name, available: !!spot.channel, placement: ["same", "thread"],
+      }));
+    });
+  }
+
+  spawnPlace(house: string, pet: string, place?: string): { channel: string; origin: string; publicOrigin: string } {
+    const target = this.destination(house, pet, undefined, place);
+    if (!target.spot?.channel) throw new HouseholdError(target.problem ?? "The requested place is not open");
+    const own = this.channels.spotsOf(house, pet).spots.find(spot => spot.key === target.spot!.key);
+    if (parsePlaceKey(target.spot.place.id)?.pet && own?.place.id !== target.spot.place.id) throw new HouseholdError("Spawn in your own place or the inbox, not another helper’s temporary place");
+    return { channel: target.spot.key, origin: target.spot.place.id, publicOrigin: this.channels.publicPlace(house, target.spot.place).id };
+  }
+
+  targetChannel(house: string, pet: string): string | undefined { return this.currentTarget(house, pet).spot?.key; }
+
+  ownerCard<S>(house: string, pet: string, card: OwnerCard<S>, signal: AbortSignal, channelKey?: string, origin?: string): Promise<S | undefined> {
+    const spot = origin ? this.channels.chosenPlace(house, pet, this.channels.publicPlace(house, { id: origin, kind: "pet-thread", title: pet }).id) : channelKey === undefined ? this.currentTarget(house, pet).spot : this.channels.spotsOf(house, pet).spots.find(spot => spot.key === channelKey);
     if (signal.aborted || !this.channels.spotsOf(house, pet).found || !spot?.channel) return Promise.resolve(undefined);
     return this.ownerCardAt(house, pet, spot, card, signal);
   }
@@ -339,10 +381,10 @@ export class Chat {
    * too often (a pet must not flood the chat its notices share). Resolves to Household's ids of the post and of
    * the channel it went to.
    */
-  replyFormat(house: string, pet: string, channel?: string) {
+  replyFormat(house: string, pet: string, channel?: string, place?: string) {
     const { found, spots } = this.channels.spotsOf(house, pet);
     if (!found) throw new HouseholdError(`unknown pet ${house}/${pet}`);
-    const target = channel === undefined ? this.channels.target(house, pet) : { spot: this.channels.chosen(house, spots, channel) };
+    const target = this.destination(house, pet, channel, place);
     if (target.problem) throw new HouseholdError(target.problem);
     if (!target.spot) throw new HouseholdError("no chat channel is available");
     const config = this.channels.house(house)!.channels.find(item => channelKey(item) === target.spot!.key)!;
@@ -350,9 +392,9 @@ export class Chat {
     return { channel: header.id, ...header.replyFormat };
   }
 
-  async reply(house: string, pet: string, text: string, buttons?: Choices, channel?: string, format: ReplyMode = "regular"): Promise<{ id: string; channel: string }> {
-    if (format === "rich" && !this.replyFormat(house, pet, channel).rich) throw new HouseholdError("this channel does not support rich replies");
-    return this.publish(house, pet, text, buttons, channel, undefined, undefined, format);
+  async reply(house: string, pet: string, text: string, buttons?: Choices, channel?: string, format: ReplyMode = "regular", place?: string): Promise<{ id: string; channel: string; place?: string }> {
+    if (format === "rich" && !this.replyFormat(house, pet, channel, place).rich) throw new HouseholdError("this channel does not support rich replies");
+    return this.publish(house, pet, text, buttons, channel, undefined, undefined, format, place);
   }
 
   /** Edit only a single text reply authored by this pet; never notices, files, or another pet's post. */
@@ -379,11 +421,11 @@ export class Chat {
     return { id, channel };
   }
 
-  async sendAttachment(house: string, pet: string, attachment: OutgoingAttachment, channel?: string, signal?: AbortSignal): Promise<{ id: string; channel: string }> {
-    return this.publish(house, pet, `(${attachment.kind}) ${attachment.name}${attachment.caption ? `: ${attachment.caption}` : ""}`, undefined, channel, attachment, signal);
+  async sendAttachment(house: string, pet: string, attachment: OutgoingAttachment, channel?: string, signal?: AbortSignal, place?: string): Promise<{ id: string; channel: string; place?: string }> {
+    return this.publish(house, pet, `(${attachment.kind}) ${attachment.name}${attachment.caption ? `: ${attachment.caption}` : ""}`, undefined, channel, attachment, signal, "regular", place);
   }
 
-  private async publish(house: string, pet: string, text: string, buttons?: Choices, channel?: string, attachment?: OutgoingAttachment, signal?: AbortSignal, format: ReplyMode = "regular"): Promise<{ id: string; channel: string }> {
+  private async publish(house: string, pet: string, text: string, buttons?: Choices, channel?: string, attachment?: OutgoingAttachment, signal?: AbortSignal, format: ReplyMode = "regular", place?: string): Promise<{ id: string; channel: string; place?: string }> {
     if (!text.trim()) throw new HouseholdError("the text is empty");
     const { replyChars, repliesPerMinute } = this.limits;
     if (text.length > replyChars) throw new HouseholdError(`the text has ${text.length} characters, over ${replyChars}: shorten it`);
@@ -391,14 +433,15 @@ export class Chat {
     if (carriesHouseholdTag([text, choices])) throw new HouseholdError("the text or a button carries a Household tag (household-…): not sent, write it some other way");
     const { found, spots } = this.channels.spotsOf(house, pet);
     if (!found) throw new HouseholdError(`unknown pet ${house}/${pet}`);
-    const target = channel === undefined ? this.channels.target(house, pet) : { spot: this.channels.chosen(house, spots, channel) };
+    const target = this.destination(house, pet, channel, place);
     if (target.problem) throw new HouseholdError(`${target.problem}; the reply was not sent`);
     const { spot } = target;
     if (!spot) {
       const none = this.channels.house(house)?.channels.length ? `${pet} is placed in no channel of house ${house}` : `house ${house} has no chat set up`;
       throw new HouseholdError(`${none}; the reply was not sent`);
     }
-    const { channel: open, place: where } = spot;
+    const open = spot.channel;
+    const where = { ...spot.place, title: petPlace(found, "").title };
     if (!open) {
       const config = this.channels.house(house)?.channels.find((candidate) => channelKey(candidate) === spot.key);
       throw new HouseholdError(`channel ${config ? channelName(knownChannelKinds(), config) : spot.key} of house ${house} is not open (see the daemon's log); the reply was not sent`);
@@ -410,7 +453,7 @@ export class Chat {
     this.live.replied(live, { channel: open, place: where });
     const record = this.posted(house, pet, where, posted, { kind: "pet", name: pet }, text, attachment ? undefined : { format, parts: posted.length, ...(choices ? { buttons: choices } : {}) });
     this.delivery.answered(house, pet);
-    return { id: record.id, channel: this.records.channelId(house, spot.key) };
+    return { id: record.id, channel: this.records.channelId(house, spot.key), place: this.channels.publicPlace(house, where).id };
   }
 
   /**
@@ -444,7 +487,7 @@ export class Chat {
   async ask(house: string, pet: string, dialog: DialogQuestion, signal?: AbortSignal): Promise<DialogAnswer | undefined> {
     const { found } = this.channels.spotsOf(house, pet);
     const name = `${house}/${pet}`;
-    const target = this.channels.target(house, pet);
+    const target = this.currentTarget(house, pet);
     if (found && target.problem) {
       this.events.error(`pet ${name}: a dialog was refused: ${target.problem}`);
       return { kind: "refused", message: `Household could not put this to your human: ${target.problem}. Ask with the reply tool instead, naming one of your channels.` };
@@ -488,11 +531,20 @@ export class Chat {
     };
     const heading = `💬 ${title(from)} → ${title(to)}:`;
     const shown = `${heading}\n\n${text.split(/\r?\n/).map(line => `> ${line}`).join("\n")}`;
+    const participants = [from, to].map(name => this.channels.spotsOf(house, name).found);
+    const helper = participants.find(p => p?.originPlace && participants.some(other => other && other.name === (p.sideworker?.parent ?? p.scout?.parent)));
+    const parent = helper?.sideworker?.parent ?? helper?.scout?.parent;
+    const postedPlaces = new Set<string>();
     const results = await Promise.allSettled([from, to].map(async pet => {
-      const target = this.channels.target(house, pet);
+      const target = pet === parent && helper?.originPlace
+        ? { spot: this.channels.chosenPlace(house, pet, this.channels.publicPlace(house, { id: helper.originPlace, kind: "pet-thread", title: pet }).id) }
+        : this.currentTarget(house, pet);
       if (target.problem) throw new Error(target.problem);
       const spot = target.spot;
       if (!spot?.channel) return;
+      const physical = spot.channel.inInbox?.(spot.place) ? inboxKey(spot.key) : spot.place.id;
+      if (postedPlaces.has(physical)) return;
+      postedPlaces.add(physical);
       const refs = spot.channel.quote
         ? await spot.channel.quote(spot.place, heading, text)
         : await spot.channel.post(spot.place, shown);
@@ -505,7 +557,7 @@ export class Chat {
   }
 
   notice(house: string, pet: string, text: string): Promise<void> {
-    return this.noticeTo(house, pet, this.channels.target(house, pet), text);
+    return this.noticeTo(house, pet, this.currentTarget(house, pet), text);
   }
 
   /**
@@ -513,7 +565,7 @@ export class Chat {
    * rewritten in place later. None while the pet has no chat place (yet). Never throws.
    */
   async liveNotice(house: string, pet: string, text: string): Promise<LiveNotice | undefined> {
-    const { spot } = this.channels.target(house, pet);
+    const { spot } = this.currentTarget(house, pet);
     if (!spot?.channel) return undefined;
     try {
       const refs = await spot.channel.notice(spot.place, text, undefined, "html");
@@ -536,11 +588,11 @@ export class Chat {
    * there says it was stopped.
    */
   prepareSideworkerCloseNotice(house: string, pet: string, kind = "Sideworker", remove = false): () => Promise<void> {
-    const target = this.channels.target(house, pet);
+    const target = this.currentTarget(house, pet);
     const { found, spots } = this.channels.spotsOf(house, pet);
     const title = found ? petTitle(found) : pet;
     return async () => {
-      if (remove) {
+      if (remove && !found?.chatPlace) {
         let removed = false;
         for (const spot of spots) {
           if (!spot.channel?.removePlace) continue;
@@ -549,7 +601,7 @@ export class Chat {
         }
         if (removed) return;
       }
-      return this.noticeTo(house, pet, target, `${kind} ${title} has been stopped and removed. You can delete this topic.`);
+      return this.noticeTo(house, pet, target, `${kind} ${title} has finished; its VM was removed. Conversation history stays here.`);
     };
   }
 
@@ -558,7 +610,7 @@ export class Chat {
    * Never throws.
    */
   async placeLink(house: string, pet: string): Promise<string | undefined> {
-    const { spot } = this.channels.target(house, pet);
+    const { spot } = this.currentTarget(house, pet);
     if (!spot?.channel?.placeLink) return undefined;
     return spot.channel.placeLink(spot.place).catch((error) => {
       this.events.error(`pet ${house}/${pet}: no link to its place (${(error as Error).message})`);
@@ -571,8 +623,8 @@ export class Chat {
    * (and its channel has such links). Resolves to its handle, to rewrite it later; undefined when it could not be
    * posted. Never throws.
    */
-  async announce(house: string, pet: string, text: string, linkTo?: string): Promise<PostedNotice | undefined> {
-    const { spot } = this.channels.target(house, pet);
+  async announce(house: string, pet: string, text: string, linkTo?: string, origin?: string): Promise<PostedNotice | undefined> {
+    const spot = origin ? this.channels.chosenPlace(house, pet, this.channels.publicPlace(house, { id: origin, kind: "pet-thread", title: pet }).id) : this.currentTarget(house, pet).spot;
     if (!spot?.channel) return undefined;
     try {
       const refs = await spot.channel.notice(spot.place, text, undefined, "html");
@@ -604,9 +656,13 @@ export class Chat {
    * config (an ended scout) has them there, as its pet's. Resolves to how many went (0: there were none). Throws
    * when no channel of `via` can remove places, or one refused.
    */
-  async removePlaces(house: string, via: string, owner: string): Promise<number> {
+  canRemovePlaces(house: string, via: string, channel?: string): boolean {
+    return this.channels.spotsOf(house, via).spots.some(spot => (channel === undefined || spot.key === channel) && !!spot.channel?.removePlace);
+  }
+
+  async removePlaces(house: string, via: string, owner: string, channel?: string): Promise<number> {
     const { spots } = this.channels.spotsOf(house, via);
-    const able = spots.filter((spot) => spot.channel?.removePlace);
+    const able = spots.filter((spot) => (channel === undefined || spot.key === channel) && spot.channel?.removePlace);
     if (able.length === 0) throw new HouseholdError("this chat cannot delete threads: delete it in the chat app yourself");
     let removed = 0;
     for (const spot of able) {
@@ -619,7 +675,11 @@ export class Chat {
   onDelivery(update: DeliveryUpdate): void {
     const { house, pet } = update;
     if (update.kind === "notification") { void this.notice(house, pet, update.text); return; }
-    if (update.kind === "turn-finished") return this.live.finish(house, pet, update.turn);
+    if (update.kind === "turn-finished") {
+      const context = this.turnPlaces.get(`${house}/${pet}`);
+      if (!update.turn || context?.turn === update.turn) this.turnPlaces.delete(`${house}/${pet}`);
+      return this.live.finish(house, pet, update.turn);
+    }
     if (update.kind === "turn-started") return this.turnStarted(house, pet, update.turn, update.messages);
     if (update.kind === "progress") return this.live.progress(house, pet, update.event);
     if (update.kind === "dialog") {
@@ -630,7 +690,11 @@ export class Chat {
       }
       return update.dialog ? this.live.dialogOpened(house, pet, update.dialog, update.input) : this.live.dialogClosed(house, pet);
     }
-    if (update.kind === "turn-lost") return this.live.lost(house, pet, update.why === "failed" ? "failed" : "other", update.turn);
+    if (update.kind === "turn-lost") {
+      const context = this.turnPlaces.get(`${house}/${pet}`);
+      if (!update.turn || context?.turn === update.turn) this.turnPlaces.delete(`${house}/${pet}`);
+      return this.live.lost(house, pet, update.why === "failed" ? "failed" : "other", update.turn);
+    }
     const { messages } = update;
     if (update.kind === "failed") {
       const worker = !!this.channels.spotsOf(house, pet).found?.sideworker;
@@ -642,7 +706,7 @@ export class Chat {
           ? `Household restarted while answering ${what}. No reply will come: write again.`
           : `${what} not sent: the agent seems to be in a dialog. \`house pet attach\``;
       // Where the batch came from (never another channel); else where the pet was last written to.
-      void this.noticeTo(house, pet, first.place === undefined ? this.channels.target(house, pet) : this.channels.spotOfMessage(house, pet, first.place), text);
+      void this.noticeTo(house, pet, first.place === undefined ? this.currentTarget(house, pet) : this.channels.spotOfMessage(house, pet, first.place), text);
       return;
     }
     const fromChat = messages.filter((message) => message.origin === "chat");
@@ -666,16 +730,21 @@ export class Chat {
    * of Household's) continues the turn going on.
    */
   private turnStarted(house: string, pet: string, turn: string | undefined, messages: Message[]): void {
-    if (messages.length === 0) return this.live.continued(house, pet, turn);
+    if (messages.length === 0) {
+      const previous = this.turnPlaces.get(`${house}/${pet}`);
+      if (previous) this.turnPlaces.set(`${house}/${pet}`, { ...previous, turn });
+      return this.live.continued(house, pet, turn);
+    }
     const { found, spots } = this.channels.spotsOf(house, pet);
     if (!found) return;
     const last = messages.filter((message) => message.origin === "chat" && message.place !== undefined).at(-1);
+    this.turnPlaces.set(`${house}/${pet}`, { turn, place: last?.place });
     const at = last && this.channels.spotAt(house, last.place!);
     // Delegated work has no chat-origin place. A worker's own thread still shows its native progress;
     // internal reminders delivered to ordinary pets and scheduled tasks remain silent.
     const internalWork = (found.sideworker || found.scout) && messages.some(message => message.origin === "internal");
-    const spot = at ? spots.find((candidate) => candidate.key === at.key) : internalWork ? this.channels.target(house, pet).spot : undefined;
-    this.live.start(house, pet, turn, spot?.channel ? { channel: spot.channel, place: spot.place } : undefined);
+    const spot = at ? this.currentTarget(house, pet).spot : internalWork ? this.currentTarget(house, pet).spot : undefined;
+    this.live.start(house, pet, turn, spot?.channel ? { channel: spot.channel, place: { ...spot.place, title: petPlace(found, "").title } } : undefined);
   }
 
   /**
@@ -725,8 +794,12 @@ export class Chat {
     const writer = written?.channel === key ? written.pet : undefined;
     const thread = writer !== undefined && config.pets.includes(writer) ? configured.pets.find(({ name }) => name === writer) : undefined;
 
+    const occupants = configured.pets.filter(p => config.pets.includes(p.name) && (p.name === writer || p.chatPlace === placeId));
+    const shared = occupants.some(p => p.chatPlace === placeId);
+    const addressed = shared && message.kind === "text" && !message.relayed ? addressee(message.text, occupants)?.name : undefined;
+    const sharedQuoted = shared && quoted && quoted.place === placeId && occupants.some(p => p.name === quoted.pet) ? quoted.pet : undefined;
     const pet = routedPet(config, configured.pets, {
-      about: on?.pet ?? original?.pet,
+      about: on?.pet ?? original?.pet ?? addressed ?? sharedQuoted,
       thread: thread?.name,
       // The conversation of the line it quotes, when that line is in this channel.
       quoted: quoted && parsePlaceKey(quoted.place)?.channel === key ? quoted.pet : undefined,
@@ -751,6 +824,7 @@ export class Chat {
         if (!pet || !currentChannel?.pets.includes(pet.name) || !current?.pets.some(item => item.name === pet.name)) throw new Error("Recipient changed");
         await this.receive(house, key, channel, { ...rawEnvelope!, text }, pet.name);
       },
+      retainsIncomingSecrets: channel.retainsIncomingSecrets,
       remove: async () => {
         if (!channel.removeMessage) throw new Error("This channel cannot remove sensitive messages");
         await channel.removeMessage(incomingRef);
@@ -772,6 +846,7 @@ export class Chat {
     const envelope: Envelope = {
       from: { id: this.records.personId(house, message.from.ref), name: message.from.name, trust },
       channel: this.channels.headerChannel(house, config, shown),
+      ...(unplaced ? {} : { place: this.channels.publicPlace(house, place) }),
     };
     const where = { ...(unplaced ? {} : { place: place.id }), ...(message.kept && Object.keys(message.kept).length > 0 ? { facts: message.kept } : {}) };
     // A press goes by the post pressed, so a channel without pets resolves them too.
@@ -784,7 +859,7 @@ export class Chat {
     }
     // `/stop` in the pet's own place (not relayed, not an edit): Household stops the pet; the pet never gets it.
     // Kept by its ref in no journal, so a channel replaying it stops nothing twice.
-    if (message.kind === "text" && thread === pet && message.edits === undefined && !message.relayed && !message.attachments && STOP_COMMAND.test(message.text.trim())) {
+    if (message.kind === "text" && (thread === pet || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && message.edits === undefined && !message.relayed && !message.attachments && STOP_COMMAND.test(message.text.trim())) {
       if (this.records.recordByRef(house, message.ref)) return;
       const sender: ChatSender = { kind: "person", ref: message.from.ref, name: message.from.name };
       this.records.remember(house, { refs: [message.ref], place: place.id, pet: pet.name, journals: [], sender, text: message.text, excerpt: message.text });
@@ -799,7 +874,7 @@ export class Chat {
     if (message.kind === "unsupported") return this.noticeIn(house, pet.name, own, `${UNSUPPORTED_NAMES[message.what] ?? message.what} can't be passed on yet`);
     const { ref, edits, relayed, text, attachments } = message;
     // While a dialog of the pet waits, what its owner writes in the pet's place is the answer (a guest's is a message; files are never one).
-    if (thread === pet && trust === "owner" && edits === undefined && !relayed && !attachments && (await this.dialogs.text(`${house}/${pet.name}`, text))) {
+    if ((thread === pet || pet.chatPlace === place.id || this.currentTarget(house, pet.name).spot?.place.id === place.id || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && trust === "owner" && edits === undefined && !relayed && !attachments && (await this.dialogs.text(`${house}/${pet.name}`, text))) {
       return this.seen(house, channel, ref);
     }
     const event: HeaderEvent = { kind: edit ? "edit" : "message", id: record.id, ...(relayed ? { relayed } : {}) };
@@ -834,6 +909,7 @@ export class Chat {
     const at = first?.place === undefined ? undefined : this.channels.spotAt(house, first.place);
     const own = at && this.channels.spotsOf(house, pet).spots.find((spot) => spot.key === at.key);
     if (!first || !at?.channel || !own) return;
+    if (at.channel.inInbox?.(own.place)) return;
     const batch = fresh.filter(({ place }) => place === first.place);
     for (const message of batch) keep(this.noted, noted(message), () => this.noted.add(noted(message)));
     const more = batch.length - 1;
@@ -977,7 +1053,7 @@ export class Chat {
     const posted = new Map<PostRef, Channel>();
     const board: Board = {
       post: async (text, choices, onPress) => {
-        const { spot, problem } = this.channels.target(house, pet);
+        const { spot, problem } = this.currentTarget(house, pet);
         if (!spot?.channel) throw new HouseholdError(problem ?? `house ${house} has no chat any more`);
         const live = this.live.turnOf(house, pet);
         const refs = await spot.channel.notice(spot.place, text, choices);

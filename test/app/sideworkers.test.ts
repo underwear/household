@@ -326,3 +326,22 @@ test("a failed announcement or spawn: no handle kept; a worker that never came u
   expect(g.workers.list("home")[0]!.announcement).toBeUndefined();
   f.store.close(); g.store.close();
 });
+
+test("worker placement is captured before asynchronous setup, stays in one channel, and survives reload", async () => {
+  let selected = { channel: "slack-private:T:D", origin: "inbox@slack-private:T:D", publicOrigin: "inbox@c2" };
+  const f = fixture({ place: () => ({ ...selected }), resolveDirectory: async (_h, _p, cwd) => { selected = { channel: "telegram-private:1", origin: "inbox@telegram-private:1", publicOrigin: "inbox@c1" }; return cwd; } });
+  f.config.houses[0]!.channels.push({ kind: "slack-private", chat: "T:D", token: "test", appToken: "test", pets: ["parent"] });
+  const worker = await f.workers.spawn(parent, { ...task, place: "inbox@c2", placement: "same" });
+  expect(worker).toMatchObject({ channel: "slack-private:T:D", originPlace: "inbox@slack-private:T:D", place: "inbox@c2", placement: "same" });
+  const resumed = new Sideworkers(f.deps);
+  const house = resumed.expanded(f.config).houses[0]!;
+  expect(house.channels[0]!.pets).not.toContain(worker.name);
+  expect(house.channels[1]!.pets).toContain(worker.name);
+  expect(house.pets.find(p => p.name === worker.name)?.chatPlace).toBe("inbox@slack-private:T:D");
+  f.config.houses[0]!.channels.pop();
+  expect(resumed.expanded(f.config).houses[0]!.channels[0]!.pets).not.toContain(worker.name);
+  const schema = sideworkerTools(f.workers).find(t => t.name === "sideworker_spawn")!.inputSchema as any;
+  expect(schema.properties.place.type).toBe("string");
+  expect(schema.properties.placement.enum).toEqual(["same", "thread"]);
+  f.store.close();
+});

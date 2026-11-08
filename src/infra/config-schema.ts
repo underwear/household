@@ -187,7 +187,12 @@ const telegramPrivate = z.strictObject({
   default: petName.optional(),
 });
 // One member for now; a new kind is one more (K3: telegram-group).
-const kinds = z.discriminatedUnion("kind", [telegramPrivate]);
+const slackPrivate = telegramPrivate.extend({
+  kind: z.literal("slack-private"),
+  chat: z.string().regex(/^T[A-Z0-9]+:D[A-Z0-9]+$/, "Slack private address must be T…:D… (workspace:DM)"),
+  appToken: credential("a Socket Mode app token"),
+});
+const kinds = z.discriminatedUnion("kind", [telegramPrivate, slackPrivate]);
 const channel = kinds;
 
 const houseNames = z.array(name).min(1).optional();
@@ -349,7 +354,8 @@ export function parseHousehold(raw: unknown, source: string): Household {
         ...(aliases.length > 0 ? { aliases } : {}),
       })),
       people: { owners: value.people?.owners ?? [] },
-      channels: value.channels.map(({ kind, name: shown, note: said, token, chat, pets, default: first }) => ({
+      channels: value.channels.map(({ kind, name: shown, note: said, token, chat, pets, default: first, ...adapterFields }) => ({
+        ...adapterFields,
         kind,
         ...(shown === undefined ? {} : { name: shown }),
         ...(said === undefined ? {} : { note: said }),

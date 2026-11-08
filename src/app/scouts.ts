@@ -10,11 +10,17 @@ import type { McpTool } from "../infra/mcp-server";
 import type { OwnerCard, PostedNotice } from "./chat";
 import type { DeliveryUpdate } from "./delivery";
 import { cardText, html } from "../core/card";
+import { channelKey, parsePlaceKey, petPlaceKey } from "../core/channels";
 
 export type ScoutStatus = "waiting_approval" | "running" | "waiting_owner" | "done" | "failed" | "cancelled";
 export type ScoutOutcome = "success" | "failed" | "blocked";
 export interface ScoutFile { id: string; type: string; size: number; sha256: string }
 export interface ScoutRun {
+  /** Captured at launch: a helper belongs to one conversation, never every channel of its parent. */
+  channel?: string;
+  originPlace?: string;
+  place?: string;
+  placement?: "same" | "thread";
   /** A capability's "Test install": a disposable VM with no task, no pet and no thread. */
   cleanupPending?: boolean; probe?: boolean; id: string; house: string; scout: string; parent: string; task: string; report: "pet" | "owner";
   status: ScoutStatus; outcome?: ScoutOutcome; createdAt: number; startedAt?: number; endedAt?: number;
@@ -44,7 +50,9 @@ export interface ScoutRun {
 }
 export interface ScoutDeps {
   store: KeyValueStore; configured(): Promise<Household>;
-  choose(caller: PetIdentity, card: OwnerCard<Decision>, signal: AbortSignal): Promise<Decision | undefined>;
+  place?(house: string, pet: string, place?: string): { channel: string; origin: string; publicOrigin: string };
+  channel?(house: string, pet: string): string | undefined;
+  choose(caller: PetIdentity, card: OwnerCard<Decision>, signal: AbortSignal, channel?: string, origin?: string): Promise<Decision | undefined>;
   prepare(run: ScoutRun, secrets: Record<string,string>): Promise<Pet["scout"]>;
   launch(): Promise<unknown>; ready(run: ScoutRun): Promise<boolean>;
   remove(run: ScoutRun): Promise<void>;
@@ -77,6 +85,7 @@ export interface ScoutDeps {
   /** A notice of Household's (its launch card) says `text` (HTML) now, its buttons gone; with `link`, one that opens the run's thread. */
   rewrite?(run: ScoutRun, notice: PostedNotice, text: string, link: boolean): Promise<void>;
   /** The run's thread goes, with every message in it; resolves to how many went (0: it had none). Throws when the chat cannot. */
+  canRemoveThread?(run: ScoutRun): boolean;
   removeThread?(run: ScoutRun): Promise<number>;
   log(text: string): void; now?(): number;
 }
@@ -84,7 +93,7 @@ export interface ScoutDeps {
  * The only Household tools a scout has: to talk to its human (and send them files), reach the network, pass things
  * to its calling pet through its human, get secrets for its run, and say it is done. Its prompt names no others.
  */
-export const SCOUT_TOOLS: readonly string[] = ["reply", "edit_reply", "react", "channel_format", "send_file", "network_request", "network_list", "parent_send", "secret_ask", "scout_finish", "secret_request"];
+export const SCOUT_TOOLS: readonly string[] = ["reply", "edit_reply", "react", "channel_format", "places", "send_file", "network_request", "network_list", "parent_send", "secret_ask", "scout_finish", "secret_request"];
 /** How long a scout may idle before its pet is reminded, and again after each reminder. Nothing stops it on its own. */
 export const SCOUT_IDLE_MS = 30 * 60_000;
 type Decision = "pending" | "yes" | "no";
@@ -180,14 +189,14 @@ export class Scouts {
     const r=this.require(c,id), now=this.now(), domains=Object.values(r.domains??{});
     const tools:Record<string,number>={};for(const action of r.actions)if(action.tool!=="network")tools[action.tool]=(tools[action.tool]??0)+1;
     const requests={pending:0,approved:0,denied:0};for(const q of r.networkRequests??[]){if(q.status==="pending")requests.pending++;else if(["temporary","permanent","permanent-pending"].includes(q.status))requests.approved++;else requests.denied++;}
-    return { id:r.id,scout:r.scout,parent:r.parent,status:r.status,...(r.outcome?{outcome:r.outcome}:{}),started_at:r.startedAt,ended_at:r.endedAt,steps:r.steps,tools,domains:{total:domains.length,new_last_minute:domains.filter(at=>now-at<60_000).length,infrastructure:r.infrastructure??0,requests},secret_requests:structuredClone(r.secretRequests),files:structuredClone(r.files) };
+    return { id:r.id,scout:r.scout,parent:r.parent,status:r.status,...(r.place?{place:r.place}:{}),...(r.outcome?{outcome:r.outcome}:{}),started_at:r.startedAt,ended_at:r.endedAt,steps:r.steps,tools,domains:{total:domains.length,new_last_minute:domains.filter(at=>now-at<60_000).length,infrastructure:r.infrastructure??0,requests},secret_requests:structuredClone(r.secretRequests),files:structuredClone(r.files) };
   }
   running(c: PetIdentity) { return this.runs.filter(r=>r.house===c.house && !r.probe && !terminal(r.status)).map(r=>this.status(c,r.id)); }
   expanded(config: Household): Household {
     return {...config,houses:config.houses.map(h=>{
       const runs=this.runs.filter(r=>r.house===h.name && houseFeatures(h).scouts && !terminal(r.status) && this.launches.has(r.id));
-      const added:Pet[]=runs.map(r=>({name:r.id,title:`${r.definition.title??r.scout}${r.number?` #${r.number}`:""}`,emoji:r.definition.emoji??"🧭",agent:r.definition.agent,key:r.definition.key,model:r.definition.model,mode:r.definition.mode,reasoningEffort:r.definition.reasoningEffort,cpus:r.definition.resources.cpus,memoryMiB:r.definition.resources.memoryMiB,scout:this.launches.get(r.id)!}));
-      return {...h,pets:[...h.pets,...added],channels:h.channels.map(ch=>({...ch,pets:[...ch.pets,...runs.filter(r=>!r.probe&&ch.pets.includes(r.parent)).map(r=>r.id)],...(ch.default||ch.pets.length!==1?{}:{default:ch.pets[0]})}))};
+      const added:Pet[]=runs.map(r=>({name:r.id,originPlace:r.originPlace,...(r.placement === "same" ? {chatPlace:r.originPlace} : {}),title:`${r.definition.title??r.scout}${r.number?` #${r.number}`:""}`,emoji:r.definition.emoji??"🧭",agent:r.definition.agent,key:r.definition.key,model:r.definition.model,mode:r.definition.mode,reasoningEffort:r.definition.reasoningEffort,cpus:r.definition.resources.cpus,memoryMiB:r.definition.resources.memoryMiB,scout:this.launches.get(r.id)!}));
+      return {...h,pets:[...h.pets,...added],channels:h.channels.map(ch=>({...ch,pets:[...ch.pets,...runs.filter(r=>!r.probe&&ch.pets.includes(r.parent)&&channelKey(ch)===(r.channel??parsePlaceKey(r.announcement?.place)?.channel)).map(r=>r.id)],...(ch.default||ch.pets.length!==1?{}:{default:ch.pets[0]})}))};
     })};
   }
   redact(house:string,id:string,text:string): string { for (const value of [...(this.secrets.get(id)??[])].sort((a,b)=>b.length-a.length)) if(value) text=text.split(value).join("[masked]"); return text; }
@@ -205,14 +214,19 @@ export class Scouts {
     if(r.status==="running")r.status="waiting_owner";
     const abort=()=>control.abort();signal?.addEventListener("abort",abort,{once:true});if(signal?.aborted)control.abort();
     const timer=timeout?setTimeout(()=>control.abort(),timeout):undefined;
-    try { return await this.deps.choose(caller,{...scoutDecision(text,yes,no,approved,declined,keep),...(posted?{posted}:{})},control.signal)==="yes" && !control.signal.aborted; }
+    try { return await this.deps.choose(caller,{...scoutDecision(text,yes,no,approved,declined,keep),...(posted?{posted}:{})},control.signal,r.channel,caller.pet === r.parent || r.placement === "same" ? r.originPlace : undefined)==="yes" && !control.signal.aborted; }
     finally { signal?.removeEventListener("abort",abort);clearTimeout(timer);set.delete(control);this.pending.set(r.id,Math.max(0,(this.pending.get(r.id)??1)-1)); if(r.status==="waiting_owner"&&!this.pending.get(r.id))r.status="running";this.activities.set(r.id,this.now());this.save(); }
   }
   /**
    * A pet calls a scout by name. It runs on the scout's agent and resources (the house's where it sets none), as they
    * are now, and only once the owner presses Run.
    */
-  async spawn(c:PetIdentity,input:{blueprint?:unknown;template?:unknown;scout?:unknown;capabilities?:unknown;task:unknown;secrets?:unknown;report?:unknown},byOwner=false) {
+  async spawn(c:PetIdentity,input:{blueprint?:unknown;template?:unknown;scout?:unknown;capabilities?:unknown;task:unknown;secrets?:unknown;report?:unknown;place?:unknown;placement?:unknown},byOwner=false) {
+    if (input.place !== undefined && typeof input.place !== "string") throw new Error("place must be a place.id from the header or places");
+    if (input.placement !== undefined && input.placement !== "same" && input.placement !== "thread") throw new Error("placement must be same or thread");
+    const destination = this.deps.place?.(c.house, c.pet, input.place as string | undefined);
+    if (input.place !== undefined && !destination) throw new Error("Explicit place routing is unavailable");
+    const capturedChannel = destination?.channel ?? this.deps.channel?.(c.house,c.pet);
     const values=secretValues(input.secrets);
     const blueprint=input.blueprint??input.template??input.scout;
     const run=await this.serial(async()=>{
@@ -222,6 +236,8 @@ export class Scouts {
       if(byOwner?input.task.length>16000:input.task.length>1000||input.task.split("\n").length>10)throw new Error(byOwner?"Task is too long: at most 16000 characters":"Task is too long: at most 10 lines and 1000 characters (your human reads it before the scout starts)");
       if(input.report!==undefined&&!['pet','owner'].includes(String(input.report)))throw new Error("report must be pet or owner");
       if(!house.channels.some(ch=>ch.pets.includes(c.pet)))throw new Error("A channel is required for scouts");
+      const origin = capturedChannel ?? (!this.deps.channel && !this.deps.place && house.channels.filter(ch=>ch.pets.includes(c.pet)).length === 1 ? channelKey(house.channels.find(ch=>ch.pets.includes(c.pet))!) : undefined);
+      if(!origin || !house.channels.some(ch=>channelKey(ch)===origin && ch.pets.includes(c.pet)))throw new Error("The calling conversation is no longer available; start the scout from an attached channel");
       const limits=scoutLimits(house);
       if(this.runs.filter(r=>r.house===c.house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("House scout limit reached; cancel a run first");
       if(input.capabilities!==undefined)throw new Error("Call a scout by name (scout); pets no longer assemble one from capabilities. Use scouts for the list");
@@ -238,22 +254,26 @@ export class Scouts {
       const runtimeWords=def.agent||def.resources?[definition.model??definition.agent,`${definition.resources.cpus} vCPU`,`${Math.round(definition.resources.memoryMiB/102.4)/10} GiB`].join(" · "):undefined;
       const number=1+this.runs.filter(each=>each.house===c.house&&each.blueprint===base.name).reduce((most,each)=>Math.max(most,each.number??0),0);
       const r:ScoutRun={...(runtimeWords?{runtime:runtimeWords}:{}),number,id:`scout-${randomBytes(5).toString('hex')}`,house:c.house,scout:base.name,blueprint:base.name,parent:c.pet,task:input.task,report:byOwner?"owner":(input.report as "pet"|"owner"|undefined)??"owner",...(byOwner?{byOwner:true}:{}),status:"waiting_approval",createdAt:this.now(),steps:0,actions:[],secretRequests:[],files:[],definition,capabilities:structuredClone(used)};
+      r.channel=origin;
+      r.originPlace=destination?.origin ?? petPlaceKey(c.pet, origin);
+      r.placement=(input.placement as "same" | "thread" | undefined) ?? "thread";
+      if (destination) r.place=r.placement === "same" ? destination.publicOrigin : petPlaceKey(r.id,parsePlaceKey(destination.publicOrigin)!.channel);
       this.secrets.set(r.id,Object.values(values));r.task=this.redact(r.house,r.id,r.task);this.runs.push(r);this.save();return r;
     });
     void this.begin(run,values).catch(()=>this.end(run,"failed")).catch(()=>this.deps.log(`scout ${run.house}/${run.id}: cleanup failed`));
-    return {id:run.id,status:run.status};
+    return {id:run.id,status:run.status,...(run.place ? {place:run.place} : {})};
   }
   /**
    * The owner starts a scout themself (`house scout run`): no Run card, it is their decision already. Its thread
    * opens in `pet`'s channel, by default the first enabled pet that is in one; that pet hears nothing of it.
    */
-  async ownerSpawn(house:string,scout:string,input:{task:unknown;pet?:unknown}) {
+  async ownerSpawn(house:string,scout:string,input:{task:unknown;pet?:unknown;place?:unknown;placement?:unknown}) {
     const h=(await this.deps.configured()).houses.find(each=>each.name===house);
     if(!h)throw new Error("Unknown house");
     if(input.pet!==undefined&&(typeof input.pet!=="string"||!input.pet))throw new Error("pet: a pet of the house");
     const pet=(input.pet as string|undefined)??h.pets.find(p=>p.enabled!==false&&h.channels.some(ch=>ch.pets.includes(p.name)))?.name;
     if(!pet)throw new Error("A scout's thread opens in a pet's channel: this house has no enabled pet in a channel");
-    return this.spawn({house,pet},{scout,task:input.task},true);
+    return this.spawn({house,pet},{scout,task:input.task,place:input.place,placement:input.placement},true);
   }
   private async begin(r:ScoutRun,values:Record<string,string>) {
     const d=r.definition;
@@ -262,7 +282,7 @@ export class Scouts {
     if(!r.byOwner){
       const text=launchCard({pet:this.title(r),scout:`${d.emoji??"🧭"} ${d.title??d.name}`,task:r.task,report:r.report,capabilities:r.capabilities.map(capability=>({name:capability.name,own:capability.owner===d.name})),network:scoutNetwork(d,r.capabilities),
         keysInVm:r.capabilities.flatMap(capability=>capability.keys.flatMap(key=>key.via==="vm"?[key.env]:[])),secrets:Object.keys(values),...(r.runtime?{runtime:r.runtime}:{})});
-      const posted=(notice:PostedNotice)=>{r.announcement={...notice,text};this.save();};
+      const posted=(notice:PostedNotice)=>{r.announcement={...notice,text};r.channel=parsePlaceKey(notice.place)?.channel??r.channel;this.save();};
       if(!await this.choose(r,{house:r.house,pet:r.parent},text,"Run","Cancel",10*60_000,undefined,"▶ Launched.","Cancelled.",true,posted)) {await this.end(r,"cancelled");return;}
     }
     if(terminal(r.status))return;
@@ -418,24 +438,22 @@ export class Scouts {
   }
   /** The calling pet's ended runs whose thread is still there: what `deleteThread` can take. */
   ended(c:PetIdentity){return this.runs.filter(r=>r.house===c.house&&!r.probe&&r.parent===c.pet&&terminal(r.status)&&!r.threadDeleted).map(r=>({id:r.id,scout:r.scout,title:this.name(r),status:r.status,...(r.outcome?{outcome:r.outcome}:{}),ended_at:r.endedAt}));}
-  /**
-   * The thread of a run that has ended goes, with all its messages and files, at its pet's request: only once its
-   * human presses Delete on a card in the pet's place (the pet is to have asked them in the chat before). Never
-   * on its own: what a scout showed its human there may still be wanted.
-   */
+  /** The pet may request deletion at any time; only the owner's approval stops the run and removes its dedicated place. */
   async deleteThread(c:PetIdentity,id:string,signal?:AbortSignal){
     const r=this.parent(c,id);
-    if(!terminal(r.status))throw new Error("This scout is still running: its thread can be deleted only once it has ended");
+    if(r.placement === "same") throw new Error("This scout shares an existing place; it has no thread to delete");
     if(r.threadDeleted)throw new Error("Its thread is deleted already");
-    if(!this.deps.removeThread)throw new Error("This house cannot delete scout threads");
+    if(!this.deps.removeThread || this.deps.canRemoveThread?.(r) === false) return {deleted:false,reason:"This channel does not support thread deletion; its history stays. Use scout_cancel to stop the VM."};
     if(this.deleting.has(r.id))throw new Error("Your human already has a card to delete this thread");
     this.deleting.add(r.id);
     try{
       const name=this.name(r);
       const yes=await this.choose(r,{house:r.house,pet:r.parent},cardText({title:`${html(this.title(r))} wants to delete the thread of ${html(name)}`,quote:{label:"Its task",text:r.task},
-        facts:[`Status: ${r.status}${r.outcome?` (${r.outcome})`:""}`],note:"<b>Delete thread</b> removes the thread with all its messages and files, for good: this cannot be undone.\n<b>Keep</b> leaves it as it is."}),
-        "Delete thread","Keep",10*60_000,signal,"Deleted.","Kept: the thread stays.");
+        facts:[`Status: ${r.status}${r.outcome?` (${r.outcome})`:""}`],note:"<b>Delete thread</b> stops this scout if it is still active, then removes the thread with all its messages and files, for good: this cannot be undone.\n<b>Keep</b> leaves it as it is."}),
+        "Delete thread","Keep",10*60_000,signal,"Deletion approved.","Kept: the thread stays.");
       if(!yes)return {deleted:false,reason:"Your human kept the thread (or did not answer in time)."};
+      // Stop/reconcile first so the running helper cannot recreate the topic after deletion.
+      if(!terminal(r.status) || r.cleanupPending) await this.end(r,"cancelled");
       const removed=await this.deps.removeThread(r);
       r.threadDeleted=true;this.save();
       this.deps.log(`scout ${r.house}/${r.id}: thread deleted at ${r.parent}'s request`);
@@ -540,16 +558,16 @@ export class Scouts {
 function mergeFiles(a:ScoutFile[],b:ScoutFile[]){return [...new Map([...a,...b].map(f=>[f.id,f])).values()];}
 
 export function scoutTools(s:Scouts,enabled:(c:PetIdentity)=>boolean):McpTool<PetIdentity>[] {
-  const make=(name:string,description:string,properties:Record<string,unknown>,required:string[],call:(c:PetIdentity,a:any)=>unknown,self=false):McpTool<PetIdentity>=>({name,description,inputSchema:{type:'object',additionalProperties:false,properties,required},available:c=>self?s.isScout(c):!s.isScout(c)&&enabled(c),call:async(c,a)=>JSON.stringify(await call(c,a))});
+  const make=(name:string,description:string,properties:Record<string,unknown>,required:string[],call:(c:PetIdentity,a:any,signal?:AbortSignal)=>unknown,self=false):McpTool<PetIdentity>=>({name,description,inputSchema:{type:'object',additionalProperties:false,properties,required},available:c=>self?s.isScout(c):!s.isScout(c)&&enabled(c),call:async(c,a,signal)=>JSON.stringify(await call(c,a,signal))});
   const str={type:'string'},id={id:str};
   return [
     make('scouts','List the scouts of your house (name, title, description, shared capabilities, network: open internet or only its hosts): pick the one whose description fits the task and call it with scout_spawn. Read the household-scouts skill.',{},[],c=>s.catalog(c)),
     make('scouts_running','House-generated facts about active scout runs. No scout text.',{},[],c=>s.running(c)),
-    make('scout_spawn','Call a scout by name (from the scouts tool) for one task. Your human approves every run (and sees the names of secrets you pass) before it starts. secrets values never appear in Telegram; do not put secrets in task. report defaults owner.',{scout:str,task:str,secrets:{type:'object',additionalProperties:{type:'string'}},report:{type:'string',enum:['pet','owner']}},['scout','task'],(c,a)=>s.spawn(c,a)),
+    make('scout_spawn','Call a scout by name (from the scouts tool) for one task. Your human approves every run (and sees the names of secrets you pass) before it starts. secrets values never appear in chat; do not put secrets in task. report defaults owner.',{scout:str,task:str,place:{type:'string',description:'Parent place.id from the request header or places; defaults to the current request place.'},placement:{type:'string',enum:['same','thread'],description:'thread (default): a dedicated place in the selected channel; same: share the selected place.'},secrets:{type:'object',additionalProperties:{type:'string'}},report:{type:'string',enum:['pet','owner']}},['scout','task'],(c,a)=>s.spawn(c,a)),
     make('scouts_ended','Your scout runs that have ended and whose thread is still in the chat: id, scout, status, outcome. For scout_thread_delete.',{},[],c=>s.ended(c)),
-    make('scout_thread_delete','Delete the chat thread of a scout run you called that has ended (done, failed or cancelled), with all its messages and files. Irreversible: what the scout showed your human there is gone for good. Call it only after your human has explicitly asked for it or agreed to it in the chat; Household then asks them once more (Delete thread / Keep) and waits for their press. Ended threads are never deleted on their own.',id,['id'],(c,a)=>s.deleteThread(c,a.id)),
+    make('scout_thread_delete','Request deletion of a dedicated thread of a scout you called, at any time, active or ended. No prior chat agreement is needed: this tool asks your human with Delete thread / Keep and waits. Approval stops any active VM and deletes its thread; refusal or timeout keeps both unchanged. Irreversible: all messages and files in the thread are removed. Channels without deletion support keep history and do not prompt. Use scout_cancel to stop only the VM without approval.',id,['id'],(c,a,signal)=>s.deleteThread(c,a.id,signal)),
     make('scout_status','Get facts only: fixed status/outcome, steps, tool counts, domain counts (never names), secret requests and neutral file handles.',id,['id'],(c,a)=>s.status(c,a.id)),
-    make('scout_cancel','Stop any scout run in your own house.',id,['id'],(c,a)=>s.cancel(c,a.id)),
+    make('scout_cancel','Stop any scout run in your own house immediately, at your discretion, without owner approval. Removes its VM but preserves its chat history. Thread deletion is a separate owner-approved request via scout_thread_delete.',id,['id'],(c,a)=>s.cancel(c,a.id)),
     make('scout_send','Send to the scout you called. No approval required; messages visible to owner.',{...id,text:str},['id','text'],(c,a)=>s.send(c,a.id,a.text)),
     make('scout_file','Check a file name you chose; returns only exists and neutral handle.',{...id,name:str},['id','name'],(c,a)=>s.file(c,a.id,a.name)),
     make('scout_secret','Answer a pending secret request. Household asks owner before handing value to scout.',{...id,key:str,value:str},['id','key','value'],(c,a)=>s.giveSecret(c,a.id,a.key,a.value)),

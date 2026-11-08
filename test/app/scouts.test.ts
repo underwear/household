@@ -215,7 +215,7 @@ test("a failed setup is kept on the run: its VM is gone after", async () => {
 });
 
 /** Owner cards answered at once (`answer` for a thread deletion), each telling its handle; launch-card rewrites and thread removals recorded. */
-function threadFixture(){
+function threadFixture(extra: Partial<ScoutDeps> = {}){
  const asked:string[]=[],rewrites:{ref:string;text:string;link:boolean}[]=[],removed:string[]=[];
  const answer={delete:'yes' as 'yes'|'no'};
  const f=fixture(true,{
@@ -223,6 +223,7 @@ function threadFixture(){
   status:async(_run,_text,handle)=>handle??'status-card',
   rewrite:async(_run,notice,text,link)=>{rewrites.push({ref:notice.ref,text,link});},
   removeThread:async run=>{removed.push(run.id);return 1;},
+  ...extra,
  });
  return {...f,asked,rewrites,removed,answer};
 }
@@ -235,17 +236,16 @@ test('once its thread is up with its card, the launch card says the scout was sp
  expect(rewrites).toHaveLength(1); // once
  await scouts.stop();
 });
-test('a scout thread is deleted only after it ended, only for its pet, only on the owner\'s Delete',async()=>{
+test('an ended scout thread is deleted only for its pet and on the owner\'s Delete',async()=>{
  const {scouts,rewrites,removed,asked,answer}=threadFixture();
  const {id}=await scouts.spawn(parent,{scout:'helper',task:'Check this'});await settle();
- await expect(scouts.deleteThread(parent,id)).rejects.toThrow('still running');
  await scouts.cancel(parent,id);await settle();
  expect(scouts.ended(parent)).toEqual([expect.objectContaining({id,status:'cancelled',title:'🧭 helper #1'})]);
  await expect(scouts.deleteThread({house:'work',pet:'other'},id)).rejects.toThrow('calling pet');
  answer.delete='no';
  expect(await scouts.deleteThread(parent,id)).toMatchObject({deleted:false});
  expect(removed).toEqual([]);
- expect(asked.at(-1)).toContain('<b>Delete thread</b> removes the thread with all its messages and files, for good: this cannot be undone.');
+ expect(asked.at(-1)).toContain('<b>Delete thread</b> stops this scout if it is still active, then removes the thread with all its messages and files, for good: this cannot be undone.');
  answer.delete='yes';
  expect(await scouts.deleteThread(parent,id)).toEqual({deleted:true});
  expect(removed).toEqual([id]);
@@ -259,6 +259,106 @@ test('the thread tools: listed for pets only; the delete tool says it is irrever
  const del=tools.find(t=>t.name==='scout_thread_delete')!;
  expect(del.available!(parent)).toBe(true);
  expect(del.description).toContain('Irreversible');
- expect(del.description).toContain('only after your human has explicitly asked');
+ expect(del.description).toContain('No prior chat agreement is needed');
+ expect(del.description).toContain('active or ended');
  expect(tools.find(t=>t.name==='scouts_ended')!.available!(parent)).toBe(true);
+});
+
+test('a Slack-launched scout stays in its origin channel, including owner cards and later parent activity', async()=>{
+ let current='slack-private:TTEST:DTEST';
+ const chosen:string[]=[];
+ const {scouts,config,state}=fixture(true,{
+  channel:()=>current,
+  choose:async(_caller,card,_signal,channel)=>{chosen.push(channel!);card.posted?.({place:`pet:parent@${channel}`,ref:'launch-card' as any});return 'yes';},
+ });
+ config.houses[0]!.channels=[
+  {kind:'telegram-private',chat:'123',token:'test',pets:['parent']},
+  {kind:'slack-private',chat:'TTEST:DTEST',token:'test',appToken:'test',pets:['parent']},
+ ];
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Stay in Slack'});await settle();
+ current='telegram-private:123';
+ let channels=scouts.expanded(config).houses[0]!.channels;
+ expect(channels[0]!.pets).toEqual(['parent']);
+ expect(channels[1]!.pets).toEqual(['parent',id]);
+ expect(channels[1]!.default).toBe('parent');
+ expect(scouts.run('work',id)!.channel).toBe('slack-private:TTEST:DTEST');
+ expect(JSON.parse(state.get('scouts.runs.v1')!)[0].channel).toBe('slack-private:TTEST:DTEST');
+ await scouts.parentSend({house:'work',pet:id},'Result');await settle();
+ expect(chosen.every(c=>c==='slack-private:TTEST:DTEST')).toBe(true);
+ config.houses[0]!.channels.splice(1,1);
+ channels=scouts.expanded(config).houses[0]!.channels;
+ expect(channels[0]!.pets).toEqual(['parent']); // Removed origin never falls back to Telegram.
+ await scouts.stop();
+});
+
+test('a scout refuses a missing calling conversation instead of silently using the first channel',async()=>{
+ const {scouts}=fixture(true,{channel:()=>undefined});
+ await expect(scouts.spawn(parent,{scout:'helper',task:'Test'})).rejects.toThrow('calling conversation');
+ await scouts.stop();
+});
+
+test('explicit scout places pin launch cards while later scout cards use its own thread', async()=>{
+ const chosen:{pet:string;origin?:string}[]=[];
+ const {scouts,config}=fixture(true,{
+  place:()=>({channel:'slack-private:T:D',origin:'inbox@slack-private:T:D',publicOrigin:'inbox@c2'}),
+  choose:async(caller,_card,_signal,_channel,origin)=>{chosen.push({pet:caller.pet,origin});return 'yes';},
+ });
+ config.houses[0]!.channels.push({kind:'slack-private',chat:'T:D',token:'test',appToken:'test',pets:['parent']});
+ const run=await scouts.spawn(parent,{scout:'helper',task:'test',place:'inbox@c2',placement:'thread'});await settle();
+ expect(run.place).toBe(`pet:${run.id}@c2`);
+ expect(chosen[0]).toEqual({pet:'parent',origin:'inbox@slack-private:T:D'});
+ await scouts.parentSend({house:'work',pet:run.id},'Result');await settle();
+ expect(chosen.at(-1)).toEqual({pet:run.id,origin:undefined});
+ const same=await scouts.ownerSpawn('work','helper',{task:'same',pet:'parent',place:'inbox@c2',placement:'same'});await settle();
+ expect(same.place).toBe('inbox@c2');
+ expect(scouts.expanded(config).houses[0]!.pets.find(p=>p.name===same.id)?.chatPlace).toBe('inbox@slack-private:T:D');
+ await scouts.stop();
+});
+
+test('an active scout may request thread deletion: Keep leaves it running, Delete stops it before removing history', async()=>{
+ const ordering:string[]=[];
+ const {scouts,answer,removed}=threadFixture({removeThread:async run=>{
+  ordering.push(run.status);
+  expect(run.cleanupPending).toBe(false);
+  removed.push(run.id);return 1;
+ }});
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Running task'});await settle();
+ answer.delete='no';
+ expect(await scouts.deleteThread(parent,id)).toMatchObject({deleted:false});
+ expect(scouts.run('work',id)!.status).toBe('running');
+ expect(removed).toEqual([]);
+ answer.delete='yes';
+ expect(await scouts.deleteThread(parent,id)).toEqual({deleted:true});
+ expect(ordering).toEqual(['cancelled']);
+ expect(scouts.run('work',id)).toMatchObject({status:'cancelled',threadDeleted:true});
+ await scouts.stop();
+});
+
+test('an adapter without deletion support does not ask the owner or stop the scout; cancel still removes only its VM', async()=>{
+ const {scouts,asked,removed}=threadFixture({canRemoveThread:()=>false});
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Keep history'});await settle();
+ const before=asked.length;
+ expect(await scouts.deleteThread(parent,id)).toMatchObject({deleted:false,reason:expect.stringContaining('does not support')});
+ expect(asked).toHaveLength(before);
+ expect(scouts.run('work',id)!.status).toBe('running');
+ await scouts.cancel(parent,id);
+ expect(scouts.run('work',id)).toMatchObject({status:'cancelled'});
+ expect(scouts.run('work',id)!.threadDeleted).toBeUndefined();
+ expect(removed).toEqual([]);
+ await scouts.stop();
+});
+
+test('aborting a deletion request through the tool leaves the active scout and thread intact', async()=>{
+ const {scouts,removed}=threadFixture({choose:async(_caller,card,signal)=>{
+  if(!card.text.includes('wants to delete the thread')) return 'yes';
+  return await new Promise<undefined>(resolve=>signal.addEventListener('abort',()=>resolve(undefined),{once:true}));
+ }});
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Keep running'});await settle();
+ const tool=scoutTools(scouts,()=>true).find(t=>t.name==='scout_thread_delete')!;
+ const controller=new AbortController();
+ const pending=tool.call(parent,{id},controller.signal);await settle();controller.abort();
+ expect(JSON.parse(await pending as string)).toMatchObject({deleted:false});
+ expect(scouts.run('work',id)!.status).toBe('running');
+ expect(removed).toEqual([]);
+ await scouts.stop();
 });

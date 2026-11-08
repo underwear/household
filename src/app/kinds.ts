@@ -1,3 +1,4 @@
+import { slack, slackPrivate } from "../channel-adapters/slack";
 import { telegram, telegramPrivate } from "../channel-adapters/telegram";
 import { platformOf, type ChannelKinds, type ChannelKindSpec, type Platform, type PlatformSpec } from "../core/channels";
 import { HouseholdError } from "../core/errors";
@@ -10,9 +11,9 @@ export type { ChannelKinds };
 export type Platforms = ReadonlyMap<Platform, PlatformSpec>;
 
 /** The kinds of channel this build knows, as their adapters describe them. A new kind is one more entry here (and a branch in `openChannels`). */
-const KINDS: ChannelKindSpec[] = [telegramPrivate];
+const KINDS: ChannelKindSpec[] = [telegramPrivate, slackPrivate];
 /** Their platforms' descriptions (what an owner's id is), one per platform, from the platform's adapter package. */
-const PLATFORM_SPECS: PlatformSpec[] = [telegram];
+const PLATFORM_SPECS: PlatformSpec[] = [telegram, slack];
 
 /** Exactly one description for every platform a kind is on: checked once, when the build starts. */
 function registry(): { kinds: ChannelKinds; platforms: Platforms } {

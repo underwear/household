@@ -217,7 +217,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       // The owner starts it themself: no Run card.
       if (tail === "runs" && request.method === "POST") {
         if (!deps.scouts.ownerSpawn) return json({ error: "Scouts are unavailable" }, 503);
-        const value = await body(request, z.strictObject({ task: z.string(), pet: z.string().optional() }));
+        const value = await body(request, z.strictObject({ task: z.string(), pet: z.string().optional(), place: z.string().optional(), placement: z.enum(["same", "thread"]).optional() }));
         return json(await deps.scouts.ownerSpawn(houseName, name, value), 201);
       }
       // A blueprint's own capability: created here, edited on its capability page, deleted with the blueprint.

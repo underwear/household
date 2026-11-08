@@ -1,3 +1,4 @@
+import { slackTokenCheck, slackAppTokenCheck } from "../channel-adapters/slack";
 import { telegramBotToken } from "../channel-adapters/telegram";
 import type { ChannelConfig, ChannelKinds, FieldCheck } from "../core/channels";
 import { HouseholdError } from "../core/errors";
@@ -14,7 +15,7 @@ export type ChannelChecks = ReadonlyMap<string, ReadonlyMap<string, FieldCheck>>
  */
 export function channelChecks(telegramApi?: string): ChannelChecks {
   const botToken = telegramBotToken(telegramApi);
-  return new Map([["telegram-private", new Map([["token", botToken]])]]);
+  return new Map([["telegram-private", new Map([["token", botToken]])], ["slack-private", new Map([["token", slackTokenCheck()], ["appToken", slackAppTokenCheck]])]]);
 }
 
 const fieldOf = (channel: ChannelConfig, key: string) => (channel as unknown as Record<string, unknown>)[key];
@@ -51,7 +52,9 @@ export async function checkFields(
     for (const other of household.houses) {
       for (const channel of other.channels) {
         const theirs = fieldOf(channel, key);
-        if (channel.kind !== kind || typeof theirs !== "string" || check.identityOf(theirs) !== accepted.identity) continue;
+        if (channel.kind !== kind || typeof theirs !== "string") continue;
+        const identity = check.identityOf(theirs) ?? await check.identify?.(theirs);
+        if (identity !== accepted.identity) continue;
         if (other.name !== house) throw new HouseholdError(`${accepted.shown} is house ${other.name}'s bot, and a bot serves one house`);
         if (channel.chat !== chat && theirs !== accepted.value) also.push({ chat: channel.chat, fields: { [key]: accepted.value } });
       }

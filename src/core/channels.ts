@@ -6,7 +6,7 @@ import { petTitle } from "./household";
  * (`telegram-private`, threads on), a group later. Its pets are placed in it explicitly; each has its own place
  * there (a thread), and what is addressed to none of them (General) goes to the channel's default pet.
  */
-export const CHANNEL_KINDS = ["telegram-private"] as const;
+export const CHANNEL_KINDS = ["telegram-private", "slack-private"] as const;
 export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 
 /**
@@ -14,7 +14,7 @@ export type ChannelKind = (typeof CHANNEL_KINDS)[number];
  * channel of the platform, whatever its kind). A fixed set: a new one (WhatsApp) is one more name here and its
  * adapter's `PlatformSpec`.
  */
-export const PLATFORMS = ["telegram"] as const;
+export const PLATFORMS = ["telegram", "slack"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 /** A field a channel kind asks for (a bot token, a chat id, …), as a form shows it: text, for now. */
@@ -39,6 +39,8 @@ export interface FieldCheck {
   accept(value: string): Promise<{ value: string; identity: string; shown: string }>;
   /** Whose a value is (its bot's id), from the value alone; undefined for one that is not such a value. */
   identityOf(value: string): string | undefined;
+  /** Some platforms reveal bot identity only through an authenticated API call. */
+  identify?(value: string): Promise<string | undefined>;
   /** How to show a value (its bot's @username), from what is known now (never waits); null when it is not such a value. */
   describe(value: string): string | null;
 }
@@ -116,6 +118,8 @@ export interface ChannelConfig {
   /** The owner's own words about it («test bot, delete later»): for the web UI only, never told to a pet or a chat. */
   note?: string;
   token: string;
+  /** Slack Socket Mode credential; host-only, never included in pet prompts. */
+  appToken?: string;
   chat: string;
   pets: string[];
   default?: string;
@@ -148,7 +152,7 @@ export const channelsOf = (house: House, pet: string) => house.channels.filter((
 
 /**
  * What a place of a house is, inside Household: a pet's own place in a channel, or a channel's inbox (General).
- * Its id (`c<n>`) is minted once per key, so a pet that leaves a channel and comes back has the same place.
+ * Its key is stable, so a pet that leaves a channel and comes back has the same place. Public addresses replace the channel key with its Household channel id.
  */
 export const petPlaceKey = (pet: string, channel: string) => `pet:${pet}@${channel}`;
 export const inboxKey = (channel: string) => `inbox@${channel}`;

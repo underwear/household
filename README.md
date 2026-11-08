@@ -17,3 +17,7 @@ house start
 ```
 
 `house update` moves to the newest release. `house dashboard` signs you in to the web admin; `house --help` lists everything else.
+
+## Slack prototype
+
+A Slack Bot DM adapter is available alongside Telegram: one thread per pet, progress and Stop, interactive decisions, and host-only tokens over Socket Mode. See [setup, local demo, and current limits](docs/slack.md).

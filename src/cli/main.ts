@@ -66,7 +66,7 @@ const USAGE = `usage:
                                  add or remove an allowlist entry: host, host:port (443 when left out),
                                  '*.example.com' (its subdomains at any depth, not example.com itself), or
                                  '*' / '*:*' (any public host on 443 / any port; never private addresses)
-  house channel add <house> --kind telegram-private [--token <bot token>] --chat <id> [--pets a,b] [--default a] [--name <name>] [--note <text>]
+  house channel add <house> --kind telegram-private|slack-private [--app-token <xapp-token>] [--token <bot token>] --chat <id> [--pets a,b] [--default a] [--name <name>] [--note <text>]
                                  a chat of the house: a private chat with a bot (its token from @BotFather, from
                                  stdin when --token is left out, checked with Telegram as the web UI does; chat:
                                  your Telegram user id), its pets (default: who gets General; needed with two or more)
@@ -268,6 +268,7 @@ async function main(argv: string[]): Promise<void> {
       "allow-overage": { type: "string" },
       kind: { type: "string" },
       token: { type: "string" },
+      "app-token": { type: "string" },
       key: { type: "string" },
       provider: { type: "string" },
       value: { type: "string" },
@@ -307,6 +308,8 @@ async function main(argv: string[]): Promise<void> {
       branch: { type: "string" },
       max: { type: "string" },
       task: { type: "string" },
+      place: { type: "string" },
+      placement: { type: "string" },
       wait: { type: "boolean" },
       via: { type: "string" },
     } as const;
@@ -406,7 +409,8 @@ async function main(argv: string[]): Promise<void> {
     const household = await config.load();
     if (!findHouse(household, args[1]!)) throw new HouseholdError(`unknown house '${args[1]}'`); // before Telegram is asked
     // The web's checks: the token's shape, then Telegram (the bot, Threaded Mode), one bot per house by its id.
-    const given = { token: values.token ?? (await readStdin()) };
+    if (kind === "slack-private" && !values["app-token"]) throw new HouseholdError("Slack requires --app-token (xapp-…). You can also configure it through Channels in the admin.");
+    const given = { token: values.token ?? (await readStdin()), ...(kind === "slack-private" ? { appToken: values["app-token"]! } : {}) };
     const { own, also } = await checkFields(knownChannelKinds(), channelChecks(process.env.HOUSEHOLD_TELEGRAM_API), kind, given, { household, house: args[1]! });
     await config.addChannel(args[1]!, { kind, ...own, chat: chat.trim(), pets, default: first, name, note: values.note?.trim() || undefined }, also);
     console.log(`house '${args[1]}' is in chat ${chat} (pets: ${pets?.join(", ") || "none yet"})`);

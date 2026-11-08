@@ -165,9 +165,9 @@ test("scout runs: the owner starts one, reads it, its VM's logs and screen while
   const call = async (method: string, suffix: string, data?: unknown) => (await routes(new Request(`http://local/api/houses/work/${suffix}`, { method, ...(data === undefined ? {} : { body: JSON.stringify(data), headers: { "content-type": "application/json" } }) })))!;
   await call("POST", "scouts", { name: "breaker", description: "Incident response" });
 
-  const started = await call("POST", "scouts/breaker/runs", { task: "Check the logs", pet: "sibling" });
+  const started = await call("POST", "scouts/breaker/runs", { task: "Check the logs", pet: "sibling", place: "inbox@c3", placement: "same" });
   expect(started.status).toBe(201);
-  expect(spawned).toEqual([["work", "breaker", { task: "Check the logs", pet: "sibling" }]]);
+  expect(spawned).toEqual([["work", "breaker", { task: "Check the logs", pet: "sibling", place: "inbox@c3", placement: "same" }]]);
   expect((await call("POST", "scouts/breaker/runs", { task: "x", secrets: {} })).status).toBe(400); // only a task and a pet
 
   expect(await (await call("GET", "scout-runs")).json()).toEqual([expect.objectContaining({ id: "scout-1", number: 3, byOwner: true, steps: 2 })]);

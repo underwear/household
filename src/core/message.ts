@@ -25,7 +25,7 @@ export interface ChannelFacts {
 /**
  * A message of a house's chat as Household remembers it, so a pet can name it (`id`: `m1`, `m2`, … in its
  * channel, Household's, never the channel's) and learn what a reaction is on. `ref`: its first piece in the
- * channel. `place`: the key of where it was written (internal: pets never see places; it names the channel).
+ * channel. `place`: the key of where it was written (internal key; the header exposes its public place address).
  * `pet`: whose conversation it is, the one pet it was for (the person's message: the pet it was routed to; a
  * post: the pet's own, or the pet a notice is about); who may see it is the journals it is in (`ChatRecords`),
  * not this. `excerpt`: what headers show of it, how it begins and ends (`headAndTail`; older records: how it
@@ -64,7 +64,7 @@ export interface Message {
    */
   header?: Header;
   /**
-   * The key of the place it was written in (a pet's thread, a channel's inbox): never shown to the pet, it says
+   * The key of the place it was written in (a pet's thread, a channel's inbox): its public address is in the header; it says
    * where the pet was asked and bounds a batch. None where it is not known (a reaction on a message Household has
    * no record of) and for `house pet send`.
    */

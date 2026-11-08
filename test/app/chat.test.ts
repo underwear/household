@@ -51,6 +51,7 @@ const CHANNEL = { id: "c1", kind: "telegram-private", name: "Telegram Bot DM (th
 
 function setup({ records = new SqliteStore(":memory:"), replyChars = 100, stopWaitMs = 1000 } = {}) {
   const calls: string[] = [];
+  const headers: any[] = [];
   const stops: { status: "stopped" | "idle" | "failed"; leftover?: string }[] = [];
   const delivery = {
     /** Records what the pet would get: the header's JSON line, and its content after an empty line. */
@@ -58,7 +59,9 @@ function setup({ records = new SqliteStore(":memory:"), replyChars = 100, stopWa
       const prompt = promptText({ ...draft, id: 0, status: "received" }).split("\n");
       // These legacy assertions focus on routing; formatting metadata is checked independently below.
       const header = JSON.parse(prompt[2]!);
+      headers.push(structuredClone(header));
       delete header.channel.replyFormat;
+      delete header.place; // Exact public places are checked in the placement contract tests below.
       prompt[2] = JSON.stringify(header).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
       const content = prompt.slice(5, -2).join("\n"); // between <household-content> and </household-content>
       calls.push(`send ${house}/${pet} ${draft.ref}: ${prompt[2]}${prompt.length > 5 ? `\n\n${content}` : ""}`);
@@ -115,7 +118,7 @@ function setup({ records = new SqliteStore(":memory:"), replyChars = 100, stopWa
     },
     { timing: { chatGapMs: 10 } },
   );
-  return { chat, calls, opened, byKey, lines, records, stops };
+  return { chat, calls, opened, byKey, lines, records, stops, headers };
 }
 
 test("the owner's messages go to their pet under Household's header: General to the default pet, a thread to its pet", async () => {
@@ -142,7 +145,7 @@ test("the owner's messages go to their pet under Household's header: General to 
   await chat.stop();
 });
 
-test("a header names the channel (its id, kind, name, audience), never a place; the channel's kept facts are stored with the message, never shown", async () => {
+test("a header names the channel (its id, kind, name, audience); the channel's kept facts are stored with the message, never shown", async () => {
   const { chat, calls, opened, records } = setup();
   await chat.setHouses([work()]);
   await opened[0]!.say(text("in thread", { place: SIBLING, external: { username: "oleg" }, kept: { message: 5, thread: 100, user: 1, username: "oleg" } }));
@@ -330,7 +333,7 @@ test("a file is downloaded from the channel of the place its message was written
 test("a reply goes to the pet's place and answers what it was given; it fails, with a reason, when it cannot", async () => {
   const { chat, calls, opened } = setup();
   await chat.setHouses([work(), { ...work([]), name: "home" }]);
-  expect(await chat.reply("work", "chair", "done")).toEqual({ id: "m1", channel: "c1" });
+  expect(await chat.reply("work", "chair", "done")).toMatchObject({ id: "m1", channel: "c1" });
   expect(opened[0]!.calls).toEqual(["post 🐾 Chair: done"]);
   expect(calls).toEqual(["answered work/chair"]);
   await expect(chat.reply("work", "chair", "  ")).rejects.toThrow("the text is empty");
@@ -579,7 +582,7 @@ test("every message of the chat gets Household's id: the person's in their heade
   const channel = opened[0]!;
   await channel.say(text("hello", { place: CHAIR, external: { message: 5 } }));
   expect(calls[0]).toBe(`send work/chair hello: {"event":{"kind":"message","id":"m1"},${FROM},"channel":{"id":"c1","kind":"telegram-private","name":"Telegram Bot DM (threaded)","audience":"private","meta":{"message":5}}}\n\nhello`);
-  expect(await chat.reply("work", "chair", "hello to you too")).toEqual({ id: "m2", channel: "c1" });
+  expect(await chat.reply("work", "chair", "hello to you too")).toMatchObject({ id: "m2", channel: "c1" });
   await chat.notice("work", "chair", "container restarted");
   expect(records.recordById("work", "c1", "m3")).toMatchObject({ ref: "post-2", place: CHAIR, pet: "chair", sender: { kind: "household" }, excerpt: "container restarted" });
   await channel.say(text("hello", { place: CHAIR, external: { message: 5 } })); // replayed
@@ -685,13 +688,13 @@ test("a reply carrying Household's tag, in its text or a button, is refused back
 test("a reply's channel is Household's id of one the pet is placed in (its place there takes it); any other is refused, saying what to use", async () => {
   const { chat, opened } = setup();
   await chat.setHouses([work([DM, { ...FAMILY, pets: ["chair"] }])]);
-  expect(await chat.reply("work", "sibling", "here", undefined, "c1")).toEqual({ id: "m1", channel: "c1" });
+  expect(await chat.reply("work", "sibling", "here", undefined, "c1")).toMatchObject({ id: "m1", channel: "c1" });
   await expect(chat.reply("work", "sibling", "x", undefined, "c2")).rejects.toThrow("c2 is not one of your channels (yours: c1): use one of them, or leave channel out");
   await expect(chat.reply("work", "sibling", "x", undefined, "c42")).rejects.toThrow("there is no channel c42 in your house (yours: c1)");
   await expect(chat.reply("work", "sibling", "x", undefined, "21837")).rejects.toThrow("21837 is not a Household id: use an id from a header (event.id, from.id, channel.id)");
   await expect(chat.reply("work", "sibling", "x", undefined, "sibling")).rejects.toThrow("sibling is not a Household id");
   await expect(chat.reply("work", "sibling", "x", undefined, "m1")).rejects.toThrow("m1 is a message id, not a channel id (c<n>)");
-  expect(await chat.reply("work", "chair", "in the family", undefined, "c2")).toEqual({ id: "m1", channel: "c2" }); // ids per channel
+  expect(await chat.reply("work", "chair", "in the family", undefined, "c2")).toMatchObject({ id: "m1", channel: "c2" }); // ids per channel
   expect(opened[0]!.calls).toEqual(["post 🐾 Sibling: here"]);
   expect(opened[1]!.calls).toEqual(["post 🐾 Chair: in the family"]);
   await chat.stop();
@@ -706,7 +709,7 @@ test("ids flow: a header's channel and event ids go into reply and react, whose 
   expect(header).not.toHaveProperty("place");
   expect(await chat.react("work", "sibling", header.channel.id, header.event.id, "👍")).toEqual({ id: header.event.id, reaction: "👍" });
   const sent = await chat.reply("work", "sibling", "Buy?", [["Yes"]], header.channel.id);
-  expect(sent).toEqual({ id: "m2", channel: header.channel.id });
+  expect(sent).toMatchObject({ id: "m2", channel: header.channel.id });
   await channel.press("post-2", 0, "Yes", { place: SIBLING }); // the reaction was the channel's first call
   expect(JSON.parse(calls.at(-1)!.split(": ").slice(1).join(": ")).event.on.id).toBe(sent.id);
   await chat.stop();
@@ -823,40 +826,29 @@ test("two channels: each message is routed in its own channel, its header names 
   await chat.stop();
 });
 
-test("a pet's words go where it was last written to: replies, notices and cards; before any message, the first channel it is in; a restart keeps it", async () => {
+test("request place is pinned through delivery elsewhere; explicit place overrides it and ambiguity fails closed", async () => {
   const records = new SqliteStore(":memory:");
-  const before = setup({ records });
-  await before.chat.setHouses([work([DM, FAMILY])]);
-  const [dm, family] = before.opened;
-  const inFamily = petPlaceKey("sibling", channelKey(FAMILY));
-  const familyInbox = inboxKey(channelKey(FAMILY));
-  expect(await before.chat.reply("work", "sibling", "one")).toMatchObject({ channel: "c1" });
-  // A message from the family's General was delivered: it counts as delivered in sibling's place there.
-  before.chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("f1") }, familyInbox)] });
-  expect(family!.calls.slice(0, 1)).toEqual(["seen f1"]);
-  expect(await before.chat.reply("work", "sibling", "two")).toMatchObject({ channel: "c2" });
-  await before.chat.notice("work", "sibling", "container restarted");
-  void before.chat.ask("work", "sibling", color);
-  await waitFor(() => family!.calls.some((call) => call.includes("Sibling asks")));
-  expect(dm!.calls).toEqual(["post 🐾 Sibling: one"]);
-  // (General's notes on the delivered message are there too.)
-  expect(family!.calls.filter((call) => !call.includes("General")).slice(1, 3)).toEqual(["post 🐾 Sibling: two", "notice 🐾 Sibling: container restarted"]);
-  // Another of its channels, by id: taken, and not where it was last written to.
-  expect(await before.chat.reply("work", "sibling", "three", undefined, "c1")).toMatchObject({ channel: "c1" });
-  await before.chat.stop();
-
-  const after = setup({ records }); // the same database, nothing else
-  await after.chat.setHouses([work([DM, FAMILY])]);
-  expect(await after.chat.reply("work", "sibling", "four")).toMatchObject({ channel: "c2" });
-  after.chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("d1") }, SIBLING)] });
-  expect(await after.chat.reply("work", "sibling", "five")).toMatchObject({ channel: "c1" });
-  // Taken out of the family channel it was last written to in: no silent move to another; a named one works.
-  after.chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("f2") }, familyInbox)] });
-  await after.chat.setHouses([work([DM, { ...FAMILY, pets: [] }])]);
-  await expect(after.chat.reply("work", "sibling", "six")).rejects.toThrow("you were last written to in channel c2, which you are no longer in: pass channel (yours: c1); the reply was not sent");
-  expect(await after.chat.reply("work", "sibling", "six", undefined, "c1")).toMatchObject({ channel: "c1" });
-  await expect(after.chat.reply("work", "sibling", "x", undefined, "c2")).rejects.toThrow("c2 is not one of your channels (yours: c1)");
-  await after.chat.stop();
+  const { chat, opened } = setup({ records });
+  await chat.setHouses([work([DM, FAMILY])]);
+  await expect(chat.reply("work", "sibling", "ambiguous")).rejects.toThrow("pass place");
+  const origin = inboxKey(channelKey(FAMILY));
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "t1", messages: [message({}, origin)] });
+  chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({}, SIBLING)] });
+  expect(await chat.reply("work", "sibling", "pinned")).toMatchObject({ channel: "c2", place: "inbox@c2" });
+  expect(opened[1]!.calls).toContain("post 🐾 Sibling: pinned");
+  expect(chat.spawnPlace("work", "sibling")).toEqual({ channel: channelKey(FAMILY), origin, publicOrigin: "inbox@c2" });
+  expect(await chat.reply("work", "sibling", "explicit", undefined, undefined, "regular", "pet:sibling@c1")).toMatchObject({ channel: "c1", place: "pet:sibling@c1" });
+  await expect(chat.reply("work", "sibling", "no", undefined, "c1", "regular", "inbox@c2")).rejects.toThrow("not both");
+  await expect(chat.reply("work", "sibling", "no", undefined, undefined, "regular", "pet:chair@c1")).rejects.toThrow("another pet");
+  await chat.setHouses([work([DM])]);
+  await expect(chat.reply("work", "sibling", "gone")).rejects.toThrow("inaccessible place");
+  chat.onDelivery({ kind: "turn-finished", house: "work", pet: "sibling", turn: "t1" });
+  expect(await chat.reply("work", "sibling", "only")).toMatchObject({ place: "pet:sibling@c1" });
+  await chat.stop();
+  const resumed = setup({ records });
+  await resumed.chat.setHouses([work([DM, FAMILY])]);
+  await expect(resumed.chat.reply("work", "sibling", "restart")).rejects.toThrow("pass place");
+  await resumed.chat.stop();
 });
 
 test("a channel that goes ends the dialogs its cards show: the agent is refused with why, the card says so; a dialog elsewhere waits on", async () => {
@@ -894,14 +886,12 @@ test("a channel that does not stop in time holds the reload only so long, and sa
   await chat.stop().catch(() => {});
 });
 
-test("where a pet was last written to is forgotten when that channel leaves the config: its words go to its first channel then", async () => {
-  const { chat, opened } = setup();
+test("removing a channel never silently moves an active request", async () => {
+  const { chat } = setup();
   await chat.setHouses([work([DM, FAMILY])]);
-  chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("f1") }, inboxKey(channelKey(FAMILY)))] });
-  expect(await chat.reply("work", "sibling", "there")).toMatchObject({ channel: "c2" });
-  await chat.setHouses([work([DM])]); // the family channel is gone
-  expect(await chat.reply("work", "sibling", "here")).toMatchObject({ channel: "c1" });
-  expect(opened[0]!.calls.at(-1)).toBe("post 🐾 Sibling: here");
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", messages: [message({}, inboxKey(channelKey(FAMILY)))] });
+  await chat.setHouses([work([DM])]);
+  await expect(chat.reply("work", "sibling", "gone")).rejects.toThrow("inaccessible place");
   await chat.stop();
 });
 
@@ -1408,7 +1398,7 @@ test("a worker's final notice uses its captured topic after routing removal and 
   expect(channel.calls).toEqual([]); // capturing never announces a successful close in advance
   await chat.setHouses([{ ...work([{ ...DM, pets: ["sibling"] }]), pets: [house.pets[0]!] }]);
   await finish();
-  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has been stopped and removed. You can delete this topic."]);
+  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has finished; its VM was removed. Conversation history stays here."]);
   channel.failure = "offline";
   await expect(finish()).resolves.toBeUndefined();
   expect(lines.at(-1)).toContain("notice not sent (offline)");
@@ -1425,7 +1415,7 @@ test("outgoing media goes to the pet's thread, is recorded and can be reacted to
   } });
   const bytes = new Uint8Array([0, 255, 10]);
   const result = await chat.sendAttachment("work", "chair", { kind: "photo", name: "plot.png", bytes, caption: "Result" });
-  expect(result).toEqual({ id: "m1", channel: "c1" });
+  expect(result).toMatchObject({ id: "m1", channel: "c1" });
   expect(sent).toEqual([{ place: CHAIR, kind: "photo", bytes }]);
   expect(records.recordById("work", "c1", result.id)).toMatchObject({
     ref: "media-1", place: CHAIR, pet: "chair", sender: { kind: "pet", name: "chair" }, text: "(photo) plot.png: Result",
@@ -1447,7 +1437,7 @@ test("outgoing media honors channel selection and refuses channels the pet is no
     return `media-${i}` as PostRef;
   } }));
   const file = { kind: "voice" as const, name: "voice.ogg", bytes: new Uint8Array([1]) };
-  expect(await chat.sendAttachment("work", "chair", file, "c2")).toEqual({ id: "m1", channel: "c2" });
+  expect(await chat.sendAttachment("work", "chair", file, "c2")).toMatchObject({ id: "m1", channel: "c2" });
   expect(sent).toEqual([`1:${petPlaceKey("chair", channelKey(second))}`]);
   await expect(chat.sendAttachment("work", "sibling", file, "c2")).rejects.toThrow();
   expect(sent).toHaveLength(1);
@@ -1472,7 +1462,7 @@ test("unsupported and failed uploads create no record and do not mark a question
 test("reply format is adapter-owned, available without a prompt, and respects destination membership", async () => {
   const { chat, opened, records } = setup();
   await chat.setHouses([work([DM, FAMILY])]);
-  expect(chat.replyFormat("work", "sibling")).toEqual({ channel: "c1", ...telegramPrivate.replyFormat });
+  expect(chat.replyFormat("work", "sibling", "c1")).toEqual({ channel: "c1", ...telegramPrivate.replyFormat });
   expect(chat.replyFormat("work", "sibling", "c2")).toEqual({ channel: "c2", ...telegramPrivate.replyFormat });
   expect(() => chat.replyFormat("work", "chair", "c2")).toThrow();
   await opened[0]!.say(text("format check", { place: SIBLING }));
@@ -1493,7 +1483,7 @@ test("reply editing preserves author, format, keyboard and history across a stor
   await after.chat.setHouses([work()]);
   const edits: unknown[][] = [];
   Object.assign(after.opened[0]!, { editPost: async (...args: unknown[]) => { edits.push(args); } });
-  expect(await after.chat.editReply("work", "sibling", "c1", sent.id, "# After")).toEqual(sent);
+  expect(await after.chat.editReply("work", "sibling", "c1", sent.id, "# After")).toMatchObject({ id: sent.id, channel: sent.channel });
   expect(edits[0]).toEqual([expect.objectContaining({ id: SIBLING }), before.ref, "# After", [["Accept"]], "rich"]);
   expect(after.records.recordById("work", "c1", sent.id)).toMatchObject({ text: "# After", excerpt: "# After", outgoing: before.outgoing });
   after.records.markResolved("work", before.ref);
@@ -1715,7 +1705,7 @@ test("a closed worker's places are deleted, not told; where it had none, the not
   expect(channel.removed).toEqual([CHAIR]);
   expect(channel.calls).toEqual([]);
   await finish(); // its thread is gone already: the notice instead
-  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has been stopped and removed. You can delete this topic."]);
+  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has finished; its VM was removed. Conversation history stays here."]);
   await chat.stop();
 });
 
@@ -1730,5 +1720,82 @@ test("an ended scout's places are found and deleted as its pet's; a chat that ca
   expect(await chat.removePlaces("work", "sibling", "scout-1")).toBe(0);
   channel.removePlace = undefined as never;
   await expect(chat.removePlaces("work", "sibling", "scout-1")).rejects.toThrow("cannot delete threads");
+  await chat.stop();
+});
+
+test("public place headers and shared helper addressing preserve the actual location; cleanup never deletes it", async () => {
+  const { chat, opened, calls, records, headers } = setup();
+  const house = work();
+  house.pets.push({ name: "sw-shared", chatPlace: SIBLING, sideworker: { parent: "sibling", cwd: "/tmp" } });
+  house.channels = [{ ...DM, pets: [...DM.pets, "sw-shared"] }];
+  await chat.setHouses([house]);
+  await chat.peerMessage("work", "sibling", "sw-shared", "shared task");
+  expect(opened[0]!.calls.filter(line => line.includes("shared task"))).toHaveLength(1);
+  const removed: string[] = [];
+  opened[0]!.removePlace = async place => { removed.push(place.id); return true; };
+  await opened[0]!.say(text("sw-shared, test", { place: SIBLING }));
+  expect(calls.some(line => line.startsWith("send work/sw-shared"))).toBe(true);
+  expect(headers[0].place).toEqual({id: "pet:sibling@c1", kind: "pet-thread", title: "🐾 Sibling"});
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sw-shared", turn: "shared", messages: [message({}, SIBLING)] });
+  const sent = await chat.reply("work", "sw-shared", "here");
+  expect(sent).toMatchObject({ place: "pet:sibling@c1" });
+  const own = records.recordById("work", "c1", sent.id)!;
+  expect(own.place).toBe(SIBLING);
+  expect(opened[0]!.calls).toContain("post 🐾 Sw-shared: here");
+  calls.length = 0;
+  await opened[0]!.say(text("follow-up", { place: SIBLING, replyTo: own.ref }));
+  expect(calls.some(line => line.startsWith("send work/sw-shared"))).toBe(true);
+  await chat.prepareSideworkerCloseNotice("work", "sw-shared", "Sideworker", true)();
+  expect(removed).toEqual([]);
+  expect(chat.places("work", "sw-shared").map(p => p.id)).toEqual(["pet:sibling@c1", "inbox@c1"]);
+  await chat.stop();
+});
+
+test("file delivery takes the exact explicit place and returns it", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work([DM, FAMILY])]);
+  const destinations: string[] = [];
+  Object.assign(opened[1]!, { sendAttachment: async (place: Place) => { destinations.push(place.id); return "file-place" as PostRef; } });
+  expect(await chat.sendAttachment("work", "sibling", { kind: "document", name: "qa.txt", bytes: new Uint8Array([1]) }, undefined, undefined, "inbox@c2")).toMatchObject({channel: "c2", place: "inbox@c2"});
+  expect(destinations).toEqual([inboxKey(channelKey(FAMILY))]);
+  await chat.stop();
+});
+
+test("lost sessions clear the request pin and helpers cannot own other helpers' shared places", async () => {
+  const { chat } = setup();
+  const house = work([DM, FAMILY]);
+  house.pets.push({ name: "sw-temporary", sideworker: { parent: "sibling", cwd: "/tmp" } });
+  house.channels[0] = { ...DM, pets: [...DM.pets, "sw-temporary"] };
+  await chat.setHouses([house]);
+  expect(() => chat.spawnPlace("work", "sibling", "pet:sw-temporary@c1")).toThrow("temporary place");
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "lost", messages: [message()] });
+  chat.onDelivery({ kind: "turn-lost", house: "work", pet: "sibling", why: "session" });
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "manual", messages: [] });
+  await expect(chat.reply("work", "sibling", "ambiguous")).rejects.toThrow("pass place");
+  await chat.stop();
+});
+
+test("peer reports to a helper's parent stay in the spawn place after the parent switches channels", async () => {
+  const { chat, opened } = setup();
+  const house = work([DM, FAMILY]);
+  house.pets.push({ name: "sw-pinned", chatPlace: INBOX, originPlace: INBOX, sideworker: { parent: "sibling", cwd: "/tmp" } });
+  house.channels[0] = { ...DM, pets: [...DM.pets, "sw-pinned"] };
+  await chat.setHouses([house]);
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", messages: [message({}, inboxKey(channelKey(FAMILY)))] });
+  await chat.peerMessage("work", "sw-pinned", "sibling", "pinned report");
+  expect(opened[0]!.calls.filter(line => line.includes("pinned report"))).toHaveLength(1);
+  expect(opened[1]!.calls.filter(line => line.includes("pinned report"))).toHaveLength(0);
+  expect(chat.places("work", "sibling")[0]).toMatchObject({channelKind: "telegram-private", channelName: "Telegram Bot DM (threaded)"});
+  await chat.stop();
+});
+
+test("thread deletion capabilities and removal are scoped to the helper's original channel", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work([DM, FAMILY])]);
+  Object.assign(opened[1]!, { removePlace: undefined });
+  expect(chat.canRemovePlaces("work", "sibling", KEY)).toBe(true);
+  expect(chat.canRemovePlaces("work", "sibling", channelKey(FAMILY))).toBe(false);
+  await expect(chat.removePlaces("work", "sibling", "scout-qa", channelKey(FAMILY))).rejects.toThrow("cannot delete");
+  expect(opened[0]!.removed).toEqual([]);
   await chat.stop();
 });

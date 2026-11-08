@@ -228,7 +228,7 @@ test("owners by platform: `owners: {telegram: [ids]}`; the old shapes say what t
   const replacement = "owners are listed by platform now; write:\n  owners:\n    telegram:\n      - 100200300\n      - 42";
   await expect(owners("\n        - 100200300\n        - telegram: 42\n")).rejects.toThrow(replacement); // a bare id (before platforms), or a pair (7040098)
   await expect(owners("\n        - 12345678901234567890\n")).rejects.toThrow('- "<the id, quoted>"'); // never a rounded number
-  await expect(owners(" {Telegram: [1]}\n")).rejects.toThrow("unknown platform 'Telegram' (known: telegram)");
+  await expect(owners(" {Telegram: [1]}\n")).rejects.toThrow("unknown platform 'Telegram' (known: telegram, slack)");
   await expect(owners(" {telegram: [12345678901234567890]}\n")).rejects.toThrow("too large for a YAML number: quote it");
   expect(await owners(' {telegram: ["12345678901234567890"]}\n')).toEqual([{ platform: "telegram", id: "12345678901234567890" }]); // quoted: kept (the app's check refuses it)
   await expect(owners(" {telegram: ['']}\n")).rejects.toThrow("an owner id is a number or a string");
@@ -276,7 +276,7 @@ test("owners are added to and removed from their platform's list, the ids read a
   expect(await text()).toContain('- "777" # quoted\n          - 100200300');
   await config.removeOwner("work", "telegram", " 777 ");
   expect((await config.load()).houses[0]!.people.owners).toEqual([{ platform: "telegram", id: "100200300" }]);
-  await expect(config.addOwner("work", "whatsapp", "1")).rejects.toThrow("unknown platform 'whatsapp' (known: telegram)");
+  await expect(config.addOwner("work", "whatsapp", "1")).rejects.toThrow("unknown platform 'whatsapp' (known: telegram, slack)");
 });
 
 test("an edit that would break the config is refused and not written", async () => {
@@ -655,4 +655,15 @@ test("a pet's lifecycle is written whole, a multi-line message as a block, read 
   await config.updatePet("work", "sibling", { lifecycle: null });
   expect((await config.load()).houses[0]!.pets[0]!.lifecycle).toBeUndefined();
   expect(await text()).not.toContain("lifecycle");
+});
+
+test("Slack DM configuration round-trips alongside Telegram; workspace identities and app token are retained", async () => {
+  const { config } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling:\n");
+  await config.addOwner("work", "slack", "TTEST:UOWNER");
+  await config.addChannel("work", { kind: "slack-private", chat: "TTEST:DTEST", token: "xoxb-synthetic-0000000000000000", appToken: "xapp-1-ATEST-synthetic-00000000", pets: ["sibling"] });
+  const house = (await config.load()).houses[0]!;
+  expect(house.people.owners).toContainEqual({ platform: "slack", id: "TTEST:UOWNER" });
+  expect(house.channels[0]).toMatchObject({ kind: "slack-private", chat: "TTEST:DTEST", appToken: "xapp-1-ATEST-synthetic-00000000" });
+  await expect(config.addChannel("work", { kind: "slack-private", chat: "TTEST:CGROUP", token: "xoxb-fake", appToken: "xapp-fake", pets: [] })).rejects.toThrow("workspace:DM");
+  await expect(config.addChannel("work", { kind: "slack-private", chat: "TTEST:DOTHER", token: "xoxb-fake", pets: [] })).rejects.toThrow("appToken");
 });

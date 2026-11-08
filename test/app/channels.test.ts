@@ -140,3 +140,22 @@ test("a token that is no bot token (a key pasted by mistake) is never sent to Te
   const work: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [], people: { owners: [{ platform: "telegram", id: "1" }] }, channels: [{ kind: "telegram-private", token: "sk-ant-oat01-not-a-bot-token", chat: "1", pets: [] }] };
   expect(open([work]).get("work")!.get("telegram-private:1")).toEqual({ problem: "its token is not a bot token (one looks like 123456789:AAH4x…, from @BotFather)" });
 });
+
+test("Slack opener reuses connections and refuses competing sockets for one app", async () => {
+  const records = new SqliteStore(":memory:");
+  stops.push(() => records.close());
+  const events = new EventLog(join(tempDir(), "slack-events.log"), () => {});
+  const open = openChannels({ state: records, events });
+  const token = "xoxb-synthetic-00000000000000000";
+  const appToken = "xapp-1-ATEST-synthetic-00000000";
+  const dm: ChannelConfig = { kind: "slack-private", chat: "TTEST:DONE", token, appToken, pets: [] };
+  const make = (channels: ChannelConfig[]): House => ({ name: "lab", network: { kind: "allowlist", allow: [] }, pets: [], people: { owners: [{ platform: "slack", id: "TTEST:UOWNER" }] }, channels });
+  const first = open([make([dm])]).get("lab")!.get("slack-private:TTEST:DONE")!;
+  const again = open([make([dm])]).get("lab")!.get("slack-private:TTEST:DONE")!;
+  expect(first.channel).toBe(again.channel);
+  const competing = { ...dm, chat: "TOTHER:DTWO", token: "xoxb-other-synthetic-0000000000", appToken: "xapp-1-ATEST-rotated-0000000000" };
+  const result = open([make([dm, competing])]);
+  expect(result.get("lab")!.get("slack-private:TOTHER:DTWO")!.problem).toContain("one workspace installation");
+  const bad = open([make([{ ...dm, appToken: undefined }])]);
+  expect(bad.get("lab")!.get("slack-private:TTEST:DONE")!.problem).toContain("app token");
+});

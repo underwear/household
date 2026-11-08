@@ -38,11 +38,12 @@ function replyTool(chat: Pick<Chat, "reply">): McpTool<PetIdentity> {
   return {
     name: REPLY_TOOL,
     description:
-      "Send a message to your human. It goes to a channel you are in: the one you were last written in, unless you name another. Use the destination channel.replyFormat from the prompt header, or call channel_format to learn its format. " +
+      "Send a message to your human. Pass place from the request header or places to select the exact destination. Without it, reply uses the current request place; an ambiguous destination is refused. channel is supported for older calls. Use the destination channel.replyFormat from the prompt header, or call channel_format to learn its format. " +
       'Returns Household\'s ids of your message and of the channel it went to, e.g. {"id":"m47","channel":"c1"}.',
     inputSchema: {
       type: "object",
       properties: {
+        place: { type: "string", description: "Destination place.id from a message header or places. Defaults to the current request place. Do not combine with channel." },
         text: { type: "string", description: "The message in the destination channel's replyFormat (or replyFormat.rich for rich mode)" },
         format: { type: "string", enum: ["regular", "rich"], description: "Default regular. Choose rich for structured reports only when channel_format advertises rich support; follow its rich instructions." },
         buttons: {
@@ -55,17 +56,17 @@ function replyTool(chat: Pick<Chat, "reply">): McpTool<PetIdentity> {
         },
         channel: {
           type: "string",
-          description: "Household's id of one of your channels (channel.id in a header). Leave it out to answer where you were last written to.",
+          description: "Legacy selector: your own place in this Household channel. Prefer place for an exact destination; omitted destination inherits the current request.",
         },
       },
       required: ["text"],
       additionalProperties: false,
     },
     // A channel is only ever Household's id, checked by Chat (one the pet is in).
-    async call({ house, pet }, { text, buttons, channel, format }) {
+    async call({ house, pet }, { text, buttons, channel, format, place }) {
       if (typeof text !== "string") throw new Error("text must be a string");
       if (format !== undefined && format !== "regular" && format !== "rich") throw new Error("format must be regular or rich");
-      const sent = await chat.reply(house, pet, text, rowsOf(buttons), channel === undefined ? undefined : idArg("channel", channel), format);
+      const sent = await chat.reply(house, pet, text, rowsOf(buttons), channel === undefined ? undefined : idArg("channel", channel), format, place === undefined ? undefined : idArg("place", place));
       return JSON.stringify(sent);
     },
   };
@@ -148,7 +149,7 @@ function historyTool(history: Pick<History, "find">): McpTool<PetIdentity> {
 }
 
 /** What the agent API answers, per path: hook events at /events, Household's MCP server (tools `reply`, `react`, `history`) at /mcp. */
-export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Chat, "reply" | "react"> & Partial<Pick<Chat, "replyFormat" | "editReply">>, history: Pick<History, "find">, network?: Pick<NetworkRequests, "list" | "request">, environment?: Pick<PetEnvironment, "runEnvironmentSetup"> & Partial<Pick<PetEnvironment, "getEnvironment" | "updateEnvironment">>, crons?: Crons, memory?: PetMemory, extraTools: McpTool<PetIdentity>[] = [], isSideworker: (identity: PetIdentity) => boolean = () => false, guard?: { allow(caller: PetIdentity, tool: string): boolean; redact(caller: PetIdentity, payload: unknown): unknown; replied?(caller:PetIdentity,text:string):void }) {
+export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Chat, "reply" | "react"> & Partial<Pick<Chat, "replyFormat" | "editReply" | "places">>, history: Pick<History, "find">, network?: Pick<NetworkRequests, "list" | "request">, environment?: Pick<PetEnvironment, "runEnvironmentSetup"> & Partial<Pick<PetEnvironment, "getEnvironment" | "updateEnvironment">>, crons?: Crons, memory?: PetMemory, extraTools: McpTool<PetIdentity>[] = [], isSideworker: (identity: PetIdentity) => boolean = () => false, guard?: { allow(caller: PetIdentity, tool: string): boolean; redact(caller: PetIdentity, payload: unknown): unknown; replied?(caller:PetIdentity,text:string):void }) {
   const tools = [replyTool(chat), reactTool(chat), historyTool(history), ...extraTools];
   if (chat.editReply) tools.push({
     name: "edit_reply",
@@ -163,12 +164,13 @@ export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Ch
       return JSON.stringify(await chat.editReply!(house, pet, idArg("channel", channel), idArg("id", id), text));
     },
   });
+  if (chat.places) tools.push({ name: "places", description: "List your available chat places and supported helper placement modes. Use their id in reply, send_file, scout_spawn and sideworker_spawn. No vendor ids or credentials.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, call: async ({ house, pet }) => JSON.stringify(chat.places!(house, pet)) });
   if (chat.replyFormat) tools.push({
     name: "channel_format",
-    description: "Get the text format and formatting instructions for reply in your destination channel. Use when no chat header is present or when sending to another channel. With no channel, resolves the same destination as reply.",
-    inputSchema: { type: "object", additionalProperties: false, properties: { channel: { type: "string", description: "Optional Household channel id" } } },
-    async call({ house, pet }, { channel }) {
-      return JSON.stringify(chat.replyFormat!(house, pet, channel === undefined ? undefined : idArg("channel", channel)));
+    description: "Get the text format and formatting instructions for reply in your destination channel. Use when no chat header is present or when sending to another channel. With no destination, inherits the same request place as reply.",
+    inputSchema: { type: "object", additionalProperties: false, properties: { channel: { type: "string", description: "Optional legacy Household channel id" }, place: { type: "string", description: "Destination place.id" } } },
+    async call({ house, pet }, { channel, place }) {
+      return JSON.stringify(chat.replyFormat!(house, pet, channel === undefined ? undefined : idArg("channel", channel), place === undefined ? undefined : idArg("place", place)));
     },
   });
   if (memory) tools.push(...memoryTools(memory));

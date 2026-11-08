@@ -46,7 +46,7 @@ export const SCOUT_USAGE = `  house scout ls <house>         its scouts (capabil
   house scout instructions <house> <name>  /  house scout instructions set <house> <name> [<file>]
   house scout settings <house> [--max <n>] [--cpus <n>] [--memory <GiB>] [--agent <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]]
                                  how many scouts run at once, and the agent and allocation of scouts that set none
-  house scout run <house> <name> [--task <text>] [--pet <pet>] [--wait]
+  house scout run <house> <name> [--task <text>] [--pet <pet>] [--place <place-id>] [--placement same|thread] [--wait]
                                  start it yourself, with no Run card (task from stdin without --task); its thread opens
                                  in <pet>'s channel (default: the first pet in one), the pet hears nothing of it;
                                  --wait: until it says it is done or ends, exit 1 unless it succeeded
@@ -60,6 +60,7 @@ export const SCOUT_USAGE = `  house scout ls <house>         its scouts (capabil
   (the agent's own log: house logs --pet <run>)`;
 
 export interface ScoutValues {
+  place?: string; placement?: string;
   json?: boolean;
   description?: string;
   install?: string;
@@ -495,7 +496,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
   if (verb === "run" && rest.length === 0) {
     const task = values.task ?? (await textFrom(undefined));
     if (!task.trim()) usage(SCOUT_USAGE, "a run needs a task: --task, or on stdin");
-    const started = await api<{ id: string; status: string }>(paths, "POST", `${at(name)}/runs`, { task, ...(values.pet ? { pet: values.pet } : {}) });
+    const started = await api<{ id: string; status: string }>(paths, "POST", `${at(name)}/runs`, { task, ...(values.pet ? { pet: values.pet } : {}), ...(values.place ? { place: values.place } : {}), ...(values.placement ? { placement: values.placement } : {}) });
     if (!values.json) {
       say(`scout '${name}' started: run ${started.id}`);
       say(`  follow its setup: house scout logs ${h} ${started.id} -f    its state: house scout status ${h} ${started.id}`);

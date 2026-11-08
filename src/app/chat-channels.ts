@@ -135,7 +135,8 @@ export class ChatChannels {
         const channel = channels.get(key);
         if (!channel) continue;
         for (const pet of house.pets.filter(({ name }) => config.pets.includes(name))) {
-          const place = petPlace(pet, petPlaceKey(pet.name, key));
+          if (pet.chatPlace) continue; // A shared place belongs to its original pet: never rename it.
+          const place = this.placeOf(pet, key);
           channel.retitle(place).catch((error) => this.events.error(`a place was not renamed: ${(error as Error).message}`));
           channel.ensurePlace?.(place).catch((error) => this.events.error(`a place was not created for ${house.name}/${pet.name}: ${(error as Error).message}`));
         }
@@ -191,6 +192,36 @@ export class ChatChannels {
     };
   }
 
+  /** Public place addresses retain the existing key shape, replacing vendor channel keys with Household ids. */
+  publicPlace(house: string, place: Place): Place {
+    const at = parsePlaceKey(place.id)!;
+    return { ...place, id: at.pet ? petPlaceKey(at.pet, this.records.channelId(house, at.channel)) : inboxKey(this.records.channelId(house, at.channel)) };
+  }
+
+  chosenPlace(house: string, pet: string, id: string): Spot {
+    const at = parsePlaceKey(id);
+    const key = at && this.records.channelKeyOf(house, at.channel);
+    const { found, spots } = this.spotsOf(house, pet);
+    const own = spots.find(spot => spot.key === key);
+    if (!found || !at || !key || !own) throw new HouseholdError("Unknown or inaccessible place; use places to list your destinations");
+    const actual = at.pet ? petPlaceKey(at.pet, key) : inboxKey(key);
+    if (actual === own.place.id) return own;
+    if (!at.pet) return { ...own, place: this.inbox(key, own.channel) };
+    const other = this.house(house)?.pets.find(p => p.name === at.pet);
+    if (other && (other.sideworker?.parent === pet || other.scout?.parent === pet)) {
+      const destination = this.spotsOf(house, other.name).spots.find(spot => spot.key === key);
+      if (destination) return destination;
+    }
+    throw new HouseholdError("That place belongs to another pet; use places to list your destinations");
+  }
+
+  placeOf(pet: Pet, key: string): Place {
+    const shared = parsePlaceKey(pet.chatPlace);
+    return shared?.channel === key
+      ? { id: pet.chatPlace!, kind: shared.pet ? "pet-thread" : "house-inbox", title: petPlace(pet, "").title }
+      : petPlace(pet, petPlaceKey(pet.name, key));
+  }
+
   /**
    * The pet's place in the channel it named (to reply, to react): Household's id of a channel it is placed in now.
    * Throws, saying what to use instead, when not (no such channel, one the pet is not in or has left): never a
@@ -225,7 +256,7 @@ export class ChatChannels {
     if (!line || !found) return { spots: [] };
     const spots = channelsOf(line.house, pet).map((config) => {
       const key = channelKey(config);
-      return { key, channel: line.channels.get(key), place: petPlace(found, petPlaceKey(pet, key)) };
+      return { key, channel: line.channels.get(key), place: this.placeOf(found, key) };
     });
     return { found, spots };
   }
