@@ -979,3 +979,51 @@ test("owner card transitions replace the entire text and formatting including th
   expect(edits[1]!.text).toBe("🏠 Notification from Household\n\nCancelled.\n\nNothing sent.");
   expect(edits[1]!.reply_markup).toEqual({ inline_keyboard: [] });
 });
+
+test("a place's link is t.me/<bot>/<thread>, its thread made first; the inbox has none", async () => {
+  const { api, open } = setup();
+  const channel = open();
+  expect(await channel.placeLink(sibling)).toBe("https://t.me/fake_bot/100");
+  expect(api.sent("createForumTopic")).toEqual([{ chat_id: OWNER, name: "🐾 Sibling" }]);
+  expect(await channel.placeLink(sibling)).toBe("https://t.me/fake_bot/100"); // the same thread, getMe asked once
+  expect(api.sent("getMe")).toHaveLength(1);
+  expect(await channel.placeLink(inbox)).toBeUndefined();
+});
+
+test("a notice rewritten with a link has that one URL button and no choices", async () => {
+  const { api, open } = setup();
+  const channel = open();
+  const [card] = await channel.notice(sibling, "<b>Run?</b>", [["Run"], ["Cancel"]], "html");
+  await channel.setChoices(card!, [], undefined, { text: "<b>✅ Spawned new scout</b>", format: "html", link: { label: "Open thread", url: "https://t.me/fake_bot/101" } });
+  const edit = api.sent("editMessageText").at(-1)!;
+  expect(edit.text).toBe("🏠 Notification from Household\n\n✅ Spawned new scout");
+  expect(edit.reply_markup).toEqual({ inline_keyboard: [[{ text: "Open thread", url: "https://t.me/fake_bot/101" }]] });
+  await channel.setChoices(card!, [], undefined, { text: "<b>⏹ Finished</b>", format: "html" });
+  expect(api.sent("editMessageText").at(-1)!.reply_markup).toEqual({ inline_keyboard: [] });
+});
+
+test("a removed place's thread is deleted and forgotten: messages there are no one's, a new one is made if needed", async () => {
+  const { api, state, received, open, listen, lines } = setup();
+  const channel = listen(open());
+  expect(await channel.removePlace(sibling)).toBe(false); // no thread yet: nothing made to delete it
+  expect(api.sent("deleteForumTopic")).toEqual([]);
+  await channel.post(sibling, "hello");
+  expect(await channel.removePlace(sibling)).toBe(true);
+  expect(api.sent("deleteForumTopic")).toEqual([{ chat_id: OWNER, message_thread_id: 100 }]);
+  expect(api.topics.has(`${OWNER}/100`)).toBe(false);
+  expect(state.get(`telegram.123456.${OWNER}.thread.c1`)).toBe("");
+  expect(lines).toContain("telegram house work: thread for c1 deleted");
+  api.push({ message: fromOwner({ text: "late", message_thread_id: 100, is_topic_message: true }) });
+  await waitFor(() => received.length === 1);
+  expect(received[0]!.place).toBeUndefined();
+  expect(await channel.removePlace(sibling)).toBe(false);
+  // A thread Telegram no longer has counts as deleted; any other refusal is the caller's to hear.
+  await channel.post(sibling, "again");
+  expect(api.sent("createForumTopic")).toHaveLength(2);
+  api.topics.delete(`${OWNER}/101`);
+  expect(await channel.removePlace(sibling)).toBe(true);
+  await channel.post(sibling, "third");
+  api.fail("deleteForumTopic", 403, "Forbidden: not enough rights");
+  await expect(channel.removePlace(sibling)).rejects.toThrow("not enough rights");
+  expect(state.get(`telegram.123456.${OWNER}.thread.c1`)).toBe("102");
+});

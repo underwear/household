@@ -1671,3 +1671,64 @@ test("asynchronous owner action runs once, refuses guests and does not overwrite
   expect(channel.calls.some(line => line === "resolve post-1: Open")).toBe(false);
   await chat.stop();
 });
+
+test("a spawn notice goes in the parent's place with a button to the worker's own place; rewritten, the button goes", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const notice = await chat.announce("work", "sibling", "<b>✅ Spawned new sideworker chair</b>", "chair");
+  expect(notice).toEqual({ place: SIBLING, ref: expect.any(String) });
+  expect(channel.calls[0]).toBe("notice 🐾 Sibling: <b>✅ Spawned new sideworker chair</b>");
+  expect(channel.threads.has(CHAIR)).toBe(true); // the link made its place first
+  expect(channel.replaced).toEqual([{ ref: notice!.ref, text: "<b>✅ Spawned new sideworker chair</b>", link: { label: "Open thread", url: `https://chat.example/${encodeURIComponent(CHAIR)}` } }]);
+  await chat.rewrite("work", notice!, "<b>⏹ finished</b>");
+  expect(channel.replaced.at(-1)).toEqual({ ref: notice!.ref, text: "<b>⏹ finished</b>" });
+  // A channel with no links: the notice comes without a button.
+  channel.placeLink = undefined as never;
+  const plain = await chat.announce("work", "sibling", "<b>plain</b>", "chair");
+  expect(channel.replaced.at(-1)).toEqual({ ref: plain!.ref, text: "<b>plain</b>" });
+  await chat.stop();
+});
+
+test("an owner card tells its handle once it is up, to rewrite it after it is answered", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work()]);
+  let handle: unknown;
+  const card: OwnerCard<"pending" | "yes"> = { text: "Run?", format: "html", start: "pending", view: (s) => s === "pending" ? { choices: [["Run"]] } : { outcome: "Ran" }, press: () => "yes", posted: (notice) => { handle = notice; } };
+  void chat.ownerCard("work", "sibling", card, new AbortController().signal);
+  await waitFor(() => handle !== undefined);
+  expect(handle).toEqual({ place: SIBLING, ref: expect.any(String) });
+  expect(opened[0]!.calls[0]).toContain("notice 🐾 Sibling: Run?");
+  await chat.stop();
+});
+
+test("a closed worker's places are deleted, not told; where it had none, the notice says it stopped", async () => {
+  const { chat, opened } = setup();
+  const house = work();
+  house.pets[1]!.sideworker = { parent: "sibling", cwd: "/home/agent/work" };
+  await chat.setHouses([house]);
+  const channel = opened[0]!;
+  channel.threads.add(CHAIR);
+  const finish = chat.prepareSideworkerCloseNotice("work", "chair", "Sideworker", true);
+  await chat.setHouses([{ ...work([{ ...DM, pets: ["sibling"] }]), pets: [house.pets[0]!] }]);
+  await finish();
+  expect(channel.removed).toEqual([CHAIR]);
+  expect(channel.calls).toEqual([]);
+  await finish(); // its thread is gone already: the notice instead
+  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has been stopped and removed. You can delete this topic."]);
+  await chat.stop();
+});
+
+test("an ended scout's places are found and deleted as its pet's; a chat that cannot delete says so", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const scoutPlace = petPlaceKey("scout-1", KEY);
+  channel.threads.add(scoutPlace);
+  expect(await chat.removePlaces("work", "sibling", "scout-1")).toBe(1);
+  expect(channel.removed).toEqual([scoutPlace]);
+  expect(await chat.removePlaces("work", "sibling", "scout-1")).toBe(0);
+  channel.removePlace = undefined as never;
+  await expect(chat.removePlaces("work", "sibling", "scout-1")).rejects.toThrow("cannot delete threads");
+  await chat.stop();
+});

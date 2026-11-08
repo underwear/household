@@ -7,6 +7,8 @@ import type { PetIdentity } from "../infra/agent-api";
 import type { KeyValueStore } from "../infra/sqlite-store";
 import type { McpTool } from "../infra/mcp-server";
 import type { SideworkerWorktree } from "./sideworker-workspace";
+import type { PostedNotice } from "./chat";
+import { cardText, html } from "../core/card";
 
 /** Resolved adapter settings captured at spawn; credential values never enter worker state. */
 export interface SideworkerLaunch {
@@ -34,15 +36,31 @@ export interface SideworkerRecord {
   remindedAt?: number;
   /** Desired removal remains durable until VM reconciliation succeeds. */
   closing?: boolean;
+  /** Household's notice in the parent's place that it was spawned (with a button to its thread): rewritten when it closes. */
+  announcement?: PostedNotice;
 }
 export const SIDEWORKER_HOME = "/home/worker";
+/** The notice in its parent's place that a worker was spawned (a button to its thread goes under it). */
+export function sideworkerSpawned(worker: Pick<SideworkerRecord, "name" | "parent" | "cwd" | "worktree">): string {
+  return cardText({ title: `✅ Spawned new sideworker ⛏️ ${html(worker.name)}`,
+    facts: [`Started by: ${html(worker.parent)}`, `Folder: <code>${html(worker.cwd)}</code>`, ...(worker.worktree ? [`Branch: <code>${html(worker.worktree.branch)}</code>`] : [])] });
+}
+/** The same notice once the worker is closed: its thread is gone, so is the button. */
+export function sideworkerFinished(worker: Pick<SideworkerRecord, "name">): string {
+  return cardText({ title: `⏹ Sideworker ⛏️ ${html(worker.name)} finished`, note: "Its VM is removed; shared project files remain." });
+}
 export const SIDEWORKER_IDLE_MS = 30 * 60_000;
 export const SIDEWORKER_STATE_KEY = "sideworkers.v1";
 const STATE_KEY = SIDEWORKER_STATE_KEY;
 export interface SideworkerDeps {
   store: KeyValueStore;
   agents: Agents;
+  /** Captured before it is removed, run after: its thread goes (or, where it cannot, a notice there says it stopped). */
   prepareClosedNotice?(house: string, name: string): () => Promise<void>;
+  /** A spawned worker is told in its parent's place, with a way to its thread; resolves to that notice's handle. */
+  announce?(worker: SideworkerRecord): Promise<PostedNotice | undefined>;
+  /** A closed worker's spawn notice (`announce`) says it is finished, its thread button gone. */
+  finished?(worker: SideworkerRecord, notice: PostedNotice): Promise<void>;
   configured(): Promise<Household>;
   reload(): Promise<unknown>;
   resolveDirectory(house: string, pet: string, cwd: string): Promise<string | undefined>;
@@ -157,8 +175,11 @@ export class Sideworkers {
         await this.deps.dispatch(caller, name, input.task);
       } catch (error) {
         record.closing = true; this.save();
+        // Its thread may be there already (made on the reload): it goes with it.
+        const closed = this.deps.prepareClosedNotice?.(caller.house, name);
         try {
           await this.deps.reload();
+          await closed?.().catch(() => {});
           this.records = this.records.filter(item => item !== record); this.save();
         } catch {
           throw new Error(`${(error as Error).message}. Cleanup is pending for ${name}; retry sideworker_close.`);
@@ -166,6 +187,8 @@ export class Sideworkers {
         throw error;
       }
       this.deps.log(`sideworker ${caller.house}/${name} spawned by ${caller.pet} in ${cwd}${worktree ? ` (worktree on ${worktree.branch} from ${worktree.base})` : ""}`);
+      const announcement = await this.deps.announce?.(structuredClone(record)).catch(() => undefined);
+      if (announcement && this.records.includes(record)) { record.announcement = announcement; this.save(); }
       return structuredClone(record);
     });
   }
@@ -186,6 +209,7 @@ export class Sideworkers {
       this.deps.log(`sideworker ${house}/${name} closed`);
       const notice = this.closedNotices.get(noticeKey); this.closedNotices.delete(noticeKey);
       try { await notice?.(); } catch { this.deps.log(`sideworker ${house}/${name}: final notice could not be posted`); }
+      if (worker.announcement) await this.deps.finished?.(structuredClone(worker), worker.announcement).catch(() => this.deps.log(`sideworker ${house}/${name}: its spawn notice was not updated`));
     });
   }
   humanMessage(house: string, name: string) {
@@ -227,7 +251,7 @@ export function sideworkerTools(workers: Sideworkers): McpTool<PetIdentity>[] {
       async call(caller) { return JSON.stringify(await workers.profiles(caller)); } },
     { name: "sideworkers", description: "List the house's active or closing sideworkers, their parent pets, working directories and observed idle times.", inputSchema: { type: "object", additionalProperties: false, properties: {} },
       async call(caller) { return JSON.stringify(workers.list(caller.house)); } },
-    { name: "sideworker_close", description: "Stop and remove one of your sideworker VMs. Shared project files remain; the worker's private home is retained for inspection. Ends its session immediately.",
+    { name: "sideworker_close", description: "Stop and remove one of your sideworker VMs. Shared project files remain; the worker's private home is retained for inspection. Ends its session immediately, and its chat thread is deleted with all its messages (in Telegram): tell your human first what in it they may want to keep.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: { name: { type: "string" } } },
       available: caller => !workers.worker(caller.house, caller.pet),
       async call(caller, args) { if (typeof args.name !== "string") throw new Error("name must be a string"); await workers.close(caller, args.name); return JSON.stringify({ closed: args.name }); } },

@@ -231,7 +231,7 @@ function choiceOf(callback: CallbackQuery, { chat: id, prefix: chat, placeOf }: 
   if (message?.chat.id !== id) return { skipped: `a press in another chat` };
   const index = pressedIndex(callback.data ?? "");
   if (index === undefined) return { skipped: "a press on a button Household did not make", answer: INACTIVE };
-  const label = message.reply_markup?.inline_keyboard.flat().find((button) => button.callback_data === callback.data)?.text;
+  const label = message.reply_markup?.inline_keyboard.flat().find((button) => "callback_data" in button && button.callback_data === callback.data)?.text;
   if (label === undefined) return { skipped: "a press on a button the message does not have (any more)", answer: INACTIVE };
   const { thread, place } = whereOf(message, placeOf);
   return {

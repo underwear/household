@@ -1,9 +1,9 @@
 import type { Attachment, OutgoingAttachment } from "../../core/attachment";
-import { DownloadRefused, RateLimited, StatusGone, type Channel, type Choices, type InboundMessage, type MessageRef, type Place, type PostRef, type SenderRef, type StatusView } from "../../core/channel";
+import { DownloadRefused, RateLimited, StatusGone, type Channel, type Choices, type LinkButton, type InboundMessage, type MessageRef, type Place, type PostRef, type SenderRef, type StatusView } from "../../core/channel";
 import { TelegramError } from "./bot-api";
 import { pause, type BotChat, type TelegramBot } from "./bot";
 import { isTelegramId } from "./kind";
-import { keyboard, type InlineKeyboard } from "./keyboard";
+import { keyboard, linkKeyboard, type InlineKeyboard } from "./keyboard";
 import { telegramHtml, splitFormatted } from "./html";
 import { MAX_TEXT, splitText } from "./split";
 import { renderStatus } from "./status";
@@ -224,10 +224,10 @@ export class TelegramChannel implements Channel, BotChat {
    * Only the buttons change, unless the note does: then the text is the message's own with the note under it.
    * When the text is unknown or would get too long, the buttons only change.
    */
-  async setChoices(ref: PostRef, choices: Choices, note?: string, replacement?: { text: string; format?: "plain" | "html" }): Promise<void> {
+  async setChoices(ref: PostRef, choices: Choices, note?: string, replacement?: { text: string; format?: "plain" | "html"; link?: LinkButton }): Promise<void> {
     const messageId = messageIdOf(this.prefix, ref);
     const shown = messageId === undefined ? undefined : this.shown.get(messageId);
-    const reply_markup = keyboard(choices);
+    const reply_markup = replacement?.link && choices.length === 0 ? linkKeyboard(replacement.link) : keyboard(choices);
     if (replacement) {
       const content = replacement.format === "html"
         ? telegramHtml(`<b>${CARD_HEADING}</b>\n\n${replacement.text}`)
@@ -336,6 +336,40 @@ export class TelegramChannel implements Channel, BotChat {
     if (place.kind !== "pet-thread") return;
     this.wanted.set(place.id, place.title);
     await this.thread(place);
+  }
+
+  /**
+   * `https://t.me/<bot>/<thread>`, the thread made first if need be. Only this form opens a thread of a private chat
+   * cleanly in Telegram's apps (checked by hand): one with a message id in it (`t.me/<bot>/<thread>/<message>`,
+   * `?thread=`, `tg://resolve?…&post=…&thread=…`) opens the thread but says the message is not found,
+   * `t.me/<bot>/<message>` goes to General, and `t.me/c/…` is refused for a private chat.
+   */
+  async placeLink(place: Place): Promise<string | undefined> {
+    if (place.kind !== "pet-thread") return undefined;
+    const [thread, username] = await Promise.all([this.thread(place), this.bot.username()]);
+    return username ? `https://t.me/${username}/${thread}` : undefined;
+  }
+
+  /**
+   * deleteForumTopic (works in a private chat with topics), then the place's thread is forgotten: a place of the
+   * same id later would get a new one. A thread Telegram no longer has counts as deleted.
+   */
+  async removePlace(place: Place): Promise<boolean> {
+    if (place.kind !== "pet-thread") return false;
+    await this.creating.get(place.id)?.catch(() => {});
+    const { state, log } = this.bot.options;
+    const thread = state.get(this.keys.thread(place.id));
+    if (!thread) return false;
+    try {
+      await this.bot.api.call("deleteForumTopic", { chat_id: this.chat, message_thread_id: Number(thread) });
+    } catch (error) {
+      if (!/thread not found|TOPIC_ID_INVALID/i.test((error as Error).message)) throw error;
+    }
+    for (const key of [this.keys.thread(place.id), this.keys.title(place.id), this.keys.place(Number(thread))]) state.set(key, "");
+    this.wanted.delete(place.id);
+    this.failed.delete(place.id);
+    log.info(`telegram ${this.name}: thread for ${place.id} deleted`);
+    return true;
   }
 
   /** A rename of the place, after the ones before it (one at a time per chat). */
@@ -501,7 +535,7 @@ export class TelegramChannel implements Channel, BotChat {
     let parsed: Parsed | undefined;
     let answer: string | void = undefined;
     try {
-      parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => state.get(this.keys.place(thread)) });
+      parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => state.get(this.keys.place(thread)) || undefined });
       if (parsed && "skipped" in parsed) {
         answer = parsed.answer;
         log.info(`telegram ${name}: update ${update.update_id} skipped (${parsed.skipped})`);

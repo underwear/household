@@ -1,4 +1,4 @@
-import { RateLimited, StatusGone, type Channel, type Choices, type InboundMessage, type MessageRef, type Place, type PostRef, type SenderRef, type StatusView } from "../../src/core/channel";
+import { RateLimited, StatusGone, type Channel, type Choices, type LinkButton, type InboundMessage, type MessageRef, type Place, type PostRef, type SenderRef, type StatusView } from "../../src/core/channel";
 
 /** How choices are recorded: ` {a|b}{c}` (one brace per row). */
 const shown = (choices?: Choices) => (choices ? ` ${choices.map((row) => `{${row.join("|")}}`).join("")}` : "");
@@ -32,10 +32,29 @@ export class FakeChannel implements Channel {
     return [this.record(`notice ${place.title}: ${text}${shown(choices)}`)];
   }
 
-  /** Recorded as `choices <ref>: {choices}`, with ` — <note>` when there is one. */
-  async setChoices(ref: PostRef, choices: Choices, note?: string): Promise<void> {
+  /** Recorded as `choices <ref>: {choices}`, with ` — <note>` when there is one; a replacement also in `replaced`. */
+  async setChoices(ref: PostRef, choices: Choices, note?: string, replacement?: { text: string; link?: LinkButton }): Promise<void> {
     if (this.failure) throw new Error(this.failure);
     this.calls.push(`choices ${ref}:${shown(choices)}${note === undefined ? "" : ` — ${note}`}`);
+    if (replacement) this.replaced.push({ ref, text: replacement.text, ...(replacement.link ? { link: replacement.link } : {}) });
+  }
+
+  /** Whole texts notices were replaced with (`setChoices`), with the link button under each, if any. */
+  replaced: { ref: PostRef; text: string; link?: LinkButton }[] = [];
+  /** Places that have a thread (`placeLink` makes one), by id; `removePlace` takes them away, recorded in `removed`. */
+  threads = new Set<string>();
+  removed: string[] = [];
+
+  async placeLink(place: Place): Promise<string | undefined> {
+    if (place.kind !== "pet-thread") return undefined;
+    this.threads.add(place.id);
+    return `https://chat.example/${encodeURIComponent(place.id)}`;
+  }
+
+  async removePlace(place: Place): Promise<boolean> {
+    if (this.failure) throw new Error(this.failure);
+    this.removed.push(place.id);
+    return this.threads.delete(place.id);
   }
 
   async resolve(ref: PostRef, outcome: string): Promise<void> {

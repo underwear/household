@@ -213,3 +213,52 @@ test("a failed setup is kept on the run: its VM is gone after", async () => {
   expect(scouts.run("work", id)).toMatchObject({ status: "failed", setupFailure: expect.stringContaining("Unable to locate package") });
   await scouts.stop();
 });
+
+/** Owner cards answered at once (`answer` for a thread deletion), each telling its handle; launch-card rewrites and thread removals recorded. */
+function threadFixture(){
+ const asked:string[]=[],rewrites:{ref:string;text:string;link:boolean}[]=[],removed:string[]=[];
+ const answer={delete:'yes' as 'yes'|'no'};
+ const f=fixture(true,{
+  choose:async(_c,card)=>{asked.push(card.text);card.posted?.({place:'work/parent',ref:`post-${asked.length}` as any});return card.text.includes('wants to delete the thread')?answer.delete:'yes';},
+  status:async(_run,_text,handle)=>handle??'status-card',
+  rewrite:async(_run,notice,text,link)=>{rewrites.push({ref:notice.ref,text,link});},
+  removeThread:async run=>{removed.push(run.id);return 1;},
+ });
+ return {...f,asked,rewrites,removed,answer};
+}
+test('once its thread is up with its card, the launch card says the scout was spawned, with a button to its thread',async()=>{
+ const {scouts,rewrites,asked}=threadFixture();
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Check this'});await settle();
+ expect(rewrites).toEqual([{ref:'post-1',text:`${asked[0]}\n\n<b>✅ Spawned new scout 🧭 helper #1</b>`,link:true}]);
+ expect(scouts.list('work').find(r=>r.id===id)!.announcement).toMatchObject({place:'work/parent',ref:'post-1'});
+ scouts.opened();await settle();
+ expect(rewrites).toHaveLength(1); // once
+ await scouts.stop();
+});
+test('a scout thread is deleted only after it ended, only for its pet, only on the owner\'s Delete',async()=>{
+ const {scouts,rewrites,removed,asked,answer}=threadFixture();
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Check this'});await settle();
+ await expect(scouts.deleteThread(parent,id)).rejects.toThrow('still running');
+ await scouts.cancel(parent,id);await settle();
+ expect(scouts.ended(parent)).toEqual([expect.objectContaining({id,status:'cancelled',title:'🧭 helper #1'})]);
+ await expect(scouts.deleteThread({house:'work',pet:'other'},id)).rejects.toThrow('calling pet');
+ answer.delete='no';
+ expect(await scouts.deleteThread(parent,id)).toMatchObject({deleted:false});
+ expect(removed).toEqual([]);
+ expect(asked.at(-1)).toContain('<b>Delete thread</b> removes the thread with all its messages and files, for good: this cannot be undone.');
+ answer.delete='yes';
+ expect(await scouts.deleteThread(parent,id)).toEqual({deleted:true});
+ expect(removed).toEqual([id]);
+ expect(rewrites.at(-1)).toEqual({ref:'post-1',text:`${asked[0]}\n\n<b>🗑 The thread of 🧭 helper #1 was deleted.</b>`,link:false});
+ expect(scouts.ended(parent)).toEqual([]);
+ await expect(scouts.deleteThread(parent,id)).rejects.toThrow('deleted already');
+ await scouts.stop();
+});
+test('the thread tools: listed for pets only; the delete tool says it is irreversible and needs the human\'s yes',()=>{
+ const {scouts}=fixture();const tools=scoutTools(scouts,()=>true);
+ const del=tools.find(t=>t.name==='scout_thread_delete')!;
+ expect(del.available!(parent)).toBe(true);
+ expect(del.description).toContain('Irreversible');
+ expect(del.description).toContain('only after your human has explicitly asked');
+ expect(tools.find(t=>t.name==='scouts_ended')!.available!(parent)).toBe(true);
+});

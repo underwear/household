@@ -119,7 +119,18 @@ export interface OwnerCard<S> {
   act?(state: S, index: number): Promise<S>;
   /** Whole-card replacement when cancelled or timed out. */
   cancelledText?(): string;
+  /** The card is up: its handle, to rewrite it later (`rewrite`), after it is answered. */
+  posted?(notice: PostedNotice): void;
 }
+
+/**
+ * One of Household's notices, by where it is and its handle there: plain data, kept across restarts, so the notice
+ * can be rewritten later (`Chat.rewrite`) as long as its channel is the house's.
+ */
+export interface PostedNotice { place: string; ref: PostRef }
+
+/** The label of the button that opens a pet's own place (its thread). */
+export const OPEN_PLACE = "Open thread";
 
 /** What a message says, as kept with it: its files named before it, a press is its label, a reaction what changed. */
 function textOf(message: InboundMessage): string {
@@ -287,6 +298,7 @@ export class Chat {
       this.posted(house, pet, spot.place, refs, { kind: "household" }, card.text);
       const posted = refs.at(-1)!;
       ref = posted;
+      try { card.posted?.({ place: spot.place.id, ref: posted }); } catch { /* the card goes on without it */ }
       // Cancellation or a reload may win while Telegram is posting the card.
       if (settled || !this.channels.accepts(house, spot.key, channel)) {
         finish();
@@ -518,12 +530,90 @@ export class Chat {
     await notice.channel.setChoices(notice.ref, [], undefined, { text, format: "html" }).catch(() => {});
   }
 
-  /** Capture the worker's thread before lifecycle reconciliation removes its routing. */
-  prepareSideworkerCloseNotice(house: string, pet: string, kind = "Sideworker"): () => Promise<void> {
+  /**
+   * Capture the worker's places before lifecycle reconciliation removes its routing. With `remove`, they go then,
+   * with all their messages (its channels that can: Telegram deletes the threads); where none could, a notice
+   * there says it was stopped.
+   */
+  prepareSideworkerCloseNotice(house: string, pet: string, kind = "Sideworker", remove = false): () => Promise<void> {
     const target = this.channels.target(house, pet);
-    const found = this.channels.spotsOf(house, pet).found;
+    const { found, spots } = this.channels.spotsOf(house, pet);
     const title = found ? petTitle(found) : pet;
-    return () => this.noticeTo(house, pet, target, `${kind} ${title} has been stopped and removed. You can delete this topic.`);
+    return async () => {
+      if (remove) {
+        let removed = false;
+        for (const spot of spots) {
+          if (!spot.channel?.removePlace) continue;
+          try { removed = (await spot.channel.removePlace(spot.place)) || removed; }
+          catch (error) { this.events.error(`pet ${house}/${pet}: its place was not removed (${(error as Error).message})`); }
+        }
+        if (removed) return;
+      }
+      return this.noticeTo(house, pet, target, `${kind} ${title} has been stopped and removed. You can delete this topic.`);
+    };
+  }
+
+  /**
+   * The address that opens `pet`'s place where its words go (`target`), when its channel has one; else undefined.
+   * Never throws.
+   */
+  async placeLink(house: string, pet: string): Promise<string | undefined> {
+    const { spot } = this.channels.target(house, pet);
+    if (!spot?.channel?.placeLink) return undefined;
+    return spot.channel.placeLink(spot.place).catch((error) => {
+      this.events.error(`pet ${house}/${pet}: no link to its place (${(error as Error).message})`);
+      return undefined;
+    });
+  }
+
+  /**
+   * An HTML notice of Household's in `pet`'s place, with a button that opens `linkTo`'s place under it when given
+   * (and its channel has such links). Resolves to its handle, to rewrite it later; undefined when it could not be
+   * posted. Never throws.
+   */
+  async announce(house: string, pet: string, text: string, linkTo?: string): Promise<PostedNotice | undefined> {
+    const { spot } = this.channels.target(house, pet);
+    if (!spot?.channel) return undefined;
+    try {
+      const refs = await spot.channel.notice(spot.place, text, undefined, "html");
+      this.posted(house, pet, spot.place, refs, { kind: "household" }, text);
+      const notice = { place: spot.place.id, ref: refs.at(-1)! };
+      if (linkTo !== undefined) await this.rewrite(house, notice, text, linkTo);
+      return notice;
+    } catch (error) {
+      this.events.error(`pet ${house}/${pet}: notice not sent (${(error as Error).message})`);
+      return undefined;
+    }
+  }
+
+  /**
+   * A notice of Household's (`announce`, an owner card once answered) says `text` now (HTML), with no buttons but
+   * one that opens `linkTo`'s place, when given and its channel has such links. Never throws: a notice whose channel
+   * is gone, or that cannot be edited any more, stays as it was.
+   */
+  async rewrite(house: string, notice: PostedNotice, text: string, linkTo?: string): Promise<void> {
+    const channel = this.channels.spotAt(house, notice.place)?.channel;
+    if (!channel) return;
+    const url = linkTo === undefined ? undefined : await this.placeLink(house, linkTo);
+    await channel.setChoices(notice.ref, [], undefined, { text, format: "html", ...(url ? { link: { label: OPEN_PLACE, url } } : {}) })
+      .catch((error) => this.events.error(`house ${house}: a notice was not rewritten (${(error as Error).message})`));
+  }
+
+  /**
+   * `owner`'s places in every channel `via` is in go, with all their messages, for good: a pet no longer in the
+   * config (an ended scout) has them there, as its pet's. Resolves to how many went (0: there were none). Throws
+   * when no channel of `via` can remove places, or one refused.
+   */
+  async removePlaces(house: string, via: string, owner: string): Promise<number> {
+    const { spots } = this.channels.spotsOf(house, via);
+    const able = spots.filter((spot) => spot.channel?.removePlace);
+    if (able.length === 0) throw new HouseholdError("this chat cannot delete threads: delete it in the chat app yourself");
+    let removed = 0;
+    for (const spot of able) {
+      const place = { id: petPlaceKey(owner, spot.key), kind: "pet-thread" as const, title: owner };
+      if (await spot.channel!.removePlace!(place)) removed++;
+    }
+    return removed;
   }
 
   onDelivery(update: DeliveryUpdate): void {

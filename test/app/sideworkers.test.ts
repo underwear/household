@@ -298,3 +298,31 @@ test("disabled house sideworkers cannot spawn; existing workers pause and resume
   await f.workers.close(parent, task.name);
   f.store.close();
 });
+
+test("a spawned worker is announced in its parent's place; closing removes its thread and says it is finished, across a restart", async () => {
+  const events: string[] = [];
+  const f = fixture({
+    announce: async worker => { events.push(`announce ${worker.parent} ${worker.name}`); return { place: "parent-place", ref: "post-1" as never }; },
+    prepareClosedNotice: (_house, name) => { events.push(`prepare ${name}`); return async () => { events.push(`closed ${name}`); }; },
+    finished: async (worker, notice) => { events.push(`finished ${worker.name} ${notice.ref}`); },
+  });
+  await f.workers.spawn(parent, task);
+  expect(events).toEqual(["announce parent sw-review"]);
+  expect(f.workers.list("home")[0]!.announcement).toEqual({ place: "parent-place", ref: "post-1" as never });
+  await new Sideworkers(f.deps).close(parent, "sw-review");
+  expect(events).toEqual(["announce parent sw-review", "prepare sw-review", "closed sw-review", "finished sw-review post-1"]);
+  f.store.close();
+});
+
+test("a failed announcement or spawn: no handle kept; a worker that never came up has its thread removed too", async () => {
+  const events: string[] = [];
+  const f = fixture({ announce: async () => { throw new Error("chat down"); }, ready: async () => false,
+    prepareClosedNotice: (_house, name) => async () => { events.push(`closed ${name}`); } });
+  await expect(f.workers.spawn(parent, task)).rejects.toThrow("did not become ready");
+  expect(events).toEqual(["closed sw-review"]);
+  expect(f.workers.list("home")).toEqual([]);
+  const g = fixture({ announce: async () => { throw new Error("chat down"); } });
+  await g.workers.spawn(parent, task);
+  expect(g.workers.list("home")[0]!.announcement).toBeUndefined();
+  f.store.close(); g.store.close();
+});

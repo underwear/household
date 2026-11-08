@@ -10,7 +10,7 @@ export interface BotCall {
 /**
  * A fake Bot API on 127.0.0.1: records every call, serves queued updates to getUpdates (honouring the offset,
  * like Telegram), answers createForumTopic with fresh thread ids (editForumTopic renames them, as Telegram does:
- * TOPIC_NOT_MODIFIED for the same name) and sendMessage with fresh message ids (kept in `messages`). `fail` makes the next calls of a method fail.
+ * TOPIC_NOT_MODIFIED for the same name; deleteForumTopic deletes them) and sendMessage with fresh message ids (kept in `messages`). `fail` makes the next calls of a method fail.
  * Files added with `file` are given by getFile and downloaded from `/file/bot<token>/<path>` (method `file` for `fail`).
  */
 export function fakeTelegram(token: string, ...others: string[]) {
@@ -73,6 +73,11 @@ export function fakeTelegram(token: string, ...others: string[]) {
         if (!topics.has(topic)) return refuse("Bad Request: message thread not found");
         if (topics.get(topic) === params.name) return refuse("Bad Request: TOPIC_NOT_MODIFIED");
         topics.set(topic, params.name);
+        return Response.json({ ok: true, result: true });
+      }
+      if (method === "deleteForumTopic") {
+        const topic = `${params.chat_id}/${params.message_thread_id}`;
+        if (!topics.delete(topic)) return Response.json({ ok: false, error_code: 400, description: "Bad Request: message thread not found" }, { status: 400 });
         return Response.json({ ok: true, result: true });
       }
       if (["sendMessage", "sendRichMessage", "sendDocument", "sendPhoto", "sendVoice", "sendVideo"].includes(method)) {

@@ -55,7 +55,8 @@ files only when you go looking; it starts from them.
 ## Finish
 
 - A worker in a worktree commits on its branch. Review the branch, merge it, then `git worktree remove` it.
-- `sideworker_close({name})` stops the worker and removes its VM. Its worktree, branch and files stay.
+- `sideworker_close({name})` stops the worker and removes its VM. Its worktree, branch and files stay; its chat
+  thread is deleted with all its messages (Telegram), so tell your human first if something there is worth keeping.
 - Household reminds you every 30 minutes of a worker that sits idle: close what you no longer need.
 
 ## Docker and shared files

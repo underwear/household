@@ -19,7 +19,7 @@ import { houseSecrets } from "../core/secrets";
 import { PetOutboxFiles } from "../infra/pet-outbox";
 import { outboxTool } from "./outbox";
 import { HouseMessages, houseMessageTools } from "./house-messages";
-import { Sideworkers, sideworkerTools } from "./sideworkers";
+import { Sideworkers, sideworkerFinished, sideworkerSpawned, sideworkerTools } from "./sideworkers";
 import { makeWorktree } from "./sideworker-workspace";
 import { Monitoring } from "./monitoring";
 import { MetricsStore } from "../infra/metrics-store";
@@ -179,7 +179,11 @@ export async function startDaemon(deps: DaemonDeps) {
   let placed: PlacedPet[] = [];
   let monitoring: Monitoring | undefined;
   const sideworkers = new Sideworkers({
-    store: records, agents, prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name), configured: () => config.load(), reload: () => applyConfig(),
+    store: records, agents, prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", true),
+    // In its parent's place: it was spawned, with a button to its own thread; once closed, that it is finished.
+    announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.name),
+    finished: (worker, notice) => chat.rewrite(worker.house, notice, sideworkerFinished(worker)),
+    configured: () => config.load(), reload: () => applyConfig(),
     resolveDirectory: async (house, pet, cwd) => {
       const current = placed.find(item => item.house === house && item.pet === pet);
       if (!current) return;
@@ -260,6 +264,9 @@ export async function startDaemon(deps: DaemonDeps) {
       return chat.liveNotice(run.house,run.id,shown);
     },
     send: (house,pet,text)=>{delivery.send(house,pet,{origin:"internal",text});},
+    rewrite: (run,notice,text,link)=>chat.rewrite(run.house,notice,scouts.redact(run.house,run.id,text),link?run.id:undefined),
+    // An ended run is no pet of the config any more: its thread is found as its pet's.
+    removeThread: run=>chat.removePlaces(run.house,run.parent,run.id),
     secret: async (run,key,value)=>{await scoutStorage.giveSecret(run.house,run.id,key,value);},
     collect: async (run,files)=>{const result=await scoutArtifacts.collect(run,files);for(const file of await scoutArtifacts.ownerFiles(run,result.map(f=>f.id))){const key=`${run.id}/${file.id}`;if(scoutPostedFiles.has(key))continue;await chat.sendAttachment(run.house,run.id,{kind:"document",name:file.name,bytes:file.bytes});scoutPostedFiles.add(key);}return result;},
     file: (run,name)=>scoutArtifacts.file(run,name),

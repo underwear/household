@@ -7,7 +7,7 @@ import { houseFeatures } from "../core/house-features";
 import type { PetIdentity } from "../infra/agent-api";
 import type { KeyValueStore } from "../infra/sqlite-store";
 import type { McpTool } from "../infra/mcp-server";
-import type { OwnerCard } from "./chat";
+import type { OwnerCard, PostedNotice } from "./chat";
 import type { DeliveryUpdate } from "./delivery";
 import { cardText, html } from "../core/card";
 
@@ -37,6 +37,10 @@ export interface ScoutRun {
   capabilities: CapabilityDefinition[];
   /** Registrable domains it reached, and when each was first seen: only counted for its pet, never named. */
   domains?: Record<string, number>;
+  /** Its launch card in its pet's place, and that card's text: rewritten once its thread is there (a button to it), and when the thread goes. */
+  announcement?: PostedNotice & { text: string };
+  /** Its thread was deleted at its pet's request, with its human's yes (`deleteThread`). */
+  threadDeleted?: boolean;
 }
 export interface ScoutDeps {
   store: KeyValueStore; configured(): Promise<Household>;
@@ -70,6 +74,10 @@ export interface ScoutDeps {
   setupProgress?(run: ScoutRun): Promise<string | undefined>;
   /** Whether its agent waits for input (no turn under way): a quiet scout running a long command is not idle. */
   isIdle?(house: string, id: string): Promise<boolean>;
+  /** A notice of Household's (its launch card) says `text` (HTML) now, its buttons gone; with `link`, one that opens the run's thread. */
+  rewrite?(run: ScoutRun, notice: PostedNotice, text: string, link: boolean): Promise<void>;
+  /** The run's thread goes, with every message in it; resolves to how many went (0: it had none). Throws when the chat cannot. */
+  removeThread?(run: ScoutRun): Promise<number>;
   log(text: string): void; now?(): number;
 }
 /**
@@ -132,6 +140,10 @@ export class Scouts {
   private cleaning = new Map<string, Promise<void>>();
   /** Runs whose human has a Close card open (see `finish`). */
   private closing = new Set<string>();
+  /** Runs whose human has a card to delete their thread open (see `deleteThread`). */
+  private deleting = new Set<string>();
+  /** Runs whose launch card got its button to their thread this process. */
+  private announced = new Set<string>();
   /** Each run's card in its own thread (see `opened`): its handle once posted, and what its status line says. */
   private cards = new Map<string, { handle?: unknown; posting?: boolean; line: string; since: number; timer?: ReturnType<typeof setInterval> }>();
   private queue: Promise<unknown> = Promise.resolve();
@@ -187,13 +199,13 @@ export class Scouts {
     return value;
   }
   private title(r:ScoutRun,pet=r.parent){return this.deps.title?.(r.house,pet)??pet;}
-  private async choose(r:ScoutRun,caller:PetIdentity,text:string,yes:string,no:string,timeout?:number,signal?:AbortSignal,approved?:string,declined?:string,keep=false):Promise<boolean> {
+  private async choose(r:ScoutRun,caller:PetIdentity,text:string,yes:string,no:string,timeout?:number,signal?:AbortSignal,approved?:string,declined?:string,keep=false,posted?:(notice:PostedNotice)=>void):Promise<boolean> {
     const control=new AbortController(); const set=this.controls.get(r.id)??new Set(); set.add(control);this.controls.set(r.id,set);
     this.pending.set(r.id,(this.pending.get(r.id)??0)+1);
     if(r.status==="running")r.status="waiting_owner";
     const abort=()=>control.abort();signal?.addEventListener("abort",abort,{once:true});if(signal?.aborted)control.abort();
     const timer=timeout?setTimeout(()=>control.abort(),timeout):undefined;
-    try { return await this.deps.choose(caller,scoutDecision(text,yes,no,approved,declined,keep),control.signal)==="yes" && !control.signal.aborted; }
+    try { return await this.deps.choose(caller,{...scoutDecision(text,yes,no,approved,declined,keep),...(posted?{posted}:{})},control.signal)==="yes" && !control.signal.aborted; }
     finally { signal?.removeEventListener("abort",abort);clearTimeout(timer);set.delete(control);this.pending.set(r.id,Math.max(0,(this.pending.get(r.id)??1)-1)); if(r.status==="waiting_owner"&&!this.pending.get(r.id))r.status="running";this.activities.set(r.id,this.now());this.save(); }
   }
   /**
@@ -250,7 +262,8 @@ export class Scouts {
     if(!r.byOwner){
       const text=launchCard({pet:this.title(r),scout:`${d.emoji??"🧭"} ${d.title??d.name}`,task:r.task,report:r.report,capabilities:r.capabilities.map(capability=>({name:capability.name,own:capability.owner===d.name})),network:scoutNetwork(d,r.capabilities),
         keysInVm:r.capabilities.flatMap(capability=>capability.keys.flatMap(key=>key.via==="vm"?[key.env]:[])),secrets:Object.keys(values),...(r.runtime?{runtime:r.runtime}:{})});
-      if(!await this.choose(r,{house:r.house,pet:r.parent},text,"Run","Cancel",10*60_000,undefined,"▶ Launched.","Cancelled.",true)) {await this.end(r,"cancelled");return;}
+      const posted=(notice:PostedNotice)=>{r.announcement={...notice,text};this.save();};
+      if(!await this.choose(r,{house:r.house,pet:r.parent},text,"Run","Cancel",10*60_000,undefined,"▶ Launched.","Cancelled.",true,posted)) {await this.end(r,"cancelled");return;}
     }
     if(terminal(r.status))return;
     const h=(await this.deps.configured()).houses.find(h=>h.name===r.house);
@@ -392,8 +405,44 @@ export class Scouts {
     const first=card.handle===undefined;if(first)card.posting=true;
     try{card.handle=await this.deps.status(r,text,card.handle).catch(()=>card.handle)??card.handle;}
     finally{if(first)card.posting=false;}
+    // Its thread is there now, with its card in it: the launch card in its pet's place gets a button to it.
+    if(first&&card.handle!==undefined)this.spawned(r);
     // Its line changed while the card went up: show the latest.
     if(first&&card.handle!==undefined&&!text.includes(html(card.line)))void this.show(r);
+  }
+  /** The launch card, answered, says the scout was spawned, with a button that opens its thread. Once per run. */
+  private spawned(r:ScoutRun){
+    const a=r.announcement;if(!a||!this.deps.rewrite||this.announced.has(r.id))return;
+    this.announced.add(r.id);
+    void this.deps.rewrite(r,{place:a.place,ref:a.ref},`${a.text}\n\n<b>✅ Spawned new scout ${html(this.name(r))}</b>`,true).catch(()=>this.deps.log(`scout ${r.house}/${r.id}: launch card not updated`));
+  }
+  /** The calling pet's ended runs whose thread is still there: what `deleteThread` can take. */
+  ended(c:PetIdentity){return this.runs.filter(r=>r.house===c.house&&!r.probe&&r.parent===c.pet&&terminal(r.status)&&!r.threadDeleted).map(r=>({id:r.id,scout:r.scout,title:this.name(r),status:r.status,...(r.outcome?{outcome:r.outcome}:{}),ended_at:r.endedAt}));}
+  /**
+   * The thread of a run that has ended goes, with all its messages and files, at its pet's request: only once its
+   * human presses Delete on a card in the pet's place (the pet is to have asked them in the chat before). Never
+   * on its own: what a scout showed its human there may still be wanted.
+   */
+  async deleteThread(c:PetIdentity,id:string,signal?:AbortSignal){
+    const r=this.parent(c,id);
+    if(!terminal(r.status))throw new Error("This scout is still running: its thread can be deleted only once it has ended");
+    if(r.threadDeleted)throw new Error("Its thread is deleted already");
+    if(!this.deps.removeThread)throw new Error("This house cannot delete scout threads");
+    if(this.deleting.has(r.id))throw new Error("Your human already has a card to delete this thread");
+    this.deleting.add(r.id);
+    try{
+      const name=this.name(r);
+      const yes=await this.choose(r,{house:r.house,pet:r.parent},cardText({title:`${html(this.title(r))} wants to delete the thread of ${html(name)}`,quote:{label:"Its task",text:r.task},
+        facts:[`Status: ${r.status}${r.outcome?` (${r.outcome})`:""}`],note:"<b>Delete thread</b> removes the thread with all its messages and files, for good: this cannot be undone.\n<b>Keep</b> leaves it as it is."}),
+        "Delete thread","Keep",10*60_000,signal,"Deleted.","Kept: the thread stays.");
+      if(!yes)return {deleted:false,reason:"Your human kept the thread (or did not answer in time)."};
+      const removed=await this.deps.removeThread(r);
+      r.threadDeleted=true;this.save();
+      this.deps.log(`scout ${r.house}/${r.id}: thread deleted at ${r.parent}'s request`);
+      const a=r.announcement;
+      if(a)await this.deps.rewrite?.(r,{place:a.place,ref:a.ref},`${a.text}\n\n<b>🗑 The thread of ${html(name)} was deleted.</b>`,false).catch(()=>{});
+      return removed?{deleted:true}:{deleted:false,reason:"It had no thread left."};
+    }finally{this.deleting.delete(r.id);}
   }
   /** How a run is shown: its scout's emoji, title and the run's number ("🧭 General #3"). */
   private name(r:ScoutRun){const d=r.definition;return `${d.emoji??"🧭"} ${d.title??d.name}${r.number?` #${r.number}`:""}`;}
@@ -497,6 +546,8 @@ export function scoutTools(s:Scouts,enabled:(c:PetIdentity)=>boolean):McpTool<Pe
     make('scouts','List the scouts of your house (name, title, description, shared capabilities, network: open internet or only its hosts): pick the one whose description fits the task and call it with scout_spawn. Read the household-scouts skill.',{},[],c=>s.catalog(c)),
     make('scouts_running','House-generated facts about active scout runs. No scout text.',{},[],c=>s.running(c)),
     make('scout_spawn','Call a scout by name (from the scouts tool) for one task. Your human approves every run (and sees the names of secrets you pass) before it starts. secrets values never appear in Telegram; do not put secrets in task. report defaults owner.',{scout:str,task:str,secrets:{type:'object',additionalProperties:{type:'string'}},report:{type:'string',enum:['pet','owner']}},['scout','task'],(c,a)=>s.spawn(c,a)),
+    make('scouts_ended','Your scout runs that have ended and whose thread is still in the chat: id, scout, status, outcome. For scout_thread_delete.',{},[],c=>s.ended(c)),
+    make('scout_thread_delete','Delete the chat thread of a scout run you called that has ended (done, failed or cancelled), with all its messages and files. Irreversible: what the scout showed your human there is gone for good. Call it only after your human has explicitly asked for it or agreed to it in the chat; Household then asks them once more (Delete thread / Keep) and waits for their press. Ended threads are never deleted on their own.',id,['id'],(c,a)=>s.deleteThread(c,a.id)),
     make('scout_status','Get facts only: fixed status/outcome, steps, tool counts, domain counts (never names), secret requests and neutral file handles.',id,['id'],(c,a)=>s.status(c,a.id)),
     make('scout_cancel','Stop any scout run in your own house.',id,['id'],(c,a)=>s.cancel(c,a.id)),
     make('scout_send','Send to the scout you called. No approval required; messages visible to owner.',{...id,text:str},['id','text'],(c,a)=>s.send(c,a.id,a.text)),

@@ -30,6 +30,14 @@ export interface Sender {
  * way (Telegram: an inline keyboard). A press names its choice by `index`, counted across the rows.
  */
 export type Choices = string[][];
+/**
+ * A button that opens an address instead of answering (Telegram: an inline URL button). Pressing it comes back as
+ * nothing: it is only a way there (a place's own thread, …).
+ */
+export interface LinkButton {
+  label: string;
+  url: string;
+}
 export type ReplyMode = "regular" | "rich";
 
 /**
@@ -127,9 +135,11 @@ export interface Channel {
   notice(place: Place, text: string, choices?: Choices, format?: "plain" | "html"): Promise<PostRef[]>;
   /**
    * New choices on a notice (one of Household's cards), e.g. the marks of a multi-select so far, or the next step
-   * of a card; `note` is a line under its text that asks them (left out, a note shown before goes).
+   * of a card; `note` is a line under its text that asks them (left out, a note shown before goes). A `replacement`
+   * is the notice's whole new text; its `link` (with no choices) is the only button under it, a channel without
+   * such buttons leaves it out.
    */
-  setChoices(ref: PostRef, choices: Choices, note?: string, replacement?: { text: string; format?: "plain" | "html" }): Promise<void>;
+  setChoices(ref: PostRef, choices: Choices, note?: string, replacement?: { text: string; format?: "plain" | "html"; link?: LinkButton }): Promise<void>;
   /**
    * The choices of a post or notice give way to `outcome` (what was chosen, or why nothing will be), shown under
    * its text: no more presses.
@@ -169,4 +179,14 @@ export interface Channel {
   download?(attachment: Attachment, signal: AbortSignal): Promise<Uint8Array>;
   /** Ensure a configured pet's place exists, without posting a message. Safe to repeat on reload. */
   ensurePlace?(place: Place): Promise<void>;
+  /**
+   * An address that opens the place in the channel's own apps (Telegram: `https://t.me/<bot>/<thread>`), made
+   * first if it is not there yet; undefined when the channel has none for it (the inbox, no bot username).
+   */
+  placeLink?(place: Place): Promise<string | undefined>;
+  /**
+   * The place goes, with every message in it, for good (Telegram: its thread is deleted). False when it never was
+   * (no thread made for it, or gone already). Throws when the channel refused.
+   */
+  removePlace?(place: Place): Promise<boolean>;
 }
