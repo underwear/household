@@ -16,7 +16,7 @@ Secrets (agent keys, bot tokens) go from the user straight to the `house` CLI th
 - [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): requirements, installing, agent keys (Claude subscription or API key, ChatGPT subscription or OpenAI API key), the Telegram bot, running as a service
 - [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): pets, network and secrets, scouts and capabilities, updates and migrations, backups
 - [Debugging](https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md): where to look when a pet, scout or channel does not work
-- [Skill overview](https://github.com/underwear/household/blob/main/plugins/household/skills/household/SKILL.md): concepts and the rules an agent follows
+- [Skill overview](https://github.com/underwear/household/blob/main/plugins/household/skills/household/SKILL.md): concepts and where to read on
 
 ## Source
 

@@ -37,7 +37,7 @@ const USAGE = `usage:
   house status                   daemon state and network subjects
   house dashboard [--no-open]    sign in to the web UI: prints a one-time link (60 s) and opens it in the browser
   house reload                   check the config, then apply it to the running daemon
-  house doctor                   check Docker, openssl, the config, the keys, bots and the daemon
+  house doctor                   check images, microsandbox, openssl, the config, the keys, bots and the daemon
   house ls                       keys, houses and pets from the config (no values)
   house key add <name> --provider anthropic|openai [--value <value>] [--note <text>]
                                  a key the pets may run on (its value from stdin when --value is left out:
