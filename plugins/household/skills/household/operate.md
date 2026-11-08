@@ -76,7 +76,7 @@ house migrate                                          # what will migrate (chan
 ```
 
 Then restart the daemon (the service, or Ctrl-C and `house start`). On start it copies the config and the
-database to `~/.local/state/household/backups/pre-migrate-…` and migrates them; VM images rebuild by themselves.
+database to `~/.local/state/household/backups/pre-migrate-…` and migrates them; the pets' VMs move to the new release's images (pulled) by themselves.
 Check with `house doctor` and `house status`.
 
 To go back: stop the daemon, `git checkout <the previous tag>`, `bun run setup`,

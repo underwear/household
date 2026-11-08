@@ -1,7 +1,7 @@
 # Installing and setting up Household
 
 Work through the steps in order. After each, check it before going on. Run `house doctor` whenever unsure: it
-checks Docker, microsandbox, openssl, python3, the config, every key, every bot and the daemon, and says what is
+checks microsandbox, openssl, python3, the config, every key, every bot and the daemon, and says what is
 wrong.
 
 ## 1. Requirements
@@ -11,8 +11,9 @@ wrong.
 - **microsandbox 0.7.13** exactly (Household checks the version):
   macOS `brew install superradcompany/tap/microsandbox`, then `msb --version`. On Linux follow
   https://microsandbox.dev for 0.7.13.
-- **Docker**, to build the VM images: on macOS OrbStack (`brew install --cask orbstack`, then open it once), on
-  Linux Docker Engine. `docker info` must work without sudo.
+- **No Docker**: the agents' VM images come prebuilt with each release (`ghcr.io/underwear/household-agent-*`),
+  and Household pulls them itself. Docker (OrbStack on macOS) is needed only to build changed images from a
+  modified checkout; `house doctor` asks for it only then.
 - **openssl** and **python3** (macOS: `brew install openssl python`).
 
 Installing apps and using sudo are the user's call: ask first.
@@ -105,7 +106,7 @@ The token is read from stdin and checked with Telegram before it is saved. One b
 house start          # foreground; Ctrl-C stops it. For good, make it a service (step 8)
 ```
 
-In another terminal: `house status` (each pet `running` after its first image build, which takes minutes),
+In another terminal: `house status` (each pet `running` after its first image download, a minute or two),
 `house doctor` (all ✓). Then the user writes to the bot: the pet answers in its thread.
 `house dashboard` prints a one-time sign-in link to the web UI (http://127.0.0.1:8780).
 
@@ -113,8 +114,8 @@ In another terminal: `house status` (each pet `running` after its first image bu
 
 `house start` stops cleanly on SIGTERM and exits non-zero only when it cannot run: restart it on failure.
 
-**macOS**: write `~/Library/LaunchAgents/dev.household.plist` (absolute paths; `PATH` must find `docker`,
-`openssl` and `msb`), then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.household.plist`.
+**macOS**: write `~/Library/LaunchAgents/dev.household.plist` (absolute paths; `PATH` must find `openssl`,
+`python3` and `msb`), then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.household.plist`.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
