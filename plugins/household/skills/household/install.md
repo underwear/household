@@ -4,7 +4,8 @@ Done when the user writes to their Telegram bot and a pet answers. `house doctor
 
 ## Checklist
 
-1. **Host**: macOS on Apple silicon, or Linux with `/dev/kvm` usable by the user.
+1. **Host**: macOS on Apple silicon, or Linux with `/dev/kvm` usable by the user — the user's machine, a VM with
+   nested virtualization, or a VPS that offers KVM. Intel Macs only through such a Linux VM.
 2. **Dependencies**: Bun, openssl, python3, and microsandbox **exactly 0.7.13** (https://microsandbox.dev; on macOS
    `superradcompany/tap/microsandbox`). No Docker: agent images come prebuilt with each release.
 3. **Household** from the newest release tag of https://github.com/underwear/household (not `main`), `bun run setup`
@@ -32,4 +33,5 @@ doing them (it needs a real terminal, it asks questions).
    `PATH` finds `msb`, `openssl` and `python3`. Only one daemon at a time.
 10. **Check**: `house doctor` all ✓, `house status` shows the pet `running` (the first start downloads its image).
 11. **Web UI**: `house dashboard` prints a one-time sign-in link (60 s) and opens it; the UI is at
-    http://127.0.0.1:8780.
+    http://127.0.0.1:8780, on that machine only. On a remote one: `ssh -L 8780:127.0.0.1:8780 <host>` (the same
+    port on both ends), then `house dashboard --no-open` there and open the link locally.
