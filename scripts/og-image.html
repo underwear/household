@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- The share preview (landing/og.png, 1200×630). Render:
+     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
+       --window-size=1200,630 --screenshot=landing/og.png scripts/og-image.html -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=block" rel="stylesheet">
+<style>
+  :root { --bg: #1f1d1a; --fg: #f2f0eb; --muted: #a39e94; --line: #36332e; --green: #72c191; --card: #272521; --tile: #33302b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    background: radial-gradient(900px 520px at 88% 8%, #2b2924 0%, transparent 70%), var(--bg);
+    color: var(--fg); font-family: Onest, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    display: grid; grid-template-columns: 1fr 400px; gap: 48px; padding: 60px 64px;
+  }
+  .left { display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 14px; font-weight: 600; font-size: 28px; }
+  .brand svg { width: 48px; height: 48px; }
+  h1 { font-size: 56px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 56px 0 0; white-space: nowrap; }
+  h1 .soft { color: var(--muted); }
+  .lead { font-size: 24px; line-height: 1.45; color: var(--muted); margin: 24px 0 0; max-width: 560px; }
+  .foot { margin-top: auto; display: flex; align-items: center; gap: 12px; font-size: 22px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+
+  .chat {
+    align-self: center; background: var(--card); border: 1px solid var(--line); border-radius: 24px;
+    box-shadow: 0 24px 60px -24px rgb(0 0 0 / 0.6); overflow: hidden;
+  }
+  .chat-head { display: flex; align-items: center; gap: 14px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+  .avatar { width: 44px; height: 44px; border-radius: 12px; background: var(--tile); display: grid; place-items: center; font-size: 24px; }
+  .who { font-weight: 600; font-size: 20px; }
+  .state { font-size: 15px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .state .dot { width: 8px; height: 8px; }
+  .msgs { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 84%; padding: 12px 16px; border-radius: 18px; font-size: 17px; line-height: 1.4; }
+  .me { align-self: flex-end; background: #3a5a46; color: #eef6f0; border-bottom-right-radius: 6px; }
+  .pet { align-self: flex-start; background: var(--tile); border-bottom-left-radius: 6px; }
+  .tool { align-self: flex-start; font-size: 15px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; padding: 0 4px; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#f2f0eb"/><path d="M16 6.5 26 15v9.5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V15Z" fill="#1f1d1a"/><rect x="13.25" y="18.5" width="5.5" height="8" rx="1.25" fill="#f2f0eb"/><circle cx="24.5" cy="8" r="4.25" fill="#72c191" stroke="#f2f0eb" stroke-width="2"/></svg>Household</div>
+    <h1>A home for your agents.<br><span class="soft">A home for your pets.</span></h1>
+    <p class="lead">Claude Code and Codex, each in its own microVM, in the messenger you already use.</p>
+    <div class="foot"><span class="dot"></span>agents-household.dev</div>
+  </div>
+  <div class="chat">
+    <div class="chat-head">
+      <div class="avatar">🐾</div>
+      <div><div class="who">Assistant</div><div class="state"><span class="dot"></span>in its microVM</div></div>
+    </div>
+    <div class="msgs">
+      <div class="msg me">What changed in the repo since yesterday?</div>
+      <div class="tool">$ git log --since=yesterday</div>
+      <div class="msg pet">Three PRs merged: the binary installer, house update and the landing. CI is green.</div>
+      <div class="msg me">Nice. Ship the release notes</div>
+      <div class="msg pet">Drafted. Want me to post them?</div>
+    </div>
+  </div>
+</body>
+</html>
