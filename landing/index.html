@@ -52,7 +52,10 @@
       font: 400 17px/1.6 var(--font-sans);
       -webkit-font-smoothing: antialiased;
     }
-    main { max-width: 720px; margin: 0 auto; padding: 72px 24px 48px; }
+    main { max-width: 1120px; margin: 0 auto; padding: 72px 24px 48px; }
+    main > .cards, main > .start { max-width: 720px; margin-left: auto; margin-right: auto; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 56px; align-items: center; margin-top: 48px; }
+    .hero h1 { margin-top: 0; }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 18px; }
     .brand svg { width: 32px; height: 32px; }
     .masthead { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -128,6 +131,10 @@
     .prompt .done { display: none; color: var(--green); }
     .prompt.copied .done { display: inline; }
     .prompt.copied .todo { display: none; }
+    @media (width < 960px) {
+      .hero { grid-template-columns: 1fr; gap: 40px; }
+      .hero .thread { max-width: 520px; }
+    }
     @media (width < 600px) {
       .cards { grid-template-columns: 1fr; }
       .card li:has(.long) { flex-wrap: wrap; row-gap: 2px; }
@@ -137,6 +144,37 @@
       main { padding-top: 40px; }
       h1 { margin-top: 48px; }
     }
+    /* Demo: a pet's thread, played message by message. */
+    .thread {
+      background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.08);
+    }
+    .thread-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .thread-head .avatar { width: 38px; height: 38px; border-radius: 11px; background: var(--tile); display: grid; place-items: center; font-size: 20px; }
+    .thread-head b { display: block; font-weight: 600; font-size: 16px; line-height: 1.2; }
+    .thread-head small { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+    .live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    .replay { margin-left: auto; height: 30px; padding: 0 10px; font: 500 13px/1 var(--font-sans); color: var(--muted);
+      background: none; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; opacity: 0; transition: opacity .3s; }
+    .replay.show { opacity: 1; }
+    .lines { padding: 16px; display: flex; flex-direction: column; gap: 9px; height: 540px; overflow: hidden; justify-content: flex-end;
+      mask-image: linear-gradient(to bottom, transparent 0, #000 56px); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px); }
+    .line { opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
+    .line.in { opacity: 1; transform: none; }
+    .bubble { max-width: 84%; padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.42; }
+    .me { align-self: flex-end; background: #3a5a46; color: #eef6f0; border-bottom-right-radius: 5px; }
+    .pet { align-self: flex-start; background: var(--tile); border-bottom-left-radius: 5px; }
+    .sys { align-self: center; font-size: 13px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .ask { align-self: flex-start; width: min(340px, 90%); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 14.5px; background: var(--bg); }
+    .ask b { font-weight: 600; }
+    .ask .btns { display: flex; gap: 8px; margin-top: 10px; }
+    .ask button { flex: 1; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: inherit; font: 500 14px/1 var(--font-sans); transition: background-color .2s, color .2s, border-color .2s; }
+    .ask button.pressed { background: var(--green); border-color: var(--green); color: #10251a; }
+    .typing { align-self: flex-start; display: flex; gap: 4px; padding: 13px 14px; background: var(--tile); border-radius: 16px; border-bottom-left-radius: 5px; }
+    .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1s infinite; }
+    .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+    @keyframes blink { 0%, 60%, 100% { opacity: .25 } 30% { opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .line { transition: none; } .typing i { animation: none; } }
   </style>
 </head>
 <body>
@@ -146,11 +184,23 @@
       <a class="top-link" href="https://github.com/underwear/household"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>GitHub</a>
     </div>
 
-    <h1>A home for your agents.<br><span class="soft">A home for your pets.</span></h1>
-    <p class="lead">A harness for harnesses. Household wraps terminal agents like Claude Code and Codex, gives each its own sandbox, and lets you talk to it from the messenger you already use.</p>
-    <div class="actions">
-      <a class="btn primary" href="#start">Get started<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
-      <a class="btn" href="docs/"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>Read the docs</a>
+    <div class="hero">
+      <div class="hero-text">
+      <h1>A home for your agents.<br><span class="soft">A home for your pets.</span></h1>
+      <p class="lead">A harness for harnesses. Household wraps terminal agents like Claude Code and Codex, gives each its own sandbox, and lets you talk to it from the messenger you already use.</p>
+      <div class="actions">
+        <a class="btn primary" href="#start">Get started<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        <a class="btn" href="docs/"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>Read the docs</a>
+      </div>
+      </div>
+      <div class="thread" aria-label="A pet at work">
+        <div class="thread-head">
+          <span class="avatar">🦉</span>
+          <div><b>Assistant</b><small><span class="live"></span>in its microVM</small></div>
+          <button class="replay" type="button">Replay</button>
+        </div>
+        <div class="lines" aria-live="polite"></div>
+      </div>
     </div>
 
     <div class="cards">
@@ -178,6 +228,7 @@
         </ul>
       </section>
     </div>
+
 
     <section id="start" class="start">
       <h2>Get started</h2>
@@ -213,6 +264,42 @@ Read <span class="md-link">https://agents-household.dev/llms.txt</span> and help
         }
       });
     }
+
+    // The demo thread: plays once it is on screen, again on Replay.
+    const SCRIPT = [
+      { me: "Find me a flat in Barcelona: 2 rooms, a balcony, under €1,500. No ground floors, I've suffered enough." },
+      { pet: "On it. I'll send a scout to look around." },
+      { sys: "🕵️ scout flat-hunter started" },
+      { ask: "<b>flat-hunter</b> wants to reach <b>idealista.com</b>", press: "Allow" },
+      { sys: "✓ allowed for this house" },
+      { pet: "Found 3. The best: Gràcia, 3rd floor, balcony with a plant that looks emotionally available. €1,420." },
+      { me: "Book a viewing for Saturday" },
+      { pet: "Done: Saturday 11:00. I put it in your calendar and told the plant." },
+    ];
+    const lines = document.querySelector(".lines"), replay = document.querySelector(".replay");
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const add = (node) => { lines.append(node); void node.offsetHeight; node.classList.add("in"); return node; };
+    const el = (cls, html) => { const n = document.createElement("div"); n.className = `line ${cls}`; n.innerHTML = html; return n; };
+    let run = 0;
+    async function play() {
+      const mine = ++run; lines.replaceChildren(); replay.classList.remove("show");
+      for (const step of SCRIPT) {
+        if (mine !== run) return;
+        if (step.pet) {
+          const t = add(el("typing", "<i></i><i></i><i></i>")); await wait(900 + step.pet.length * 12); t.remove();
+          add(el("bubble pet", step.pet));
+        } else if (step.me) add(el("bubble me", step.me));
+        else if (step.sys) add(el("sys", step.sys));
+        else if (step.ask) {
+          const a = add(el("ask", `${step.ask}<div class="btns"><button type="button" tabindex="-1">Allow</button><button type="button" tabindex="-1">Deny</button></div>`));
+          await wait(1400); a.querySelector("button").classList.add("pressed");
+        }
+        await wait(step.me ? 1100 : 900);
+      }
+      replay.classList.add("show");
+    }
+    replay.addEventListener("click", play);
+    new IntersectionObserver((entries, obs) => { if (entries[0].isIntersecting) { obs.disconnect(); play(); } }, { threshold: 0.4 }).observe(lines);
   </script>
 </body>
 </html>
