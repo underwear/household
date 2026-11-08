@@ -114,3 +114,20 @@ test("only the newest five backups are kept", () => {
   }
   expect(listBackups(paths).map((each) => each.name)).toEqual([16, 15, 14, 13, 12].map((hour) => `pre-migrate-20261108T${hour}0000Z`));
 });
+
+test("migration 3: browser and dev capabilities left as their templates made them get Node.js 22; edited ones stay", async () => {
+  const { CAPABILITY_TEMPLATES, LEGACY_NODE_INSTALLS } = await import("../../src/builtin-capabilities");
+  const { parseDocument } = await import("yaml");
+  const migration = CONFIG_MIGRATIONS.find((each) => each.id === 3)!;
+  const doc = parseDocument("houses:\n  work:\n    capabilities: []\n");
+  const capabilities = doc.getIn(["houses", "work", "capabilities"]) as import("yaml").YAMLSeq;
+  for (const [name, install] of Object.entries(LEGACY_NODE_INSTALLS)) capabilities.items.push(doc.createNode({ name, install }));
+  capabilities.items.push(doc.createNode({ name: "browser", install: "my own script\n" }));
+  migration.change(doc);
+  const installs = (doc.toJS() as { houses: { work: { capabilities: { name: string; install: string }[] } } }).houses.work.capabilities;
+  const template = (name: string) => CAPABILITY_TEMPLATES.find((each) => each.name === name)!.install;
+  expect(installs.map((each) => each.install)).toEqual([template("browser"), template("dev"), "my own script\n"]);
+  expect(template("browser")).toContain("setup_22.x");
+  expect(template("dev")).not.toContain(" npm");
+  migration.change(parseDocument("houses:\n  work:\n    network: { allow: [] }\n")); // nothing to rewrite: harmless
+});

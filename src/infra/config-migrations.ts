@@ -1,5 +1,5 @@
 import { isMap, isScalar, isSeq, type Document } from "yaml";
-import { GENERAL_SCOUT } from "../builtin-capabilities";
+import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -19,6 +19,7 @@ export interface ConfigMigration {
 export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 1, store: "config", name: "a house's default scout becomes the General scout", change: migrateDefaultScouts },
   { id: 2, store: "config", name: "scouts' maximum run time is dropped", change: (doc) => { for (const path of legacyTimeouts(doc)) doc.deleteIn(path); } },
+  { id: 3, store: "config", name: "the browser and dev capabilities install Node.js 22", change: migrateNodeInstalls },
 ];
 
 /** The config version this Household writes: a config with a newer one is from a newer Household, and not read. */
@@ -58,5 +59,26 @@ function migrateDefaultScouts(doc: Document): void {
       if (isSeq(scouts)) scouts.items.push(doc.createNode(general)); else setIn(doc, ["houses", house, "scouts"], doc.createNode([general]));
     }
     doc.deleteIn(["houses", house, "defaultScout"]);
+  }
+}
+
+/**
+ * The browser and dev capabilities as their templates made them, with Debian's Node.js 18 (today's Playwright will
+ * not run on it), get the templates' install script now. One the owner changed is theirs: left as it is.
+ */
+function migrateNodeInstalls(doc: Document): void {
+  const houses = doc.getIn(["houses"]);
+  if (!isMap(houses)) return;
+  for (const pair of houses.items) {
+    if (!isScalar(pair.key)) continue;
+    const capabilities = doc.getIn(["houses", pair.key.value, "capabilities"]);
+    if (!isSeq(capabilities)) continue;
+    for (const item of capabilities.items) {
+      if (!isMap(item)) continue;
+      const name = item.get("name");
+      const legacy = typeof name === "string" ? LEGACY_NODE_INSTALLS[name] : undefined;
+      const template = CAPABILITY_TEMPLATES.find(each => each.name === name);
+      if (legacy && template && item.get("install") === legacy) item.set("install", template.install);
+    }
   }
 }

@@ -1,6 +1,18 @@
 import type { CapabilityDefinition } from "../core/scouts";
 
 /**
+ * Node.js 22 from NodeSource: Debian 12's own is 18, too old for Playwright (and much else) by now. NodeSource's
+ * nodejs carries npm and conflicts with Debian's npm package, so no template installs that one.
+ */
+const NODE = "apt-get update -qq\napt-get install -y -qq curl ca-certificates\ncurl -fsSL https://deb.nodesource.com/setup_22.x | bash -\napt-get install -y -qq nodejs\n";
+
+/** What the browser and dev templates installed before Node came from NodeSource: rewritten by config migration 3. */
+export const LEGACY_NODE_INSTALLS: Record<string, string> = {
+  browser: "apt-get update -qq\napt-get install -y -qq nodejs npm\nnpm install -g playwright\nplaywright install --with-deps chromium\n",
+  dev: "apt-get update -qq\napt-get install -y -qq git curl jq python3 python3-pip nodejs npm\n",
+};
+
+/**
  * Starting points for a house's capabilities: an install script (fetching software at run time, nothing vendored
  * here), a network and a description. Once created from one, a capability is the owner's like any other.
  */
@@ -8,7 +20,7 @@ export const CAPABILITY_TEMPLATES: (Omit<CapabilityDefinition, "keys"> & { label
   {
     name: "browser", label: "Browser (Playwright)",
     description: "A headless Chromium driven by Playwright: sites without an API, forms, tickets, screenshots.",
-    install: "apt-get update -qq\napt-get install -y -qq nodejs npm\nnpm install -g playwright\nplaywright install --with-deps chromium\n",
+    install: `${NODE}npm install -g playwright\nplaywright install --with-deps chromium\n`,
     network: { any: true, allow: [] },
   },
   {
@@ -20,7 +32,7 @@ export const CAPABILITY_TEMPLATES: (Omit<CapabilityDefinition, "keys"> & { label
   {
     name: "dev", label: "Developer tools",
     description: "git, Node.js, Python and the usual command-line tools, to clone and inspect repositories.",
-    install: "apt-get update -qq\napt-get install -y -qq git curl jq python3 python3-pip nodejs npm\n",
+    install: `${NODE}apt-get install -y -qq git jq python3 python3-pip\n`,
     network: { any: true, allow: [] },
   },
   {
