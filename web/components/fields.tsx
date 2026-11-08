@@ -70,7 +70,7 @@ export interface TextFieldProps extends CommonProps {
   placeholder?: string;
   readOnly?: boolean;
   maxLength?: number;
-  type?: "text" | "search" | "url";
+  type?: "text" | "search" | "url" | "password";
   inputMode?: "text" | "numeric" | "url";
 }
 

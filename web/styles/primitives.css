@@ -186,3 +186,10 @@ html:has(.scrim) { overflow: hidden; }
 
 /* Short descriptions in reusable cards. */
 .clamp-two { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.slack-steps { display: flex; justify-content: space-between; gap: 12px; list-style: none; padding: 0; margin: 0 0 8px; }
+.slack-steps li { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
+.slack-steps li[aria-current] { color: var(--ink); font-weight: 600; }
+.slack-steps li span { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid currentColor; border-radius: 50%; }
+.slack-destination { padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.slack-settings { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }

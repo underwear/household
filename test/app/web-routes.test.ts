@@ -1023,3 +1023,14 @@ test("house feature settings require owner session, validate addresses, persist 
   expect((await env.call("PUT", path, { ...settings, preview: { ...settings.preview, publicHost: "localhost:8780" } })).status).toBe(400);
   expect((await env.call("PUT", "/api/houses/missing/features", settings)).status).toBe(404);
 });
+
+test("Slack onboarding requires a session and rejects invalid credentials without changing config", async () => {
+  const { call, signIn, text } = setup();
+  const before = await text();
+  const fields = { token: "invalid", appToken: "invalid", member: "U123" };
+  expect((await call("POST", "/api/houses/work/slack/resolve", fields)).status).toBe(401);
+  await signIn();
+  expect((await call("POST", "/api/houses/work/slack/resolve", fields)).status).toBe(400);
+  expect((await call("POST", "/api/houses/missing/slack/resolve", fields)).status).toBe(404);
+  expect(await text()).toBe(before);
+});

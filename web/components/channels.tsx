@@ -1,3 +1,4 @@
+import { SlackSetup } from "./slack-setup";
 import { useState } from "react";
 import { api, type ChannelFields, type ChannelKindView, type ChannelView, type HouseView, type PlatformView } from "../api";
 import { Dialog } from "./dialog";
@@ -168,6 +169,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
       />
     );
   }
+  if (spec.kind === "slack-private") return <SlackSetup house={house} spec={spec} channel={channel} onClose={onClose} back={() => setKind(undefined)} save={save} />;
   return (
     <Dialog
       onClose={onClose}

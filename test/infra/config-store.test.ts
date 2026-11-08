@@ -667,3 +667,16 @@ test("Slack DM configuration round-trips alongside Telegram; workspace identitie
   await expect(config.addChannel("work", { kind: "slack-private", chat: "TTEST:CGROUP", token: "xoxb-fake", appToken: "xapp-fake", pets: [] })).rejects.toThrow("workspace:DM");
   await expect(config.addChannel("work", { kind: "slack-private", chat: "TTEST:DOTHER", token: "xoxb-fake", pets: [] })).rejects.toThrow("appToken");
 });
+
+test("connecting a channel and its owner is atomic and preserves an existing owner's note", async () => {
+  const { config, text } = store();
+  await config.createHouse("work");
+  const before = await text();
+  await expect(config.addChannel("work", { kind: "telegram-private", token: "bot", chat: "123", pets: ["missing"] }, [], { platform: "telegram", id: "123" })).rejects.toThrow();
+  expect(await text()).toBe(before);
+  await config.addChannel("work", { kind: "telegram-private", token: "bot", chat: "123" }, [], { platform: "telegram", id: "123" });
+  expect((await config.load()).houses[0]!.people.owners).toEqual([{ platform: "telegram", id: "123" }]);
+  await config.updateOwner("work", "telegram", "123", "keep me");
+  await config.addChannel("work", { kind: "telegram-private", token: "bot", chat: "456" }, [], { platform: "telegram", id: "123" });
+  expect((await config.load()).houses[0]!.people.owners).toEqual([{ platform: "telegram", id: "123", note: "keep me" }]);
+});

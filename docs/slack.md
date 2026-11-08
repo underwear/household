@@ -19,13 +19,19 @@ A bot cannot delete a user's Slack message. For this channel, `!secret` still pe
 1. Create a Slack app from [`manifest.json`](../src/channel-adapters/slack/manifest.json). Socket Mode and interactivity are enabled. No tunnel or public callback endpoint is needed.
 2. Install it in the intended workspace. Requested bot scopes are `chat:write`, `im:history`, `im:read`, `im:write`, `reactions:read`, `reactions:write`, `files:read`, `files:write`. There is no user token or channel-history scope.
 3. Copy the `xoxb-…` Bot User OAuth Token. Under Basic Information → App-Level Tokens, generate an `xapp-…` token with **only `connections:write`**.
-4. Save both in a private file outside the checkout, mode `0600`:
+4. In Household admin, open **Channels → Add channel → Slack Bot DM**. Paste both tokens in **App**, then enter your Slack member ID in **Your account** (Slack profile → More → Copy member ID).
+5. Choose **Find my bot DM**. Household opens/resumes the private conversation automatically, without sending a message. Review the owner account, choose your pets and the pet that replies in Messages, then **Connect Slack**. The channel and owner access are saved together. Tokens stay on the host.
+6. To change pets later, edit the connection. Tokens and technical addresses are tucked into **Connection settings**.
+
+### Optional CLI setup
+
+For scripted installations, save both tokens in a private file outside the checkout, mode `0600`:
 
    ```json
    { "botToken": "xoxb-…", "appToken": "xapp-…" }
    ```
 
-5. Find your Slack member ID (`U…`, profile → More → Copy member ID). Run from the checkout:
+Find your Slack member ID (`U…`, profile → More → Copy member ID). Run from the checkout:
 
    ```sh
    bun scripts/slack-setup.ts --credentials /private/path/slack.json --user U0123456789
@@ -33,7 +39,7 @@ A bot cannot delete a user's Slack message. For this channel, `!secret` still pe
 
    This validates the bot, opens/resumes your bot DM, and prints the workspace-qualified owner and DM IDs. It does not print credentials or modify Household config.
 
-6. Start/restart Household **from this checkout** so the running daemon includes the new adapter. Then attach existing pets:
+Start/restart Household **from this checkout** so the running daemon includes the new adapter. Then attach existing pets:
 
    ```sh
    bun scripts/slack-setup.ts --credentials /private/path/slack.json \
@@ -57,7 +63,7 @@ channels:
     pets: [sibling]
 ```
 
-Keep the existing Telegram owner/channel alongside these. The web form renders the Slack fields from the adapter descriptor. CLI `channel add` and `channel set` also accept `--app-token`; the private-file helper avoids putting credentials in shell history/process arguments.
+Keep the existing Telegram owner/channel alongside these. The web admin resolves the DM from your member ID; you do not need to copy a Workspace:DM address. CLI `channel add` and `channel set` also accept `--app-token`; the private-file helper avoids putting credentials in shell history/process arguments.
 
 ## Local proof of concept
 

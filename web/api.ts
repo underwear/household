@@ -28,6 +28,7 @@ export type { AgentModelsView, AgentView, AllowView, ChannelKindView, ChannelVie
  * the fields every channel has (`name` and `default` null for none).
  */
 export interface ChannelFields {
+  slackMember?: string;
   /** Its chat: only when it is added (it names the channel). */
   chat?: string;
   own: Record<string, string>;
@@ -176,6 +177,7 @@ export const api = {
   allowHosts: (name: string, hosts: readonly string[]) => call<WriteView>("POST", `${housePath(name)}/allow/bulk`, { hosts }),
   disallowHost: (name: string, host: string) => call<WriteView>("DELETE", `${housePath(name)}/allow/${encodeURIComponent(host)}`),
   revokeTemporary: (name: string, pet: string, domain: string, port = 443) => call<WriteView>("DELETE", `${housePath(name)}/temporary/${encodeURIComponent(domain)}?port=${port}&pet=${encodeURIComponent(pet)}`),
+  resolveSlack: (house: string, token: string, appToken: string, member: string) => call<{ chat: string; owner: string; url: string }>("POST", `${housePath(house)}/slack/resolve`, { token, appToken, member }),
   addChannel: (house: string, kind: string, { own, ...common }: ChannelFields) => call<WriteView>("POST", `${housePath(house)}/channels`, { kind, ...own, ...common }),
   updateChannel: (house: string, chat: string, { own, ...common }: ChannelFields) => call<WriteView>("PATCH", under(house, "channels", chat), { ...own, ...common }),
   /** Who is in a channel and who gets what is addressed to none, the rest of it as it is. */

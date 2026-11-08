@@ -407,8 +407,16 @@ export class ConfigStore {
    * Adds a channel at the end of the house's list (and changes the house's channels `also` names, in the same
    * edit); the config's rules check it (core/channels.ts).
    */
-  async addChannel(house: string, { kind, name, pets, default: first, ...own }: ChannelFields & { kind: string }, also: AlsoChannel[] = []): Promise<Household> {
+  async addChannel(house: string, { kind, name, pets, default: first, ...own }: ChannelFields & { kind: string }, also: AlsoChannel[] = [], newOwner?: { platform: string; id: string }): Promise<Household> {
     return this.edit((doc, household) => {
+      if (newOwner) {
+        const owner = ownerOf(newOwner.platform, newOwner.id);
+        if (!knownHouse(household, house).people.owners.some(other => sameOwner(other, owner))) {
+          const path = ["houses", house, "people", "owners", owner.platform];
+          ownerList(doc, path);
+          append(doc, path, ownerItem(owner.id));
+        }
+      }
       const { channels } = knownHouse(household, house);
       for (const other of also) setFields(doc, ["houses", house, "channels", channelIndex(household, house, other.chat)], other.fields);
       append(doc, ["houses", house, "channels"], { kind });

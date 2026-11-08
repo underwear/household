@@ -1,3 +1,4 @@
+import { resolveSlackDm } from "../channel-adapters/slack/setup";
 import type { Previews } from "./previews";
 import { houseFeatures, previewSettings, houseFeatureSettingsSchema } from "../core/house-features";
 import { sideworkerProfileProblems } from "./agents";
@@ -129,7 +130,7 @@ const petBody = z.strictObject(petFields);
 // channel); its kind's own (token, …) are strings, checked against the kind's descriptor (`ownFields`), then by
 // the config's rules.
 const commonChannel = { name: optional, note: optional, pets: z.array(z.string()).optional(), default: optional };
-const newChannelBody = z.object({ kind: z.string(), chat: z.string(), ...commonChannel }).catchall(z.string());
+const newChannelBody = z.object({ kind: z.string(), chat: z.string(), slackMember: z.string().optional(), ...commonChannel }).catchall(z.string());
 const NO_NEW_CHAT = "a channel's chat names it: another chat is another channel (remove this one, add that one)";
 const channelBody = z.object({ chat: z.never({ error: NO_NEW_CHAT }).optional(), ...commonChannel }).catchall(z.string());
 
@@ -474,14 +475,24 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       events.info(`web: house ${name} revoked ${pets[0]}'s temporary access to ${domain}:${port}`);
       return json({ house: await viewOf(household, name!) } satisfies WriteView);
     }],
+    ["POST", at("/slack/resolve"), async ({ request, params: [name] }) => {
+      const { token, appToken, member } = await bodyOf(request, z.strictObject({ token: z.string(), appToken: z.string(), member: z.string() }));
+      const household = await config.load();
+      if (!findHouse(household, name!)) throw new NotFoundError(`unknown house '${name}'`);
+      await checkFields(deps.channelKinds, deps.checks, "slack-private", { token, appToken }, { household, house: name! });
+      return json(await resolveSlackDm(token.trim(), member));
+    }],
     ["POST", at("/channels"), async ({ request, params: [name] }) => {
-      const { kind, chat, name: shown, note, pets, default: first, ...own } = await bodyOf(request, newChannelBody);
+      const { kind, chat, slackMember, name: shown, note, pets, default: first, ...own } = await bodyOf(request, newChannelBody);
+      if (slackMember !== undefined && kind !== "slack-private") throw new HouseholdError("Slack member is only for Slack channels.");
       ownFields(kind, own, { chat });
       const household = await config.load();
       if (!findHouse(household, name!)) throw new NotFoundError(`unknown house '${name}'`); // before Telegram is asked
       const { own: kept, also } = await checkFields(deps.channelKinds, deps.checks, kind, own, { household, house: name! });
+      const destination = slackMember === undefined ? undefined : await resolveSlackDm(kept.token!, slackMember);
+      if (destination && destination.chat !== chat) throw new HouseholdError("Slack destination changed. Go back and find your DM again.");
       const channel = { kind, chat, ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }) };
-      return written(await config.addChannel(name!, channel, also), name!, `is in a ${kind} chat`, 201);
+      return written(await config.addChannel(name!, channel, also, destination ? { platform: "slack", id: destination.owner } : undefined), name!, `is in a ${kind} chat`, 201);
     }],
     ["PATCH", at("/channels/([^/]+)"), async ({ request, params: [name, chat] }) => {
       const { chat: _, name: shown, note, pets, default: first, ...own } = await bodyOf(request, channelBody);

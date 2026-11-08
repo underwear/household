@@ -15,7 +15,7 @@ export const slack: PlatformSpec = {
 export const slackPrivate: ChannelKindSpec = {
   kind: "slack-private", platform: "slack", audience: "private", label: "Slack Bot DM",
   description: "Talk to the default pet directly in Messages. Other placed pets and temporary helpers use separate threads.",
-  chat: { key: "chat", label: "Workspace:DM", placeholder: "T0123456789:D0123456789", mono: true, hint: "Use the setup helper to open your bot DM and obtain this address." },
+  chat: { key: "chat", label: "Workspace:DM", placeholder: "T0123456789:D0123456789", mono: true, hint: "The admin connects your bot DM automatically from your Slack member ID." },
   fields: [
     { key: "token", label: "Bot token", placeholder: "xoxb-…", mono: true, wide: true, hint: "OAuth & Permissions → Bot User OAuth Token. Kept on the host." },
     { key: "appToken", label: "Socket Mode app token", placeholder: "xapp-…", mono: true, wide: true, hint: "Basic Information → App-Level Tokens, with connections:write. No public server needed." },
