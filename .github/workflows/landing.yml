@@ -42,6 +42,13 @@ jobs:
             curl -fsS "${auth[@]}" -X POST "$api/$PROJECT/domains" -d "{\"name\":\"$DOMAIN\"}" >/dev/null
             echo "added $DOMAIN to $PROJECT"
           fi
+          # A domain put on a project through the API gets no DNS record of its own: the zone points it at Pages.
+          zone=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN" | jq -r '.result[0].id')
+          records="https://api.cloudflare.com/client/v4/zones/$zone/dns_records"
+          if [ "$(curl -fsS "${auth[@]}" "$records?name=$DOMAIN" | jq '.result | length')" = 0 ]; then
+            curl -fsS "${auth[@]}" -X POST "$records" -d "{\"type\":\"CNAME\",\"name\":\"$DOMAIN\",\"content\":\"$PROJECT.pages.dev\",\"proxied\":true}" >/dev/null
+            echo "pointed $DOMAIN at $PROJECT.pages.dev"
+          fi
 
       - name: Deploy
         run: npx --yes wrangler@3 pages deploy landing --project-name "$PROJECT" --branch main
