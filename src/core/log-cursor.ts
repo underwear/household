@@ -14,7 +14,7 @@ export const NO_LOG: LogCursor = { log: "none", at: 0 };
 
 const CURSOR = /^([\w.-]{1,64}):(\d{1,16})$/;
 
-/** «16777232-48213:5120»: a cursor as the API and the CLI pass it on. */
+/** «16777232-48213-1a2b3c4d:5120»: a cursor as the API and the CLI pass it on. */
 export const formatCursor = ({ log, at }: LogCursor): string => `${log}:${at}`;
 
 /** A cursor from its text; a HouseholdError (so a 400) for text that is none. */

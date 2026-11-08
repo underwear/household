@@ -18,7 +18,7 @@ import { resolvePaths } from "../../src/infra/paths";
 import { runCommand } from "../../src/infra/process";
 import { SCHEMA_VERSION, SqliteStore } from "../../src/infra/sqlite-store";
 import { packDir, unpackFile } from "../../src/infra/tarball";
-import { tempDir } from "../helpers";
+import { tarArchive, tempDir } from "../helpers";
 import { FakeRuntime } from "./fake-runtime";
 
 const SIBLING = "household.work.sibling";
@@ -390,8 +390,7 @@ test("an archive entry that climbs out with `..` (secrets/../x) is not unpacked"
   const dir = tempDir();
   writeFileSync(join(dir, "token"), "x");
   const evil = join(tempDir(), "evil.tar.gz");
-  // macOS tar's -s renames the entry as it is written: the name a hostile archive would carry.
-  expect((await runCommand(["tar", "-czf", evil, "-C", dir, "-s", ",^token$,secrets/../token,", "token"])).ok).toBe(true);
+  writeFileSync(evil, Bun.gzipSync(tarArchive([{ name: "secrets/../token", content: "x" }]))); // the name a hostile archive would carry
   const { deps, paths } = blank();
   expect(await fails(importHousehold(deps, evil))).toStartWith(`cannot unpack ${evil}:`);
   expect(existsSync(join(paths.configFile, "..", "token"))).toBe(false);

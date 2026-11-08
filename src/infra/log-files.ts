@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readSync, renameSync, writeSync } from "node:fs";
 import { NO_LOG, type LogCursor } from "../core/log-cursor";
 
@@ -58,7 +59,7 @@ export interface FileLine {
   text: string;
 }
 
-/** One file of a log, open for reading: its identity (device and inode) and size when opened. */
+/** One file of a log, open for reading: its identity (device, inode and first line) and size when opened. */
 interface OpenFile {
   id: string;
   fd: number;
@@ -80,7 +81,7 @@ function withFiles<T>(path: string, keep: number, use: (files: OpenFile[]) => T)
         continue; // not written yet, or rotated away meanwhile
       }
       const stat = fstatSync(fd);
-      const id = `${stat.dev}-${stat.ino}`;
+      const id = identity(fd, stat.dev, stat.ino);
       if (files.some((file) => file.id === id)) closeSync(fd);
       else files.push({ id, fd, size: stat.size });
     }
@@ -88,6 +89,19 @@ function withFiles<T>(path: string, keep: number, use: (files: OpenFile[]) => T)
   } finally {
     for (const file of files) closeSync(file.fd);
   }
+}
+
+/**
+ * A file's identity: its device and inode, and a hash of its first line. Linux hands a deleted file's inode to the next
+ * new one at once, so a cursor into a log rotated away would otherwise point into a newer file. A file still empty
+ * gets another identity once written to: a cursor into it starts that file over, from 0, as it would anyway.
+ */
+function identity(fd: number, dev: number, ino: number): string {
+  const head = Buffer.alloc(256);
+  const got = readSync(fd, head, 0, head.length, 0);
+  const end = head.subarray(0, got).indexOf(0x0a);
+  const first = head.subarray(0, end === -1 ? got : end);
+  return `${dev}-${ino}-${createHash("sha256").update(first).digest("hex").slice(0, 8)}`;
 }
 
 function read(file: OpenFile, from: number, to: number): Buffer {

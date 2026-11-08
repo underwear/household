@@ -3,7 +3,7 @@ import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, re
 import { join } from "node:path";
 import { HostHomeStorage } from "../../src/infra/home-storage";
 import { runCommand } from "../../src/infra/process";
-import { tempDir } from "../helpers";
+import { tarArchive, tempDir } from "../helpers";
 
 async function archive(from: string, file: string) {
   expect((await runCommand(["tar", "-cf", file, "-C", from, "."], { env: { COPYFILE_DISABLE: "1" } })).ok).toBe(true);
@@ -12,7 +12,8 @@ async function archive(from: string, file: string) {
 test("host homes round-trip plain tar including dotfiles, long Unicode paths, executable modes, timestamps and internal links", async () => {
   const root = tempDir(), home = join(root, "household.work.sibling.home");
   mkdirSync(home);
-  const nested = join(home, ".state", "πολύ-μακρύς-φάκελος-".repeat(8));
+  // Past tar's 100-byte name field, in folders each under the 255-byte name limit of Linux file systems.
+  const nested = join(home, ".state", ...Array(8).fill("πολύ-μακρύς-φάκελος"));
   mkdirSync(nested, { recursive: true });
   const script = join(nested, "run.sh");
   writeFileSync(script, "#!/bin/sh\necho test\n"); chmodSync(script, 0o750);
@@ -31,7 +32,7 @@ test("host homes round-trip plain tar including dotfiles, long Unicode paths, ex
   expect(statSync(join(restored, ".memory")).mode & 0o777).toBe(0o660);
   expect(readlinkSync(join(restored, "latest"))).toBe(".memory");
   expect(statSync(join(restored, "hardlink")).ino).toBe(statSync(join(restored, ".memory")).ino);
-  const restoredScript = join(restored, ".state", "πολύ-μακρύς-φάκελος-".repeat(8), "run.sh");
+  const restoredScript = join(restored, ".state", ...Array(8).fill("πολύ-μακρύς-φάκελος"), "run.sh");
   expect(statSync(restoredScript).mode & 0o777).toBe(0o750);
   expect(statSync(restoredScript).mtime.toISOString()).toBe(at.toISOString());
   expect(await storage.volumeHasFiles("restored.home")).toBe(true);
@@ -81,8 +82,7 @@ test("link-parent writes and traversal archives are refused before extraction", 
   expect((await runCommand(["tar", "-rf", aliased, "-C", aliasSource, "alias/child"])).ok).toBe(true);
   await expect(storage.loadVolume("pet.home", aliased)).rejects.toThrow("unsafe Household home archive");
   const traversal = join(tempDir(), "traversal.tar");
-  writeFileSync(join(source, "file"), "attack");
-  expect((await runCommand(["tar", "-cf", traversal, "-C", source, "-s", ",^file$,../outside,", "file"])).ok).toBe(true);
+  writeFileSync(traversal, tarArchive([{ name: "../outside", content: "attack" }]));
   await expect(storage.loadVolume("pet.home", traversal)).rejects.toThrow("unsafe Household home archive");
   expect(readFileSync(join(home, "keep"), "utf8")).toBe("old");
 });

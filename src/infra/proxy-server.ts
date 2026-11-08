@@ -214,7 +214,8 @@ class Connection {
     }
     const socket = interceptor
       ? net.connect({ host: "127.0.0.1", port: interceptor.port, allowHalfOpen: true })
-      : net.connect({ host: address, port: endpoint.port, allowHalfOpen: true });
+      // A name with IPv6 and IPv4 addresses: each is tried in turn (Linux answers IPv6 first, which may not route).
+      : net.connect({ host: address, port: endpoint.port, allowHalfOpen: true, autoSelectFamily: true });
     upstream = socket;
     socket.setTimeout(this.timeouts.connectMs, () => socket.destroy(new Error(`no connection within ${this.timeouts.connectMs} ms`)));
     socket.on("error", (error) => {
