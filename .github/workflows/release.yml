@@ -1,0 +1,39 @@
+name: Release
+
+# Push a tag `vX.Y.Z` whose version is package.json's: the tests run, then a GitHub release with notes from the
+# commits since the last tag (GitHub attaches the source archives).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag is package.json's version
+        run: |
+          version=$(jq -r .version package.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, package.json says $version"
+            exit 1
+          fi
+
+  test:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}
