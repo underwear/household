@@ -91,6 +91,8 @@
     .card .ok { color: var(--green); }
     .card .note { color: var(--muted); font-size: 14px; white-space: nowrap; }
     .card .soon { color: var(--muted); font-size: 14px; }
+    .card.wide { grid-column: 1 / -1; }
+    .card.wide .note { white-space: normal; }
     .start { margin-top: 80px; scroll-margin-top: 32px; }
     .start h2 { font-size: 28px; line-height: 1.2; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 10px; }
     .start p { color: var(--muted); margin: 0 0 20px; max-width: 560px; }
@@ -115,6 +117,8 @@
     .prompt.copied .todo { display: none; }
     @media (width < 600px) {
       .cards { grid-template-columns: 1fr; }
+      .card li:has(.long) { flex-wrap: wrap; row-gap: 2px; }
+      .card .note.long { flex-basis: 100%; padding-left: 28px; }
     }
     @media (width < 600px) {
       main { padding-top: 40px; }
@@ -149,6 +153,14 @@
           <li class="soon"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>More coming soon</li>
         </ul>
       </section>
+      <section class="card wide">
+        <div class="card-head"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></span><h2>Runs on</h2></div>
+        <ul>
+          <li><svg class="i ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Your Mac <span class="note">Apple silicon</span></li>
+          <li><svg class="i ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Your Linux machine <span class="note">with KVM</span></li>
+          <li><svg class="i ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>A VM or a VPS <span class="note long">Linux with KVM inside: nested virtualization or a KVM-enabled VPS</span></li>
+        </ul>
+      </section>
     </div>
 
     <section id="start" class="start">
@@ -160,7 +172,7 @@
 
 Read <span class="md-link">https://agents-household.dev/llms.txt</span> and help me set up Household on my machine.</code></pre>
       </div>
-      <p class="after">A Mac with Apple silicon or Linux with KVM. No Docker: the agent installs the rest and asks you only for a key and a Telegram bot.</p>
+      <p class="after">No Docker. Your agent installs the rest and asks you only for a key and a Telegram bot.</p>
     </section>
   </main>
   <script>
