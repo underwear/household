@@ -19,15 +19,20 @@ Installing apps and using sudo are the user's call: ask first.
 
 ## 2. Household
 
+Install a release, not the `main` branch (which moves between releases): clone, then check out the newest
+version tag.
+
 ```sh
 git clone https://github.com/underwear/household ~/household
-cd ~/household && bun run setup
+cd ~/household && git checkout "$(git tag --sort=-v:refname | head -1)"
+bun run setup
 mkdir -p ~/.local/bin
 printf '#!/bin/sh\nexec bun "$HOME/household/src/cli/main.ts" "$@"\n' > ~/.local/bin/house && chmod +x ~/.local/bin/house
 house --version && house doctor
 ```
 
-`~/.local/bin` must be on `PATH`. At this point doctor reports no config and no daemon: that is expected.
+`~/.local/bin` must be on `PATH`. `house --version` shows the release. At this point doctor reports no config and
+no daemon: that is expected. Releases and their notes: https://github.com/underwear/household/releases
 
 ## 3. An agent key
 

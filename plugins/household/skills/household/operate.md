@@ -64,15 +64,24 @@ the scout's VM (needed by CLIs that read it themselves); `--via gateway` keeps i
 
 ## Updates
 
+Household is installed at a release tag. To move to the newest one, after reading its notes
+(https://github.com/underwear/household/releases) with the user:
+
 ```sh
-cd ~/household && git pull && bun run setup
-house migrate                      # what will migrate (changes nothing)
+cd ~/household && git fetch --tags
+house --version                                        # the release installed now: note it, to go back
+git checkout "$(git tag --sort=-v:refname | head -1)"
+bun run setup
+house migrate                                          # what will migrate (changes nothing)
 ```
 
 Then restart the daemon (the service, or Ctrl-C and `house start`). On start it copies the config and the
 database to `~/.local/state/household/backups/pre-migrate-…` and migrates them; VM images rebuild by themselves.
-To go back: stop the daemon, check out the previous version, `house migrate restore <backup>` (list:
-`house migrate backups`), start it.
+Check with `house doctor` and `house status`.
+
+To go back: stop the daemon, `git checkout <the previous tag>`, `bun run setup`,
+`house migrate restore <backup>` (list: `house migrate backups`), start it. A newer config or database is refused
+by an older Household, so the code and the backup go back together.
 
 ## Backups
 

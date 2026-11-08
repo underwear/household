@@ -11,6 +11,8 @@ silicon, or Linux with `/dev/kvm`.
 ## Quick start
 
 ```sh
+git clone https://github.com/underwear/household && cd household
+git checkout "$(git tag --sort=-v:refname | head -1)"   # the newest release
 bun run setup
 alias house="bun $PWD/src/cli/main.ts"
 house doctor
