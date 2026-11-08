@@ -9,10 +9,15 @@ Done when the user writes to their Telegram bot and a pet answers. `house doctor
    `superradcompany/tap/microsandbox`). No Docker: agent images come prebuilt with each release.
 3. **Household** from the newest release tag of https://github.com/underwear/household (not `main`), `bun run setup`
    in it, and `house` on `PATH` running `bun <checkout>/src/cli/main.ts`. `house --version` shows the release.
+
+Steps 4–8 are what `house onboard` asks for, one at a time, in a terminal; the user can run it instead of you
+doing them (it needs a real terminal, it asks questions).
+
 4. **A key** for the agent the user wants:
    - Claude subscription: the user runs `claude setup-token`; the token goes to
      `house key add claude --provider anthropic` (stdin). Or an Anthropic API key, the same way.
-   - ChatGPT subscription: `house key codex codex` (device sign-in). Or an OpenAI API key with `--provider openai`.
+   - ChatGPT subscription: `house key codex codex --local` copies the login of the Codex on this machine;
+     `house key codex codex` signs in with a code instead. Or an OpenAI API key with `--provider openai`.
 5. **A house**: `house create my-house`, and `house allow` for the hosts the user's work needs.
 6. **A pet**: `house pet add my-house assistant --key <key> --title Assistant`
    (`--agent codex-app-server` for Codex).

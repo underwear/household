@@ -12,6 +12,7 @@ import { inboundMessage, messageIdOf, postRef, senderRef, type Parsed, type Upda
 export { TelegramBot, type TelegramBotOptions, type TelegramState } from "./bot";
 export { isTelegramId, telegram, telegramPrivate } from "./kind";
 export { getMe, isBotToken, isRefusedToken, telegramBotToken, type BotInfo } from "./token";
+export { firstPrivateContact, type Contact } from "./first-contact";
 
 /** Notices start so, in bold: a pet's reply cannot impersonate this prefix, even through formatting. */
 const NOTICE = "🏠 Household:";

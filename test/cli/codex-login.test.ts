@@ -19,7 +19,7 @@ function setupLogin() {
   const fake = (body: string) => writeFileSync(join(bin, "codex"), `#!${process.execPath}\n${body}`, { mode: 0o700 });
   const run = async (name = "subscription") => {
     const child = Bun.spawn([process.execPath, cli, "key", "codex", name], {
-      env: { ...process.env, ...dirs, PATH: `${bin}:${process.env.PATH}`, OPENAI_API_KEY: "unwanted-provider-secret", CODEX_HOME: "/unrelated/cli/login", HTTPS_PROXY: "http://unwanted-proxy" },
+      env: { ...process.env, ...dirs, PATH: `${bin}:${process.env.PATH}`, HOUSEHOLD_CODEX: join(bin, "codex"), OPENAI_API_KEY: "unwanted-provider-secret", CODEX_HOME: "/unrelated/cli/login", HTTPS_PROXY: "http://unwanted-proxy" },
       stdin: "ignore", stdout: "pipe", stderr: "pipe",
     });
     const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
@@ -89,4 +89,37 @@ test("unsafe names and existing API keys fail before credential paths or login a
   expect(result.code).toBe(1);
   expect(result.out).toContain("choose another name");
   expect(existsSync(existing.root)).toBe(false);
+});
+
+test("this machine's Codex login is copied into Household's own store, private, with whose it is", async () => {
+  const { importCodex, localCodexLogin } = await import("../../src/cli/codex-login");
+  const { paths } = setupLogin();
+  const config = new ConfigStore(paths.configFile);
+  const codexHome = tempDir();
+  const idToken = `e30.${Buffer.from(JSON.stringify({ email: "me@example.com", "https://api.openai.com/auth": { chatgpt_plan_type: "pro" } })).toString("base64url")}.sig`;
+  const login = credential();
+  writeFileSync(join(codexHome, "auth.json"), JSON.stringify({ ...login, tokens: { ...login.tokens, id_token: idToken } }));
+  expect(localCodexLogin(codexHome)).toEqual({ file: join(codexHome, "auth.json"), email: "me@example.com", plan: "pro" });
+  await importCodex(paths, config, "codex", localCodexLogin(codexHome));
+  const copy = join(dedicatedAuthRoot(paths.configFile), "codex", "auth.json");
+  expect(statSync(copy).mode & 0o777).toBe(0o600);
+  expect((await config.load()).keys).toMatchObject([{ name: "codex", provider: "openai", value: "codex-chatgpt:own-account", note: "ChatGPT login copied from this machine's Codex (me@example.com)" }]);
+  expect(localCodexLogin(tempDir())).toBeUndefined(); // no login there
+});
+
+test("an ended Codex login that cannot be refreshed is not kept", async () => {
+  const { importCodex, localCodexLogin } = await import("../../src/cli/codex-login");
+  const { paths } = setupLogin();
+  const config = new ConfigStore(paths.configFile);
+  const codexHome = tempDir();
+  writeFileSync(join(codexHome, "auth.json"), JSON.stringify(credential(Math.floor(Date.now() / 1000) - 60)));
+  const before = process.env.HOUSEHOLD_CODEX;
+  process.env.HOUSEHOLD_CODEX = join(tempDir(), "no-codex-here");
+  try {
+    await expect(importCodex(paths, config, "codex", localCodexLogin(codexHome))).rejects.toThrow("that Codex login has ended");
+  } finally {
+    if (before === undefined) delete process.env.HOUSEHOLD_CODEX; else process.env.HOUSEHOLD_CODEX = before;
+  }
+  expect(existsSync(join(dedicatedAuthRoot(paths.configFile), "codex", "auth.json"))).toBe(false);
+  expect((await config.load()).keys).toEqual([]);
 });

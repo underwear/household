@@ -3,6 +3,7 @@ import { chmod, lstat, mkdtemp, mkdir, readFile, realpath, rename, rm, stat, sym
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { parseSubscriptionMarker } from "./auth";
+import { hostCodex } from "./host-codex";
 
 export interface LocalCodexAuth {
   accountId: string;
@@ -83,7 +84,7 @@ async function refreshFile(source: string, run: (home: string, cwd: string) => P
   }
 }
 
-export async function runCodexAuthServer(home: string, cwd: string, command = "codex", timeoutMs = 30_000): Promise<void> {
+export async function runCodexAuthServer(home: string, cwd: string, command = hostCodex(), timeoutMs = 30_000): Promise<void> {
   const child = spawn(command, ["app-server", "--stdio", "-c", 'forced_login_method="chatgpt"', "-c", 'model_provider="openai"', "-c", 'cli_auth_credentials_store="file"'], {
     cwd, env: codexAuthEnvironment(home), stdio: ["pipe", "pipe", "pipe"],
   });

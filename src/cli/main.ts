@@ -1,11 +1,5 @@
 #!/usr/bin/env bun
-import { codexAuthEnvironment, readLocalCodexAuth, refreshLocalCodexAuth } from "../agent-adapters/codex-app-server/host-auth";
-import { parseSubscriptionMarker, SUBSCRIPTION_PREFIX } from "../agent-adapters/codex-app-server/auth";
 import { parseArgs } from "node:util";
-import { chmodSync, lstatSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { assertName } from "../core/names";
-import { assertAuthDestination, dedicatedAuthRoot } from "../app/codex-auth-backup";
 import { runDaemon, type DashboardLink, type ReloadReport, type StatusReport } from "../app/daemon";
 import { formatVersion, householdVersion } from "../app/version";
 import { DEFAULT_AGENT, keyKind, knownAgents, placePets } from "../app/agents";
@@ -26,6 +20,12 @@ import { callControl } from "../infra/control-socket";
 import { openInBrowser, runCommand } from "../infra/process";
 import { resolvePaths, type Paths } from "../infra/paths";
 import { MORE_USAGE, runMore } from "./commands";
+import { connectCodex, importCodex, localCodexLogin } from "./codex-login";
+import { onboard } from "./onboard";
+import { consoleTerminal } from "./terminal";
+import { firstPrivateContact, getMe } from "../channel-adapters/telegram";
+import { hostCapacity } from "../infra/host";
+import { MICROSANDBOX_VERSION } from "../infra/microsandbox-runtime";
 import { CAPABILITY_USAGE, FEATURES_USAGE, SCOUT_USAGE, groupUsage, runScouts } from "./scouts";
 import { MIGRATE_USAGE, runMigrate } from "./migrate";
 import { formatHosts } from "../core/secrets";
@@ -33,6 +33,7 @@ import { DEFAULT_LIFECYCLE } from "../core/lifecycle";
 
 const USAGE = `usage:
   house --version                Household's version (and the commit, from a git checkout)
+  house onboard                  set up a house step by step: a key, a Telegram bot, a pet, scouts and sideworkers
   house start                    run the daemon in the foreground (stops on Ctrl-C or SIGTERM)
   house status                   daemon state and network subjects
   house dashboard [--no-open]    sign in to the web UI: prints a one-time link (60 s) and opens it in the browser
@@ -42,7 +43,9 @@ const USAGE = `usage:
   house key add <name> --provider anthropic|openai [--value <value>] [--note <text>]
                                  a key the pets may run on (its value from stdin when --value is left out:
                                  a command line stays in the shell's history)
-  house key codex <name>          sign in to ChatGPT for Household (dedicated, portable subscription login)
+  house key codex <name> [--local]
+                                 sign in to ChatGPT for Household (its own login: a code for any browser), or with
+                                 --local copy the ChatGPT login of the Codex on this machine ($CODEX_HOME or ~/.codex)
   house key rm <name>            remove a key (refused while a pet runs on it)
                                  key add and key set take --houses a,b: only those houses' pets may run on it
   house key set <name> --allow-overage on|off
@@ -110,6 +113,39 @@ async function dashboard(paths: Paths, open: boolean): Promise<void> {
   if (open && !(await openInBrowser(link.url))) console.log("could not open a browser: open the link yourself");
 }
 
+async function startOnboarding(paths: Paths, config: ConfigStore): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new HouseholdError("house onboard asks questions: run it in a terminal");
+  const telegramApi = process.env.HOUSEHOLD_TELEGRAM_API;
+  await onboard({
+    terminal: consoleTerminal(), config, capacity: hostCapacity(),
+    async checkBot(token, household, house, chat) {
+      const checked = await checkFields(knownChannelKinds(), channelChecks(telegramApi), "telegram-private", { token }, { household, house, ...(chat ? { chat } : {}) });
+      const me = await getMe(checked.own.token ?? token, telegramApi);
+      return { ...checked, bot: `@${me.username}` };
+    },
+    botName: async (token) => `@${(await getMe(token, telegramApi, 3000)).username}`,
+    firstContact: (token) => firstPrivateContact(token, { apiBase: telegramApi }),
+    codexLogin: (name) => connectCodex(paths, config, name),
+    localCodex: () => localCodexLogin(),
+    codexImport: async (name) => { await importCodex(paths, config, name); },
+    claudeHere: async () => Bun.which("claude") !== null,
+    async claudeSetupToken() {
+      try { return (await Bun.spawn(["claude", "setup-token"], { stdin: "inherit", stdout: "inherit", stderr: "inherit" }).exited) === 0; }
+      catch { return false; }
+    },
+    async missing() {
+      const problems: string[] = [];
+      const msb = await runCommand(["msb", "--version"]);
+      if (msb.stdout.trim() !== `msb ${MICROSANDBOX_VERSION}`) problems.push(`microsandbox ${MICROSANDBOX_VERSION} is not installed: pets cannot start until it is (https://microsandbox.dev)`);
+      for (const tool of ["python3", "openssl"]) if (!(await runCommand([tool, "--version"])).ok && !(await runCommand([tool, "version"])).ok) problems.push(`${tool} is not installed: Household needs it to run`);
+      return problems;
+    },
+    daemonUp: async () => (await callControl(paths.socket, "/status")) !== undefined,
+    notifyDaemon: () => notifyDaemon(paths),
+    startDaemon: () => runDaemon(paths),
+  });
+}
+
 async function checkUp(paths: Paths, config: ConfigStore): Promise<void> {
   const findings = await doctor({
     paths, config, agents: knownAgents(), run: runCommand, telegramApi: process.env.HOUSEHOLD_TELEGRAM_API,
@@ -117,61 +153,6 @@ async function checkUp(paths: Paths, config: ConfigStore): Promise<void> {
   });
   for (const { ok, text, warning } of findings) console.log(`${warning ? "!" : ok ? "✓" : "✗"} ${text}`);
   process.exitCode = findings.every((finding) => finding.ok) ? 0 : 1;
-}
-
-/** A subscription belongs to Household's config, independently of any host Codex installation. */
-async function connectCodex(paths: Paths, config: ConfigStore, name: string, note?: string): Promise<void> {
-  assertName("key", name); // before a name can become a directory
-  const existing = (await config.load()).keys.find((key) => key.name === name);
-  if (existing && (existing.provider !== "openai" || !parseSubscriptionMarker(existing.value))) {
-    throw new HouseholdError(`key '${name}' already exists: choose another name for the subscription`);
-  }
-  const root = dedicatedAuthRoot(paths.configFile);
-  assertAuthDestination(root, name);
-  const home = join(root, name);
-  const file = join(home, "auth.json");
-  const present = lstatSync(file, { throwIfNoEntry: false });
-  if (present && !present.isFile()) throw new HouseholdError("dedicated Codex auth.json must be a plain file");
-  mkdirSync(root, { recursive: true, mode: 0o700 });
-  chmodSync(root, 0o700);
-  mkdirSync(home, { recursive: true, mode: 0o700 });
-  chmodSync(home, 0o700);
-  let auth;
-  try { auth = await readLocalCodexAuth(undefined, { home }); } catch {
-    if (present) {
-      try {
-        await refreshLocalCodexAuth(home);
-        auth = await readLocalCodexAuth(undefined, { home });
-      } catch { /* A failed/expired dedicated login can be replaced by a new device login below. */ }
-    }
-  }
-  if (!auth) {
-    console.log(`Sign in to ChatGPT for Household subscription '${name}'; this login is stored with Household and included in its backups.`);
-    let child;
-    try {
-      child = Bun.spawn(["codex", "-c", 'forced_login_method="chatgpt"', "-c", 'cli_auth_credentials_store="file"', "login", "--device-auth"], {
-        cwd: home, env: codexAuthEnvironment(home), stdin: "inherit", stdout: "inherit", stderr: "inherit",
-      });
-    } catch {
-      throw new HouseholdError("could not start Codex login: install the Codex CLI, then try again");
-    }
-    const halt = () => child.kill("SIGTERM");
-    process.once("SIGINT", halt);
-    process.once("SIGTERM", halt);
-    try {
-      if (await child.exited !== 0) throw new HouseholdError("Codex subscription login did not finish; no key was saved");
-    } finally {
-      process.off("SIGINT", halt);
-      process.off("SIGTERM", halt);
-    }
-    auth = await readLocalCodexAuth(undefined, { home });
-  }
-  chmodSync(file, 0o600);
-  const fields = { provider: "openai", value: `${SUBSCRIPTION_PREFIX}${auth.accountId}`, note: note ?? existing?.note ?? "Household ChatGPT subscription" };
-  if (existing) await config.updateKey(name, fields);
-  else await config.addKey(name, fields);
-  console.log(`subscription '${name}' connected; dedicated credentials stay with Household`);
-  await notifyDaemon(paths);
 }
 
 /** A key's value: `--value`, or stdin (a command line ends up in the shell's history). */
@@ -292,6 +273,7 @@ async function main(argv: string[]): Promise<void> {
       default: { type: "string" },
       name: { type: "string" },
       force: { type: "boolean" },
+      local: { type: "boolean" },
       "no-open": { type: "boolean" },
       cpus: { type: "string" },
       memory: { type: "string" },
@@ -336,6 +318,7 @@ async function main(argv: string[]): Promise<void> {
   const [command, ...args] = positionals;
 
   if (command === "start" && args.length === 0) return runDaemon(paths);
+  if (command === "onboard" && args.length === 0) return startOnboarding(paths, config);
   if (command === "status" && args.length === 0) return status(paths);
   if (command === "dashboard" && args.length === 0) return dashboard(paths, !values["no-open"]);
   if (command === "doctor" && args.length === 0) return checkUp(paths, config);
@@ -351,7 +334,11 @@ async function main(argv: string[]): Promise<void> {
     return notifyDaemon(paths);
   }
   if (command === "key" && args[0] === "codex" && args.length === 2) {
-    return connectCodex(paths, config, args[1]!, values.note);
+    if (values.local) {
+      const from = await importCodex(paths, config, args[1]!, undefined, values.note);
+      console.log(`subscription '${args[1]}' connected: a copy of this machine's Codex login${from.email ? ` (${from.email})` : ""}, refreshed by Household`);
+    } else await connectCodex(paths, config, args[1]!, values.note);
+    return notifyDaemon(paths);
   }
   if (command === "key" && args[0] === "set" && args.length === 2 && values["allow-overage"] !== undefined) {
     const allowOverage = { on: true, off: false }[values["allow-overage"]];

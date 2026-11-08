@@ -16,6 +16,8 @@ git clone https://github.com/underwear/household && cd household
 git checkout "$(git tag --sort=-v:refname | head -1)"   # the newest release
 bun run setup
 alias house="bun $PWD/src/cli/main.ts"
-house doctor
-house --help
+house onboard      # a key, a house, its Telegram bot, a pet, scouts and sideworkers, step by step
+house start
 ```
+
+`house dashboard` signs you in to the web admin; `house --help` lists everything else.

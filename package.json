@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@openai/codex": "0.162.1",
     "cron-parser": "^5.10.3",
     "tldts": "^7.4.19",
     "yaml": "^2.9.1",
