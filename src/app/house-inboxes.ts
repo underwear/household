@@ -146,7 +146,7 @@ export class HouseInboxes {
       state.error = controller.signal.aborted ? "Check cancelled; pending events retained." : error instanceof InboxPollError ? error.message : "Check or delivery failed. Verify credentials, source format, channel and pet placement; pending events will retry.";
       state.failures += 1;
     } finally {
-      state.nextCheck = this.now() + Math.min(3600, inbox.intervalSeconds * Math.max(1, Math.min(8, 2 ** state.failures))) * 1000;
+      state.nextCheck = this.now() + Math.max(inbox.intervalSeconds, Math.min(3600, inbox.intervalSeconds * Math.max(1, Math.min(8, 2 ** state.failures)))) * 1000;
       // Respect intervals longer than the retry cap on successful polls.
       if (!state.failures) state.nextCheck = this.now() + inbox.intervalSeconds * 1000;
       try { save(); } finally {

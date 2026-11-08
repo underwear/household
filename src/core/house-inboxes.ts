@@ -41,7 +41,7 @@ export const inboxItemSchema = z.strictObject({
 export type InboxItem = z.infer<typeof inboxItemSchema>;
 export const pollResultSchema = z.strictObject({
   items: z.array(inboxItemSchema).max(50),
-  cursor: z.string().max(250000).optional(),
+  cursor: z.string().max(1_000_000).optional(),
 });
 export type PollResult = z.infer<typeof pollResultSchema>;
 export interface InboxState {

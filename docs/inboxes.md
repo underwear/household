@@ -106,7 +106,7 @@ Bun.serve({
 - Cursor, IDs and pending events are saved **before** delivery. Retries drain unfinished deliveries before polling for more.
 - Pet queue entries have stable deduplication IDs. Restarting does not intentionally replay queued events.
 - External channel posting is **at least once around a crash**: a messenger may accept a post just before Household saves its receipt. That narrow failure window can duplicate a channel post; exactly-once delivery is not promised.
-- Failures back off exponentially, capped at eight times the interval or one hour. Success restores the configured schedule.
+- Failures back off exponentially, capped at eight times the interval or one hour, never faster than the configured interval. Success restores the configured schedule.
 - Changing source identity or channel with pending events is refused. Drain the queue first, or remove the inbox to discard it.
 - Changing endpoint, mail account/folder or monitor establishes a new baseline. Rotating passwords or headers keeps the cursor; do not use a credential change to switch datasets.
 - Removing a subscription stops future fan-out; entries already in a pet's durable queue remain.

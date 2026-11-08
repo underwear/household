@@ -32,12 +32,15 @@ async function jsonGet(url: URL, headers: Record<string, string>, signal: AbortS
   catch { throw new InboxPollError("Source did not return valid JSON"); }
 }
 const alert = z.object({
-  fingerprint: z.string(), startsAt: z.string(), labels: z.record(z.string(), z.string()),
+  fingerprint: z.string().max(128), startsAt: z.string().max(100), labels: z.record(z.string(), z.string()),
   annotations: z.record(z.string(), z.string()).default({}),
-  status: z.object({ state: z.string() }),
+  status: z.object({ state: z.string().max(100) }),
 });
 const monitor = z.object({ id: z.number(), name: z.string(), overall_state: z.string(), message: z.string().optional() });
 type Snapshot = Record<string, { state: string; title: string; text: string }>;
+const snapshotCursor = (entries: Record<string, { state: string; title: string }>, generation: number) => JSON.stringify({
+  entries: Object.fromEntries(Object.entries(entries).map(([key, entry]) => [key, { state: entry.state, title: entry.title.slice(0, 300) }])), generation,
+});
 /** A complete monitor snapshot yields transitions, including disappearance, never a repeated firing every tick. */
 export function transitions(current: Snapshot, cursor?: string): PollResult {
   const old = cursor ? JSON.parse(cursor) as { entries: Snapshot; generation: number } : { entries: {}, generation: 0 };
@@ -55,9 +58,9 @@ export function transitions(current: Snapshot, cursor?: string): PollResult {
     let count = 0;
     for (const [key, value] of Object.entries(current)) if (old.entries[key]?.state !== value.state && count++ < 50) merged[key] = value;
     for (const key of Object.keys(old.entries)) if (!current[key] && count++ < 50) delete merged[key];
-    return { items: items.slice(0, 50), cursor: JSON.stringify({ entries: merged, generation }) };
+    return { items: items.slice(0, 50), cursor: snapshotCursor(merged, generation) };
   }
-  return { items, cursor: JSON.stringify({ entries: current, generation }) };
+  return { items, cursor: snapshotCursor(current, generation) };
 }
 export const pollInbox: Poller = async (source, cursor, initial, signal) => {
   try {
@@ -81,7 +84,7 @@ export const pollInbox: Poller = async (source, cursor, initial, signal) => {
       if (!parsed.success) throw new InboxPollError("Invalid Grafana alert snapshot (maximum 1,000 alerts)");
       const snapshot = Object.fromEntries(parsed.data.map(a => [a.fingerprint + ":" + a.startsAt, { state: a.status.state, title: a.labels.alertname ?? "Grafana alert", text: [a.annotations.summary, a.annotations.description, JSON.stringify(a.labels)].filter(Boolean).join("\n").slice(0, 16000) }]));
       // A first baseline must consume the whole snapshot, not backfill remaining pages later.
-      if (!cursor && initial === "new") return { items: [], cursor: JSON.stringify({ entries: snapshot, generation: 0 }) };
+      if (!cursor && initial === "new") return { items: [], cursor: snapshotCursor(snapshot, 0) };
       return pollResultSchema.parse(transitions(snapshot, cursor));
     }
     url.pathname = url.pathname.replace(/\/$/, "") + "/api/v1/monitor/" + source.monitor;
@@ -90,7 +93,7 @@ export const pollInbox: Poller = async (source, cursor, initial, signal) => {
     if (!parsed.success) throw new InboxPollError("Invalid Datadog monitor response");
     const m = parsed.data;
     const snapshot = { [String(m.id)]: { state: m.overall_state, title: m.name, text: m.message ?? m.overall_state } };
-    if (!cursor && initial === "new") return { items: [], cursor: JSON.stringify({ entries: snapshot, generation: 0 }) };
+    if (!cursor && initial === "new") return { items: [], cursor: snapshotCursor(snapshot, 0) };
     return transitions(snapshot, cursor);
   } catch (error) {
     if (signal.aborted) throw new InboxPollError("Poll cancelled");

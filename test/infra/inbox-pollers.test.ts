@@ -69,3 +69,10 @@ test("config rejects transport header overrides, embedded URL credentials and un
     { ...base, source: { ...base.source, headers: { Authorization: "a\r\nb" } } },
   ]) expect(houseInboxSchema.safeParse(bad).success).toBe(false);
 });
+
+test("alert cursor retains only identity, state and title, not repeated message bodies", () => {
+  const result = transitions({ cpu: { state: "active", title: "CPU", text: "large body".repeat(1000) } });
+  expect(result.cursor!.length).toBeLessThan(200);
+  expect(result.cursor).not.toContain("large body");
+  expect(transitions({ cpu: { state: "active", title: "CPU", text: "changed annotation" } }, result.cursor).items).toHaveLength(0);
+});

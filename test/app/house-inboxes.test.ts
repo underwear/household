@@ -122,3 +122,10 @@ test("rotating credentials preserves the cursor and pending delivery", async () 
   await s.service.run("work", "mail");
   expect(cursors).toEqual([undefined, "head"]);
 });
+
+test("failure backoff never polls more often than a long custom interval", async () => {
+  const s = setup(async () => { throw Error("unavailable"); });
+  s.source.intervalSeconds = 86400;
+  const result = await s.service.run("work", "mail");
+  expect(result.status.nextCheck - Date.parse(result.status.lastCheck!)).toBe(86400000);
+});
