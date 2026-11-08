@@ -21,12 +21,14 @@
 
 ## Updating
 
-Goal: the newest release tag checked out, `bun run setup` run, the daemon restarted, `house doctor` and
-`house status` clean. Release notes: https://github.com/underwear/household/releases.
+`house update` installs the newest release (`house update <tag>` a given one) and keeps the one before; the daemon
+uses it once restarted. Then `house doctor` and `house status` clean. Release notes:
+https://github.com/underwear/household/releases.
 
 `house migrate` shows what the new release will migrate. On start the daemon backs up the config and the database
-(`house migrate backups`) and migrates them; pets move to the new release's images by themselves. Going back is the
-previous tag plus `house migrate restore <backup>`: an older Household refuses a newer config or database.
+(`house migrate backups`) and migrates them; pets move to the new release's images by themselves. Going back is
+`house update <previous tag>` plus `house migrate restore <backup>`: an older Household refuses a newer config or
+database.
 
 ## Backups
 

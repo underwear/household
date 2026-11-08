@@ -5,19 +5,15 @@ and credentials under your control.
 
 ## Requirements
 
-Bun, [microsandbox](https://microsandbox.dev) 0.7.13, openssl, python3. macOS on Apple
-silicon, or Linux with `/dev/kvm`. The agents' images come prebuilt with each release; Docker is needed only
-to build changed ones yourself (`HOUSEHOLD_BUILD_IMAGES=1` forces it).
+macOS on Apple silicon, or Linux with `/dev/kvm` (your machine, a VM with nested virtualization, or a KVM VPS);
+openssl and python3. The installer brings the rest: microsandbox, Codex, the web UI. No Bun, no Docker.
 
 ## Quick start
 
 ```sh
-git clone https://github.com/underwear/household && cd household
-git checkout "$(git tag --sort=-v:refname | head -1)"   # the newest release
-bun run setup
-alias house="bun $PWD/src/cli/main.ts"
+curl -fsSL https://agents-household.dev/install.sh | sh
 house onboard      # a key, a house, its Telegram bot, a pet, scouts and sideworkers, step by step
 house start
 ```
 
-`house dashboard` signs you in to the web admin; `house --help` lists everything else.
+`house update` moves to the newest release. `house dashboard` signs you in to the web admin; `house --help` lists everything else.

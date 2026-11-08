@@ -6,10 +6,10 @@ Done when the user writes to their Telegram bot and a pet answers. `house doctor
 
 1. **Host**: macOS on Apple silicon, or Linux with `/dev/kvm` usable by the user — the user's machine, a VM with
    nested virtualization, or a VPS that offers KVM. Intel Macs only through such a Linux VM.
-2. **Dependencies**: Bun, openssl, python3, and microsandbox **exactly 0.7.13** (https://microsandbox.dev; on macOS
-   `superradcompany/tap/microsandbox`). No Docker: agent images come prebuilt with each release.
-3. **Household** from the newest release tag of https://github.com/underwear/household (not `main`), `bun run setup`
-   in it, and `house` on `PATH` running `bun <checkout>/src/cli/main.ts`. `house --version` shows the release.
+2. **Household**: `curl -fsSL https://agents-household.dev/install.sh | sh` installs the newest release into
+   `~/.household` (its own microsandbox and Codex inside; no Bun, Docker or sudo) and says what is missing:
+   `~/.household/bin` on `PATH`, `python3` and `openssl` on the machine. `house --version` shows the release.
+3. **Check the host**: `house doctor` says whether microVMs can run here.
 
 Steps 4–8 are what `house onboard` asks for, one at a time, in a terminal; the user can run it instead of you
 doing them (it needs a real terminal, it asks questions).
@@ -30,7 +30,7 @@ doing them (it needs a real terminal, it asks questions).
    - `house owner add my-house telegram <their numeric user id>` (e.g. from @userinfobot);
    - `house channel add my-house --kind telegram-private --chat <user id> --pets assistant` (token on stdin).
 9. **Running for good**: `house start` as a launchd / systemd user service that restarts on failure and whose
-   `PATH` finds `msb`, `openssl` and `python3`. Only one daemon at a time.
+   `PATH` finds `openssl` and `python3`. Only one daemon at a time.
 10. **Check**: `house doctor` all ✓, `house status` shows the pet `running` (the first start downloads its image).
 11. **Web UI**: `house dashboard` prints a one-time sign-in link (60 s) and opens it; the UI is at
     http://127.0.0.1:8780, on that machine only. On a remote one: `ssh -L 8780:127.0.0.1:8780 <host>` (the same
