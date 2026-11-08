@@ -84,7 +84,9 @@ The user, in Telegram:
 1. **@BotFather** → `/newbot` → a name and a username → copy the token (`123456789:AAH…`) into a file only they
    read, or keep it on the clipboard.
 2. In BotFather's **Mini App** (the menu button) → the bot → **Bot Settings** → **Threads Settings** → turn
-   **Threaded Mode** on. Household refuses a bot without it.
+   **Threaded Mode** on. Household refuses a bot without it. In the same screen, tick the switch that stops users
+   from creating threads themselves: Household opens a thread for each pet and scout, and a thread the user
+   makes by hand belongs to none of them.
 3. Open a private chat with the new bot and press **Start**.
 4. Get their numeric Telegram user id, e.g. from **@userinfobot** (`Id: 123456789`). It is not a secret.
 
