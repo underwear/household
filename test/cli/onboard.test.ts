@@ -86,11 +86,12 @@ test("wrong answers are said and asked again; Codex signs in; features off; a ru
     "Bad Name", "home",          // house
     "123:nope", TOKEN,           // bot token: refused, then good
     "n", "abc", "555",           // not me; a typed id, wrong then right
-    "helper", "Helper", "0", "4", "0.3", "3", // pet with resources outside, then inside the bounds
+    // pet with resources outside, then inside the bounds (small: the config checks them against the real host too)
+    "helper", "Helper", "0", "1", "0.3", "0.5",
     "n", "n",                    // scouts, sideworkers off
   ]);
   const home = await house("home");
-  expect(home.pets).toMatchObject([{ name: "helper", agent: "codex-app-server", key: "codex", cpus: 4, memoryMiB: 3072 }]);
+  expect(home.pets).toMatchObject([{ name: "helper", agent: "codex-app-server", key: "codex", cpus: 1, memoryMiB: 512 }]);
   expect(home.people.owners).toMatchObject([{ id: "555" }]);
   expect(houseFeatures(home)).toMatchObject({ scouts: false, sideworkers: false });
   expect(calls).toEqual(["codex codex", "notify"]);

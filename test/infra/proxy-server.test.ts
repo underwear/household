@@ -209,9 +209,12 @@ test("SSRF: a chat grant of a name that resolves to loopback is refused; the own
     expect(logs).toMatchObject([{ verdict: "DENY", target, reason: expect.stringContaining("resolves to 127.0.0.1") }]);
     expect(opened).toEqual([]);
   }
-  useEntries([`localtest.me:${echoPort}`]);
-  expect(await connect(target, "ping")).toBe("HTTP/1.1 200 Connection Established\r\n\r\nping");
-  expect(opened).toEqual([{ pet: "sibling", target, reach: "any" }]);
+  // The owner's exact entry dials through the system's resolver: localhost, so the test needs no internet DNS
+  // (a CI runner's answer for localtest.me need not be 127.0.0.1).
+  const exact = `localhost:${echoPort}`;
+  useEntries([exact]);
+  expect(await connect(exact, "ping")).toBe("HTTP/1.1 200 Connection Established\r\n\r\nping");
+  expect(opened).toEqual([{ pet: "sibling", target: exact, reach: "any" }]);
 });
 
 test("a pinned grant goes only to its own addresses: DNS is not asked again, so rebinding after approval changes nothing", async () => {
