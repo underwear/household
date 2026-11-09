@@ -17,6 +17,6 @@ let page = template
   .replace(/<article>[\s\S]*?<\/article>/, `<article><p class="crumb">Sources and delivery</p>${content}</article>`)
   .replace(/<nav class="toc"[\s\S]*?<\/nav>/, `<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul>${headings.map(h => `<li><a href="#${h.id}">${h.title}</a></li>`).join("")}</ul></nav>`)
   .replace('</style>', 'pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a, td { overflow-wrap: anywhere; } table { display: block; overflow-x: auto; }\n</style>');
-page = page.replace(/(<meta name="description" content=")[^"]*/, '$1Connect mailboxes, Grafana, Datadog and custom HTTP sources to your house. Setup, scheduling, subscriptions and the JSON polling contract.');
+page = page.replace(/(<meta name="description" content=")[^"]*/, '$1Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your pets. Setup, sources, per-pet switches and the custom HTTP format.');
 await Bun.write("landing/docs/inboxes/index.html", page);
 console.log("Built landing/docs/inboxes/index.html");

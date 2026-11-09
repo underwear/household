@@ -18,8 +18,10 @@ house start
 
 `house update` moves to the newest release. `house dashboard` signs you in to the web admin; `house --help` lists everything else.
 
-## Slack prototype
+## Slack
 
-A Slack Bot DM adapter is available alongside Telegram: a default pet in Messages, helpers in threads, progress and Stop, interactive decisions, and host-only tokens over Socket Mode. See [setup, local demo, and current limits](docs/slack.md).
+Talk to your pets in a Slack bot DM, alongside Telegram: the default pet in Messages, others in threads, progress, Stop and decisions with buttons. No public URL; tokens stay on the host. See [connecting Slack](docs/slack.md).
 
-House inboxes poll IMAP/POP3 mail, Grafana alerts, Datadog monitors or a custom HTTP endpoint on the host. Choose a schedule, a delivery channel and individual pet subscribers in the admin. See [setup and the HTTP contract](docs/inboxes.md).
+## Inboxes
+
+A house can watch mail, feeds, health checks, Grafana and Datadog alerts, a Telegram bot or your own endpoint, and hand new events to the pets you choose, from the admin. See [inboxes](docs/inboxes.md).

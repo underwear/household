@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inboxes — Household docs</title>
-  <meta name="description" content="Connect mailboxes, Grafana, Datadog and custom HTTP sources to your house. Setup, scheduling, subscriptions and the JSON polling contract.">
+  <meta name="description" content="Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your pets. Setup, sources, per-pet switches and the custom HTTP format.">
   <meta property="og:title" content="House inboxes">
   <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
   <meta property="og:url" content="https://agents-household.dev/docs/inboxes/">
@@ -173,102 +173,75 @@
     <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../../#start">Quick start</a></li></ul></nav>
 
     <article><p class="crumb">Sources and delivery</p><h1>House inboxes</h1>
-<p>In <strong>House → Inboxes</strong>, connect a source, choose a channel and subscribe individual pets. Keep <strong>Post events in the channel</strong> on for a House post per event, or turn it off to deliver directly to pets without a House post. Without a post, at least one pet must receive; pets may still choose to reply in the selected channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.</p>
-<p>Pollers run on the host. Passwords and authorization headers stay in the private Household config, outside pet prompts and VM environments. Incoming content is marked as external, untrusted data. Subscribing a pet does not make the source an owner.</p>
-<h2 id="setup">Setup</h2>
+<p>An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the pets you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a pet's VM. Event contents are treated as untrusted data, never as your instructions.</p>
+<h2 id="add-an-inbox">Add an inbox</h2>
+<p>In <strong>House → Inboxes</strong>, choose <strong>+ Add inbox</strong>:</p>
 <ol>
-<li>Choose <strong>Telegram Bot Updates</strong>, <strong>RSS / Atom</strong>, <strong>Health check</strong>, <strong>JSON watcher</strong>, <strong>IMAP</strong>, <strong>POP3</strong>, <strong>Grafana</strong>, <strong>Datadog</strong>, or <strong>Custom HTTP</strong>.</li>
-<li>Enter connection details and choose <strong>Test and continue</strong>. Testing reads the source without posting messages, notifying pets or changing its saved cursor.</li>
-<li>Name the inbox. Choose <strong>every minute</strong>, <strong>every 5 minutes</strong>, <strong>every 15 minutes</strong>, or a custom interval from 60 seconds to 24 hours.</li>
-<li>Choose a channel, whether events are posted in it, and which pets receive them. Only pets placed in that channel are offered. With posting on, leave every pet off for a channel-only feed. With posting off, the channel determines where pets can reply.</li>
-<li>On the first check, choose <strong>Start from now</strong> (default) or <strong>Deliver what is there now</strong> (up to 50 items or a snapshot), then save.</li>
+<li><strong>Source.</strong> Pick what to watch (see <a href="#sources">Sources</a>).</li>
+<li><strong>Connection.</strong> Enter the address and credentials, then <strong>Test and continue</strong>. A test posts nothing, tells no pet and does not move the inbox forward.</li>
+<li><strong>Delivery.</strong> Name it and choose how often to check: every minute, 5 or 15 minutes, or any interval from 1 minute to 24 hours. Choose a channel and:
+<ul>
+<li><strong>Post events in the channel</strong> — on: one House message per event in that channel. Off: only the pets get them.</li>
+<li><strong>Pets</strong> — for each pet in that channel, <strong>Receives</strong> and <strong>Silent</strong> (see <a href="#pets">Pets</a>). With posting on, you may leave every pet off for a plain channel feed; with posting off, at least one pet must receive.</li>
+<li><strong>On the first check</strong> — <em>Start from now</em> (default) skips what is already there; <em>Deliver what is there now</em> sends up to 50 current items, or the current state of a JSON or health check.</li>
+</ul>
+</li>
 </ol>
-<p>The page shows status, next check, pending deliveries and the last 50 events. <strong>Check now</strong> uses the saved cursor. <strong>Pause</strong> retains state; <strong>Resume</strong> continues it. <strong>Remove</strong> discards pending events and polling state, but leaves posted chat history.</p>
-<h2 id="a-pet-s-inboxes">A pet's inboxes</h2>
-<p>A pet's <strong>Inboxes</strong> tab lists every inbox of its house with two switches. <strong>Receives</strong> subscribes the pet (it must be placed in the inbox's channel first). <strong>Silent</strong> keeps receiving without waking it: events are archived for the pet and found with <code>inbox_history</code> / <code>inbox_search</code>, but no turn starts and no poller notice is sent to it. The same switches appear per pet in the inbox's form. The config keeps silent subscribers in the inbox's <code>quiet</code> list, a subset of <code>pets</code>. The last subscriber of an inbox that does not post cannot unsubscribe from the pet's tab.</p>
-<h2 id="built-in-sources">Built-in sources</h2>
+<p>Pets reply about an event in the inbox's channel.</p>
+<h2 id="manage-inboxes">Manage inboxes</h2>
+<p>Each inbox shows its state (Watching, Retrying, Needs attention, Paused), when it was last checked, when it checks next, and how many events wait for delivery. <strong>Recent events</strong> under the list shows what arrived lately.</p>
+<ul>
+<li><strong>Check now</strong> checks right away.</li>
+<li><strong>Edit</strong> changes anything. Changing the source or the channel is refused while events still wait for delivery: let them go out, or remove the inbox.</li>
+<li><strong>Pause</strong> stops checking and keeps its place; <strong>Resume</strong> goes on from there.</li>
+<li><strong>Remove</strong> stops it and drops waiting events. Posts already in the channel and the pets' event history stay.</li>
+</ul>
+<h2 id="pets">Pets</h2>
+<p>A pet's <strong>Inboxes</strong> tab lists every inbox of its house with two switches:</p>
+<ul>
+<li><strong>Receives</strong> — the pet gets the inbox's events. It must be in the inbox's channel first.</li>
+<li><strong>Silent</strong> — events go to the pet's inbox history only: it is not woken for them and can look them up when it needs to.</li>
+</ul>
+<p>The same switches are in the inbox's own form. The only pet of an inbox that does not post in its channel cannot switch off there: turn posting on or add another pet first.</p>
+<p>A busy pet takes events when it is idle. A paused pet, or one whose VM was down, gets a short <strong>catch-up digest</strong> instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.</p>
+<p>Pets read and search their history with three tools:</p>
+<ul>
+<li><code>inbox_list</code> — the inboxes it receives, and which of them are silent.</li>
+<li><code>inbox_history</code> — events by inbox and date, newest first.</li>
+<li><code>inbox_search</code> — events by words in their title, text and metadata.</li>
+</ul>
+<p>A pet sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.</p>
+<h2 id="sources">Sources</h2>
 <table>
 <thead>
-<tr><th>Source</th><th>Connection</th><th>What arrives</th></tr>
+<tr><th>Source</th><th>You enter</th><th>What arrives</th></tr>
 </thead>
 <tbody>
-<tr><td>Telegram Bot Updates</td><td>Dedicated BotFather token, no webhook or other consumer</td><td>Incoming Bot API updates; never sends/edits messages</td></tr>
-<tr><td>RSS / Atom</td><td>Feed URL, optional headers</td><td>New entries identified by GUID/Atom ID, link, or content fallback</td></tr>
-<tr><td>Health check</td><td>URL, expected status, timeout, consecutive failure threshold</td><td>Down/recovered transitions</td></tr>
-<tr><td>JSON watcher</td><td>URL, optional headers, whole response or selected JSON Pointer paths</td><td>Changed values or current response preview</td></tr>
-<tr><td>IMAP</td><td>Host, implicit TLS port (usually 993), username, password/app password, folder</td><td>New UID messages; read-only mailbox and <code>BODY.PEEK</code>, no read flags changed</td></tr>
-<tr><td>POP3</td><td>Host, implicit TLS port (usually 995), username, password/app password</td><td>New UIDL messages; no <code>DELE</code></td></tr>
-<tr><td>Grafana</td><td>Base URL, <code>Authorization: Bearer …</code> service-account header</td><td>State changes from <code>/api/alertmanager/grafana/api/v2/alerts</code>; disappearing alerts labelled “No longer active”</td></tr>
-<tr><td>Datadog</td><td>Region API base URL, monitor ID, <code>DD-API-KEY</code> and <code>DD-APPLICATION-KEY</code> headers</td><td>Changes to that monitor's <code>overall_state</code> from <code>/api/v1/monitor/{id}</code>, including recovery to OK</td></tr>
-<tr><td>Custom HTTP</td><td>Endpoint URL and authorization headers</td><td>Events in the versioned JSON contract below</td></tr>
+<tr><td>IMAP</td><td>Server, TLS port (993), username, password or app password, folder</td><td>New mail. Messages stay unread.</td></tr>
+<tr><td>POP3</td><td>Server, TLS port (995), username, password or app password</td><td>New mail. Nothing is deleted.</td></tr>
+<tr><td>RSS / Atom</td><td>Feed URL</td><td>New entries</td></tr>
+<tr><td>Health check</td><td>URL, expected status, timeout, failures before an alert</td><td>Down and recovered</td></tr>
+<tr><td>JSON watcher</td><td>URL, the whole response or selected fields</td><td>Changed values</td></tr>
+<tr><td>Grafana</td><td>Base URL, <code>Authorization: Bearer &lt;service account token&gt;</code></td><td>Alerts and their state changes</td></tr>
+<tr><td>Datadog</td><td>API URL of your region, monitor ID, <code>DD-API-KEY</code> and <code>DD-APPLICATION-KEY</code></td><td>State changes of that monitor</td></tr>
+<tr><td>Telegram Bot Updates</td><td>Token of a dedicated bot</td><td>Updates the bot receives</td></tr>
+<tr><td>Custom HTTP</td><td>URL and headers</td><td>Events your endpoint returns (<a href="#custom-http">format</a>)</td></tr>
 </tbody>
 </table>
-<p>Use read access appropriate to the Grafana alert resources or Datadog monitor. Datadog watches one monitor per inbox, not a full per-group event history. A Grafana disappearance can mean resolution or removal; it is not always a recovery.</p>
-<p>Email requires Python 3.9+ on the host and a provider accepting a password or app password. OAuth-only mailboxes and STARTTLS ports (143/110) are not implemented. Certificates and hostnames are verified. Attachments are not forwarded; MIME text/HTML becomes plain text, with previews capped at 64 KiB per mail and 16,000 characters per event. Large POP3 messages require server support for <code>TOP</code>. Up to 10,000 mailbox IDs are supported. IMAP UIDVALIDITY changes establish a new baseline without replaying the folder.</p>
-<p>Recent-mail import takes the latest 50 existing messages, then catches up new mail in batches of 50. Grafana imports current alerts in batches of 50, up to 1,000 alerts. The default first successful check establishes a baseline without sending existing events.</p>
-<h2 id="telegram-bot-updates">Telegram Bot Updates</h2>
-<p>Use a <strong>dedicated bot token</strong>. Household calls only <code>getMe</code>, <code>getWebhookInfo</code> and <code>getUpdates</code>. It never sends or edits messages, downloads attachments, answers callbacks, changes update subscriptions, or installs/removes a webhook. Tokens stay on the host, including Telegram's required token-in-URL API requests; transport errors are replaced with credential-free diagnostics.</p>
-<p>Telegram exposes a single update queue per bot. Advancing <code>offset</code> <strong>acknowledges updates on Telegram</strong>; this is an incoming-only consumer, not an independent read-only mirror. Do not share the token with another polling process. Household rejects bots already used by one of its channels or another inbox, including across houses and token rotation. Existing webhooks are refused without changing them. A competing external consumer may return HTTP 409; external consumers cannot always be detected in advance.</p>
-<p>Connection testing calls only <code>getMe</code> and <code>getWebhookInfo</code>: no updates read or acknowledged. Normal polling uses up to 50 updates and 10-second long polling per scheduled check. The next offset is saved with pending deliveries and used only after those deliveries drain. “Start from now” skips the pending queue counted at first connection, in batches; import starts with the oldest pending updates. Do not use this as an archive of historical Telegram chat messages: the API retains pending updates for at most 24 hours, and only returns updates the bot is permitted/subscribed to receive. Existing <code>allowed_updates</code> settings and privacy mode remain unchanged. Callback and non-message updates are retained as JSON previews; they are not acted upon.</p>
-<h2 id="rss-atom">RSS / Atom</h2>
-<p>Supports RSS 2.0, RSS 1.0 and Atom, including namespaced feeds. Give the direct feed URL. HTML content becomes a plain-text preview; feed links are not fetched. First connection skips existing entries by default, including feeds larger than one batch. Import emits up to 50 entries per check in feed order and catches up subsequent entries. Up to 5,000 entry identities are retained in the durable cursor. Editing an entry with the same ID does not emit a new event. XML DTD/entity declarations are refused; feed responses are limited to 2 MB. Redirects are refused, so configure the final feed URL.</p>
-<h2 id="health-check">Health check</h2>
-<p>A GET must return the exact expected HTTP status (default <strong>200</strong>) within the timeout (default <strong>10 seconds</strong>, configurable 0.1–60). Redirects, network errors and timeouts count as failed checks. Response bodies are not imported. After <strong>3 consecutive failures</strong> by default (configurable 1–10), emit one down event. The first successful check after a down event emits recovery. Repeated down/up results are quiet. Failures reset after any successful check.</p>
-<p>A site already down when monitoring begins still alerts after the threshold, including with “Start from now.” Health failures are observations, not poller errors: checks continue at the configured interval without backoff. State and failure counts survive restarts. Connection testing reports the current result without starting the counter or delivering anything.</p>
-<h2 id="json-watcher">JSON watcher</h2>
-<p>No custom envelope is needed: the endpoint returns any valid JSON. Choose <strong>Entire JSON response</strong> or <strong>Selected fields</strong>. Selected fields use <a href="https://www.rfc-editor.org/rfc/rfc6901">JSON Pointer</a>, one per line:</p>
+<p>Every URL source accepts request headers for credentials. Redirects are not followed: enter the final URL.</p>
+<p><strong>Mail.</strong> Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes and STARTTLS ports (143, 110) are not supported. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.</p>
+<p><strong>RSS / Atom.</strong> RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.</p>
+<p><strong>Health check.</strong> A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the pets get one <em>down</em> event; the first passing check after it sends <em>recovered</em>. A site already down when you add it still alerts. The response body is ignored.</p>
+<p><strong>JSON watcher.</strong> Any JSON endpoint. Watch the whole response, or list fields as <a href="https://www.rfc-editor.org/rfc/rfc6901">JSON Pointer</a> paths, one per line:</p>
 <pre><code class="language-text">/price
 /status
 /items/0/available
 </code></pre>
-<p>Use <code>~1</code> for a slash in a property name and <code>~0</code> for a tilde. Missing fields are distinct from <code>null</code>; additions and removals trigger events. Object key order and whitespace are ignored; array order remains significant. In whole-response mode any semantic JSON change triggers an event. In selected-fields mode changes outside those fields are ignored.</p>
-<p>The poller stores only SHA-256 hashes and a transition counter in its cursor, not copies of the previous JSON body. Repeated identical responses are quiet. Returning to an earlier value is a new transition, including after a restart. Events contain current changed field values, or a whole-response preview limited to 16,000 characters, with a truncation marker. “Start from now” establishes a silent baseline; “Deliver current items / snapshot” emits the first snapshot. Errors or invalid JSON preserve the last successful baseline.</p>
-<h2 id="poller-problems-and-recovery">Poller problems and recovery</h2>
-<p>After <strong>3 consecutive failed checks</strong>, subscribed pets receive one operational notice. It includes a safe diagnostic and warns that incoming data may be delayed. The first fully successful check sends one recovery notice. Repeated failures do not spam pets; the incident, pending notices and recipient progress survive daemon restarts. A later outage starts a new incident. Pausing, editing or stopping the daemon does not count as a failed check.</p>
-<p>The Inboxes UI shows the failure count, when the problem began, the last successful poll and the next retry. Existing retry backoff still applies. Source and event-delivery errors both count: a successful fetch alone does not clear an incident if delivery remains blocked.</p>
-<p>Operational notices are <strong>pet-only</strong>, independent of the inbox's normal announcement mode. They have a separate durable queue so a failed channel announcement cannot block them. They are also archived with <code>metadata.kind = &quot;poller_status&quot;</code>, <code>status = &quot;failed&quot; | &quot;recovered&quot;</code>, <code>consecutiveFailures</code> and <code>problemSince</code>; offline pets receive them through normal inbox catch-up. A missing channel or pet placement can still prevent notification delivery until its configuration is repaired; the UI remains the place to inspect the problem. Inboxes with no subscribers show the problem in the UI only.</p>
-<h2 id="catch-up-after-vm-downtime">Catch-up after VM downtime</h2>
-<p>When a pet is paused, its VM is unavailable, or queued events are restored after a daemon restart, pending inbox notifications are delivered as a <strong>catch-up digest</strong> once its agent is idle and ready. Backlogs accumulated while busy also use this format.</p>
-<p>The digest groups events by inbox: counts, received-time range, up to three example titles and ready-to-use <code>inbox_history</code> filters. Full bodies and metadata remain in the archive; they are not pasted into the VM in bulk. This is a pet notification only, with no additional House channel post, so silent delivery stays silent.</p>
-<p>Different reply places/channels and intervening owner messages remain separate. Very large backlogs are split into batches of at most 500 events / 30 inbox groups, with each batch waiting for the prior inbox turn to finish. Original durable queue rows remain the acknowledgment units: a digest does not delete events or mark them done before delivery. Completed batches are not replayed on the next wake-up.</p>
-<p>Inbox events delivered before an interrupted session but not confirmed complete return in a digest too. It explicitly says they <strong>may already have been seen</strong>; the pet should consult history and avoid repeating actions blindly. No old event body is automatically replayed in that recovery path. If Household itself was offline, pollers resume from their saved cursors when it starts; they cannot recover events a provider has already expired (for example Telegram's 24-hour retention).</p>
-<h2 id="durable-event-history-and-metadata">Durable event history and metadata</h2>
-<p>Every accepted new event is archived in the host SQLite database <strong>before delivery</strong>, including silent events and events whose channel delivery needs retrying. The archive keeps title, full accepted notification text, URL, source kind, delivery mode, arbitrary JSON-object <code>metadata</code>, and both timestamps:</p>
-<ul>
-<li><code>occurredAt</code>: source event time, when provided; otherwise null.</li>
-<li><code>receivedAt</code>: when Household accepted the event, always present.</li>
-</ul>
-<p>The scheduler's “Recent events” list is capped at 50; the archive is not. Removing or pausing an inbox does not erase history. Backups include it. Archiving starts with this version: previously delivered notifications are not reconstructed from chat previews, and events skipped by initial baselining are not archived. Text limits still apply; an archived preview is not the original attachment or an unlimited provider response.</p>
-<h3>Pet tools</h3>
-<ul>
-<li><code>inbox_list({})</code>: subscribed inboxes (with <code>quiet</code> for silent ones) and readable retained archives, without connection credentials.</li>
-<li><code>inbox_history({inbox?, since?, until?, time?, before?, limit?})</code>: event slices, newest accepted first.</li>
-<li><code>inbox_search({query, ...sameFilters})</code>: word/prefix search across notification title, body <strong>and metadata</strong>. All search words must match.</li>
-</ul>
-<p><code>since</code> is inclusive, <code>until</code> exclusive; timestamps must include a timezone. <code>time</code> defaults to <code>received</code>; <code>occurred</code> filters by source time, falling back to received time when absent. Pass returned <code>next</code> as <code>before</code> with unchanged filters to continue. Default 10 events, maximum 50, also capped by response size. Results include metadata and both timestamps.</p>
-<pre><code class="language-json">{&quot;inbox&quot;:&quot;production-alerts&quot;,&quot;since&quot;:&quot;2026-11-09T00:00:00+01:00&quot;,&quot;until&quot;:&quot;2026-11-10T00:00:00+01:00&quot;,&quot;limit&quot;:10}
-</code></pre>
-<p>Each pet can read only events addressed to it when they were accepted, within its own house. A new subscriber does not retroactively gain old events; removal of a subscription stops new delivery but preserves access to its own archived events. Scouts/sideworkers do not automatically inherit this access. Retrieved notifications and metadata remain untrusted external content, not owner instructions. Known source credentials are redacted recursively from content and metadata before storage or delivery.</p>
-<h3>Built-in metadata</h3>
-<table>
-<thead>
-<tr><th>Source</th><th>Metadata</th></tr>
-</thead>
-<tbody>
-<tr><td>Telegram</td><td><code>updateId</code>, <code>type</code>, chat and sender IDs/names, message/thread IDs, callback identifiers/data when present; message date supplies <code>occurredAt</code></td></tr>
-<tr><td>IMAP / POP3</td><td><code>from</code>, <code>to</code>, <code>cc</code>, <code>subject</code>, <code>messageId</code>, raw date, content type, truncation flag; IMAP UID/UIDVALIDITY/mailbox or POP3 UIDL; a valid timezone-aware mail date supplies <code>occurredAt</code></td></tr>
-<tr><td>RSS / Atom</td><td><code>feedUrl</code>, <code>entryId</code>, author, categories, feed format; published/updated time supplies <code>occurredAt</code></td></tr>
-<tr><td>Grafana</td><td>Fingerprint, start time, bounded labels, current/previous state; disappearance includes the prior state</td></tr>
-<tr><td>Datadog</td><td>Monitor ID, current/previous state</td></tr>
-<tr><td>Health check</td><td>State, HTTP status, expected status, latency, timeout, failure count and reason</td></tr>
-<tr><td>JSON watcher</td><td>Whole/fields mode, changed JSON Pointer paths and transition generation</td></tr>
-<tr><td>Custom HTTP</td><td>Any provider-defined JSON object conforming to the size/depth bounds below</td></tr>
-</tbody>
-</table>
-<h2 id="custom-http-contract-version-1">Custom HTTP contract, version 1</h2>
-<p>Household sends <strong>GET</strong> to the configured URL, preserving query parameters and adding <code>limit=50</code> and, after a response supplies it, <code>cursor=&lt;opaque cursor&gt;</code>.</p>
-<p>Use headers for authorization. Embedded URL credentials and transport-header overrides are rejected. Redirects are not followed. HTTPS is recommended; HTTP is allowed for explicitly configured local/internal endpoints.</p>
-<p>Respond with HTTP 200 and JSON:</p>
+<p>Key order and whitespace don't count as changes; array order does. A field appearing or disappearing is a change.</p>
+<p><strong>Grafana and Datadog.</strong> Give the token read access to the alerts or the monitor. One Datadog inbox watches one monitor. A Grafana alert that disappears arrives as &quot;No longer active&quot;: it may be resolved or deleted.</p>
+<p><strong>Telegram Bot Updates.</strong> Use a bot made for this inbox, not one of your channels' bots: checking takes the updates off Telegram's queue, so nothing else may read that bot, and a bot with a webhook is refused. Household never sends messages as this bot. Telegram keeps waiting updates for 24 hours only.</p>
+<h2 id="custom-http">Custom HTTP</h2>
+<p>Household sends <code>GET &lt;your URL&gt;?limit=50</code>, adding <code>cursor=&lt;value&gt;</code> once you have returned one. Put credentials in headers. Answer <code>200</code> with:</p>
 <pre><code class="language-json">{
   &quot;version&quot;: 1,
   &quot;items&quot;: [
@@ -278,7 +251,7 @@
       &quot;text&quot;: &quot;p95 latency exceeded 2 seconds for five minutes.&quot;,
       &quot;url&quot;: &quot;https://status.example.com/incidents/184&quot;,
       &quot;occurredAt&quot;: &quot;2026-11-09T08:30:00Z&quot;,
-      &quot;metadata&quot;: { &quot;service&quot;: &quot;payments&quot;, &quot;severity&quot;: &quot;warning&quot;, &quot;ticketId&quot;: 184 }
+      &quot;metadata&quot;: { &quot;service&quot;: &quot;payments&quot;, &quot;severity&quot;: &quot;warning&quot; }
     }
   ],
   &quot;nextCursor&quot;: &quot;184&quot;
@@ -286,80 +259,40 @@
 </code></pre>
 <table>
 <thead>
-<tr><th>Field</th><th>Contract</th></tr>
+<tr><th>Field</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td><code>version</code></td><td>Exactly <code>1</code></td></tr>
-<tr><td><code>items</code></td><td>0–50 events, oldest first</td></tr>
-<tr><td><code>id</code></td><td>Required stable nonempty string, maximum 512 characters; changed events need a new ID</td></tr>
-<tr><td><code>title</code></td><td>Required string, maximum 300 characters</td></tr>
-<tr><td><code>text</code></td><td>Required plain-text string, maximum 16,000 characters</td></tr>
-<tr><td><code>url</code></td><td>Optional HTTP(S) URL, without embedded credentials</td></tr>
-<tr><td><code>occurredAt</code></td><td>Optional ISO 8601 timestamp with timezone</td></tr>
-<tr><td><code>metadata</code></td><td>Optional arbitrary JSON object, up to 16 KiB serialized UTF-8 and 8 levels deep; arrays, objects, strings, numbers, booleans and null allowed inside</td></tr>
-<tr><td><code>nextCursor</code></td><td>Optional opaque string, maximum 4,096 characters; omission retains the previous cursor</td></tr>
+<tr><td><code>version</code></td><td>Always <code>1</code></td></tr>
+<tr><td><code>items</code></td><td>Up to 50 events, oldest first; empty when there is nothing new</td></tr>
+<tr><td><code>id</code></td><td>Required, stable, up to 512 characters. A changed event needs a new ID.</td></tr>
+<tr><td><code>title</code></td><td>Required, up to 300 characters</td></tr>
+<tr><td><code>text</code></td><td>Required plain text, up to 16,000 characters</td></tr>
+<tr><td><code>url</code></td><td>Optional HTTP(S) link</td></tr>
+<tr><td><code>occurredAt</code></td><td>Optional time with a timezone</td></tr>
+<tr><td><code>metadata</code></td><td>Optional JSON object, up to 16 KiB; pets can search it</td></tr>
+<tr><td><code>nextCursor</code></td><td>Optional, up to 4,096 characters; where to continue next time</td></tr>
 </tbody>
 </table>
-<p>On the <strong>first request without a cursor</strong>, return the most recent 50 events and a cursor after them. “Start from now” records these IDs/cursor without delivery; “import recent” delivers them. Subsequent requests return the next oldest events after the cursor, advancing only through returned items. An empty array means caught up. If more than 50 wait, the next page arrives on the following poll. Without cursors, return a recent rolling window; Household remembers the last 5,000 IDs per inbox.</p>
-<p>Keep IDs stable across polls and restarts. Never use fetch time as an ID. Include a revision for changed items. Sources cannot choose channels, select pets, run commands or override authorization: those are owner settings.</p>
-<h3>Minimal endpoint</h3>
-<p>Replace this in-memory Bun example with your database. Store <code>INBOX_TOKEN</code> in your endpoint's environment.</p>
-<pre><code class="language-ts">const events = [
-  { sequence: 1, id: &quot;demo-1&quot;, title: &quot;New ticket&quot;, text: &quot;A customer needs help.&quot; },
-];
-
-Bun.serve({
-  port: 8080,
-  fetch(request) {
-    if (!process.env.INBOX_TOKEN ||
-        request.headers.get(&quot;authorization&quot;) !== &quot;Bearer &quot; + process.env.INBOX_TOKEN) {
-      return new Response(&quot;Unauthorized&quot;, { status: 401 });
-    }
-    const raw = new URL(request.url).searchParams.get(&quot;cursor&quot;);
-    if (raw !== null &amp;&amp; !/^\d+$/.test(raw)) return new Response(&quot;Invalid cursor&quot;, { status: 400 });
-    const selected = raw === null
-      ? events.slice(-50)
-      : events.filter(event =&gt; event.sequence &gt; Number(raw)).slice(0, 50);
-    return Response.json({
-      version: 1,
-      items: selected.map(({ sequence, ...event }) =&gt; event),
-      nextCursor: String(selected.at(-1)?.sequence ?? Number(raw ?? 0)),
-    });
-  },
-});
-</code></pre>
-<h2 id="delivery-and-failures">Delivery and failures</h2>
+<p>Without a cursor, return the latest 50 events; with one, the next events after it. Endpoints without cursors can return a recent window: Household remembers the last 5,000 IDs of each inbox.</p>
+<h2 id="when-something-fails">When something fails</h2>
+<p>A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows <strong>Needs attention</strong> with the reason, and its pets get one notice; they get one more when it recovers. An inbox without pets shows the problem on the page only.</p>
+<p>Good to know:</p>
 <ul>
-<li>Checks never overlap for one inbox. At most four sources poll concurrently.</li>
-<li>HTTP/feed responses are bounded to 2 MB and 20 seconds; health checks use their configured timeout and discard the body. Mail processes are bounded to 60 seconds.</li>
-<li>Cursor, IDs and pending events are saved <strong>before</strong> delivery. Retries drain unfinished deliveries before polling for more.</li>
-<li>Pet queue entries have stable deduplication IDs. Restarting does not intentionally replay queued events.</li>
-<li>External channel posting is <strong>at least once around a crash</strong>: a messenger may accept a post just before Household saves its receipt. That narrow failure window can duplicate a channel post; exactly-once delivery is not promised.</li>
-<li>Failures back off exponentially, capped at eight times the interval or one hour, never faster than the configured interval. Success restores the configured schedule.</li>
-<li>Changing source identity or channel with pending events is refused. Drain the queue first, or remove the inbox to discard it.</li>
-<li>Changing endpoint, mail account/folder or monitor establishes a new baseline. Rotating passwords or headers keeps the cursor; do not use a credential change to switch datasets.</li>
-<li>Delivery mode is captured when an event is queued. Switching silent/announcement affects future events; already pending events keep their mode.</li>
-<li>Removing a subscription stops future fan-out; entries already in a pet's durable queue remain.</li>
-<li>Silent applies when an event is delivered: switching a pet to silent also stops waking it for events still pending.</li>
-<li>Polling sees snapshots: an alert appearing and resolving entirely between checks can be missed.</li>
-<li>The host can reach configured internal endpoints. VM allowlists do not govern host polling. Only the owner admin configures sources.</li>
+<li>An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a pet may get an event it had already started on: the digest tells it so.</li>
+<li>Checks see snapshots: an alert that fires and clears between two checks can be missed.</li>
+<li>Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.</li>
+<li>Switching posting on or off applies to new events; switching a pet to Silent applies at once.</li>
+<li>The host can reach internal addresses your pets cannot: only you configure sources.</li>
 </ul>
-<p>Configuration and polling state are included in normal Household backups. Restore a backup before downgrading to a release without inbox support.</p>
-<h2 id="adding-a-built-in-poller">Adding a built-in poller</h2>
-<p>Add a validated source variant to <code>pollSourceSchema</code>, implement its handler, register it in the exhaustive registry in <code>src/infra/inbox-pollers.ts</code>, and add the corresponding connection fields in the admin UI.</p>
-<p>A handler may provide a separate non-consuming <code>test</code> probe; Telegram uses one because a connection check must not acknowledge updates. The host-only handler contract is <code>(source, cursor, initial, signal) =&gt; Promise&lt;PollResult&gt;</code>. Return up to 50 normalized <code>InboxItem</code> events and an opaque cursor (up to 1 MB). The application persists the cursor with pending delivery before dispatch; no poller-local files or in-memory caches are needed. Honor cancellation and do not mutate remote data. Use safe fixed diagnostics (<code>InboxPollError</code>) rather than including provider responses or credentials in errors.</p>
-<p><code>inbox-pollers/common.ts</code> supplies bounded HTTP reads, canonical JSON and SHA-256 hashes. Each implementation owns the meaning of its cursor: feed IDs, watched-field hashes, or health state/counters. Event IDs must distinguish separate transitions (A → B → A) while remaining stable for retries. <code>baselineHandled: true</code> is reserved for built-in pollers that own first-check delivery semantics, such as health monitoring; it is not part of the external HTTP contract. Other sources use the normal first-check baseline suppression. Pollers never choose recipients or delivery modes.</p>
 <h2 id="references">References</h2>
 <ul>
 <li><a href="https://core.telegram.org/bots/api#getting-updates">Telegram Bot API: getting updates</a></li>
-<li><a href="https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/api/generated_base_api_alertmanager.go">Grafana Alertmanager API routes</a></li>
+<li><a href="https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/api/generated_base_api_alertmanager.go">Grafana Alertmanager API</a></li>
 <li><a href="https://docs.datadoghq.com/api/latest/monitors/get-a-monitors-details/">Datadog monitor details API</a></li>
-<li><a href="https://docs.python.org/3/library/imaplib.html">Python IMAP client</a></li>
-<li><a href="https://docs.python.org/3/library/poplib.html">Python POP3 client</a></li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#setup">Setup</a></li><li><a href="#a-pet-s-inboxes">A pet's inboxes</a></li><li><a href="#built-in-sources">Built-in sources</a></li><li><a href="#telegram-bot-updates">Telegram Bot Updates</a></li><li><a href="#rss-atom">RSS / Atom</a></li><li><a href="#health-check">Health check</a></li><li><a href="#json-watcher">JSON watcher</a></li><li><a href="#poller-problems-and-recovery">Poller problems and recovery</a></li><li><a href="#catch-up-after-vm-downtime">Catch-up after VM downtime</a></li><li><a href="#durable-event-history-and-metadata">Durable event history and metadata</a></li><li><a href="#custom-http-contract-version-1">Custom HTTP contract, version 1</a></li><li><a href="#delivery-and-failures">Delivery and failures</a></li><li><a href="#adding-a-built-in-poller">Adding a built-in poller</a></li><li><a href="#references">References</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#add-an-inbox">Add an inbox</a></li><li><a href="#manage-inboxes">Manage inboxes</a></li><li><a href="#pets">Pets</a></li><li><a href="#sources">Sources</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#when-something-fails">When something fails</a></li><li><a href="#references">References</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen
