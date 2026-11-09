@@ -40,7 +40,7 @@ A backup from an older Household restores with a warning. One from a newer House
 ## Move to another machine
 
 1. `house export` on the old machine.
-2. [Install Household](../../#start) on the new one; skip `house onboard`.
+2. [Install Household](../start/) on the new one; skip `house onboard`.
 3. Copy the archive over, then `house import <file>` and `house start`.
 
 Stop the daemon on the old machine before starting the new one: both would answer the same bots.

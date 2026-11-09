@@ -17,6 +17,7 @@ Install the `household` agent skill too, for running Household afterwards:
 
 ## Docs
 
+- [Quick start](https://agents-household.dev/docs/start/): install, house onboard, house start, the first message to your pet
 - [Pets](https://agents-household.dev/docs/pets/): what a pet is, how it differs from sideworkers and scouts, and every tab of its page in the admin
 - [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra agents a pet starts for one job: another project's CLAUDE.md or AGENTS.md, a thread you can talk in, limits and profiles
 - [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-pet subscriptions and silent delivery; the custom HTTP format

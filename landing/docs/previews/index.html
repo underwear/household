@@ -159,7 +159,7 @@
       .term { flex-direction: column; align-items: flex-start; gap: 6px; }
       .top-link .label { display: none; }
     }
-  pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+  pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,7 +170,7 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="./" aria-current="page">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../../#start">Quick start</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="./" aria-current="page">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Pets</p><h1>HTTP previews</h1>
 <p>A pet can show you a web app running in its VM — a site it is building, a dev server with live reload, a dashboard — by a link you open in your browser. Each link needs your approval and lives 15 minutes.</p>
@@ -188,7 +188,7 @@
 <li><strong>This computer only</strong> (default) — links on <code>127.0.0.1</code>: they open only on the machine Household runs on.</li>
 <li><strong>Another address</strong> — listen on an address of this machine and give the host people will open, like <code>mac-mini.local</code>. Who can reach it depends on your network and firewall: Household opens no ports or tunnels.</li>
 </ul>
-<p>⚠️ <strong>There is no login.</strong> Anyone who can reach the link sees the app for those 15 minutes. Approve only what you would show on a shared screen.</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>There is no login.</strong> Anyone who can reach the link sees the app for those 15 minutes. Approve only what you would show on a shared screen.</p>
 <h2 id="limits">Limits</h2>
 <ul>
 <li>One port of the pet's own VM per preview; HTTP and WebSocket only, not other TCP.</li>
