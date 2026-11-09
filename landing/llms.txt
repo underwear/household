@@ -17,7 +17,13 @@ Install the `household` agent skill too, for running Household afterwards:
 
 ## Docs
 
+- [Pets](https://agents-household.dev/docs/pets/): what a pet is, how it differs from sideworkers and scouts, and every tab of its page in the admin
+- [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra agents a pet starts for one job: another project's CLAUDE.md or AGENTS.md, a thread you can talk in, limits and profiles
 - [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-pet subscriptions and silent delivery; the custom HTTP format
+- [Scouts](https://agents-household.dev/docs/scouts/): specialists a pet calls for one task in their own VM; capabilities, network limits, owner approval (Run), secrets, results and threads
+- [HTTP previews](https://agents-household.dev/docs/previews/): a pet shows a web app from its VM by a 15-minute link you approve; who can open it; limits
+- [MCP servers](https://agents-household.dev/docs/mcp/): give a pet any MCP server by asking it; hosts and keys it needs, what persists, limits
+- [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, what a backup holds, moving to another machine
 
 - [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): the checklist from a bare machine to a pet answering in Telegram
 - [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): what Household can do (pets, network, secrets, scouts), updates, backups
