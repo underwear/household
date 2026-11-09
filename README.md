@@ -14,7 +14,7 @@ and lets you talk to it from the messenger you already use.
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-72c191?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/macOS%20%C2%B7%20Linux%2BKVM-1f1d1a?style=flat-square&logo=linux&logoColor=white)](#requirements)
 
-[Quick start](#quick-start) · [What's inside](#whats-inside) · [Docs](https://agents-household.dev/docs/) · [Website](https://agents-household.dev)
+[Quick start](#quick-start) · [Supported harnesses and messengers](#supported-harnesses-and-messengers) · [Docs](https://agents-household.dev/docs/) · [Website](https://agents-household.dev)
 
 <br>
 
@@ -32,6 +32,14 @@ and lets you talk to it from the messenger you already use.
 - 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find this movie on a torrent site" sends a scout onto untrusted sites without exposing the bot’s files or secrets.
 - 🧰 **Real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
 - 📬 **Wakes up on its own.** Mail, feeds and alerts trigger your bots.
+
+### Supported harnesses and messengers
+
+| Harnesses | Messengers |
+|---|---|
+| ✅ Claude Code | ✅ Telegram — threaded bot chats |
+| ✅ Codex | ✅ Slack — bot DMs |
+| 🕒 More coming soon | 🕒 More coming soon |
 
 ## 🚀 Quick start
 
@@ -60,23 +68,6 @@ house start
 | ☁️ A VM or a VPS | Linux with KVM inside: nested virtualization or a KVM-enabled VPS |
 
 Plus `openssl` and `python3`. The installer brings the rest: microsandbox, Codex, the web UI. No Docker.
-
-## 🧩 What's inside
-
-| | |
-|---|---|
-| **Workspace** | Groups bots, channels, network rules and secrets. |
-| **Bot** | Your persistent assistant, on a **harness** — Claude Code or Codex. |
-| **Scouts** | Specialists a bot calls for one task — "buy two bus tickets", "find this movie on a torrent site" — in a fresh VM with only the access you allow. |
-| **Sideworkers** | Extra hands a bot starts for one job, while it keeps talking to you. |
-| **Inboxes** | Sources that hand new events to your bots. |
-| **Previews** | Open a web app running in a bot's VM by a link, with your approval. |
-
-| Harnesses | Messengers |
-|---|---|
-| ✅ Claude Code | ✅ Telegram — bot, threaded mode |
-| ✅ Codex | 🕒 More coming soon |
-| 🕒 More coming soon | |
 
 ## 📚 Documentation
 
