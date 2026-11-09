@@ -12,6 +12,9 @@ const mail = {
   password: z.string().min(1).max(8192).refine(v => !/[\r\n\0]/.test(v)),
 };
 export const pollSourceSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("rss"), url: endpoint, headers: headers.default({}) }),
+  z.strictObject({ kind: z.literal("health"), url: endpoint, headers: headers.default({}), timeoutMs: z.number().int().min(100).max(60000).default(10000), failures: z.number().int().min(1).max(10).default(3), expectedStatus: z.number().int().min(200).max(599).default(200) }),
+  z.strictObject({ kind: z.literal("json-watch"), url: endpoint, headers: headers.default({}), pointers: z.array(z.string().max(512).regex(/^(?:\/(?:[^~]|~[01])*)*$/)).max(30).refine(v => new Set(v).size === v.length).default([]) }),
   z.strictObject({ kind: z.literal("http"), url: endpoint, headers: headers.default({}) }),
   z.strictObject({ kind: z.literal("grafana"), url: endpoint, headers: headers.default({}) }),
   z.strictObject({ kind: z.literal("datadog"), url: endpoint, headers: headers.default({}), monitor: z.string().regex(/^[0-9]+$/) }),
@@ -25,9 +28,10 @@ export const houseInboxSchema = z.strictObject({
   intervalSeconds: z.number().int().min(60).max(86400).default(300),
   channel: z.string().min(1).max(256),
   pets: z.array(z.string().min(1)).max(50).refine(v => new Set(v).size === v.length),
+  delivery: z.enum(["announce", "silent"]).default("announce"),
   initial: z.enum(["new", "latest"]).default("new"),
   source: pollSourceSchema,
-});
+}).refine(v => v.delivery !== "silent" || v.pets.length > 0, "Silent delivery needs at least one subscribed pet");
 export const houseInboxesSchema = z.array(houseInboxSchema).max(30).refine(v => new Set(v.map(i => i.name)).size === v.length, "Inbox names must be unique");
 export type HouseInbox = z.infer<typeof houseInboxSchema>;
 export type PollSource = HouseInbox["source"];
@@ -42,6 +46,7 @@ export type InboxItem = z.infer<typeof inboxItemSchema>;
 export const pollResultSchema = z.strictObject({
   items: z.array(inboxItemSchema).max(50),
   cursor: z.string().max(1_000_000).optional(),
+  baselineHandled: z.boolean().optional(),
 });
 export type PollResult = z.infer<typeof pollResultSchema>;
 export interface InboxState {
@@ -49,7 +54,7 @@ export interface InboxState {
   initialized: boolean;
   cursor?: string;
   seen: string[];
-  pending: { item: InboxItem; channel: string; pets: string[]; posted?: boolean; delivered: string[] }[];
+  pending: { item: InboxItem; channel: string; pets: string[]; delivery?: "announce" | "silent"; posted?: boolean; delivered: string[] }[];
   recent: { id: string; title: string; at: string; status: "queued" | "delivered" }[];
   lastCheck?: string;
   lastSuccess?: string;

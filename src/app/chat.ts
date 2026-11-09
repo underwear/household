@@ -294,7 +294,7 @@ export class Chat {
 
 ${item.text}${item.url ? "\n\n" + item.url : ""}`;
     const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const refs = await spot.channel.notice(place, `<b>${escape(inbox.title)} · ${escape(item.title)}</b>
+    const refs = inbox.delivery === "silent" ? [] : await spot.channel.notice(place, `<b>${escape(inbox.title)} · ${escape(item.title)}</b>
 
 ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "html");
     this.records.remember(house, { refs: [...refs, ref], place: place.id, pet: inbox.pets[0] ?? "", journals: [...inbox.pets], sender: { kind: "household" }, text, excerpt: headAndTail(text), relayed: true });

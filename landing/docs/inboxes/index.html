@@ -173,15 +173,15 @@
     <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../../#start">Quick start</a></li></ul></nav>
 
     <article><p class="crumb">Sources and delivery</p><h1>House inboxes</h1>
-<p>In <strong>House → Inboxes</strong>, connect a source, choose a channel and subscribe individual pets. Each new event is posted once in that channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.</p>
+<p>In <strong>House → Inboxes</strong>, connect a source, choose a channel and subscribe individual pets. Choose <strong>Announce in channel</strong> for a House post per event, or <strong>Silent — pets only</strong> to deliver directly to pets without a House post. Silent delivery requires at least one subscriber; pets may still choose to reply in the selected channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.</p>
 <p>Pollers run on the host. Passwords and authorization headers stay in the private Household config, outside pet prompts and VM environments. Incoming content is marked as external, untrusted data. Subscribing a pet does not make the source an owner.</p>
 <h2 id="setup">Setup</h2>
 <ol>
-<li>Choose <strong>IMAP</strong>, <strong>POP3</strong>, <strong>Grafana</strong>, <strong>Datadog</strong>, or <strong>Custom HTTP</strong>.</li>
+<li>Choose <strong>RSS / Atom</strong>, <strong>Health check</strong>, <strong>JSON watcher</strong>, <strong>IMAP</strong>, <strong>POP3</strong>, <strong>Grafana</strong>, <strong>Datadog</strong>, or <strong>Custom HTTP</strong>.</li>
 <li>Enter connection details and choose <strong>Test connection &amp; continue</strong>. Testing reads the source without posting messages, notifying pets or changing its saved cursor.</li>
 <li>Name the inbox. Choose <strong>every minute</strong>, <strong>every 5 minutes</strong>, <strong>every 15 minutes</strong>, or a custom interval from 60 seconds to 24 hours.</li>
-<li>Choose a channel and subscribers. Only pets placed in that channel are offered. Leave all unchecked for a channel-only feed.</li>
-<li>Choose <strong>Start from now</strong> (default) or <strong>Import recent mail / current alerts</strong>, then save.</li>
+<li>Choose delivery mode, a channel and subscribers. Only pets placed in that channel are offered. In announcement mode, leave all unchecked for a channel-only feed. In silent mode, the channel determines where pets can reply.</li>
+<li>Choose <strong>Start from now</strong> (default) or <strong>Deliver current items / snapshot</strong>, then save.</li>
 </ol>
 <p>The page shows status, next check, pending deliveries and the last 50 events. <strong>Check now</strong> uses the saved cursor. <strong>Pause</strong> retains state; <strong>Resume</strong> continues it. <strong>Remove</strong> discards pending events and polling state, but leaves posted chat history.</p>
 <h2 id="built-in-sources">Built-in sources</h2>
@@ -190,6 +190,9 @@
 <tr><th>Source</th><th>Connection</th><th>What arrives</th></tr>
 </thead>
 <tbody>
+<tr><td>RSS / Atom</td><td>Feed URL, optional headers</td><td>New entries identified by GUID/Atom ID, link, or content fallback</td></tr>
+<tr><td>Health check</td><td>URL, expected status, timeout, consecutive failure threshold</td><td>Down/recovered transitions</td></tr>
+<tr><td>JSON watcher</td><td>URL, optional headers, whole response or selected JSON Pointer paths</td><td>Changed values or current response preview</td></tr>
 <tr><td>IMAP</td><td>Host, implicit TLS port (usually 993), username, password/app password, folder</td><td>New UID messages; read-only mailbox and <code>BODY.PEEK</code>, no read flags changed</td></tr>
 <tr><td>POP3</td><td>Host, implicit TLS port (usually 995), username, password/app password</td><td>New UIDL messages; no <code>DELE</code></td></tr>
 <tr><td>Grafana</td><td>Base URL, <code>Authorization: Bearer …</code> service-account header</td><td>State changes from <code>/api/alertmanager/grafana/api/v2/alerts</code>; disappearing alerts labelled “No longer active”</td></tr>
@@ -200,6 +203,19 @@
 <p>Use read access appropriate to the Grafana alert resources or Datadog monitor. Datadog watches one monitor per inbox, not a full per-group event history. A Grafana disappearance can mean resolution or removal; it is not always a recovery.</p>
 <p>Email requires Python 3.9+ on the host and a provider accepting a password or app password. OAuth-only mailboxes and STARTTLS ports (143/110) are not implemented. Certificates and hostnames are verified. Attachments are not forwarded; MIME text/HTML becomes plain text, with previews capped at 64 KiB per mail and 16,000 characters per event. Large POP3 messages require server support for <code>TOP</code>. Up to 10,000 mailbox IDs are supported. IMAP UIDVALIDITY changes establish a new baseline without replaying the folder.</p>
 <p>Recent-mail import takes the latest 50 existing messages, then catches up new mail in batches of 50. Grafana imports current alerts in batches of 50, up to 1,000 alerts. The default first successful check establishes a baseline without sending existing events.</p>
+<h2 id="rss-atom">RSS / Atom</h2>
+<p>Supports RSS 2.0, RSS 1.0 and Atom, including namespaced feeds. Give the direct feed URL. HTML content becomes a plain-text preview; feed links are not fetched. First connection skips existing entries by default, including feeds larger than one batch. Import emits up to 50 entries per check in feed order and catches up subsequent entries. Up to 5,000 entry identities are retained in the durable cursor. Editing an entry with the same ID does not emit a new event. XML DTD/entity declarations are refused; feed responses are limited to 2 MB. Redirects are refused, so configure the final feed URL.</p>
+<h2 id="health-check">Health check</h2>
+<p>A GET must return the exact expected HTTP status (default <strong>200</strong>) within the timeout (default <strong>10 seconds</strong>, configurable 0.1–60). Redirects, network errors and timeouts count as failed checks. Response bodies are not imported. After <strong>3 consecutive failures</strong> by default (configurable 1–10), emit one down event. The first successful check after a down event emits recovery. Repeated down/up results are quiet. Failures reset after any successful check.</p>
+<p>A site already down when monitoring begins still alerts after the threshold, including with “Start from now.” Health failures are observations, not poller errors: checks continue at the configured interval without backoff. State and failure counts survive restarts. Connection testing reports the current result without starting the counter or delivering anything.</p>
+<h2 id="json-watcher">JSON watcher</h2>
+<p>No custom envelope is needed: the endpoint returns any valid JSON. Choose <strong>Entire JSON response</strong> or <strong>Selected fields</strong>. Selected fields use <a href="https://www.rfc-editor.org/rfc/rfc6901">JSON Pointer</a>, one per line:</p>
+<pre><code class="language-text">/price
+/status
+/items/0/available
+</code></pre>
+<p>Use <code>~1</code> for a slash in a property name and <code>~0</code> for a tilde. Missing fields are distinct from <code>null</code>; additions and removals trigger events. Object key order and whitespace are ignored; array order remains significant. In whole-response mode any semantic JSON change triggers an event. In selected-fields mode changes outside those fields are ignored.</p>
+<p>The poller stores only SHA-256 hashes and a transition counter in its cursor, not copies of the previous JSON body. Repeated identical responses are quiet. Returning to an earlier value is a new transition, including after a restart. Events contain current changed field values, or a whole-response preview limited to 16,000 characters, with a truncation marker. “Start from now” establishes a silent baseline; “Deliver current items / snapshot” emits the first snapshot. Errors or invalid JSON preserve the last successful baseline.</p>
 <h2 id="custom-http-contract-version-1">Custom HTTP contract, version 1</h2>
 <p>Household sends <strong>GET</strong> to the configured URL, preserving query parameters and adding <code>limit=50</code> and, after a response supplies it, <code>cursor=&lt;opaque cursor&gt;</code>.</p>
 <p>Use headers for authorization. Embedded URL credentials and transport-header overrides are rejected. Redirects are not followed. HTTPS is recommended; HTTP is allowed for explicitly configured local/internal endpoints.</p>
@@ -264,18 +280,23 @@ Bun.serve({
 <h2 id="delivery-and-failures">Delivery and failures</h2>
 <ul>
 <li>Checks never overlap for one inbox. At most four sources poll concurrently.</li>
-<li>HTTP responses are bounded to 2 MB and 20 seconds. Mail processes are bounded to 60 seconds.</li>
+<li>HTTP/feed responses are bounded to 2 MB and 20 seconds; health checks use their configured timeout and discard the body. Mail processes are bounded to 60 seconds.</li>
 <li>Cursor, IDs and pending events are saved <strong>before</strong> delivery. Retries drain unfinished deliveries before polling for more.</li>
 <li>Pet queue entries have stable deduplication IDs. Restarting does not intentionally replay queued events.</li>
 <li>External channel posting is <strong>at least once around a crash</strong>: a messenger may accept a post just before Household saves its receipt. That narrow failure window can duplicate a channel post; exactly-once delivery is not promised.</li>
 <li>Failures back off exponentially, capped at eight times the interval or one hour, never faster than the configured interval. Success restores the configured schedule.</li>
 <li>Changing source identity or channel with pending events is refused. Drain the queue first, or remove the inbox to discard it.</li>
 <li>Changing endpoint, mail account/folder or monitor establishes a new baseline. Rotating passwords or headers keeps the cursor; do not use a credential change to switch datasets.</li>
+<li>Delivery mode is captured when an event is queued. Switching silent/announcement affects future events; already pending events keep their mode.</li>
 <li>Removing a subscription stops future fan-out; entries already in a pet's durable queue remain.</li>
 <li>Polling sees snapshots: an alert appearing and resolving entirely between checks can be missed.</li>
 <li>The host can reach configured internal endpoints. VM allowlists do not govern host polling. Only the owner admin configures sources.</li>
 </ul>
 <p>Configuration and polling state are included in normal Household backups. Restore a backup before downgrading to a release without inbox support.</p>
+<h2 id="adding-a-built-in-poller">Adding a built-in poller</h2>
+<p>Add a validated source variant to <code>pollSourceSchema</code>, implement its handler, register it in the exhaustive registry in <code>src/infra/inbox-pollers.ts</code>, and add the corresponding connection fields in the admin UI.</p>
+<p>The host-only handler contract is <code>(source, cursor, initial, signal) =&gt; Promise&lt;PollResult&gt;</code>. Return up to 50 normalized <code>InboxItem</code> events and an opaque cursor (up to 1 MB). The application persists the cursor with pending delivery before dispatch; no poller-local files or in-memory caches are needed. Honor cancellation and do not mutate remote data. Use safe fixed diagnostics (<code>InboxPollError</code>) rather than including provider responses or credentials in errors.</p>
+<p><code>inbox-pollers/common.ts</code> supplies bounded HTTP reads, canonical JSON and SHA-256 hashes. Each implementation owns the meaning of its cursor: feed IDs, watched-field hashes, or health state/counters. Event IDs must distinguish separate transitions (A → B → A) while remaining stable for retries. <code>baselineHandled: true</code> is reserved for built-in pollers that own first-check delivery semantics, such as health monitoring; it is not part of the external HTTP contract. Other sources use the normal first-check baseline suppression. Pollers never choose recipients or delivery modes.</p>
 <h2 id="references">References</h2>
 <ul>
 <li><a href="https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/api/generated_base_api_alertmanager.go">Grafana Alertmanager API routes</a></li>
@@ -285,7 +306,7 @@ Bun.serve({
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#setup">Setup</a></li><li><a href="#built-in-sources">Built-in sources</a></li><li><a href="#custom-http-contract-version-1">Custom HTTP contract, version 1</a></li><li><a href="#delivery-and-failures">Delivery and failures</a></li><li><a href="#references">References</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#setup">Setup</a></li><li><a href="#built-in-sources">Built-in sources</a></li><li><a href="#rss-atom">RSS / Atom</a></li><li><a href="#health-check">Health check</a></li><li><a href="#json-watcher">JSON watcher</a></li><li><a href="#custom-http-contract-version-1">Custom HTTP contract, version 1</a></li><li><a href="#delivery-and-failures">Delivery and failures</a></li><li><a href="#adding-a-built-in-poller">Adding a built-in poller</a></li><li><a href="#references">References</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

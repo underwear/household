@@ -1,36 +1,14 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
+import { digest, jsonGet } from "./inbox-pollers/common";
+import { pollFeed, pollHealth, pollJsonWatch } from "./inbox-pollers/watchers";
 import { InboxPollError, pollResultSchema, type PollResult, type PollSource, type InboxItem } from "../core/house-inboxes";
 import { runCommand } from "./process";
 import mailHelper from "./inbox-mail.py" with { type: "text" };
 
 export type Poller = (source: PollSource, cursor: string | undefined, initial: "new" | "latest", signal: AbortSignal) => Promise<PollResult>;
-const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
 const httpResult = z.strictObject({ version: z.literal(1), items: pollResultSchema.shape.items, nextCursor: z.string().max(4096).optional() });
 
-/** Bounded requests, no redirect credential forwarding; response bodies and auth never enter errors. */
-async function jsonGet(url: URL, headers: Record<string, string>, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(url, { headers, redirect: "error", signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
-  if (!response.ok) throw new InboxPollError(`Source returned HTTP ${response.status}`);
-  const reader = response.body?.getReader();
-  if (!reader) throw new InboxPollError("Source returned an empty body");
-  let size = 0;
-  const chunks: Uint8Array[] = [];
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > 2_000_000) throw new InboxPollError("Source response exceeds 2 MB");
-      chunks.push(value);
-    }
-  } finally { await reader.cancel().catch(() => {}); }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  try { return JSON.parse(new TextDecoder().decode(bytes)); }
-  catch { throw new InboxPollError("Source did not return valid JSON"); }
-}
 const alert = z.object({
   fingerprint: z.string().max(128), startsAt: z.string().max(100), labels: z.record(z.string(), z.string()),
   annotations: z.record(z.string(), z.string()).default({}),
@@ -62,7 +40,7 @@ export function transitions(current: Snapshot, cursor?: string): PollResult {
   }
   return { items, cursor: snapshotCursor(current, generation) };
 }
-export const pollInbox: Poller = async (source, cursor, initial, signal) => {
+const pollLegacy = async (source: Exclude<PollSource, { kind: "rss" | "health" | "json-watch" }>, cursor: string | undefined, initial: "new" | "latest", signal: AbortSignal): Promise<PollResult> => {
   try {
     if (source.kind === "imap" || source.kind === "pop3") {
       const result = await runCommand(["python3", "-c", mailHelper], { stdin: JSON.stringify({ source, cursor, initial }), timeoutMs: 60_000, signal });
@@ -95,6 +73,23 @@ export const pollInbox: Poller = async (source, cursor, initial, signal) => {
     const snapshot = { [String(m.id)]: { state: m.overall_state, title: m.name, text: m.message ?? m.overall_state } };
     if (!cursor && initial === "new") return { items: [], cursor: snapshotCursor(snapshot, 0) };
     return transitions(snapshot, cursor);
+  } catch (error) {
+    if (signal.aborted) throw new InboxPollError("Poll cancelled");
+    if (error instanceof InboxPollError) throw error;
+    throw new InboxPollError("Poll failed. Check connection, credentials and source format.");
+  }
+};
+
+/** Exhaustive registry: adding a source kind requires a handler at compile time. */
+type Registry = { [K in PollSource["kind"]]: (source: Extract<PollSource, { kind: K }>, cursor: string | undefined, initial: "new" | "latest", signal: AbortSignal) => Promise<PollResult> };
+const registry: Registry = {
+  rss: pollFeed, health: pollHealth, "json-watch": pollJsonWatch,
+  http: pollLegacy, grafana: pollLegacy, datadog: pollLegacy, imap: pollLegacy, pop3: pollLegacy,
+};
+export const pollInbox: Poller = async (source, cursor, initial, signal) => {
+  try {
+    // The discriminant selects the matching handler; the cast bridges TS's union-of-functions limitation.
+    return pollResultSchema.parse(await (registry[source.kind] as Poller)(source, cursor, initial, signal));
   } catch (error) {
     if (signal.aborted) throw new InboxPollError("Poll cancelled");
     if (error instanceof InboxPollError) throw error;

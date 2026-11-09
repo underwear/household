@@ -129,3 +129,24 @@ test("failure backoff never polls more often than a long custom interval", async
   const result = await s.service.run("work", "mail");
   expect(result.status.nextCheck - Date.parse(result.status.lastCheck!)).toBe(86400000);
 });
+
+test("pending event captures delivery mode across edits and restart", async () => {
+  const s = setup(async () => ({items: [event("one")]}), "latest");
+  s.source.delivery = "silent";
+  s.fail("post");
+  await s.service.run("work", "mail");
+  const raw = JSON.parse(s.store.get("house.inboxes.v1.work/mail")!);
+  expect(raw.pending[0].delivery).toBe("silent");
+  s.source.delivery = "announce";
+  const modes: string[] = [];
+  const restarted = new HouseInboxes(s.store, {post: async (_h,i) => {modes.push(i.delivery);}, pet: (_h,i) => {modes.push(i.delivery);}}, async () => ({items: []}));
+  restarted.setHouses([s.house]);
+  await restarted.run("work", "mail");
+  expect(modes).toEqual(["silent", "silent", "silent"]);
+});
+
+test("poller-owned baseline can alert immediately for a failed health check", async () => {
+  const s = setup(async () => ({items: [event("down")], baselineHandled: true}));
+  await s.service.run("work", "mail");
+  expect(s.posted).toHaveLength(1);
+});

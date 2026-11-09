@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { api, type HouseInbox, type InboxView, type HouseView } from "../api";
 import { Dialog, useDialog } from "./dialog";
-import { CheckList, ChoiceList, SelectField, TextField } from "./fields";
+import { CheckList, ChoiceList, Field, SelectField, TextField } from "./fields";
 import { Page, Panel, Stack } from "./layout";
 import { written } from "./section";
 
 const sources = [
+  { value: "rss", label: "RSS / Atom", description: "New entries from a feed. Articles, releases and changelogs." },
+  { value: "health", label: "Health check", description: "Endpoint failures and recovery, without repeated alerts." },
+  { value: "json-watch", label: "JSON watcher", description: "Changes to selected fields or the entire JSON response." },
   { value: "imap", label: "IMAP", description: "New emails in a folder. Leaves messages unread." },
   { value: "pop3", label: "POP3", description: "New emails by stable message ID. Never deletes mail." },
   { value: "grafana", label: "Grafana", description: "Alertmanager alerts and changes in their state." },
@@ -32,7 +35,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
     try { await work(); await refresh(); } catch (e) { notify((e as Error).message, true); } finally { setBusy(undefined); }
   };
   return <Page title="Inboxes" actions={<button className="btn primary" onClick={() => setEditing("new")}>+ Add inbox</button>}>
-    <p className="hint">Mail and alerts, delivered to one channel and the pets you subscribe. Pollers run on this host; credentials never enter a VM.</p>
+    <p className="hint">Feeds, changes and alerts, delivered to subscribed pets with an optional channel announcement. Pollers run on this host; credentials never enter a VM.</p>
     {error && <p className="error" role="alert">{error}</p>}
     {!loaded && !error && <p className="hint">Loading inboxes…</p>}
     {loaded && !items.length && <Panel><Stack gap={4}>
@@ -45,6 +48,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
         <div><strong>{inbox.title}</strong><p className="hint">{sources.find(s => s.value === inbox.source.kind)?.label} · Every {inbox.intervalSeconds / 60} min · {house.channels.find(c => c.chat === inbox.channel)?.name ?? "Channel removed"}</p></div>
         <span className={status.error && inbox.enabled ? "error" : "hint"}>{!inbox.enabled ? "Paused" : status.running ? "Checking…" : status.error ? "Needs attention" : status.initialized ? "Watching" : "Waiting for first check"}</span>
       </div>
+      <p className="hint">Delivery: {inbox.delivery === "silent" ? "Silent — pets only" : "House announcement"}</p>
       <p className="hint">Subscribers: {inbox.pets.map(name => house.pets.find(p => p.name === name)?.display ?? name).join(", ") || "None — post to channel only"}</p>
       <p className="hint">Last checked: {stamp(status.lastCheck)} · {status.pendingCount} pending</p>
       {inbox.enabled && <p className="hint">Next check: {status.nextCheck ? stamp(new Date(status.nextCheck).toISOString()) : "Soon"}</p>}
@@ -59,7 +63,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
         })}>Remove</button>
       </div>
       {!!status.recent.length && <details className="inbox-recent"><summary>Recent events · {status.recent.length}</summary>
-        <ul>{status.recent.map(event => <li key={event.id}><span>{event.title}</span><small className="hint">{stamp(event.at)} · {event.status === "delivered" ? "Posted & queued for pets" : "Pending delivery"}</small></li>)}</ul>
+        <ul>{status.recent.map(event => <li key={event.id}><span>{event.title}</span><small className="hint">{stamp(event.at)} · {event.status === "delivered" ? "Delivered" : "Pending delivery"}</small></li>)}</ul>
       </details>}
     </Panel>)}
     <p className="hint"><a href="https://agents-household.dev/docs/inboxes/" target="_blank" rel="noreferrer">Poller setup and HTTP contract ↗</a></p>
@@ -80,6 +84,12 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
   const [password, setPassword] = useState(source && "password" in source ? source.password : "");
   const [mailbox, setMailbox] = useState(source?.kind === "imap" ? source.mailbox : "INBOX");
   const [monitor, setMonitor] = useState(source?.kind === "datadog" ? source.monitor : "");
+  const [delivery, setDelivery] = useState<HouseInbox["delivery"]>(inbox?.delivery ?? "announce");
+  const [watchMode, setWatchMode] = useState(source?.kind === "json-watch" && source.pointers.length ? "fields" : "whole");
+  const [pointers, setPointers] = useState(source?.kind === "json-watch" ? source.pointers.join("\n") : "");
+  const [timeout, setTimeout] = useState(String(source?.kind === "health" ? source.timeoutMs / 1000 : 10));
+  const [failures, setFailures] = useState(String(source?.kind === "health" ? source.failures : 3));
+  const [expectedStatus, setExpectedStatus] = useState(String(source?.kind === "health" ? source.expectedStatus : 200));
   const [headers, setHeaders] = useState<[string, string][]>(source && "headers" in source ? Object.entries(source.headers) : []);
   const [channel, setChannel] = useState(inbox?.channel ?? house.channels[0]?.chat ?? "");
   const [pets, setPets] = useState(inbox?.pets ?? []);
@@ -87,28 +97,32 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
   const [frequency, setFrequency] = useState([1, 5, 15].includes(minutes) ? String(minutes) : "custom");
   const [custom, setCustom] = useState(String(minutes));
   const [initial, setInitial] = useState<HouseInbox["initial"]>(inbox?.initial ?? "new");
-  const [tested, setTested] = useState(false);
+  const [tested, setTested] = useState("");
   const selected = house.channels.find(c => c.chat === channel);
   const mail = kind === "imap" || kind === "pop3";
+  const requestHeaders = () => Object.fromEntries(headers.filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), value]));
   const fields = (): HouseInbox => ({
     name: inbox?.name ?? (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35).replace(/^[^a-z]+/, "") || "inbox") + "-" + suffix,
     title: title.trim() || sources.find(s => s.value === kind)!.label,
     enabled: inbox?.enabled ?? true, intervalSeconds: Number(frequency === "custom" ? custom : frequency) * 60,
-    channel: channel || "preview", pets, initial,
+    channel: channel || "preview", pets, initial, delivery,
     source: kind === "imap" ? { kind, host: host.trim(), port: Number(port || 993), username, password, mailbox } :
       kind === "pop3" ? { kind, host: host.trim(), port: Number(port || 995), username, password } :
+      kind === "health" ? { kind, url: url.trim(), headers: requestHeaders(), timeoutMs: Number(timeout) * 1000, failures: Number(failures), expectedStatus: Number(expectedStatus) } :
+      kind === "json-watch" ? { kind, url: url.trim(), headers: requestHeaders(), pointers: watchMode === "fields" ? pointers.split("\n").map(p => p.trim()).filter(Boolean) : [] } :
       kind === "datadog" ? { kind, url: url.trim(), headers: Object.fromEntries(headers.filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), value])), monitor } :
       { kind, url: url.trim(), headers: Object.fromEntries(headers.filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), value])) },
   });
   const [suffix] = useState(() => crypto.randomUUID().slice(0, 6));
   return <Dialog onClose={onClose} spec={{
-    title: inbox ? "Edit inbox" : "Add inbox", step: `inbox-${step}`,
+    title: inbox ? "Edit inbox" : "Add inbox", wide: true, step: `inbox-${step}`,
     confirmLabel: step === 0 ? "Continue" : step === 1 ? "Test connection & continue" : "Save inbox",
     busyLabel: step === 1 ? "Testing connection…" : "Saving…",
     back: step > (inbox ? 1 : 0) ? () => setStep(step - 1) : undefined,
     onConfirm: async () => {
       if (step === 0) { setStep(1); return "stay"; }
-      if (step === 1) { await api.testInbox(house.name, { ...fields(), pets: [] }); setTested(true); setStep(2); return "stay"; }
+      if (step === 1) { if (kind === "json-watch" && watchMode === "fields" && !pointers.trim()) throw new Error("Add at least one field path."); const check = await api.testInbox(house.name, { ...fields(), pets: [], delivery: "announce" }); setTested(check.message); setStep(2); return "stay"; }
+      if (delivery === "silent" && !pets.length) throw new Error("Subscribe at least one pet for silent delivery.");
       if (!channel) throw new Error("Add a channel to this house first.");
       if (!Number.isFinite(fields().intervalSeconds) || fields().intervalSeconds < 60 || fields().intervalSeconds > 86400 || !Number.isInteger(fields().intervalSeconds)) throw new Error("Choose an interval from 1 to 1,440 minutes (whole seconds).");
       await save(fields());
@@ -125,9 +139,19 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
           <TextField label="Password / app password" type="password" value={password} onChange={setPassword} />
           {kind === "imap" && <TextField label="Folder" value={mailbox} onChange={setMailbox} placeholder="INBOX" />}
         </> : <>
-          <TextField label={kind === "http" ? "Endpoint URL" : kind === "grafana" ? "Grafana base URL" : "Datadog API base URL"} value={url} onChange={setUrl} placeholder={kind === "grafana" ? "https://grafana.example.com" : kind === "datadog" ? "https://api.datadoghq.eu" : "https://example.com/inbox"}
-            hint={kind === "http" ? "GET with cursor and limit=50. Returns version: 1, items and optional nextCursor." : kind === "datadog" ? "Use your Datadog region. Supply DD-API-KEY and DD-APPLICATION-KEY below." : "Supply Authorization: Bearer <service-account-token> below."} />
+          <TextField label={kind === "grafana" ? "Grafana base URL" : kind === "datadog" ? "Datadog API base URL" : kind === "rss" ? "Feed URL" : "Endpoint URL"} value={url} onChange={setUrl} placeholder={kind === "grafana" ? "https://grafana.example.com" : kind === "datadog" ? "https://api.datadoghq.eu" : "https://example.com/inbox"}
+            hint={kind === "http" ? "GET with cursor and limit=50. Returns version: 1, items and optional nextCursor." : kind === "datadog" ? "Use your Datadog region. Supply DD-API-KEY and DD-APPLICATION-KEY below." : kind === "grafana" ? "Supply Authorization: Bearer <service-account-token> below." : kind === "rss" ? "RSS 2.0, RSS 1.0 or Atom. Only new entries are delivered." : "GET request. No custom response contract required."} />
           {kind === "datadog" && <TextField label="Monitor ID" value={monitor} onChange={setMonitor} inputMode="numeric" placeholder="123456" />}
+          {kind === "health" && <>
+            <TextField label="Expected HTTP status" inputMode="numeric" value={expectedStatus} onChange={setExpectedStatus} />
+            <TextField label="Timeout in seconds" inputMode="text" value={timeout} onChange={setTimeout} hint="0.1–60 seconds. A timeout counts as a failed check." />
+            <TextField label="Consecutive failures before alert" inputMode="numeric" value={failures} onChange={setFailures} hint="1–10 checks. Recovery is delivered after the first successful check." />
+          </>}
+          {kind === "json-watch" && <>
+            <SelectField label="Watch for changes in" value={watchMode} onChange={setWatchMode} options={[{value: "whole", label: "Entire JSON response"}, {value: "fields", label: "Selected fields"}]} />
+            {watchMode === "fields" && <Field id="inbox-pointers" label="Field paths — one per line" hint="JSON Pointer paths, e.g. /items/0/price. Escape / as ~1 and ~ as ~0."><textarea id="inbox-pointers" aria-describedby="inbox-pointers-hint" className="control mono inbox-pointers" value={pointers} onChange={e => setPointers(e.target.value)} placeholder={"/price\n/status"} rows={3} /></Field>}
+            <p className="hint">Object key order and whitespace are ignored. Array order matters. Events contain changed fields or a preview of the whole response.</p>
+          </>}
           <div className="inbox-headers"><span className="field-label">Request headers</span>
             {headers.map(([key, value], i) => <div className="inbox-header-row" key={i}>
               <TextField label={`Header ${i + 1} name`} value={key} onChange={v => setHeaders(headers.map((h, n) => n === i ? [v, h[1]] : h))} placeholder="Authorization" />
@@ -140,16 +164,20 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
         <p className="hint">Testing does not post messages, notify pets or change the polling cursor.</p>
       </>}
       {step === 2 && <>
-        {tested && <p className="hint" role="status">✓ Connection tested successfully</p>}
+        {tested && <p className="hint" role="status">✓ {tested}</p>}
         <TextField label="Inbox name" value={title} onChange={setTitle} placeholder={sources.find(s => s.value === kind)?.label} />
         <SelectField label="Check for new events" value={frequency} onChange={setFrequency} options={[{ value: "1", label: "Every minute" }, { value: "5", label: "Every 5 minutes" }, { value: "15", label: "Every 15 minutes" }, { value: "custom", label: "Custom interval…" }]} />
         {frequency === "custom" && <TextField label="Interval in minutes" inputMode="numeric" value={custom} onChange={setCustom} hint="From 1 minute to 24 hours." />}
-        <SelectField label="Post events to" value={channel} onChange={v => { setChannel(v); setPets([]); }} options={[{ value: "", label: "Choose a channel…", disabled: true }, ...house.channels.map(c => ({ value: c.chat, label: c.name }))]} />
+        <ChoiceList label="Delivery" value={delivery} onChange={v => setDelivery(v as typeof delivery)} options={[
+          { value: "announce", label: "Announce in channel", description: "House posts the event and delivers it to subscribed pets." },
+          { value: "silent", label: "Silent — pets only", description: "No House post. Pets receive the event privately and may still reply in the selected channel." },
+        ]} />
+        <SelectField label={delivery === "silent" ? "Channel for pet replies" : "Post events to"} value={channel} onChange={v => { setChannel(v); setPets([]); }} options={[{ value: "", label: "Choose a channel…", disabled: true }, ...house.channels.map(c => ({ value: c.chat, label: c.name }))]} />
         <CheckList label="Subscribe pets" checked={pets} onToggle={name => setPets(pets.includes(name) ? pets.filter(p => p !== name) : [...pets, name])}
           options={house.pets.filter(p => !p.sideworker && selected?.pets.includes(p.name)).map(p => ({ value: p.name, label: p.display }))}
           empty="Place pets in the selected channel first, or leave this as a channel-only feed." />
-        <p className="hint">One post per event. Each subscriber receives a separate copy when idle and replies in this channel. External content is never treated as an owner instruction.</p>
-        {!inbox && <SelectField label="On first connection" value={initial} onChange={v => setInitial(v as typeof initial)} options={[{ value: "new", label: "Start from now — skip existing events" }, { value: "latest", label: "Import recent mail / current alerts (up to 50 per check)" }]} />}
+        <p className="hint">{delivery === "silent" ? "At least one subscriber is required. No House notification." : "One House post per event."} Each subscriber receives a separate copy when idle and replies in this channel. External content is never treated as an owner instruction.</p>
+        {!inbox && <SelectField label="On first connection" value={initial} onChange={v => setInitial(v as typeof initial)} options={[{ value: "new", label: "Start from now — skip existing events" }, { value: "latest", label: "Deliver current items / snapshot (up to 50 per check)" }]} />}
         <button className="btn small" type="button" onClick={() => setStep(1)}>Change source connection</button>
       </>}
     </>,

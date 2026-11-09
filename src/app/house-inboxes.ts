@@ -73,9 +73,9 @@ export class HouseInboxes {
   async test(input: HouseInbox): Promise<{ count: number; message: string }> {
     const inbox = houseInboxSchema.parse(input);
     let result;
-    try { result = pollResultSchema.parse(await this.poll(inbox.source, undefined, "new", AbortSignal.timeout(65_000))); }
+    try { result = pollResultSchema.parse(await this.poll(inbox.source.kind === "health" ? { ...inbox.source, failures: 1 } : inbox.source, undefined, inbox.source.kind === "health" ? "latest" : "new", AbortSignal.timeout(65_000))); }
     catch (error) { throw new HouseholdError(error instanceof InboxPollError ? error.message : "Connection failed. Check the endpoint, TLS, credentials and expected source format."); }
-    return { count: result.items.length, message: "Connection works. No events posted, no pet notified, and no polling cursor changed." };
+    return { count: result.items.length, message: inbox.source.kind === "health" ? `${result.items[0]?.title ?? "Endpoint checked"}. No events delivered; monitoring state unchanged.` : "Connection works. No events posted, no pet notified, and no polling cursor changed." };
   }
   start() {
     if (this.timer) return;
@@ -119,7 +119,7 @@ export class HouseInboxes {
       current();
       const result = pollResultSchema.parse(await this.poll(inbox.source, state.cursor, inbox.initial, controller.signal));
       current();
-      const baseline = !state.initialized && inbox.initial === "new";
+      const baseline = !state.initialized && inbox.initial === "new" && !result.baselineHandled;
       const seen = new Set(state.seen);
       for (const raw of result.items) {
         const id = hash([state.fingerprint, raw.id]);
@@ -129,7 +129,7 @@ export class HouseInboxes {
         const item = redact(inbox, raw);
         // Source IDs are opaque and never need to be shown to a VM.
         item.id = id;
-        state.pending.push({ item, channel: inbox.channel, pets: [...inbox.pets], delivered: [] });
+        state.pending.push({ item, channel: inbox.channel, pets: [...inbox.pets], delivery: inbox.delivery, delivered: [] });
         state.recent.unshift({ id, title: item.title, at: new Date(this.now()).toISOString(), status: "queued" });
       }
       state.seen = [...seen].slice(-5000);
@@ -164,7 +164,7 @@ export class HouseInboxes {
       // Explicit destination changes affect future events only. Never silently reroute an old message.
       if (pending.channel !== inbox.channel) throw new Error("Pending events belong to the previous channel");
       if (!pending.posted) {
-        await this.deliver.post(house, inbox, pending.item);
+        await this.deliver.post(house, { ...inbox, delivery: pending.delivery ?? "announce" }, pending.item);
         pending.posted = true; save();
       }
       for (const pet of pending.pets) {
@@ -172,7 +172,7 @@ export class HouseInboxes {
         if (pending.delivered.includes(pet) || !inbox.pets.includes(pet)) continue;
         const configured = this.houses.find(h => h.name === house)?.pets.find(p => p.name === pet);
         if (!configured) { pending.delivered.push(pet); save(); continue; }
-        this.deliver.pet(house, inbox, pet, pending.item);
+        this.deliver.pet(house, { ...inbox, delivery: pending.delivery ?? "announce" }, pet, pending.item);
         pending.delivered.push(pet); save();
       }
       const recent = state.recent.find(i => i.id === pending.item.id);

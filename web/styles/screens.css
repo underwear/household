@@ -430,3 +430,5 @@ button.memory-chevron:hover { color: var(--ink); }
 .inbox-recent { margin-top: 16px; }
 .inbox-recent ul { list-style: none; padding: 0; }
 .inbox-recent li { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+
+textarea.control.inbox-pointers { min-height: 6em; }
