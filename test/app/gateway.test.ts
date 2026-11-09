@@ -14,7 +14,7 @@ const pet = { house: "work", pet: "sibling" };
 describe("petCredentials", () => {
   test("a key goes only to the exact host its agent declared, never to one a wildcard allows", () => {
     expect(petCredentials(policy, pet, anthropic)).toHaveLength(1);
-    expect(petCredentials(policy, pet, { host: "evil.anthropic.com", port: 443 })).toEqual({ refused: "pet work/sibling has no key for evil.anthropic.com" });
+    expect(petCredentials(policy, pet, { host: "evil.anthropic.com", port: 443 })).toEqual({ refused: "bot work/sibling has no key for evil.anthropic.com" });
     expect(petCredentials(policy, pet, { host: "*.anthropic.com", port: 443 })).toHaveProperty("refused");
   });
 });

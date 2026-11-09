@@ -11,7 +11,7 @@ export const masked = (value: string) => `${value.slice(0, 5)}••`;
 
 export interface KeysSectionProps {
   keys: KeyView[];
-  /** The houses a key may be limited to. */
+  /** The workspaces a key may be limited to. */
   houses: string[];
   /** The providers a key may be of. */
   providers: MeView["providers"];
@@ -22,8 +22,8 @@ export interface KeysSectionProps {
 }
 
 /**
- * Household settings · Keys: the agent-provider keys the pets run on, each with its provider, what kind it is, its value
- * (shown: the owner's own screen), its note and the pets on it; add, edit, remove (not while a pet runs on it).
+ * Household settings · Keys: the harness-provider keys the bots run on, each with its provider, what kind it is, its value
+ * (shown: the owner's own screen), its note and the bots on it; add, edit, remove (not while a bot runs on it).
  */
 export function KeysSection({ keys, houses, providers, noteMax, refresh, notify }: KeysSectionProps) {
   const dialog = useDialog();
@@ -40,7 +40,7 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
   const remove = (key: KeyView) =>
     dialog.open({
       title: `Remove key ${key.name}?`,
-      body: key.pets.length > 0 ? `${key.pets.join(", ")} run${key.pets.length > 1 ? "" : "s"} on it: give ${key.pets.length > 1 ? "them" : "it"} another key first.` : "No pet runs on it.",
+      body: key.pets.length > 0 ? `${key.pets.join(", ")} run${key.pets.length > 1 ? "" : "s"} on it: give ${key.pets.length > 1 ? "them" : "it"} another key first.` : "No bot runs on it.",
       confirmLabel: "Remove",
       danger: true,
       onConfirm: () => save(api.removeKey(key.name), `Key ${key.name} removed`),
@@ -55,7 +55,7 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
   return (
     <Section
       title="Keys"
-      hint="Model provider keys your pets run on. Pets never see them."
+      hint="Model provider keys your bots run on. Bots never see them."
       actions={
         <button className="btn primary" onClick={() => setEditing("new")}>
           + Add key
@@ -123,18 +123,18 @@ function AllowanceLine({ allowance, allowOverage }: { allowance: Allowance | nul
   );
 }
 
-/** The houses a key is used in, each with its pets on it (`pets`: `house/pet`). */
+/** The workspaces a key is used in, each with its bots on it (`bots`: `workspace/bot`). */
 function UsedIn({ pets }: { pets: string[] }) {
-  if (pets.length === 0) return <span className="hint">Not used by any pet.</span>;
-  const byHouse = new Map<string, string[]>();
+  if (pets.length === 0) return <span className="hint">Not used by any bot.</span>;
+  const byWorkspace = new Map<string, string[]>();
   for (const entry of pets) {
     const [house = "", pet = ""] = entry.split("/");
-    byHouse.set(house, [...(byHouse.get(house) ?? []), pet]);
+    byWorkspace.set(house, [...(byWorkspace.get(house) ?? []), pet]);
   }
   return (
     <span className="used-in">
       <span className="label">Used in</span>
-      {[...byHouse].map(([house, names]) => (
+      {[...byWorkspace].map(([house, names]) => (
         <span key={house}>
           <span className="strong">{house}</span> · {names.join(", ")}
         </span>
@@ -177,10 +177,10 @@ export function KeyDialog({ houses = [], providers, noteMax, keyView, onClose, s
               hint={<KeyHelp provider={provider} />}
             />
             <TextField label="Note" hint="Only you see this." value={note} onChange={setNote} placeholder="Max subscription" maxLength={noteMax} />
-            {houses.length > 0 && <HousesField houses={houses} checked={only} onChange={setOnly} />}
+            {houses.length > 0 && <WorkspacesField houses={houses} checked={only} onChange={setOnly} />}
             <CheckList label="Past its allowance" options={[{ value: "overage", label: "Go on in overage (billed apart from the subscription)" }]}
               checked={allowOverage ? ["overage"] : []} onToggle={() => setAllowOverage((current) => !current)} />
-            <p className="hint">{allowOverage ? "Pets keep sending once a subscription window is used up; the provider bills that to credits." : "Off: once a subscription window is used up, the gateway refuses its pets' requests until it resets."}</p>
+            <p className="hint">{allowOverage ? "Bots keep sending once a subscription window is used up; the provider bills that to credits." : "Off: once a subscription window is used up, the gateway refuses its bots' requests until it resets."}</p>
           </>
         ),
       }}
@@ -230,17 +230,17 @@ function KeyHelp({ provider }: { provider: string }) {
   return <>Use a key issued by your provider.</>;
 }
 
-/** Which houses a key or secret is for; none ticked: every house. */
-export function HousesField({ houses, checked, onChange }: { houses: string[]; checked: string[]; onChange: (houses: string[]) => void }) {
+/** Which workspaces a key or secret is for; none ticked: every workspace. */
+export function WorkspacesField({ houses, checked, onChange }: { houses: string[]; checked: string[]; onChange: (houses: string[]) => void }) {
   return (
     <>
       <CheckList
-        label="Houses"
+        label="Workspaces"
         options={houses.map((house) => ({ value: house, label: house }))}
         checked={checked}
         onToggle={(house) => onChange(checked.includes(house) ? checked.filter((each) => each !== house) : [...checked, house])}
       />
-      <p className="hint">{checked.length === 0 ? "None ticked: every house." : `Only pets in ${checked.join(", ")}.`}</p>
+      <p className="hint">{checked.length === 0 ? "None ticked: every workspace." : `Only bots in ${checked.join(", ")}.`}</p>
     </>
   );
 }

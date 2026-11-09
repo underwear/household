@@ -31,7 +31,7 @@ test("secret_request exposes exactly one role-specific schema and dispatches by 
 test("scout decisions replace the question with an explicit completed decision",()=>{
   for(const [yes,no,approved,declined] of [
     ["Run","Cancel","Scout launch approved.","Scout launch cancelled."],
-    ["Pass text","Drop","Text passed to 🐾 Sibling.","Text dropped. Nothing of it was sent."],
+    ["Pass text","Drop","Text passed to 🤖 Sibling.","Text dropped. Nothing of it was sent."],
     ["Allow","Deny","Secret transfer approved.","Secret transfer denied."],
   ]) {
     const card=scoutDecision("Original question",yes!,no!,approved,declined);

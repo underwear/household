@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sideworkers — Household docs</title>
-  <meta name="description" content="Extra agents a pet starts for one job, in VMs of their own: coding in another project with its own CLAUDE.md or AGENTS.md, a thread you can talk in, parallel work.">
+  <meta name="description" content="Extra assistants a bot starts for one job, in VMs of their own: coding in another project with its own CLAUDE.md or AGENTS.md, a thread you can talk in, parallel work.">
   <meta property="og:title" content="Sideworkers">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/sideworkers/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,31 +170,31 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
-    <article><p class="crumb">Pets</p><h1>Sideworkers</h1>
-<p>A sideworker is another agent a pet starts for one job: extra hands in its own VM, working on the pet's projects while the pet goes on talking to you. When the job is done, the pet closes it. How it compares with a pet and a scout: see the table on <a href="../pets/#pets-sideworkers-scouts">Pets</a>.</p>
+    <article><p class="crumb">Bots</p><h1>Sideworkers</h1>
+<p>A sideworker is another assistant a bot starts for one job: extra hands in its own VM, working on the bot's projects while the bot goes on talking to you. When the job is done, the bot closes it. How it compares with a bot and a scout: see the table on <a href="../bots/#bots-sideworkers-scouts">Bots</a>.</p>
 <h2 id="when-it-helps">When it helps</h2>
 <ul>
-<li><strong>Code in another project.</strong> Point it at a folder with its own <code>CLAUDE.md</code> or <code>AGENTS.md</code>, and it works as that project's developer: its conventions, commands and rules, without the pet's conversation in the way.</li>
+<li><strong>Code in another project.</strong> Point it at a folder with its own <code>CLAUDE.md</code> or <code>AGENTS.md</code>, and it works as that project's developer: its conventions, commands and rules, without the bot's conversation in the way.</li>
 <li><strong>Talk to it yourself.</strong> Unlike a subagent hidden inside a session, a sideworker has its own chat thread. Open it, watch it work, and tell it what you want directly.</li>
-<li><strong>A long or parallel job.</strong> A refactor, a test run, an investigation, while the pet stays free for you.</li>
-<li><strong>A clean start.</strong> Work that should not carry the pet's long conversation.</li>
-<li><strong>Another model.</strong> Run the job on a profile you allowed, say Codex next to a Claude Code pet.</li>
+<li><strong>A long or parallel job.</strong> A refactor, a test run, an investigation, while the bot stays free for you.</li>
+<li><strong>A clean start.</strong> Work that should not carry the bot's long conversation.</li>
+<li><strong>Another model.</strong> Run the job on a profile you allowed, say Codex next to a Claude Code bot.</li>
 </ul>
 <h2 id="how-it-works">How it works</h2>
 <ol>
-<li><strong>The pet starts it</strong> with a folder in its home and a brief. In a git repository the worker gets its own worktree and branch, so the two don't edit the same files.</li>
-<li><strong>It works in its own VM</strong> with its own session and Docker. It sees the pet's home and the pet's memory, and like the pet it reaches only the hosts the house allows, with the house's secrets.</li>
-<li><strong>You can join in.</strong> Its thread shows in the pet's channel. Whatever you write there goes to the worker; the pet is told.</li>
-<li><strong>The pet closes it.</strong> Its VM goes; its branch and files stay. Its chat thread is deleted with the messages (on Telegram). The pet is reminded every 30 minutes about a worker that sits idle.</li>
+<li><strong>The bot starts it</strong> with a folder in its home and a brief. In a git repository the worker gets its own worktree and branch, so the two don't edit the same files.</li>
+<li><strong>It works in its own VM</strong> with its own session and Docker. It sees the bot's home and the bot's memory, and like the bot it reaches only the hosts the workspace allows, with the workspace's secrets.</li>
+<li><strong>You can join in.</strong> Its thread shows in the bot's channel. Whatever you write there goes to the worker; the bot is told.</li>
+<li><strong>The bot closes it.</strong> Its VM goes; its branch and files stay. Its chat thread is deleted with the messages (on Telegram). The bot is reminded every 30 minutes about a worker that sits idle.</li>
 </ol>
 <p>A sideworker cannot start sideworkers or have scheduled tasks. You can close one yourself with <strong>Close</strong> on its page.</p>
 <h2 id="set-up">Set up</h2>
 <ul>
-<li><strong>House → Settings → Sideworkers</strong> turns them on. Off pauses the running ones.</li>
-<li><strong>House → Sideworkers</strong> lists what runs now, by pet. Its settings set how many may run at once in the house and the CPU and memory each new one gets.</li>
-<li><strong>Profiles</strong> are the agent setups a pet may start a worker on, besides its own: an agent, key, model and effort. Add one when you want work done by another model.</li>
+<li><strong>Workspace → Settings → Sideworkers</strong> turns them on. Off pauses the running ones.</li>
+<li><strong>Workspace → Sideworkers</strong> lists what runs now, by bot. Its settings set how many may run at once in the workspace and the CPU and memory each new one gets.</li>
+<li><strong>Profiles</strong> are the harness setups a bot may start a worker on, besides its own: a harness, key, model and effort. Add one when you want work done by another model.</li>
 </ul>
 <p>Each worker is a VM: it takes its share of the host's CPU and memory while it runs.</p>
 </article>

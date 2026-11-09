@@ -1,12 +1,12 @@
 import { call, type SkillEntry, type SkillFile } from "./api";
-import type { ScoutAgent, ScoutDefinition, ScoutLimits } from "../src/core/scouts";
-export type { ScoutAgent, ScoutDefinition, ScoutLimits };
+import type { ScoutAgent as ScoutHarness, ScoutDefinition, ScoutLimits } from "../src/core/scouts";
+export type { ScoutHarness, ScoutDefinition, ScoutLimits };
 
-/** Owner views only. These are never returned through an agent tool. */
+/** Owner views only. These are never returned through a harness tool. */
 export interface ScoutRunView {
   id: string;
   scout: string;
-  /** The blueprint it was called from; absent when its pet assembled it. */
+  /** The blueprint it was called from; absent when its bot assembled it. */
   blueprint?: string;
   capabilities: string[];
   parent: string;
@@ -68,15 +68,15 @@ export interface ScoutListView {
   capabilities: CapabilityView[];
   runs: ScoutRunView[];
   limits: ScoutLimits;
-  /** The house's agent: scouts that set none of their own run on it. */
-  agent: ScoutAgent | null;
+  /** The workspace's harness: scouts that set none of their own run on it. */
+  agent: ScoutHarness | null;
 }
 export interface ScoutDetailView {
   scout: ScoutView;
   capabilities: CapabilityView[];
   runs: ScoutRunView[];
-  /** The house's agent and resources: what it runs on unless it sets its own. */
-  defaults: { agent: ScoutAgent | null; limits: ScoutLimits };
+  /** The workspace's harness and resources: what it runs on unless it sets its own. */
+  defaults: { agent: ScoutHarness | null; limits: ScoutLimits };
 }
 export interface CapabilityDetailView {
   capability: CapabilityView;
@@ -87,7 +87,7 @@ export interface ScoutDocument {
   content: string;
   revision: string;
 }
-/** A key added on a capability: a new secret restricted to it, in its house. */
+/** A key added on a capability: a new secret restricted to it, in its workspace. */
 export interface CapabilityKeyInput {
   secret: string;
   value: string;
@@ -118,8 +118,8 @@ export const scoutApi = {
   saveDocument: (h: string, name: string, value: ScoutDocument) => call<ScoutDocument>("PUT", `${at(h, name)}/instructions`, value),
   /** A scout's own setup (its own capability), created empty; it is edited on its capability page. */
   createOwn: (h: string, name: string) => call<void>("POST", `${at(h, name)}/own`),
-  agent: (h: string) => call<ScoutAgent | null>("GET", `${base(h)}/scout-agent`),
-  setAgent: (h: string, value: ScoutAgent) => call<ScoutAgent>("PUT", `${base(h)}/scout-agent`, value),
+  agent: (h: string) => call<ScoutHarness | null>("GET", `${base(h)}/scout-agent`),
+  setHarness: (h: string, value: ScoutHarness) => call<ScoutHarness>("PUT", `${base(h)}/scout-agent`, value),
   setLimits: (h: string, value: ScoutLimits) => call<ScoutLimits>("PUT", `${base(h)}/scout-limits`, value),
 };
 export const capabilityApi = {

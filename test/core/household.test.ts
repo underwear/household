@@ -13,30 +13,30 @@ const household: Household = {
 
 test("house names are validated and unique", () => {
   expect(() => assertCanCreateHouse(household, "home")).not.toThrow();
-  expect(() => assertCanCreateHouse(household, "work")).toThrow("house 'work' already exists");
+  expect(() => assertCanCreateHouse(household, "work")).toThrow("workspace 'work' already exists");
   for (const bad of ["Work", "1st", "-x", "a_b", "", "a".repeat(32)]) {
-    expect(() => assertCanCreateHouse(household, bad)).toThrow("invalid house name");
+    expect(() => assertCanCreateHouse(household, bad)).toThrow("invalid workspace name");
   }
   expect(() => assertCanCreateHouse(household, "a".repeat(31))).not.toThrow();
 });
 
 test("pets need a known house and a fresh valid name", () => {
   for (const valid of ["chair", "test_pet-2", "a".repeat(31)]) expect(() => assertCanAddPet(household, "work", valid)).not.toThrow();
-  for (const invalid of ["1pet", "_pet", "-pet", "pet.name", "φίλος", "a".repeat(32)]) expect(() => assertCanAddPet(household, "work", invalid)).toThrow("invalid pet name");
-  expect(() => assertCanAddPet(household, "home", "chair")).toThrow("unknown house 'home'");
-  expect(() => assertCanAddPet(household, "work", "sibling")).toThrow("pet 'sibling' already exists");
-  expect(() => assertCanAddPet(household, "work", "Sibling")).toThrow("invalid pet name");
+  for (const invalid of ["1pet", "_pet", "-pet", "pet.name", "φίλος", "a".repeat(32)]) expect(() => assertCanAddPet(household, "work", invalid)).toThrow("invalid bot name");
+  expect(() => assertCanAddPet(household, "home", "chair")).toThrow("unknown workspace 'home'");
+  expect(() => assertCanAddPet(household, "work", "sibling")).toThrow("bot 'sibling' already exists");
+  expect(() => assertCanAddPet(household, "work", "Sibling")).toThrow("invalid bot name");
 });
 
-test("a pet's place in the chat: Household's id for it, its title (or name, capitalised) behind its emoji (a paw by default)", () => {
-  expect(petPlace({ name: "sibling" }, "c1")).toEqual({ id: "c1", kind: "pet-thread", title: "🐾 Sibling" });
-  expect(petPlace({ name: "sibling", title: "Sibling" }, "c1")).toEqual({ id: "c1", kind: "pet-thread", title: "🐾 Sibling" });
+test("a pet's place in the chat: Household's id for it, its title (or name, capitalised) behind its emoji (a robot by default)", () => {
+  expect(petPlace({ name: "sibling" }, "c1")).toEqual({ id: "c1", kind: "pet-thread", title: "🤖 Sibling" });
+  expect(petPlace({ name: "sibling", title: "Sibling" }, "c1")).toEqual({ id: "c1", kind: "pet-thread", title: "🤖 Sibling" });
   expect(petPlace({ name: "sibling", title: "Sibling", emoji: "🦉" }, "c1").title).toBe("🦉 Sibling");
   expect(petDisplay({ name: "chair", emoji: "👩‍💻" })).toBe("👩‍💻 Chair");
 });
 
 test("a pet's emoji is exactly one, fully qualified: ZWJ sequences, skin tones, flags and keycaps are one; text, digits, two, padding, a lone skin tone or a bare text symbol are not", () => {
-  for (const same of ["🐾", "🦉", "👍🏽", "✌🏽", "👩‍💻", "🇺🇦", "1️⃣", "❤️", "❤️‍🔥", "©️"]) expect(emojiOf(same)).toBe(same);
+  for (const same of ["🤖", "🦉", "👍🏽", "✌🏽", "👩‍💻", "🇺🇦", "1️⃣", "❤️", "❤️‍🔥", "©️"]) expect(emojiOf(same)).toBe(same);
   const qualified: [string, string][] = [
     ["❤", "❤\u{FE0F}"],
     ["☺", "☺\u{FE0F}"],
@@ -48,7 +48,7 @@ test("a pet's emoji is exactly one, fully qualified: ZWJ sequences, skin tones, 
     ["👁\u{200D}🗨", "👁\u{FE0F}\u{200D}🗨\u{FE0F}"],
   ];
   for (const [typed, stored] of qualified) expect(emojiOf(typed)).toBe(stored);
-  for (const bad of ["", "a", "1", "🐾🐾", "🐾 ", " 🐾", "x🐾", "owl", "🏽", "©", "™", "‼", "↔", "ℹ"]) expect(emojiOf(bad)).toBeUndefined();
+  for (const bad of ["", "a", "1", "🤖🤖", "🤖 ", " 🤖", "x🤖", "owl", "🏽", "©", "™", "‼", "↔", "ℹ"]) expect(emojiOf(bad)).toBeUndefined();
 });
 
 test("trust comes from the config: an owner of the house, as a channel of their platform tells its senders apart, is the owner; anyone else a guest", () => {

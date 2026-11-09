@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { api, type AgentView, type HouseView } from "./api";
-import { PetDetailPage } from "./components/pet-detail";
+import { api, type HarnessView, type WorkspaceView } from "./api";
+import { BotDetailPage } from "./components/bot-detail";
 import { TerminalDialog } from "./components/terminal";
 import { pollTerminal } from "./components/terminal-poll";
 
@@ -61,31 +61,31 @@ test("terminal polling retains the previous snapshot on failures and recovers", 
   stop();
 });
 
-test("terminal API encodes pet paths and forwards cancellation", async () => {
+test("terminal API encodes bot paths and forwards cancellation", async () => {
   const original = globalThis.fetch;
   const controller = new AbortController();
   try {
     globalThis.fetch = (async (path, options) => {
-      expect(path).toBe("/api/houses/my%20house/pets/my%2Fpet/terminal");
+      expect(path).toBe("/api/houses/my%20workspace/pets/my%2Fbot/terminal");
       expect(options?.signal).toBe(controller.signal);
       expect(options?.method).toBe("GET");
       expect(options?.body).toBeUndefined();
       return Response.json({ text: "<script>untrusted</script>" });
     }) as typeof fetch;
-    expect(await api.terminal("my house", "my/pet", controller.signal)).toEqual({ text: "<script>untrusted</script>" });
+    expect(await api.terminal("my workspace", "my/bot", controller.signal)).toEqual({ text: "<script>untrusted</script>" });
   } finally { globalThis.fetch = original; }
 });
 
 test("Console is available only for an explicit terminal capability", () => {
-  const pet = { name: "pet", title: "Pet", ownTitle: null, display: "Pet", emoji: "🐾", ownEmoji: null, aliases: [], agent: "agent", model: "model", settings: {}, mode: null, key: null, problem: null, state: "running" as const };
-  const house: HouseView = { name: "home", pets: [pet], owners: [], allow: [], channels: [] };
-  const agent: AgentView = { name: "agent", models: ["model"], defaultModel: "model", providers: [], modes: [], defaultMode: null, settings: [] };
-  const render = (agents: AgentView[]) => renderToStaticMarkup(<PetDetailPage house={house} pet={pet} agents={agents} keys={[]} capacity={{ host: { cpus: 4, memoryMiB: 8192 }, houses: [house] }} refresh={async () => {}} notify={() => {}} />);
+  const pet = { name: "bot", title: "Bot", ownTitle: null, display: "Bot", emoji: "🤖", ownEmoji: null, aliases: [], agent: "harness", model: "model", settings: {}, mode: null, key: null, problem: null, state: "running" as const };
+  const house: WorkspaceView = { name: "home", pets: [pet], owners: [], allow: [], channels: [] };
+  const agent: HarnessView = { name: "harness", models: ["model"], defaultModel: "model", providers: [], modes: [], defaultMode: null, settings: [] };
+  const render = (agents: HarnessView[]) => renderToStaticMarkup(<BotDetailPage house={house} pet={pet} agents={agents} keys={[]} capacity={{ host: { cpus: 4, memoryMiB: 8192 }, houses: [house] }} refresh={async () => {}} notify={() => {}} />);
   expect(render([agent])).not.toContain(">Console</button>");
   expect(render([{ ...agent, terminal: false }])).not.toContain(">Console</button>");
   expect(render([{ ...agent, terminal: true }])).toContain(">Console</button>");
   expect(render([{ ...agent, name: "another", terminal: true }])).not.toContain(">Console</button>");
-  const modal = renderToStaticMarkup(<TerminalDialog house="home" pet="pet" title="<script>" onClose={() => {}} />);
+  const modal = renderToStaticMarkup(<TerminalDialog house="home" pet="bot" title="<script>" onClose={() => {}} />);
   expect(modal).toContain("Read-only");
   expect(modal).toContain("updates every 2 s");
   expect(modal).toContain("&lt;script&gt;");

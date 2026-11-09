@@ -241,7 +241,7 @@ test('an ended scout thread is deleted only for its pet and on the owner\'s Dele
  const {id}=await scouts.spawn(parent,{scout:'helper',task:'Check this'});await settle();
  await scouts.cancel(parent,id);await settle();
  expect(scouts.ended(parent)).toEqual([expect.objectContaining({id,status:'cancelled',title:'🧭 helper #1'})]);
- await expect(scouts.deleteThread({house:'work',pet:'other'},id)).rejects.toThrow('calling pet');
+ await expect(scouts.deleteThread({house:'work',pet:'other'},id)).rejects.toThrow('calling bot');
  answer.delete='no';
  expect(await scouts.deleteThread(parent,id)).toMatchObject({deleted:false});
  expect(removed).toEqual([]);

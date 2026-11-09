@@ -55,7 +55,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
     try {
       const houseName = decodeURIComponent(match[1]!), area = match[2]!, name = match[3] && decodeURIComponent(match[3]), tail = match[4] ?? "";
       const config = await deps.config.load(), house = config.houses.find(h => h.name === houseName);
-      if (!house) throw new NotFoundError("Unknown house");
+      if (!house) throw new NotFoundError("Unknown workspace");
       const runs = () => deps.scouts.list(houseName);
       const capabilities = house.capabilities ?? [];
       const envOf = (secret: string) => config.secrets.find(item => item.name === secret)?.env;

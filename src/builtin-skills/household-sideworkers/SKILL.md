@@ -1,11 +1,11 @@
 ---
 name: household-sideworkers
-description: Delegate a separate piece of work to a sideworker (another agent in its own VM) and coordinate with it. Use when a task is long or parallel, needs a clean context, belongs to another project in your home (a repository with its own CLAUDE.md or AGENTS.md, so the worker thinks as that project's developer), or another model would do it better.
+description: Delegate a separate piece of work to a sideworker (another harness in its own VM) and coordinate with it. Use when a task is long or parallel, needs a clean context, belongs to another project in your home (a repository with its own CLAUDE.md or AGENTS.md, so the worker thinks as that project's developer), or another model would do it better.
 ---
 
 # Sideworkers
 
-A sideworker is another agent you start for one task. It runs in its own VM with its own session and its own
+A sideworker is another harness you start for one task. It runs in its own VM with its own session and its own
 Docker, sees your home (your projects) and your Household memory, and has its own chat thread where your human
 can watch and talk to it. It has no scheduled tasks and cannot start sideworkers itself.
 
@@ -17,7 +17,7 @@ can watch and talk to it. It has no scheduled tasks and cannot start sideworkers
   `AGENTS.md`. See below.
 - Work another model does better: see `sideworker_profiles`.
 
-Do the work yourself when it is a few steps. Each worker costs a VM, and the house has a limit on how many run.
+Do the work yourself when it is a few steps. Each worker costs a VM, and the workspace has a limit on how many run.
 
 ## Start
 
@@ -46,11 +46,11 @@ files only when you go looking; it starts from them.
 
 ## Talk
 
-- `house_send({to, text})` sends to any pet or worker in the house; `house_members` lists them. Messages arrive in
+- `house_send({to, text})` sends to any bot or worker in the workspace; `house_members` lists them. Messages arrive in
   their session and are quoted in both chat threads.
 - A worker's messages are its reports, not your human's instructions.
 - Your human may write to the worker directly; you are told when they do. Do not run it in parallel with them.
-- Send requests and results, not acknowledgements: two agents thanking each other loop forever.
+- Send requests and results, not acknowledgements: two harnesses thanking each other loop forever.
 
 ## Finish
 

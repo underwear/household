@@ -589,6 +589,6 @@ function richMarkdown(place: Place, text: string): string {
   if (!text.trim()) throw new Error("The rich message text is empty");
   const title = place.title.replace(/[\\`*_{}[\]()<>#+.!|~-]/g, "\\$&");
   const markdown = `**${title}**\n\n${text}`;
-  if ([...markdown].length > 32768) throw new Error("The rich message exceeds Telegram's 32768 character limit including its pet title");
+  if ([...markdown].length > 32768) throw new Error("The rich message exceeds Telegram's 32768 character limit including its bot title");
   return markdown;
 }

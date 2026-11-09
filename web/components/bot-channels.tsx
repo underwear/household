@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { joining } from "../../src/core/channels";
-import { api, type ChannelView, type HouseView, type PetView, type PlatformView } from "../api";
+import { api, type ChannelView, type WorkspaceView, type BotView, type PlatformView } from "../api";
 import { written } from "./section";
-import { channelLabel } from "./houses";
+import { channelLabel } from "./workspaces";
 import { PlatformIcon } from "./icon";
 import { Cell, List, ListRow, Section } from "./layout";
 import { Link } from "./link";
-import { housePath } from "../router";
+import { workspacePath } from "../router";
 
 /**
- * Where a channel's pets and default go when `pet` joins or leaves it (core's `joining`); one that leaves as the
- * default hands it to the first left (none when one or none are left: one pet is the default by being alone).
+ * Where a channel's bots and default go when `bot` joins or leaves it (core's `joining`); one that leaves as the
+ * default hands it to the first left (none when one or none are left: one bot is the default by being alone).
  */
 export function placing(channel: Pick<ChannelView, "pets" | "default">, pet: string, join: boolean): { pets: string[]; default: string | null } {
   if (join) {
@@ -23,18 +23,18 @@ export function placing(channel: Pick<ChannelView, "pets" | "default">, pet: str
 }
 
 /**
- * A pet's channels: every channel of its house, with whether the pet is in it (a switch) and, where it shares it,
- * whether it gets what is addressed to no pet (its default). The channel's own settings stay on the house's
+ * A bot's channels: every channel of its workspace, with whether the bot is in it (a switch) and, where it shares it,
+ * whether it gets what is addressed to no bot (its default). The channel's own settings stay on the workspace's
  * Channels page.
  */
-export function PetChannels({ house, pet, platforms, refresh, notify }: { house: HouseView; pet: PetView; platforms: PlatformView[]; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
+export function BotChannels({ house, pet, platforms, refresh, notify }: { house: WorkspaceView; pet: BotView; platforms: PlatformView[]; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
   const [busy, setBusy] = useState<string>();
   const titles = new Map(house.pets.map((each) => [each.name, each]));
   const place = async (channel: ChannelView, pets: string[], first: string | null, done: string) => {
     setBusy(channel.chat);
     try {
       const configured = pets.filter(name => !house.pets.find(pet => pet.name === name)?.sideworker);
-      const warning = await written(api.placePets(house.name, channel.chat, configured, first));
+      const warning = await written(api.placeBots(house.name, channel.chat, configured, first));
       notify(warning ?? done, warning !== undefined);
     } catch (e) {
       notify((e as Error).message, true);
@@ -47,15 +47,15 @@ export function PetChannels({ house, pet, platforms, refresh, notify }: { house:
     <Section
       hint={
         <>
-          Where {pet.title} answers. The default pet gets unaddressed messages. Bots and owners: the house's{" "}
-          <Link href={housePath(house.name, "channels")} className="text-link">
+          Where {pet.title} answers. The default bot gets unaddressed messages. Bots and owners: the workspace's{" "}
+          <Link href={workspacePath(house.name, "channels")} className="text-link">
             Channels
           </Link>{" "}
           page.
         </>
       }
     >
-      <List columns="minmax(0, 1fr) auto" empty={<>No channels in {house.name} yet: add one on the house's <Link href={housePath(house.name, "channels")} className="text-link">Channels</Link> page.</>}>
+      <List columns="minmax(0, 1fr) auto" empty={<>No channels in {house.name} yet: add one on the workspace's <Link href={workspacePath(house.name, "channels")} className="text-link">Channels</Link> page.</>}>
         {house.channels.map((channel) => {
           const inside = channel.pets.includes(pet.name);
           const others = channel.pets.filter((name) => name !== pet.name);
@@ -99,7 +99,7 @@ export function PetChannels({ house, pet, platforms, refresh, notify }: { house:
                   <span className="strong ellipsis">{label}</span>
                   <span className="channel-company">
                     {others.length === 0 ? (
-                      <span className="faint">{inside ? "Only this pet" : "No pets yet"}</span>
+                      <span className="faint">{inside ? "Only this bot" : "No bots yet"}</span>
                     ) : (
                       <>
                         <span className="faint">{inside ? "With" : "Has"}</span>
@@ -107,7 +107,7 @@ export function PetChannels({ house, pet, platforms, refresh, notify }: { house:
                           const other = titles.get(name);
                           return (
                             <span key={name} className="chip small">
-                              <span aria-hidden>{other?.emoji ?? "🐾"}</span>
+                              <span aria-hidden>{other?.emoji ?? "🤖"}</span>
                               <span className="ellipsis">{other?.title ?? name}</span>
                               {channel.default === name && others.length + (inside ? 1 : 0) > 1 && <span className="chip-note">default</span>}
                             </span>

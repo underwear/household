@@ -186,7 +186,7 @@ export interface CellProps {
   lines?: boolean;
   /** Side by side, but what does not fit goes on the next line (instead of squeezing the first). */
   wrap?: boolean;
-  /** Code-like: ids, hosts, agent and model. */
+  /** Code-like: ids, hosts, harness and model. */
   mono?: boolean;
   children: ReactNode;
 }

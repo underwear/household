@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quick start — Household docs</title>
-  <meta name="description" content="Install Household, run house onboard and house start, then write to your first pet.">
+  <meta name="description" content="Install Household, run house onboard and house start, then write to your first bot.">
   <meta property="og:title" content="Quick start">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/start/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,17 +170,17 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="./" aria-current="page">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Getting started</p><h1>Quick start</h1>
-<p>From a bare machine to a pet answering you in your messenger.</p>
+<p>From a bare machine to a bot answering you in your messenger.</p>
 <h2 id="what-you-need">What you need</h2>
 <ul>
 <li><strong>A Mac on Apple silicon</strong>, or <strong>Linux with <code>/dev/kvm</code></strong>: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac only through such a Linux VM.</li>
 <li><code>python3</code> and <code>openssl</code> on it.</li>
-<li><strong>A key for the agent:</strong> a Claude subscription or Anthropic API key for Claude Code, or a ChatGPT subscription or OpenAI API key for Codex.</li>
+<li><strong>A key for the harness:</strong> a Claude subscription or Anthropic API key for Claude Code, or a ChatGPT subscription or OpenAI API key for Codex.</li>
 </ul>
-<p>Don't like typing? Give this to your coding agent:</p>
+<p>Don't like typing? Give this to your coding harness:</p>
 <pre><code class="language-text">Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
 </code></pre>
 <h2 id="1-install">1. Install</h2>
@@ -194,10 +194,10 @@
 </code></pre>
 <p>It asks, one step at a time:</p>
 <ol>
-<li><strong>Agent and its key</strong> — Claude Code or Codex; paste a Claude token (<code>claude setup-token</code> makes one) or an API key, or use the ChatGPT login of the Codex on this machine.</li>
-<li><strong>House</strong> — a name for your pets' home.</li>
-<li><strong>Telegram</strong> — create a bot with <a href="https://t.me/BotFather">@BotFather</a>, turn on <strong>Threaded Mode</strong> in its Mini App (Bot Settings → Threads Settings), press <strong>Start</strong> in a chat with your bot, and paste its token. You become the house's owner.</li>
-<li><strong>Pet</strong> — its name and display name.</li>
+<li><strong>Harness and its key</strong> — Claude Code or Codex; paste a Claude token (<code>claude setup-token</code> makes one) or an API key, or use the ChatGPT login of the Codex on this machine.</li>
+<li><strong>Workspace</strong> — a name for your bots' home.</li>
+<li><strong>Telegram</strong> — create a bot with <a href="https://t.me/BotFather">@BotFather</a>, turn on <strong>Threaded Mode</strong> in its Mini App (Bot Settings → Threads Settings), press <strong>Start</strong> in a chat with your bot, and paste its token. You become the workspace's owner.</li>
+<li><strong>Bot</strong> — its name and display name.</li>
 <li><strong>Scouts</strong> — on or off.</li>
 <li><strong>Sideworkers</strong> — on or off. You can change both later in the admin.</li>
 </ol>
@@ -205,19 +205,19 @@
 <h2 id="3-start">3. Start</h2>
 <pre><code class="language-sh">house start
 </code></pre>
-<p>The first start downloads the pet's VM image, so give it a minute. <code>house status</code> shows your pet as <code>running</code> when it is ready.</p>
+<p>The first start downloads the bot's VM image, so give it a minute. <code>house status</code> shows your bot as <code>running</code> when it is ready.</p>
 <p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.</p>
 <h2 id="4-say-hi">4. Say hi</h2>
-<p>Open your bot in Telegram and write to your pet. It answers in its own thread. 🐾</p>
+<p>Open your Telegram channel and write to your assistant bot. It answers in its own thread. 🤖</p>
 <p>Then open the admin:</p>
 <pre><code class="language-sh">house dashboard
 </code></pre>
 <p>It prints a one-time link (valid 60 seconds) and opens it. The admin lives at <code>http://127.0.0.1:8780</code>, on this machine only. On a remote server, forward the port first: <code>ssh -L 8780:127.0.0.1:8780 &lt;server&gt;</code>, then run <code>house dashboard --no-open</code> there and open the link on your computer.</p>
 <h2 id="next">Next</h2>
 <ul>
-<li><a href="../pets/">Pets</a> — everything on a pet's page.</li>
-<li><a href="../scouts/">Scouts</a> — let pets use the internet and your keys safely.</li>
-<li><a href="../inboxes/">Inboxes</a> — mail, alerts and feeds for your pets.</li>
+<li><a href="../bots/">Bots</a> — everything on a bot's page.</li>
+<li><a href="../scouts/">Scouts</a> — let bots use the internet and your keys safely.</li>
+<li><a href="../inboxes/">Inboxes</a> — mail, alerts and feeds for your bots.</li>
 <li><a href="../backup/">Back up and move</a> — keep a copy of everything.</li>
 <li><code>house update</code> moves to the newest release; <code>house --help</code> lists everything else.</li>
 </ul>

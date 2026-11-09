@@ -18,7 +18,7 @@ function fixture(answers: ("yes" | "no")[]) {
     send: (_h, _p, text) => { sent.push(text); }, secret: async () => {}, log: () => {},
     collect: async () => files, fileNames: async () => ({ "file-1": "ticket.pdf", "file-2": "receipt.html" }),
     passFiles: async (_r, ids) => { passed.push(ids); return ids.map(id => `/home/agent/inbox/scout-${id}`); },
-    title: (_h, pet) => pet === "sibling" ? "🐾 Sibling" : pet,
+    title: (_h, pet) => pet === "sibling" ? "🤖 Sibling" : pet,
   };
   const scouts = new Scouts(deps);
   scouts.run("work", "scout-test")!.status = "running";
@@ -33,7 +33,7 @@ test("text and each file are decisions of their own; a dropped text does not tak
   expect(await f.scouts.parentSend(self, "Booked: seat 14", ["/work/out/ticket.pdf", "/work/out/receipt.html"])).toEqual({ status: "waiting_owner" });
   await settle();
   expect(f.cards).toHaveLength(3);
-  expect(f.cards[0]).toContain("<b>🧭 Browser wants to pass this to 🐾 Sibling</b>\n\nText:\n<blockquote>");
+  expect(f.cards[0]).toContain("<b>🧭 Browser wants to pass this to 🤖 Sibling</b>\n\nText:\n<blockquote>");
   expect(f.cards[0]).toContain("Files: 2 follow, each asked on its own");
   expect(f.cards[1]).toContain("File: <code>ticket.pdf</code>\nType: pdf\nSize: 180 KB"); // the owner sees the scout's names
   expect(f.cards[2]).toContain("<code>receipt.html</code>");

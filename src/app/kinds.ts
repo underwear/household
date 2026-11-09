@@ -61,7 +61,7 @@ export function ownerProblems(kinds: ChannelKinds, platforms: Platforms, houses:
 
 /** A pet given more than `host` has, one line per resource: its VM could not start there. */
 export const hostProblems = (host: HostCapacity, houses: House[]) =>
-  houses.flatMap((house) => house.pets.flatMap((pet) => beyondHost(petResources(pet), host).map((problem) => `pet ${house.name}/${pet.name}: ${problem}`)));
+  houses.flatMap((house) => house.pets.flatMap((pet) => beyondHost(petResources(pet), host).map((problem) => `bot ${house.name}/${pet.name}: ${problem}`)));
 
 /** The ConfigStore's check beyond the schema: the pets' agents and models, what they are given on this host, the owners. */
 export const configCheck = (agents: Agents, host: HostCapacity = hostCapacity()) => (household: Household) => [

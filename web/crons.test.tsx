@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PetCrons, cronInWords, relative, whenIn } from "./components/pet-crons";
+import { BotCrons, cronInWords, relative, whenIn } from "./components/bot-crons";
 import { TimezoneSettings } from "./components/timezone-settings";
 
 test("a common cron expression in words; any other stays as it is (null)", () => {
@@ -24,8 +24,8 @@ test("times: in the Household zone, and how far off", () => {
   expect(relative("2026-11-05T07:55:00Z", now)).toBe("5 min ago");
 });
 
-test("a pet's tasks section and the time zone setting render in the design's parts", () => {
-  const tasks = renderToStaticMarkup(<PetCrons house="work" pet="sibling" crons={{ view: undefined, error: "", now: 0, refresh: async () => {} }} />);
+test("a bot's tasks section and the time zone setting render in the design's parts", () => {
+  const tasks = renderToStaticMarkup(<BotCrons house="work" pet="sibling" crons={{ view: undefined, error: "", now: 0, refresh: async () => {} }} />);
   expect(tasks).toContain('<h2 class="h2">Scheduled tasks</h2>');
   expect(tasks).toContain('<button class="btn small" disabled="">+ New task</button>'); // until the tasks come
   expect(tasks).toContain("Loading…");

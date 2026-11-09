@@ -12,7 +12,7 @@ export interface LogFollow {
 
 /**
  * Reads a log's first page, then while live what came after its cursor, one request at a time. Stopping cancels a
- * request in flight and drops its answer, so a view that now reads something else (another filter, another pet)
+ * request in flight and drops its answer, so a view that now reads something else (another filter, another bot)
  * never gets the old read's lines or cursor.
  */
 export function followLog<P extends { cursor: string }>(

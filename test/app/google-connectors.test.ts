@@ -61,7 +61,7 @@ test("isolates houses and pets; sideworker inherits current grants, scout never 
   }
   s.service.setPets("home", id, ["bob"]);
   expect(s.service.accounts({ ...caller, pet: "worker" })).toEqual([]);
-  expect(() => s.service.setPets("home", id, ["scout"])).toThrow("configured pets");
+  expect(() => s.service.setPets("home", id, ["scout"])).toThrow("configured bots");
 });
 
 test("closed API registry rejects SSRF, traversal, arbitrary parameters, sharing, permanent deletes and excessive pages", () => {

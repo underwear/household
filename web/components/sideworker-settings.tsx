@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { DEFAULT_SIDEWORKER_LIMITS, beyondHost, sideworkerLimitsSchema, type HostCapacity } from "../../src/core/resources";
-import { api, type HouseView } from "../api";
+import { api, type WorkspaceView } from "../api";
 import { StepperField } from "./fields";
 import { Cluster, FormGrid, Section } from "./layout";
 import { written } from "./section";
 
-/** A house's sideworker limits: how many may run at once across its pets, and what each new one is given. */
-export function SideworkerSettings({ house, host, refresh, notify }: { house: HouseView; host: HostCapacity; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
+/** A workspace's sideworker limits: how many may run at once across its bots, and what each new one is given. */
+export function SideworkerSettings({ house, host, refresh, notify }: { house: WorkspaceView; host: HostCapacity; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
   const initial = house.sideworkerLimits ?? DEFAULT_SIDEWORKER_LIMITS;
   const [count, setCount] = useState(String(initial.maxWorkers));
   const [cpus, setCpus] = useState(String(initial.cpus));
@@ -30,7 +30,7 @@ export function SideworkerSettings({ house, host, refresh, notify }: { house: Ho
   return (
     <Section width="narrow" title="Limits">
       <form className="stack gap-4" onSubmit={(event) => { event.preventDefault(); if (!busy) void save(); }}>
-        <StepperField label="At most at once" value={count} onChange={setCount} step={1} min={0} max={64} unit="workers" hint="For the whole house." />
+        <StepperField label="At most at once" value={count} onChange={setCount} step={1} min={0} max={64} unit="workers" hint="For the whole workspace." />
         <FormGrid>
           <StepperField label="CPU each" value={cpus} onChange={setCpus} step={1} min={1} max={host.cpus} unit="vCPU" />
           <StepperField label="RAM each" value={ram} onChange={setRam} step={0.125} min={0.5} max={host.memoryMiB / 1024} unit="GiB" />

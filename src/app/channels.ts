@@ -60,7 +60,7 @@ export function openChannels({ state, events, telegramApi }: ChannelDeps): OpenC
       const refuse = (problem: string) => {
         results.set(key, { problem });
         nextLogged.set(name, problem);
-        if (logged.get(name) !== problem) events.error(`house ${house.name}, channel ${channelName(knownChannelKinds(), config)}: ${problem}; no chat there until a reload finds it fixed`);
+        if (logged.get(name) !== problem) events.error(`workspace ${house.name}, channel ${channelName(knownChannelKinds(), config)}: ${problem}; no chat there until a reload finds it fixed`);
       };
       switch (config.kind) {
         case "slack-private": {
@@ -87,7 +87,7 @@ export function openChannels({ state, events, telegramApi }: ChannelDeps): OpenC
           const bot = nextSlackBots.get(connection) ?? slackBots.get(connection) ?? new SlackBot({ token: config.token, appToken: config.appToken, state, log: events,
             claimIdentity(identity, claimant) {
               const current = slackIdentities.get(identity);
-              if (current && current !== claimant) throw new Error("This Slack bot is already connected: one bot serves one house, with one token pair");
+              if (current && current !== claimant) throw new Error("This Slack bot is already connected: one bot serves one workspace, with one token pair");
               slackIdentities.set(identity, claimant);
             },
             releaseIdentity(claimant) { for (const [identity, current] of slackIdentities) if (current === claimant) slackIdentities.delete(identity); },

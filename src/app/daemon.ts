@@ -415,18 +415,18 @@ export async function startDaemon(deps: DaemonDeps) {
     open: (caller, port, settings, signal) => previewGateway.open({ machine: petContainer(caller.house, caller.pet), port, ...settings, signal }),
     choose: (caller, card, signal) => chat.ownerCard(caller.house, caller.pet, card, signal),
     notify: (caller, text) => { delivery.send(caller.house, caller.pet, { origin: "internal", text }); },
-    log: (caller, text) => events.info(`pet ${caller.house}/${caller.pet}: preview ${text}`),
+    log: (caller, text) => events.info(`bot ${caller.house}/${caller.pet}: preview ${text}`),
   });
   pets.onBeforeStop((house, pet) => previews.closePet({ house, pet }));
   const lifecycleTitle = (house: string, pet: string) => petDisplay(appliedHousehold?.houses.find(item => item.name === house)?.pets.find(item => item.name === pet) ?? { name: pet });
   const announceStopped = async ({ house, pet }: { house: string; pet: string }) => {
-    events.info(`pet ${house}/${pet} stopped`);
+    events.info(`bot ${house}/${pet} stopped`);
     await chat.notice(house, pet, `${lifecycleTitle(house, pet)} stopped.`);
   };
   const announceStarted = async (started: PlacedPet[]) => {
     const results = await pets.awaitReady(started);
     for (const start of results) {
-      const name = `pet ${start.house}/${start.pet}`;
+      const name = `bot ${start.house}/${start.pet}`;
       if (start.ready) events.info(`${name} started`);
       if (start.warning) events.error(`${name}: ${start.warning}`);
       else if (!start.ready) events.error(`${name} started but is not ready; it shows: ${compact(start.output ?? "")}`);
@@ -462,7 +462,7 @@ export async function startDaemon(deps: DaemonDeps) {
       timezone = householdTimezone(household.timezone);
       crons?.setTimezone(timezone);
       appliedHousehold = household;
-      events.info(`reconciled: ${subjects.map((s) => s.subject.name).join(", ") || "no houses"}`);
+      events.info(`reconciled: ${subjects.map((s) => s.subject.name).join(", ") || "no workspaces"}`);
       placed = wanted;
       // Back to back: a channel's first message must find its pet's mailbox, and the mailboxes' notices the channel.
       await chat.setHouses(houses);
@@ -471,7 +471,7 @@ export async function startDaemon(deps: DaemonDeps) {
       const warnings = houses.flatMap((house) =>
         house.channels.flatMap((channel) => {
           const problem = chat.problem(house.name, channelKey(channel));
-          return problem === undefined ? [] : [`house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}: ${problem}`];
+          return problem === undefined ? [] : [`workspace ${house.name}, channel ${channelName(knownChannelKinds(), channel)}: ${problem}`];
         }),
       );
       const { started, removed } = await pets.reconcile(wanted, announceStopped);
@@ -509,16 +509,16 @@ export async function startDaemon(deps: DaemonDeps) {
         await delivery.suspend(house, pet);
       }, () => announceStopped({ house, pet }));
       const [start] = await announceStarted([wanted]);
-      if (!start?.ready) throw new Error("pet VM restarted but the agent is not ready");
+      if (!start?.ready) throw new Error("bot VM restarted but the harness is not ready");
       delivery.resume(house, pet);
     } catch (error) {
-      events.error(`pet ${house}/${pet} VM restart failed: ${(error as Error).message}`);
+      events.error(`bot ${house}/${pet} VM restart failed: ${(error as Error).message}`);
       throw error;
     }
   }, (house, pet, action, notice) => delivery.prepareRestart(house, pet, notice?.timeoutMs, action, notice?.text), async (house, pet) => {
     await config.updatePet(house, pet, { enabled: false });
     await applyConfig();
-    events.info(`pet ${house}/${pet}: disabled`);
+    events.info(`bot ${house}/${pet}: disabled`);
   }, (house, pet) => sideworkers.memoryOwner(house, pet));
 
   /** The web UI, or why it is off: never a reason for the daemon (and the pets) not to run. */
@@ -592,7 +592,7 @@ export async function startDaemon(deps: DaemonDeps) {
     "/status": report,
     "/send": async (body) => {
       const { house, pet, text } = (body ?? {}) as Partial<SendRequest>;
-      if (!house || !pet || !text) throw new HouseholdError("send needs house, pet and text");
+      if (!house || !pet || !text) throw new HouseholdError("send needs workspace, bot and text");
       return delivery.send(house, pet, { text, origin: "cli" });
     },
     "/reload": async (): Promise<ReloadReport> => {
@@ -619,7 +619,7 @@ export async function startDaemon(deps: DaemonDeps) {
     },
   });
   let agentApi: ReturnType<typeof serveAgentApi> | undefined;
-  events.info("starting: host proxy and isolated pet VMs");
+  events.info("starting: host proxy and isolated bot VMs");
   try {
     // The first job, so a reload that comes in meanwhile waits for the agent API and the fresh gateway image.
     const initial = await enqueue(async () => {

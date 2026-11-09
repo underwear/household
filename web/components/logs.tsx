@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Globe, Pause, Play } from "lucide-react";
-import { api, type LogKind, type LogLine, type LogPage, type PetLogSource } from "../api";
+import { api, type LogKind, type LogLine, type LogPage, type BotLogSource } from "../api";
 import { focusPage } from "./layout";
 import { useFocusTrap } from "./focus-trap";
 import { every, followLog, type LogFollow } from "./log-follow";
@@ -99,10 +99,10 @@ function LiveToggle({ live, onChange }: { live: boolean; onChange: (live: boolea
 }
 
 /**
- * What Household logged about this pet, newest at the bottom, one line each (a click opens one whole). Its network
+ * What Household logged about this bot, newest at the bottom, one line each (a click opens one whole). Its network
  * requests are many and seldom what is looked for: hidden until asked for. Broad investigation belongs in the CLI.
  */
-function PetActivity({ house, pet, lead }: { house: string; pet: string; lead: ReactNode }) {
+function BotActivity({ house, pet, lead }: { house: string; pet: string; lead: ReactNode }) {
   const [network, setNetwork] = useState(false);
   const [words, setWords] = useState("");
   const [query, setQuery] = useState("");
@@ -135,7 +135,7 @@ function PetActivity({ house, pet, lead }: { house: string; pet: string; lead: R
         <LiveToggle live={live} onChange={setLive} />
       </div>
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="log log-lines" ref={ref} onScroll={onScroll} role="log" aria-live="off" aria-label="Pet activity">
+      <div className="log log-lines" ref={ref} onScroll={onScroll} role="log" aria-live="off" aria-label="Bot activity">
         {!rows ? (
           <p className="log-empty">Loading…</p>
         ) : rows.length === 0 ? (
@@ -153,8 +153,8 @@ function PetActivity({ house, pet, lead }: { house: string; pet: string; lead: R
   );
 }
 
-/** What an agent's line is, by how event-log.ts begins it: its label, and how loud it reads. */
-const AGENT_LINES: [prefix: RegExp, label: string, tone: Tone][] = [
+/** What a harness's line is, by how event-log.ts begins it: its label, and how loud it reads. */
+const HARNESS_LINES: [prefix: RegExp, label: string, tone: Tone][] = [
   [/^prompt accepted: /, "Message", "loud"],
   [/^answer: /, "Answer", "loud"],
   [/^turn failed: /, "Failed", "loud"],
@@ -173,17 +173,17 @@ const CONTEXT = /<household-(clock|memory)>.*?(<\/household-\1>|$)\s*/g;
 /** A line as it reads in the log: a word for what it is, its text without the prefix that said so, and its tone. */
 export function logEntry(line: Pick<LogLine, "kind" | "text">): { label: string; text: string; tone: Tone } {
   if (line.kind === "network") return { label: "Network", text: line.text, tone: "quiet" };
-  // The log is one pet's already: "pet work/owl: " before its lines says nothing.
-  if (line.kind === "daemon") return { label: "Household", text: line.text.replace(/^pet [^:\s]+: /, ""), tone: "plain" };
-  const known = AGENT_LINES.find(([prefix]) => prefix.test(line.text));
-  if (!known) return { label: "Agent", text: line.text, tone: "plain" };
+  // The log is one bot's already: "bot work/owl: " before its lines says nothing.
+  if (line.kind === "daemon") return { label: "Household", text: line.text.replace(/^(?:pet|bot) [^:\s]+: /, ""), tone: "plain" };
+  const known = HARNESS_LINES.find(([prefix]) => prefix.test(line.text));
+  if (!known) return { label: "Harness", text: line.text, tone: "plain" };
   const [prefix, label, tone] = known;
   const text = line.text.replace(prefix, "");
   if (label === "Tool") return { label, text: text.replace(/^mcp__household__/, "").replace(/^mcp__([^_]+)__/, "$1 · "), tone };
   if (label !== "Message") return { label, text, tone };
   const prompt = text.replace(CONTEXT, "");
   if (!prompt) return { label, text: "Household context only", tone: "quiet" };
-  // A message from Household itself (another pet's, a notice) comes as JSON in a tag: its text is what was said.
+  // A message from Household itself (another bot's, a notice) comes as JSON in a tag: its text is what was said.
   const internal = prompt.match(/^<household-internal>\s*\{"text":"((?:[^"\\]|\\.)*)/);
   return internal ? { label: "Internal", text: internal[1]!.replace(/\\(["\\])/g, "$1").replace(/\\n/g, " "), tone: "plain" } : { label, text: prompt, tone };
 }
@@ -205,7 +205,7 @@ const LogRow = memo(function LogRow({ line }: { line: LogLine }) {
   );
 });
 
-const PET_SOURCES: { value: "activity" | PetLogSource; label: string; empty: string }[] = [
+const BOT_SOURCES: { value: "activity" | BotLogSource; label: string; empty: string }[] = [
   { value: "activity", label: "Activity", empty: "" },
   { value: "setup", label: "Setup", empty: "The setup script has not run in this VM." },
   { value: "onStart", label: "On start", empty: "The on-start script has not run in this VM." },
@@ -213,8 +213,8 @@ const PET_SOURCES: { value: "activity" | PetLogSource; label: string; empty: str
   { value: "kernel", label: "Kernel", empty: "The kernel log could not be read." },
 ];
 
-/** A log inside a pet's VM, as text: its last lines, followed every three seconds while Live. */
-function PetVmLog({ house, pet, source, enabled, lead }: { house: string; pet: string; source: PetLogSource; enabled: boolean; lead: ReactNode }) {
+/** A log inside a bot's VM, as text: its last lines, followed every three seconds while Live. */
+function BotVmLog({ house, pet, source, enabled, lead }: { house: string; pet: string; source: BotLogSource; enabled: boolean; lead: ReactNode }) {
   const [text, setText] = useState<string>();
   const [missing, setMissing] = useState(false);
   const [live, setLive] = useState(true);
@@ -226,7 +226,7 @@ function PetVmLog({ house, pet, source, enabled, lead }: { house: string; pet: s
       // The text comes byte for byte: a follow-up read can go on in the middle of a line.
       setText((current) => lastText(first || view.restarted ? view.text : (current ?? "") + view.text));
     });
-  const empty = PET_SOURCES.find(({ value }) => value === source)!.empty;
+  const empty = BOT_SOURCES.find(({ value }) => value === source)!.empty;
   return (
     <>
       <div className="log-filters">
@@ -236,7 +236,7 @@ function PetVmLog({ house, pet, source, enabled, lead }: { house: string; pet: s
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       {!enabled ? (
-        <p className="log-empty log">The pet is disabled: its VM is stopped.</p>
+        <p className="log-empty log">The bot is disabled: its VM is stopped.</p>
       ) : text === undefined && !error ? (
         <p className="log-empty log">Loading…</p>
       ) : missing || !text ? (
@@ -248,24 +248,24 @@ function PetVmLog({ house, pet, source, enabled, lead }: { house: string; pet: s
   );
 }
 
-/** What Household logged about a pet (Activity), or one of the logs inside its VM, switched at the top. */
-export function PetLogs({ house, pet }: { house: string; pet: { name: string; enabled?: boolean } }) {
-  const [source, setSource] = useState<"activity" | PetLogSource>("activity");
+/** What Household logged about a bot (Activity), or one of the logs inside its VM, switched at the top. */
+export function BotLogs({ house, pet }: { house: string; pet: { name: string; enabled?: boolean } }) {
+  const [source, setSource] = useState<"activity" | BotLogSource>("activity");
   const choice = (
     <div className="segmented" role="group" aria-label="Log source">
-      {PET_SOURCES.map(({ value, label }) => (
+      {BOT_SOURCES.map(({ value, label }) => (
         <button key={value} type="button" aria-pressed={source === value} onClick={() => setSource(value)}>{label}</button>
       ))}
     </div>
   );
   return source === "activity" ? (
-    <PetActivity key={`${house}/${pet.name}`} house={house} pet={pet.name} lead={choice} />
+    <BotActivity key={`${house}/${pet.name}`} house={house} pet={pet.name} lead={choice} />
   ) : (
-    <PetVmLog key={`${house}/${pet.name}/${source}`} house={house} pet={pet.name} source={source} enabled={pet.enabled !== false} lead={choice} />
+    <BotVmLog key={`${house}/${pet.name}/${source}`} house={house} pet={pet.name} source={source} enabled={pet.enabled !== false} lead={choice} />
   );
 }
 
-/** A pet's logs over its page, opened from its header beside Console; Escape or Close shuts it. */
+/** A bot's logs over its page, opened from its header beside Console; Escape or Close shuts it. */
 export function LogsDialog({ house, pet, title, onClose }: { house: string; pet: { name: string; enabled?: boolean }; title: string; onClose: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -290,7 +290,7 @@ export function LogsDialog({ house, pet, title, onClose }: { house: string; pet:
       <div ref={root} className="dialog panel-dialog" role="dialog" aria-modal="true" aria-label={`${title} logs`} tabIndex={-1}>
         <h2 className="dialog-title">{title} logs</h2>
         <div className="panel-dialog-body">
-          <PetLogs house={house} pet={pet} />
+          <BotLogs house={house} pet={pet} />
         </div>
         <div className="dialog-foot">
           <button ref={closeButton} type="button" className="btn primary" onClick={close}>Close</button>

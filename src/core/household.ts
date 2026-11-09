@@ -134,14 +134,14 @@ export function trustOf(people: People, isSender: (owner: Owner) => boolean): Tr
 
 export function assertCanCreateHouse(household: Household, name: string): void {
   assertName("house", name);
-  if (findHouse(household, name)) throw new HouseholdError(`house '${name}' already exists`);
+  if (findHouse(household, name)) throw new HouseholdError(`workspace '${name}' already exists`);
 }
 
 export function assertCanAddPet(household: Household, houseName: string, pet: string): void {
   assertPetName(pet);
   const house = findHouse(household, houseName);
-  if (!house) throw new HouseholdError(`unknown house '${houseName}'`);
-  if (house.pets.some((existing) => existing.name === pet)) throw new HouseholdError(`pet '${pet}' already exists in house '${houseName}'`);
+  if (!house) throw new HouseholdError(`unknown workspace '${houseName}'`);
+  if (house.pets.some((existing) => existing.name === pet)) throw new HouseholdError(`bot '${pet}' already exists in workspace '${houseName}'`);
 }
 
 /** A worker has private harness state while the parent home stays at its original path. */

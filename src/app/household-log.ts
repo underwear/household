@@ -53,8 +53,8 @@ export interface LogScan {
 const SCAN: LogScan = { window: 8 * 1024 * 1024, budget: 64 * 1024 * 1024, keep: EVENT_LOG_ROTATION.keep };
 
 // Daemon messages name a pet as «house/pet» after «pet», a house as «house work» or «house 'work'».
-const PET_IN_MESSAGE = /\bpet '?([a-z][\w-]*)\/([a-z][\w-]*)/;
-const HOUSE_IN_MESSAGE = /\bhouse '?([a-z][\w-]*)/;
+const PET_IN_MESSAGE = /\b(?:bot|pet) '?([a-z][\w-]*)\/([a-z][\w-]*)/;
+const HOUSE_IN_MESSAGE = /\b(?:workspace|house) '?([a-z][\w-]*)/;
 
 /** An event as a log line; undefined for a record that is no event. */
 export function logLine(event: HouseholdEvent): LogEvent | undefined {
@@ -147,5 +147,5 @@ export function formatLogLine(line: LogEvent, date = false): string {
   const time = formatLogTime(line.at, date);
   const whose = line.house ? `${line.house}${line.pet ? `/${line.pet}` : ""}` : "-";
   const mark = line.level === "error" ? "ERROR " : line.level === "warn" ? "WARN  " : "";
-  return `${time}  ${line.kind.padEnd(7)}  ${whose.padEnd(18)}  ${mark}${line.text}`;
+  return `${time}  ${(line.kind === "agent" ? "harness" : line.kind).padEnd(7)}  ${whose.padEnd(18)}  ${mark}${line.text}`;
 }

@@ -2,29 +2,29 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { LogLine } from "./api";
 import { followLog } from "./components/log-follow";
-import { appendPage, lastText, logEntry, LogsDialog, PetLogs, logTime } from "./components/logs";
-import { housePath, petPath, routeOf } from "./router";
+import { appendPage, lastText, logEntry, LogsDialog, BotLogs, logTime } from "./components/logs";
+import { workspacePath, botPath, routeOf } from "./router";
 
 
-test("logs exist only at pet level; old broad log pages lead back to the pets", () => {
+test("logs exist only at bot level; old broad log pages lead back to the bots", () => {
   expect(routeOf("/logs")).toEqual({ page: "redirect", to: "/" });
-  expect(routeOf("/houses/work/logs")).toEqual({ page: "redirect", to: housePath("work", "pets") });
-  expect(routeOf("/houses/work/pets/owl/logs")).toEqual({ page: "redirect", to: petPath("work", "owl") });
+  expect(routeOf("/workspaces/work/logs")).toEqual({ page: "redirect", to: workspacePath("work", "bots") });
+  expect(routeOf("/workspaces/work/bots/owl/logs")).toEqual({ page: "redirect", to: botPath("work", "owl") });
 });
 
-test("a pet's logs: a panel over its page, what Household logged about it or a log inside its VM", () => {
+test("a bot's logs: a panel over its page, what Household logged about it or a log inside its VM", () => {
   const panel = renderToStaticMarkup(<LogsDialog house="work" pet={{ name: "owl" }} title="Owl" onClose={() => {}} />);
   expect(panel).toContain('aria-label="Owl logs"');
   expect(panel).toContain(">Close</button>");
-  const html = renderToStaticMarkup(<PetLogs house="work" pet={{ name: "owl" }} />);
+  const html = renderToStaticMarkup(<BotLogs house="work" pet={{ name: "owl" }} />);
   for (const source of ["Activity", "Setup", "On start", "Docker", "Kernel"]) expect(html).toContain(`>${source}</button>`);
-  expect(html).not.toContain('aria-label="House"'); // its house and pet are given
-  expect(html).not.toContain('aria-label="Pet"');
+  expect(html).not.toContain('aria-label="Workspace"'); // its workspace and bot are given
+  expect(html).not.toContain('aria-label="Bot"');
   expect(html).not.toContain('aria-label="What"');
   expect(html).not.toContain("Problems only");
   expect(html).toContain('aria-label="Log source"');
   expect(html).toContain('aria-label="Search the log"');
-  expect(html).toContain('aria-label="Pet activity"');
+  expect(html).toContain('aria-label="Bot activity"');
 });
 
 test("a log line's time: the time today, the day too before today", () => {
@@ -98,11 +98,11 @@ test("a log line reads as what it is: a word for it, its text without the prefix
   expect(agent('prompt accepted: <household-clock> {"now":1} </household-clock> <household-memory> {"k":"v"} </household-memory> hi')).toEqual({ label: "Message", text: "hi", tone: "loud" });
   expect(agent('prompt accepted: <household-clock> {"now":1} </household-clock> <household-memory> {"k":"v…').text).toBe("Household context only");
   expect(agent('prompt accepted: <household-internal> {"text":"From \\"owl\\": hi"} </household-internal>')).toEqual({ label: "Internal", text: 'From "owl": hi', tone: "plain" });
-  expect(logEntry({ kind: "daemon", text: "pet work/owl: message delivered (0 left)" }).text).toBe("message delivered (0 left)");
+  expect(logEntry({ kind: "daemon", text: "bot work/owl: message delivered (0 left)" }).text).toBe("message delivered (0 left)");
   expect(logEntry({ kind: "network", text: "allow api.anthropic.com:443" }).tone).toBe("quiet");
 });
 
-test("a pet's activity leaves its network requests out until asked for", () => {
-  const html = renderToStaticMarkup(<PetLogs house="work" pet={{ name: "owl" }} />);
+test("a bot's activity leaves its network requests out until asked for", () => {
+  const html = renderToStaticMarkup(<BotLogs house="work" pet={{ name: "owl" }} />);
   expect(html).toContain('aria-pressed="false" title="Show its network requests too"');
 });

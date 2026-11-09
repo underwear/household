@@ -29,7 +29,7 @@ esac
 
 if [ "$platform" != "darwin-arm64" ]; then
   if [ ! -e /dev/kvm ]; then
-    say "! /dev/kvm is missing: pets run in microVMs and need KVM (bare metal, or a VM/VPS with nested virtualization)."
+    say "! /dev/kvm is missing: bots run in microVMs and need KVM (bare metal, or a VM/VPS with nested virtualization)."
   elif [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
     say "! /dev/kvm is not usable by $(id -un): add yourself to its group ($(stat -c %G /dev/kvm 2>/dev/null || echo kvm)), then log in again."
   fi
@@ -88,5 +88,5 @@ case ":$PATH:" in
 esac
 
 say ""
-say "Next: $house_cmd onboard    (a key, a Telegram bot, a pet, step by step)"
+say "Next: $house_cmd onboard    (a key, a Telegram bot, a bot, step by step)"
 say "Running already? Restart it to use $tag: Ctrl-C and \`house start\`, or restart its service."

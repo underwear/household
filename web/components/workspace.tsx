@@ -1,45 +1,45 @@
-import { HouseConnectors } from "./house-connectors";
-import { HouseInboxesPage } from "./house-inboxes";
+import { WorkspaceConnectors } from "./workspace-connectors";
+import { WorkspaceInboxesPage } from "./workspace-inboxes";
 import { ScoutsPage } from "./scouts";
 import { CapabilitiesPage } from "./capabilities";
 import { houseFeatures } from "../../src/core/house-features";
 import { Link } from "./link";
-import { HouseFeatureSettings, PreviewReachSettings } from "./house-features";
-import { HousePreviews } from "./pet-previews";
-import { HouseSideworkers } from "./pet-sideworkers";
+import { WorkspaceFeatureSettings, PreviewReachSettings } from "./workspace-features";
+import { WorkspacePreviews } from "./bot-previews";
+import { WorkspaceSideworkers } from "./bot-sideworkers";
 import { SideworkerProfiles } from "./sideworker-profiles";
 import { SideworkerSettings } from "./sideworker-settings";
 import { SkillsPage } from "./skills";
 import { NETWORK_PRESETS, type NetworkPreset } from "../../src/core/network-presets";
 import { useEffect, useState } from "react";
-import { api, type HouseView, type KeyView, type MeView, type WriteView } from "../api";
-import { housePath, navigate, type HouseTab } from "../router";
+import { api, type WorkspaceView, type KeyView, type MeView, type WriteView } from "../api";
+import { workspacePath, navigate, type WorkspaceTab } from "../router";
 import { ChannelsPage } from "./channels";
 import { useDialog, type DialogSpec } from "./dialog";
 import { SelectField, TextField } from "./fields";
 import { Cluster, Page, Panel, Section, Stack } from "./layout";
-import { PetsPage, type Capacity } from "./pets";
-import { HouseOverviewPage } from "./house-overview";
+import { BotsPage, type Capacity } from "./bots";
+import { WorkspaceOverviewPage } from "./workspace-overview";
 import { AddForm, ListSection, written, type SectionProps } from "./section";
 
-export interface HousePageProps {
-  house: HouseView;
+export interface WorkspacePageProps {
+  house: WorkspaceView;
   /** Which of its pages. */
-  tab: HouseTab;
-  /** What this Household knows: the agents a pet may run, the kinds of channel and their platforms, how long a note may be. */
+  tab: WorkspaceTab;
+  /** What this Household knows: the harnesses a bot may run, the kinds of channel and their platforms, how long a note may be. */
   known: Pick<MeView, "agents" | "channelKinds" | "platforms" | "noteMax">;
-  /** The Household's keys (a pet runs on one). */
+  /** The Household's keys (a bot runs on one). */
   keys: KeyView[];
-  /** The host and every house's pets: what a new pet's CPU and RAM are weighed against. */
+  /** The host and every workspace's bots: what a new bot's CPU and RAM are weighed against. */
   capacity: Capacity;
-  /** Refetches the houses after a write. */
+  /** Refetches the workspaces after a write. */
   refresh: () => Promise<void>;
   /** A toast: what was done, or a warning. */
   notify: (text: string, warning?: boolean) => void;
 }
 
-/** A page of a house: its pets; its channels and owners; its network (the domains allowlist); its settings (deleting it). */
-export function HousePage({ house, tab, known, keys, capacity, refresh, notify }: HousePageProps) {
+/** A page of a workspace: its bots; its channels and owners; its network (the domains allowlist); its settings (deleting it). */
+export function WorkspacePage({ house, tab, known, keys, capacity, refresh, notify }: WorkspacePageProps) {
   const dialog = useDialog();
   const save = async (write: Promise<WriteView>, done: string) => {
     try {
@@ -52,11 +52,11 @@ export function HousePage({ house, tab, known, keys, capacity, refresh, notify }
   const props = { house, ask: dialog.open, save };
   return (
     <>
-      {tab === "overview" && <HouseOverviewPage house={house} />}
-      {tab === "pets" && <PetsPage {...props} agents={known.agents} keys={keys} capacity={capacity} />}
+      {tab === "overview" && <WorkspaceOverviewPage house={house} />}
+      {tab === "bots" && <BotsPage {...props} agents={known.agents} keys={keys} capacity={capacity} />}
       {tab === "channels" && <ChannelsPage {...props} kinds={known.channelKinds} platforms={known.platforms} noteMax={known.noteMax} />}
-      {tab === "inboxes" && <HouseInboxesPage key={house.name} house={house} notify={notify} />}
-      {tab === "connectors" && <HouseConnectors key={house.name} house={house} notify={notify} />}
+      {tab === "inboxes" && <WorkspaceInboxesPage key={house.name} house={house} notify={notify} />}
+      {tab === "connectors" && <WorkspaceConnectors key={house.name} house={house} notify={notify} />}
       {tab === "skills" && <SkillsPage key={house.name} house={house.name} notify={notify} />}
       {tab === "scouts" && <ScoutsPage house={house} agents={known.agents} keys={keys} host={capacity.host} refresh={refresh} notify={notify} />}
       {tab === "capabilities" && <CapabilitiesPage house={house} refresh={refresh} notify={notify} />}
@@ -71,12 +71,12 @@ export function HousePage({ house, tab, known, keys, capacity, refresh, notify }
           {/* Off: only the line saying so; workers, profiles and limits come back with the switch. */}
           {houseFeatures(house).sideworkers ? (
             <>
-              <HouseSideworkers house={house} refresh={refresh} />
+              <WorkspaceSideworkers house={house} refresh={refresh} />
               <SideworkerProfiles house={house} agents={known.agents} keys={keys} refresh={refresh} notify={notify} />
               <SideworkerSettings key={JSON.stringify(house.sideworkerLimits)} house={house} host={capacity.host} refresh={refresh} notify={notify} />
             </>
           ) : (
-            <FeatureOff house={house.name} text="Running sideworkers are paused, and pets cannot start new ones." />
+            <FeatureOff house={house.name} text="Running sideworkers are paused, and bots cannot start new ones." />
           )}
         </Page>
       )}
@@ -84,17 +84,17 @@ export function HousePage({ house, tab, known, keys, capacity, refresh, notify }
         <Page title="Previews">
           {houseFeatures(house).preview ? (
             <>
-              <HousePreviews house={house} />
+              <WorkspacePreviews house={house} />
               <PreviewReachSettings key={JSON.stringify([house.name, house.preview])} house={house} refresh={refresh} notify={notify} />
             </>
           ) : (
-            <FeatureOff house={house.name} text="Pets cannot show you web apps from their VMs." />
+            <FeatureOff house={house.name} text="Bots cannot show you web apps from their VMs." />
           )}
         </Page>
       )}
       {tab === "settings" && (
         <Page title="Settings">
-          <HouseFeatureSettings key={JSON.stringify([house.name, house.features, house.preview])} house={house} refresh={refresh} notify={notify} />
+          <WorkspaceFeatureSettings key={JSON.stringify([house.name, house.features, house.preview])} house={house} refresh={refresh} notify={notify} />
           <DeleteSection house={house} ask={dialog.open} refresh={refresh} notify={notify} />
         </Page>
       )}
@@ -103,13 +103,13 @@ export function HousePage({ house, tab, known, keys, capacity, refresh, notify }
   );
 }
 
-/** A feature's page while the house has it off (reached by its address: the sidebar leaves it out): that, and the way back on. */
+/** A feature's page while the workspace has it off (reached by its address: the sidebar leaves it out): that, and the way back on. */
 export function FeatureOff({ house, text }: { house: string; text: string }) {
   return (
-    <div className="pet-off" role="status">
-      <span className="pet-state"><span className="dot off" /> Off</span>
-      <span className="pet-off-text">{text}</span>
-      <Link href={housePath(house, "settings")} className="btn small">Turn on in Settings</Link>
+    <div className="bot-off" role="status">
+      <span className="bot-state"><span className="dot off" /> Off</span>
+      <span className="bot-off-text">{text}</span>
+      <Link href={workspacePath(house, "settings")} className="btn small">Turn on in Settings</Link>
     </div>
   );
 }
@@ -123,13 +123,13 @@ const WHOLE_INTERNET = /^\*(?::(?:\d+|\*))?$/;
  */
 export function allowDialog(house: string, host: string, onConfirm: () => Promise<void>): DialogSpec {
   if (!WHOLE_INTERNET.test(host)) {
-    return { title: `Allow ${host}?`, body: `Pets in ${house} will be able to reach this host.`, confirmLabel: "Allow", onConfirm };
+    return { title: `Allow ${host}?`, body: `Bots in ${house} will be able to reach this host.`, confirmLabel: "Allow", onConfirm };
   }
   const port = host.split(":")[1];
   const where = port === "*" ? "on any port" : `on port ${port ?? 443}`;
   return {
-    title: `Open the whole internet to pets in ${house}?`,
-    body: `Pets can reach any public host ${where}; one tricked by a web page or a forwarded message can send what it read anywhere. Your local network and the machine House runs on stay closed.`,
+    title: `Open the whole internet to bots in ${house}?`,
+    body: `Bots can reach any public host ${where}; one tricked by a web page or a forwarded message can send what it read anywhere. Your local network and the machine Workspace runs on stay closed.`,
     confirmLabel: "I understand the risk",
     danger: true,
     safe: true,
@@ -138,10 +138,10 @@ export function allowDialog(house: string, host: string, onConfirm: () => Promis
 }
 
 /** The preview is exactly the batch submitted; presets have no persistent identity or policy. */
-export function presetDialog(house: string, preset: NetworkPreset, allow: HouseView["allow"], onConfirm: () => Promise<void>): DialogSpec {
+export function presetDialog(house: string, preset: NetworkPreset, allow: WorkspaceView["allow"], onConfirm: () => Promise<void>): DialogSpec {
   return {
     title: `Allow ${preset.label}?`,
-    body: `Pets in ${house} get full access to these hosts, uploads included. Port 443 unless shown.`,
+    body: `Bots in ${house} get full access to these hosts, uploads included. Port 443 unless shown.`,
     children: <Stack gap={3}>
       <ul>{preset.hosts.map((host) => <li key={host}><code>{host}</code>{allow.some((entry) => entry.host === host) ? " · already listed" : ""}</li>)}</ul>
       <p>{preset.note}</p>
@@ -150,14 +150,14 @@ export function presetDialog(house: string, preset: NetworkPreset, allow: HouseV
   };
 }
 
-/** The hosts the house's pets may reach: its own, and those its pets' agents bring (not removable here). */
+/** The hosts the workspace's bots may reach: its own, and those its bots' harnesses bring (not removable here). */
 export function AllowlistSection({ house, ask, save }: SectionProps) {
   const [entry, setEntry] = useState("");
   return (
     <ListSection
       title="Domains allowlist"
       width="narrow"
-      hint='Hosts pets in this house can reach. “By agent” ones are needed by the agent itself.'
+      hint='Hosts bots in this workspace can reach. “By harness” ones are needed by the harness itself.'
       form={
         <Stack gap={3}>
           <div className="network-add">
@@ -208,13 +208,13 @@ export function AllowlistSection({ house, ask, save }: SectionProps) {
         label: host,
         mono: true,
         ...(granted ? { sub: "approved in chat · public addresses only" } : {}),
-        ...(byAgent ? { tag: "by agent" } : bySecret ? { tag: `secret ${bySecret}` } : {}),
+        ...(byAgent ? { tag: "by harness" } : bySecret ? { tag: `secret ${bySecret}` } : {}),
         ...(WHOLE_INTERNET.test(host) ? { warning: "whole internet" } : {}),
       }))}
       onRemove={(host) =>
         ask({
           title: `Remove ${host}?`,
-          body: `Pets in ${house.name} will be denied this host.`,
+          body: `Bots in ${house.name} will be denied this host.`,
           confirmLabel: "Remove",
           danger: true,
           onConfirm: () => save(api.disallowHost(house.name, host), `${host} removed`),
@@ -236,7 +236,7 @@ export function TemporaryNetworkSection({ house, ask, save }: SectionProps) {
   return <ListSection
     title="Temporary access"
     width="narrow"
-    hint="Granted in chat: one host and port, for one pet, at the addresses shown, for 15 minutes."
+    hint="Granted in chat: one host and port, for one bot, at the addresses shown, for 15 minutes."
     empty="No temporary grants."
     removeLabel="Revoke"
     items={grants.map(({ domain, port = 443, pet, addresses = [], reason, expiresAt }) => ({
@@ -251,7 +251,7 @@ export function TemporaryNetworkSection({ house, ask, save }: SectionProps) {
   />;
 }
 
-/** Revoke only the grant the owner selected: one pet's, to one host and TCP port. */
+/** Revoke only the grant the owner selected: one bot's, to one host and TCP port. */
 export function revokeTemporaryDialog(house: string, pet: string, shown: string, domain: string, port: number, save: SectionProps["save"]): DialogSpec {
   const endpoint = `${domain}:${port}`;
   return {
@@ -261,7 +261,7 @@ export function revokeTemporaryDialog(house: string, pet: string, shown: string,
   };
 }
 
-interface DeleteProps extends Omit<HousePageProps, "tab" | "known" | "keys" | "capacity"> {
+interface DeleteProps extends Omit<WorkspacePageProps, "tab" | "known" | "keys" | "capacity"> {
   ask: (spec: DialogSpec) => void;
 }
 
@@ -269,15 +269,15 @@ function DeleteSection({ house, ask, refresh, notify }: DeleteProps) {
   const evicted = house.pets.map((pet) => pet.display);
   const remove = () =>
     ask({
-      title: `Delete house ${house.name}?`,
+      title: `Delete workspace ${house.name}?`,
       body: `${evicted.length > 0 ? `Evicts ${evicted.join(", ")}. ` : ""}Their VMs go; their files stay on disk.`,
-      confirmLabel: "Delete house",
+      confirmLabel: "Delete workspace",
       danger: true,
       onConfirm: async () => {
-        const warning = await written(api.deleteHouse(house.name));
+        const warning = await written(api.deleteWorkspace(house.name));
         navigate("/");
         await refresh();
-        notify(warning ?? `House ${house.name} deleted`, warning !== undefined);
+        notify(warning ?? `Workspace ${house.name} deleted`, warning !== undefined);
       },
     });
   return (
@@ -286,8 +286,8 @@ function DeleteSection({ house, ask, refresh, notify }: DeleteProps) {
         <Cluster gap={4} justify="between">
           <div className="grow">
             <Stack gap={1}>
-              <span className="strong">Delete house</span>
-              <span className="hint">Removes its pets' VMs. Their files stay on disk.</span>
+              <span className="strong">Delete workspace</span>
+              <span className="hint">Removes its bots' VMs. Their files stay on disk.</span>
             </Stack>
           </div>
           <button className="btn danger small" onClick={remove}>

@@ -46,7 +46,7 @@ test("count limit is atomic for concurrent spawns; only parent may close, only r
   expect(results.map(result => result.status)).toEqual(["fulfilled", "rejected"]);
   expect(f.reloads()).toBe(1);
   await expect(f.workers.close({ ...parent, pet: "other" }, "sw-review")).rejects.toThrow("own");
-  await expect(f.workers.spawn({ ...parent, pet: "sw-review" }, { ...task, name: "sw-child" })).rejects.toThrow("enabled pet");
+  await expect(f.workers.spawn({ ...parent, pet: "sw-review" }, { ...task, name: "sw-child" })).rejects.toThrow("enabled bot");
   await f.workers.close(parent, "sw-review");
   expect(f.workers.list("home")).toEqual([]);
   await f.workers.spawn(parent, { ...task, name: "sw-next" });
@@ -208,7 +208,7 @@ test("unknown, incompatible or invalid profiles fail before reserving a worker o
   profile.model = "sonnet"; profile.mode = "missing-mode";
   await expect(f.workers.spawn(parent, { ...task, profile: "wrong" })).rejects.toThrow("unknown mode");
   profile.mode = "auto"; f.config.keys[1]!.houses = ["elsewhere"];
-  await expect(f.workers.spawn(parent, { ...task, profile: "wrong" })).rejects.toThrow("not for house");
+  await expect(f.workers.spawn(parent, { ...task, profile: "wrong" })).rejects.toThrow("not for workspace");
   expect(f.workers.list("home")).toEqual([]); expect(f.reloads()).toBe(0);
   expect(f.store.get("sideworkers.v1.used-names")).toBeUndefined();
   f.store.close();
@@ -289,7 +289,7 @@ test("disabled house sideworkers cannot spawn; existing workers pause and resume
   await f.workers.spawn(parent, task);
   f.config.houses[0]!.features = { sideworkers: false };
   expect(f.workers.expanded(f.config).houses[0]!.pets.find(pet => pet.name === task.name)?.enabled).toBe(false);
-  await expect(f.workers.spawn(parent, { ...task, name: "sw-disabled" })).rejects.toThrow("disabled in this house");
+  await expect(f.workers.spawn(parent, { ...task, name: "sw-disabled" })).rejects.toThrow("disabled in this workspace");
   expect(f.workers.list("home")).toHaveLength(1);
   f.config.houses[0]!.features.sideworkers = true;
   expect(f.workers.expanded(f.config).houses[0]!.pets.find(pet => pet.name === task.name)?.enabled).toBe(true);

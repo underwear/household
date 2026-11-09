@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HTTP previews — Household docs</title>
-  <meta name="description" content="A pet shows you a web app from its VM by a link: you approve each one, it lives 15 minutes, and you choose who can open it.">
+  <meta name="description" content="A bot shows you a web app from its VM by a link: you approve each one, it lives 15 minutes, and you choose who can open it.">
   <meta property="og:title" content="HTTP previews">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/previews/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,20 +170,20 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="./" aria-current="page">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="./" aria-current="page">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
-    <article><p class="crumb">Pets</p><h1>HTTP previews</h1>
-<p>A pet can show you a web app running in its VM — a site it is building, a dev server with live reload, a dashboard — by a link you open in your browser. Each link needs your approval and lives 15 minutes.</p>
+    <article><p class="crumb">Bots</p><h1>HTTP previews</h1>
+<p>A bot can show you a web app running in its VM — a site it is building, a dev server with live reload, a dashboard — by a link you open in your browser. Each link needs your approval and lives 15 minutes.</p>
 <h2 id="how-it-goes">How it goes</h2>
 <ol>
-<li><strong>The pet starts the app</strong> in its VM and asks to show it: the port, a title and why.</li>
+<li><strong>The bot starts the app</strong> in its VM and asks to show it: the port, a title and why.</li>
 <li><strong>You approve.</strong> A card in the chat says who wants to show what, the port, where the link will be and that it has no login. Choose <strong>Open for 15 minutes</strong> or <strong>Cancel</strong>.</li>
-<li><strong>The pet sends you the link.</strong> Open it in your browser. Pages, assets and WebSockets (live reload) work.</li>
-<li><strong>It closes</strong> when the pet is done, when you press <strong>Close</strong>, or after 15 minutes. The app keeps running in the VM; only the link stops. Showing it again needs a new approval.</li>
+<li><strong>The bot sends you the link.</strong> Open it in your browser. Pages, assets and WebSockets (live reload) work.</li>
+<li><strong>It closes</strong> when the bot is done, when you press <strong>Close</strong>, or after 15 minutes. The app keeps running in the VM; only the link stops. Showing it again needs a new approval.</li>
 </ol>
-<p>Open previews show on the pet's <strong>Overview</strong> and on <strong>House → Previews</strong>, with <strong>Close</strong> for each.</p>
+<p>Open previews show on the bot's <strong>Overview</strong> and on <strong>Workspace → Previews</strong>, with <strong>Close</strong> for each.</p>
 <h2 id="who-can-open-the-link">Who can open the link</h2>
-<p>Set in <strong>House → Settings → HTTP previews</strong>:</p>
+<p>Set in <strong>Workspace → Settings → HTTP previews</strong>:</p>
 <ul>
 <li><strong>This computer only</strong> (default) — links on <code>127.0.0.1</code>: they open only on the machine Household runs on.</li>
 <li><strong>Another address</strong> — listen on an address of this machine and give the host people will open, like <code>mac-mini.local</code>. Who can reach it depends on your network and firewall: Household opens no ports or tunnels.</li>
@@ -191,9 +191,9 @@
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>There is no login.</strong> Anyone who can reach the link sees the app for those 15 minutes. Approve only what you would show on a shared screen.</p>
 <h2 id="limits">Limits</h2>
 <ul>
-<li>One port of the pet's own VM per preview; HTTP and WebSocket only, not other TCP.</li>
+<li>One port of the bot's own VM per preview; HTTP and WebSocket only, not other TCP.</li>
 <li>15 minutes at most. Asking again for the same port returns the same link, without extending it.</li>
-<li>Restarting the pet or Household, or turning previews off, closes its links. Changing who can open them closes the open ones too.</li>
+<li>Restarting the bot or Household, or turning previews off, closes its links. Changing who can open them closes the open ones too.</li>
 <li>Sideworkers can show previews of their own VM the same way.</li>
 </ul>
 </article>

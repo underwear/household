@@ -136,7 +136,7 @@ export class Sideworkers {
     const config = await this.deps.configured();
     const house = config.houses.find(item => item.name === caller.house);
     const parent = house?.pets.find(item => item.name === caller.pet);
-    if (!house || !parent) throw new Error("Only configured pets may select sideworker profiles");
+    if (!house || !parent) throw new Error("Only configured bots may select sideworker profiles");
     return { inherited: this.launch(config, house.name, parent).launch,
       profiles: (house.sideworkerProfiles ?? []).map(profile => ({ name: profile.name, ...this.launch(config, house.name, profile).launch })) };
   }
@@ -149,9 +149,9 @@ export class Sideworkers {
       const config = await this.deps.configured();
       const house = config.houses.find(item => item.name === caller.house);
       const parent = house?.pets.find(item => item.name === caller.pet);
-      if (!house || !parent || parent.enabled === false) throw new Error("Only an enabled pet may spawn sideworkers");
-      if (!houseFeatures(house).sideworkers) throw new Error("Sideworkers are disabled in this house. Ask your human to enable them in House Settings.");
-      if (input.profile !== undefined && (typeof input.profile !== "string" || !input.profile)) throw new Error("profile must name a configured house sideworker profile");
+      if (!house || !parent || parent.enabled === false) throw new Error("Only an enabled bot may spawn sideworkers");
+      if (!houseFeatures(house).sideworkers) throw new Error("Sideworkers are disabled in this workspace. Ask your human to enable them in Workspace Settings.");
+      if (input.profile !== undefined && (typeof input.profile !== "string" || !input.profile)) throw new Error("profile must name a configured workspace sideworker profile");
       const selected = input.profile === undefined ? parent : house.sideworkerProfiles?.find(profile => profile.name === input.profile);
       if (!selected) throw new Error(`Unknown sideworker profile '${input.profile}'; use sideworker_profiles`);
       const inherited = this.launch(config, house.name, parent);
@@ -166,8 +166,8 @@ export class Sideworkers {
         if (value !== undefined && inherited.launch.agent === launch.agent) (launch.settings ??= {})[setting.key] = value;
       }
       const limit = house.sideworkerLimits?.maxWorkers ?? 2;
-      if (this.list(caller.house).length >= limit) throw new Error(`House sideworker limit (${limit}) reached. Close an existing sideworker first.`);
-      if (!house.channels.some(channel => channel.pets.includes(caller.pet))) throw new Error("Attach your pet to a channel before spawning a sideworker");
+      if (this.list(caller.house).length >= limit) throw new Error(`Workspace sideworker limit (${limit}) reached. Close an existing sideworker first.`);
+      if (!house.channels.some(channel => channel.pets.includes(caller.pet))) throw new Error("Attach your bot to a channel before spawning a sideworker");
       if (typeof input.cwd !== "string" || !input.cwd.startsWith("/") || /[\x00-\x1f]/.test(input.cwd) || input.cwd.length > 4096) throw new Error("cwd must be an absolute guest directory path");
       const channels = house.channels.filter(channel => channel.pets.includes(caller.pet));
       const originChannel = destination?.channel ?? (channels.length === 1 ? channelKey(channels[0]!) : undefined);
@@ -195,7 +195,7 @@ export class Sideworkers {
       this.records.push(record); this.save();
       try {
         await this.deps.reload();
-        if (!await this.deps.ready(caller.house, name)) throw new Error("Sideworker VM started, but its agent did not become ready");
+        if (!await this.deps.ready(caller.house, name)) throw new Error("Sideworker VM started, but its harness did not become ready");
         await this.deps.dispatch(caller, name, input.task);
       } catch (error) {
         record.closing = true; this.save();
@@ -268,15 +268,15 @@ function publicWorker({ channel: _channel, originPlace: _origin, announcement: _
 
 export function sideworkerTools(workers: Sideworkers): McpTool<PetIdentity>[] {
   return [
-    { name: "sideworker_spawn", description: "Start a sideworker in a separate VM with shared project files. Choose a house-approved profile from sideworker_profiles for its harness/key/model/mode, or omit profile to inherit your own settings. Settings are captured at spawn. It has its own clean session; place selects its destination, placement chooses a dedicated thread or an existing shared place. It inherits your Household memory, and no scheduled tasks. Its cwd must resolve to an existing directory inside your shared home; fresh rootfs and private harness home are separate. In a git repository it gets its own worktree by default (repository/.worktrees/<name>, branch sideworker/<name> from your HEAD; your uncommitted changes are not in it): merge its branch when it is done. Pass worktree: false to share your live directory instead; then never let both of you bind-mount the same data directory into containers. You manage it with house_send and sideworker_close. The house enforces worker resource/count limits.",
-      inputSchema: { type: "object", additionalProperties: false, required: ["cwd", "task"], properties: { place: { type: "string", description: "Parent place.id from header or places; defaults to the current request place" }, placement: { type: "string", enum: ["same", "thread"], description: "thread (default): dedicated place; same: share the selected place" }, profile: { type: "string", description: "Optional house profile name from sideworker_profiles; omitted inherits your harness/key/model/mode" }, cwd: { type: "string" }, task: { type: "string", maxLength: 32000 }, name: { type: "string", description: "Optional sw-prefixed lowercase name, e.g. sw-tests" }, worktree: { type: "boolean", description: "In a git repository: its own worktree (default true) or your shared live directory (false)" } } },
+    { name: "sideworker_spawn", description: "Start a sideworker in a separate VM with shared project files. Choose a workspace-approved profile from sideworker_profiles for its harness/key/model/mode, or omit profile to inherit your own settings. Settings are captured at spawn. It has its own clean session; place selects its destination, placement chooses a dedicated thread or an existing shared place. It inherits your Household memory, and no scheduled tasks. Its cwd must resolve to an existing directory inside your shared home; fresh rootfs and private harness home are separate. In a git repository it gets its own worktree by default (repository/.worktrees/<name>, branch sideworker/<name> from your HEAD; your uncommitted changes are not in it): merge its branch when it is done. Pass worktree: false to share your live directory instead; then never let both of you bind-mount the same data directory into containers. You manage it with house_send and sideworker_close. The workspace enforces worker resource/count limits.",
+      inputSchema: { type: "object", additionalProperties: false, required: ["cwd", "task"], properties: { place: { type: "string", description: "Parent place.id from header or places; defaults to the current request place" }, placement: { type: "string", enum: ["same", "thread"], description: "thread (default): dedicated place; same: share the selected place" }, profile: { type: "string", description: "Optional workspace profile name from sideworker_profiles; omitted inherits your harness/key/model/mode" }, cwd: { type: "string" }, task: { type: "string", maxLength: 32000 }, name: { type: "string", description: "Optional sw-prefixed lowercase name, e.g. sw-tests" }, worktree: { type: "boolean", description: "In a git repository: its own worktree (default true) or your shared live directory (false)" } } },
       available: caller => !workers.worker(caller.house, caller.pet),
       async call(caller, args) { return JSON.stringify(publicWorker(await workers.spawn(caller, args as { cwd: string; task: string; name?: string; profile?: string; worktree?: boolean; place?: string; placement?: "same" | "thread" }))); } },
-    { name: "sideworker_profiles", description: "List house-approved sideworker profiles and your inherited defaults: adapter, model, effort, permission mode and credential reference name only. Pass a profile name to sideworker_spawn, or omit profile to use inherited settings.",
+    { name: "sideworker_profiles", description: "List workspace-approved sideworker profiles and your inherited defaults: adapter, model, effort, permission mode and credential reference name only. Pass a profile name to sideworker_spawn, or omit profile to use inherited settings.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       available: caller => !workers.worker(caller.house, caller.pet),
       async call(caller) { return JSON.stringify(await workers.profiles(caller)); } },
-    { name: "sideworkers", description: "List the house's active or closing sideworkers, their parent pets, working directories and observed idle times.", inputSchema: { type: "object", additionalProperties: false, properties: {} },
+    { name: "sideworkers", description: "List the workspace's active or closing sideworkers, their parent bots, working directories and observed idle times.", inputSchema: { type: "object", additionalProperties: false, properties: {} },
       async call(caller) { return JSON.stringify(workers.list(caller.house).map(publicWorker)); } },
     { name: "sideworker_close", description: "Stop and remove one of your sideworker VMs. Shared project files remain; the worker's private home is retained for inspection. Ends its session immediately, and its chat thread is deleted with all its messages (in Telegram): tell your human first what in it they may want to keep.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: { name: { type: "string" } } },

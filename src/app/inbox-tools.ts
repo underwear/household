@@ -19,7 +19,7 @@ export function inboxTools(store: InboxEventStore | undefined, inboxes: HouseInb
   const tool = (name: string, description: string, props: Record<string,unknown>, required: string[], call: (c:PetIdentity,a:Record<string,unknown>)=>unknown): McpTool<PetIdentity> => ({
     name,description,available,inputSchema:{type:"object",properties:props,required,additionalProperties:false},
     call: async (c,a) => {
-      if (!available(c)) throw new HouseholdError("Inbox history unavailable to this pet");
+      if (!available(c)) throw new HouseholdError("Inbox history unavailable to this bot");
       const key = `${c.house}/${c.pet}`;
       if (!budgets.has(key)) budgets.set(key,new TokenBucket(20/60,10));
       if (!budgets.get(key)!.take()) throw new HouseholdError("Too many inbox history requests; try again shortly");

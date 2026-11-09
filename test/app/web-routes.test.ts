@@ -222,7 +222,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
     version: "0.1.0",
     state: "running",
     // Its permission modes as claude calls them, bypass by default.
-    agents: expect.arrayContaining([{ name: "claude-code-tmux", terminal: true, dynamicModels: false, modelOptions: expect.any(Array), models: ["opus", "sonnet", "haiku", "fable"], defaultModel: "opus", modes: [{ id: "auto", label: "Auto" }, { id: "manual", label: "Manual" }, { id: "acceptEdits", label: "Accept edits" }, { id: "plan", label: "Plan" }, { id: "bypassPermissions", label: "Bypass permissions" }, { id: "dontAsk", label: "Don't ask" }], defaultMode: "bypassPermissions", settings: [expect.objectContaining({ key: "claudeAiConnectors", checkbox: true, petOnly: true, defaultLabel: "disabled" }), { key: "subagentModel", label: "Subagent model", description: expect.any(String), options: [{ id: "opus", label: "opus" }, { id: "sonnet", label: "sonnet" }, { id: "haiku", label: "haiku" }, { id: "fable", label: "fable" }], defaultLabel: "the pet's own model" }], providers: ["anthropic"] }]),
+    agents: expect.arrayContaining([{ name: "claude-code-tmux", terminal: true, dynamicModels: false, modelOptions: expect.any(Array), models: ["opus", "sonnet", "haiku", "fable"], defaultModel: "opus", modes: [{ id: "auto", label: "Auto" }, { id: "manual", label: "Manual" }, { id: "acceptEdits", label: "Accept edits" }, { id: "plan", label: "Plan" }, { id: "bypassPermissions", label: "Bypass permissions" }, { id: "dontAsk", label: "Don't ask" }], defaultMode: "bypassPermissions", settings: [expect.objectContaining({ key: "claudeAiConnectors", checkbox: true, petOnly: true, defaultLabel: "disabled" }), { key: "subagentModel", label: "Subagent model", description: expect.any(String), options: [{ id: "opus", label: "opus" }, { id: "sonnet", label: "sonnet" }, { id: "haiku", label: "haiku" }, { id: "fable", label: "fable" }], defaultLabel: "the bot's own model" }], providers: ["anthropic"] }]),
     channelKinds: [telegramPrivate, slackPrivate], // the kinds, with their own fields, as their adapters describe them
     platforms: [telegram, slack].map(({ valid: _valid, ...spec }) => spec), // its check stays on the server
     providers: ["anthropic", "openai"],
@@ -245,7 +245,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
       // Its token in full (the owner's own screen), and what it is: its bot (its id until Telegram has said its @username).
       { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "DM", ownName: "DM", note: null, fields: { token: BOT }, shown: { token: expect.stringMatching(/^(bot 4242|@fake_bot)$/) as never }, chat: "100200300", pets: ["sibling"], default: "sibling", problem: null },
     ],
-    pets: [{ name: "sibling", cpus: 2, memoryMiB: 1024, enabled: true, title: "Sibling", ownTitle: null, display: "🐾 Sibling", emoji: "🐾", ownEmoji: null, aliases: [], agent: "claude-code-tmux", model: "opus", reasoningEffort: null, settings: {}, lifecycle: null, mode: "bypassPermissions", key: "claude", problem: null, state: "running" }],
+    pets: [{ name: "sibling", cpus: 2, memoryMiB: 1024, enabled: true, title: "Sibling", ownTitle: null, display: "🤖 Sibling", emoji: "🤖", ownEmoji: null, aliases: [], agent: "claude-code-tmux", model: "opus", reasoningEffort: null, settings: {}, lifecycle: null, mode: "bypassPermissions", key: "claude", problem: null, state: "running" }],
   };
   const list = await call("GET", "/api/houses");
   expect(list.headers.get("cache-control")).toBe("no-store");
@@ -288,14 +288,14 @@ test("invalid input is a 400 with the reason, an unknown house or a bad URI a 40
   await signIn();
   const before = await text();
   const cases: [string, string, unknown, number, string][] = [
-    ["POST", "/api/houses", { name: "Lab" }, 400, "invalid house name 'Lab'"],
-    ["POST", "/api/houses", { name: "work" }, 400, "house 'work' already exists"],
+    ["POST", "/api/houses", { name: "Lab" }, 400, "invalid workspace name 'Lab'"],
+    ["POST", "/api/houses", { name: "work" }, 400, "workspace 'work' already exists"],
     ["POST", "/api/houses", { name: 7 }, 400, "expected string"],
     ["POST", "/api/houses", "{not json", 400, "the body must be JSON"],
     ["POST", "/api/houses/work/allow", { host: "a b" }, 400, "'a b' is not host or host:port (wildcards: *.example.com, * for any public host, *:* on any port)"],
-    ["POST", "/api/houses/home/allow", { host: "example.com" }, 404, "unknown house 'home'"],
+    ["POST", "/api/houses/home/allow", { host: "example.com" }, 404, "unknown workspace 'home'"],
     ["PATCH", "/api/houses/work", { telegram: null }, 405, "method not allowed"],
-    ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "12", pets: ["nobody"] }, 400, "'nobody' is not a pet of house work"],
+    ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "12", pets: ["nobody"] }, 400, "'nobody' is not a bot of workspace work"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-group", token: BOT, chat: "12" }, 400, "unknown channel kind 'telegram-group' (known: telegram-private, slack-private)"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "12", phone: "+34600000000" }, 400, "a Telegram Bot DM (threaded) channel has no field 'phone' (its fields: token)"], // another kind's
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", chat: "12" }, 400, "Bot token is required"],
@@ -303,12 +303,12 @@ test("invalid input is a 400 with the reason, an unknown house or a bad URI a 40
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: UNKNOWN_BOT, chat: "12" }, 400, "Telegram does not know this bot token (revoked, or mistyped?)"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "12", pets: "sibling" }, 400, "expected array"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "100200300" }, 400, "the same chat as an earlier channel"],
-    ["PATCH", "/api/houses/work/channels/1", { name: "x" }, 404, "house 'work' has no channel of chat '1'"],
+    ["PATCH", "/api/houses/work/channels/1", { name: "x" }, 404, "workspace 'work' has no channel of chat '1'"],
     ["PATCH", "/api/houses/work/channels/100200300", { chat: "1" }, 400, "a channel's chat names it"], // another chat is another channel, by the schema
     ["PATCH", "/api/houses/work/channels/%20100200300%20", { phone: "1" }, 400, "has no field 'phone'"], // found by its trimmed chat
-    ["PATCH", "/api/houses/home/channels/1", { token: UNKNOWN_BOT }, 404, "unknown house 'home'"], // before the token is looked at
-    ["POST", "/api/houses/home/channels", { kind: "telegram-private", token: UNKNOWN_BOT, chat: "1" }, 404, "unknown house 'home'"],
-    ["PATCH", "/api/houses/work/channels/777", { token: BOT }, 404, "house 'work' has no channel of chat '777'"],
+    ["PATCH", "/api/houses/home/channels/1", { token: UNKNOWN_BOT }, 404, "unknown workspace 'home'"], // before the token is looked at
+    ["POST", "/api/houses/home/channels", { kind: "telegram-private", token: UNKNOWN_BOT, chat: "1" }, 404, "unknown workspace 'home'"],
+    ["PATCH", "/api/houses/work/channels/777", { token: BOT }, 404, "workspace 'work' has no channel of chat '777'"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT }, 400, "chat"],
     ["PATCH", "/api/houses/work/channels/100200300", { phone: "1" }, 400, "a Telegram Bot DM (threaded) channel has no field 'phone'"],
     ["PATCH", "/api/houses/work/channels/100200300", { token: " " }, 400, "Bot token is required"],
@@ -317,8 +317,8 @@ test("invalid input is a 400 with the reason, an unknown house or a bad URI a 40
     ["POST", "/api/keys", { name: "spaced", provider: "anthropic", value: "a b" }, 400, "printable ASCII without spaces"],
     ["PATCH", "/api/keys/nope", { note: "x" }, 404, "unknown key 'nope'"],
     ["DELETE", "/api/keys/claude", undefined, 400, "key 'claude' is in use by work/sibling: give it another key first"], // one check, the store's
-    ["POST", "/api/houses/work/pets", { name: "chair", key: "nope" }, 400, "pet work/chair: unknown key 'nope' (one of: claude)"],
-    ["POST", "/api/houses/work/pets", { name: "chair" }, 400, "pet work/chair: no key: name the key it runs on (key:; one of: claude)"], // always named
+    ["POST", "/api/houses/work/pets", { name: "chair", key: "nope" }, 400, "bot work/chair: unknown key 'nope' (one of: claude)"],
+    ["POST", "/api/houses/work/pets", { name: "chair" }, 400, "bot work/chair: no key: name the key it runs on (key:; one of: claude)"], // always named
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "abc" }, 400, "must be a Telegram chat id"],
     ["DELETE", "/api/houses/work/owners/telegram/100200300", undefined, 400, "a house with telegram channels needs an owner on telegram"],
     ["POST", "/api/houses/work/owners", { platform: "telegram", id: " " }, 400, "is not a person's id"],
@@ -326,16 +326,16 @@ test("invalid input is a 400 with the reason, an unknown house or a bad URI a 40
     ["POST", "/api/houses/work/owners", { platform: "telegram", id: "9007199254740992" }, 400, "is not a Telegram user id"], // past 2^53 - 1
     ["POST", "/api/houses/work/owners", { platform: "Telegram", id: "1" }, 400, "unknown platform 'Telegram' (known: telegram, slack)"],
     ["POST", "/api/houses/work/owners", { id: "7" }, 400, "platform"],
-    ["POST", "/api/houses/work/pets", { name: "Chair" }, 400, "invalid pet name 'Chair'"],
-    ["POST", "/api/houses/work/pets", { name: "sibling" }, 400, "pet 'sibling' already exists"],
-    ["POST", "/api/houses/work/pets", { name: "chair", model: "gpt-9" }, 400, "unknown model 'gpt-9' for agent claude-code-tmux (its models: opus, sonnet, haiku, fable)"],
-    ["POST", "/api/houses/work/pets", { name: "chair", agent: "codex" }, 400, "unknown agent 'codex'"],
-    ["POST", "/api/houses/work/pets", { name: "chair", key: "claude", mode: "yolo" }, 400, "unknown mode 'yolo' for agent claude-code-tmux (its modes: auto, manual, acceptEdits, plan, bypassPermissions, dontAsk)"],
+    ["POST", "/api/houses/work/pets", { name: "Chair" }, 400, "invalid bot name 'Chair'"],
+    ["POST", "/api/houses/work/pets", { name: "sibling" }, 400, "bot 'sibling' already exists"],
+    ["POST", "/api/houses/work/pets", { name: "chair", model: "gpt-9" }, 400, "unknown model 'gpt-9' for harness claude-code-tmux (its models: opus, sonnet, haiku, fable)"],
+    ["POST", "/api/houses/work/pets", { name: "chair", agent: "codex" }, 400, "unknown harness 'codex'"],
+    ["POST", "/api/houses/work/pets", { name: "chair", key: "claude", mode: "yolo" }, 400, "unknown mode 'yolo' for harness claude-code-tmux (its modes: auto, manual, acceptEdits, plan, bypassPermissions, dontAsk)"],
     ["PATCH", "/api/houses/work/pets/sibling", { aliases: ["a, b"] }, 400, "an alias has no , : or line break"],
     ["PATCH", "/api/houses/work/pets/sibling", { emoji: "🦉🦉" }, 400, "must be one emoji"],
-    ["PATCH", "/api/houses/work/pets/nobody", { title: "X" }, 404, "house 'work' has no pet 'nobody'"],
-    ["DELETE", "/api/houses/work/pets/nobody", undefined, 404, "house 'work' has no pet 'nobody'"],
-    ["DELETE", "/api/houses/home", undefined, 404, "unknown house 'home'"],
+    ["PATCH", "/api/houses/work/pets/nobody", { title: "X" }, 404, "workspace 'work' has no bot 'nobody'"],
+    ["DELETE", "/api/houses/work/pets/nobody", undefined, 404, "workspace 'work' has no bot 'nobody'"],
+    ["DELETE", "/api/houses/home", undefined, 404, "unknown workspace 'home'"],
     ["GET", "/api/houses/%E0%A4%A", undefined, 404, "not found"],
     ["DELETE", "/api/houses/work/allow/%E0%A4%A", undefined, 404, "not found"],
     ["PUT", "/api/houses/work", {}, 405, "method not allowed"],
@@ -402,7 +402,7 @@ test("channels, owners and pets: added, changed and removed in household.yaml (c
   expect((await house(added)).pets[1]).toMatchObject({ name: "chair", title: "Chair", ownTitle: "Chair", aliases: ["Armchair"], model: "sonnet" });
   expect((await house(await call("PATCH", "/api/houses/work/pets/chair", { emoji: "🪑" }))).pets[1]).toMatchObject({ emoji: "🪑", ownEmoji: "🪑" });
   const changed = await house(await call("PATCH", "/api/houses/work/pets/chair", { title: null, emoji: null, aliases: [], model: "haiku" }));
-  expect(changed.pets[1]).toMatchObject({ title: "Chair", ownTitle: null, display: "🐾 Chair", emoji: "🐾", ownEmoji: null, aliases: [], model: "haiku", problem: null });
+  expect(changed.pets[1]).toMatchObject({ title: "Chair", ownTitle: null, display: "🤖 Chair", emoji: "🤖", ownEmoji: null, aliases: [], model: "haiku", problem: null });
   expect(changed.pets[0]).toMatchObject({ model: "opus" });
 
   // Channels: a second one with both pets (default required), changed, a problem shown.
@@ -410,7 +410,7 @@ test("channels, owners and pets: added, changed and removed in household.yaml (c
   const two = await house(await call("POST", "/api/houses/work/channels", channel));
   expect(two.channels[1]).toEqual({ kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "Home", ownName: "Home", note: "test bot", fields: { token: OTHER_BOT }, shown: { token: "@fake_bot" }, chat: "555", pets: ["sibling", "chair"], default: "chair", problem: null });
   const noDefault = await call("POST", "/api/houses/work/channels", { ...channel, chat: "556", default: null });
-  expect(((await noDefault.json()) as { error: string }).error).toContain("default is required when a channel has two pets or more");
+  expect(((await noDefault.json()) as { error: string }).error).toContain("default is required when a channel has two bots or more");
   problems.set("work/telegram-private:555", "bot secret 'telegram-home' is missing or unreadable");
   const edited = await house(await call("PATCH", "/api/houses/work/channels/555", { name: null }));
   expect(edited.channels[1]).toMatchObject({ name: "Telegram Bot DM (threaded)", ownName: null, chat: "555", problem: "bot secret 'telegram-home' is missing or unreadable" });
@@ -436,7 +436,7 @@ test("a pet that is the default of a channel keeping two pets or more is not rem
   const before = await text();
   const refused = await call("DELETE", "/api/houses/work/pets/chair");
   expect(refused.status).toBe(400);
-  expect(((await refused.json()) as { error: string }).error).toBe("chair is the default of channel DM (chat 100200300), which has other pets: make another one its default first");
+  expect(((await refused.json()) as { error: string }).error).toBe("chair is the default of channel DM (chat 100200300), which has other bots: make another one its default first");
   expect(await text()).toBe(before);
   expect(applied).toEqual([]);
   // Not the default: it just leaves the channel.
@@ -448,7 +448,7 @@ test("a pet whose model was typed wrong in household.yaml is shown marked, and c
   const { call, signIn } = setup(CONFIG.replace("      sibling:\n        key: claude\n", "      sibling: {model: gpt-9, key: claude}\n"));
   await signIn();
   const [work] = (await (await call("GET", "/api/houses")).json()) as HouseView[];
-  expect(work!.pets[0]).toMatchObject({ model: "gpt-9", problem: "unknown model 'gpt-9' for agent claude-code-tmux (its models: opus, sonnet, haiku, fable)" });
+  expect(work!.pets[0]).toMatchObject({ model: "gpt-9", problem: "unknown model 'gpt-9' for harness claude-code-tmux (its models: opus, sonnet, haiku, fable)" });
   const fixed = (await (await call("PATCH", "/api/houses/work/pets/sibling", { model: "opus" })).json()) as WriteView;
   expect(fixed.house!.pets[0]).toMatchObject({ model: "opus", problem: null });
 });
@@ -468,7 +468,7 @@ test("one bot, one house, by the bot's id: another house's bot is refused; a new
   const before = await text();
   const refused = await call("POST", "/api/houses/home/channels", { kind: "telegram-private", token: BOT, chat: "5" });
   expect(refused.status).toBe(400);
-  expect(((await refused.json()) as { error: string }).error).toBe("@fake_bot is house work's bot, and a bot serves one house");
+  expect(((await refused.json()) as { error: string }).error).toBe("@fake_bot is workspace work's bot, and a bot serves one workspace");
   expect(telegram.sent("getMe")).toHaveLength(calls + 1); // asked who it is; nothing written
   expect(await text()).toBe(before);
 });
@@ -843,8 +843,8 @@ test("pet CPU and RAM are validated against the schema and this host, persisted,
   };
   for (const fields of [{cpus: 0}, {cpus: 1.5}, {cpus: 1025}, {memoryMiB: 128}, {memoryMiB: 513}]) await error(fields);
   // Beyond the host: refused, saying what it has.
-  expect(await error({cpus: 9})).toBe("pet work/sibling: 9 vCPU, more than this host's 8");
-  expect(await error({memoryMiB: 16384 + 128})).toBe("pet work/sibling: 16.125 GiB of RAM, more than this host's 16 GiB");
+  expect(await error({cpus: 9})).toBe("bot work/sibling: 9 vCPU, more than this host's 8");
+  expect(await error({memoryMiB: 16384 + 128})).toBe("bot work/sibling: 16.125 GiB of RAM, more than this host's 16 GiB");
   expect((await call("PATCH", path, {cpus: 8, memoryMiB: 16384})).status).toBe(200); // all of it: a warning in the UI, not a refusal
   expect((await call("PATCH", path, {memoryMiB: 512})).status).toBe(200);
   expect((await call("PATCH", path, {cpus: 4, memoryMiB: 4096})).status).toBe(200);

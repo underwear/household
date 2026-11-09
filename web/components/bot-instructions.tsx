@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
-import { api, type InstructionFile, type PetView } from "../api";
+import { api, type InstructionFile, type BotView } from "../api";
 import { useDialog } from "./dialog";
 import { Section } from "./layout";
 import { MarkdownEditor } from "./markdown-editor";
-import { RestartDialog } from "./pets";
+import { RestartDialog } from "./bots";
 
 /**
- * A pet's own instructions: the file its agent reads at the start of each session (CLAUDE.md or AGENTS.md, in its
+ * A bot's own instructions: the file its harness reads at the start of each session (CLAUDE.md or AGENTS.md, in its
  * home), in the editor Skills and Memory use. A change applies from the next session; after a save, a restart that
  * starts one is a click away.
  */
-export function PetInstructions({ house, pet }: { house: string; pet: PetView }) {
+export function BotInstructions({ house, pet }: { house: string; pet: BotView }) {
   const [view, setView] = useState<InstructionFile>();
   const [content, setContent] = useState("");
   const [error, setError] = useState<string>();
@@ -60,7 +60,7 @@ export function PetInstructions({ house, pet }: { house: string; pet: PetView })
   return (
     <Section
       title="Instructions"
-      hint={`Read by ${pet.title} at the start of every session. Rules for all pets go in Skills.`}
+      hint={`Read by ${pet.title} at the start of every session. Rules for all bots go in Skills.`}
     >
       <div className="script tall">
         <header className="skills-doc-head">

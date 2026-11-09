@@ -76,13 +76,13 @@ export async function exportHousehold(
         for (const pet of house.pets) {
           const name = petContainer(house.name, pet.name);
           const info = await runtime.container(name);
-          if (info && ownerOf(info) !== instanceId(paths.stateDir)) throw new HouseholdError("foreign pet runtime during skills export");
+          if (info && ownerOf(info) !== instanceId(paths.stateDir)) throw new HouseholdError("foreign bot runtime during skills export");
           if (info?.state === "running") { paused.push(name); await runtime.pause(name); }
         }
         await skillStorage.saveVolume(house.name, join(staging, BACKUP.skills, `${house.name}.tar`));
       } finally {
         const resumed = await Promise.allSettled(paused.map(name => runtime.unpause(name)));
-        if (resumed.some(result => result.status === "rejected")) throw new HouseholdError("could not resume every pet after skills export; check house status");
+        if (resumed.some(result => result.status === "rejected")) throw new HouseholdError("could not resume every bot after skills export; check house status");
       }
       log(`house ${house.name}: shared skills saved`);
     }
@@ -106,8 +106,8 @@ async function saveHome(runtime: BackupDeps["runtime"], house: string, pet: stri
   const volume = petVolume(house, pet);
   const container = petContainer(house, pet);
   const info = await runtime.container(container);
-  if (info && ownerOf(info) !== owner) throw new HouseholdError(`pet ${house}/${pet}: same-named runtime belongs to another Household; not paused or exported`);
-  if (!(await runtime.volumeHasFiles(volume))) return log(`pet ${house}/${pet}: no home yet, skipped`);
+  if (info && ownerOf(info) !== owner) throw new HouseholdError(`bot ${house}/${pet}: same-named runtime belongs to another Household; not paused or exported`);
+  if (!(await runtime.volumeHasFiles(volume))) return log(`bot ${house}/${pet}: no home yet, skipped`);
   const state = info?.state;
   // Paused, the pet changes nothing while its files are read. One paused already is someone else's to unpause.
   const pause = state === "running";
@@ -118,5 +118,5 @@ async function saveHome(runtime: BackupDeps["runtime"], house: string, pet: stri
     if (pause) await runtime.unpause(container); // also when the pause itself was cut short: it may have taken
   }
   const how = pause ? "paused while saved" : state === "paused" ? "it was paused, left so" : "pet not running";
-  log(`pet ${house}/${pet}: home ${volume} (${how})`);
+  log(`bot ${house}/${pet}: home ${volume} (${how})`);
 }

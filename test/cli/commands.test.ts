@@ -34,7 +34,7 @@ async function daemon(answers: Record<string, { status?: number; body: unknown }
 
 test("pet restart, disable and enable go to the web API's routes: the agent saves its work first unless --now", async () => {
   const { paths, calls } = await daemon();
-  expect(await runMore(paths, "pet", ["restart", "work", "sibling"], { now: true })).toBe(true);
+  expect(await runMore(paths, "bot", ["restart", "work", "sibling"], { now: true })).toBe(true);
   expect(await runMore(paths, "pet", ["disable", "work", "sibling"], {})).toBe(true);
   expect(await runMore(paths, "pet", ["enable", "work", "sibling"], {})).toBe(true);
   expect(calls).toEqual([
@@ -110,4 +110,11 @@ test("pet logs print the text as read, byte for byte; house logs -n 0 prints no 
   await runMore(paths, "logs", [], { lines: "1" });
   expect(said).toHaveLength(1);
   expect(said[0]).toContain("ready");
+});
+
+test("workspace commands use the existing API routes", async () => {
+  const { paths, calls, said } = await daemon();
+  expect(await runMore(paths, "workspace", ["delete", "work"], {})).toBe(true);
+  expect(calls).toEqual([{ method: "DELETE", path: "/api/houses/work" }]);
+  expect(said).toEqual(["workspace 'work' deleted"]);
 });

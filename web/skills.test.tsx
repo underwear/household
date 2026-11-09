@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BuiltinSkills, SkillPreview, SkillsPage, frontmatterOf } from "./components/skills";
 import { routeOf } from "./router";
 
-test("Skills belongs to the house navigation; a new skill is a button in the page's head", () => {
-  expect(routeOf("/houses/work/skills")).toEqual({ page: "house", name: "work", tab: "skills" });
+test("Skills belongs to the workspace navigation; a new skill is a button in the page's head", () => {
+  expect(routeOf("/workspaces/work/skills")).toEqual({ page: "workspace", name: "work", tab: "skills" });
   const html = renderToStaticMarkup(<SkillsPage house="work" notify={() => {}} />);
-  expect(html).toContain("Shared by every pet in work");
+  expect(html).toContain("Shared by every bot in work");
   expect(html).toContain('<button class="btn primary">+ New skill</button>');
   expect(html).toContain("Loading skills…"); // before the list comes
 });
@@ -31,7 +31,7 @@ test("Markdown preview: the frontmatter as its header, formatting without active
   expect(html).not.toContain("https://evil.test");
 });
 
-test("Household's own skills sit under the house's, read-only: a row opens its text, nothing edits it", () => {
+test("Household's own skills sit under the workspace's, read-only: a row opens its text, nothing edits it", () => {
   const html = renderToStaticMarkup(<BuiltinSkills skills={[{ name: "household-network", description: "Reach a blocked host.", content: "---\nname: household-network\ndescription: Reach a blocked host.\n---\n\n# Network\n" }]} />);
   expect(html).toContain('<h2 class="h2">Built-in</h2>');
   expect(html).toContain("household-network");

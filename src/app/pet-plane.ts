@@ -142,7 +142,7 @@ export class PetPlane {
     const wanted = new Set(pets.map(({ house, pet }) => petContainer(house, pet)));
     for (const name of wanted) {
       const present = existing.get(name) ?? await this.runtime.container(name);
-      if (present && ownerOf(present) !== this.owner) throw new Error(`pet runtime ${name} belongs to another Household; refusing to replace it`);
+      if (present && ownerOf(present) !== this.owner) throw new Error(`bot runtime ${name} belongs to another Household; refusing to replace it`);
     }
     const removed: string[] = [];
     for (const [name, info] of existing) {
@@ -158,13 +158,13 @@ export class PetPlane {
       const name = petContainer(placed.house, placed.pet);
       const current = existing.get(name);
       if (placed.enabled === false) {
-        if (current?.state === "paused") throw new Error("pet VM is paused; finish its backup before disabling");
+        if (current?.state === "paused") throw new Error("bot VM is paused; finish its backup before disabling");
         if (current && current.state !== "stopped") {
           await this.stop(name);
           await onStopped({ house: placed.house, pet: placed.pet });
         }
         if (current && placed.agent.sessionFile) {
-          if (!this.runtime.resetSession) throw new Error("runtime cannot reset this agent’s session");
+          if (!this.runtime.resetSession) throw new Error("runtime cannot reset this harness’s session");
           await this.runtime.resetSession(petVolume(placed.house, placed.pet), placed.agent.sessionFile);
         }
         if (current) await this.runtime.configureResources?.(name, petResources(placed));
@@ -191,7 +191,7 @@ export class PetPlane {
       }
       await this.runtime.configureResources?.(name, petResources(placed));
       if (change === "adopt") continue;
-      if (!this.runtime.startContainer) throw new Error("runtime does not support starting a pet VM");
+      if (!this.runtime.startContainer) throw new Error("runtime does not support starting a bot VM");
       await this.runtime.startContainer(name);
       started.push(placed);
     }
@@ -199,7 +199,7 @@ export class PetPlane {
   }
 
   private async stop(name: string): Promise<void> {
-    if (!this.runtime.stopContainer) throw new Error("runtime does not support stopping a pet VM");
+    if (!this.runtime.stopContainer) throw new Error("runtime does not support stopping a bot VM");
     const identity = /^household\.([^.]+)\.([^.]+)$/.exec(name);
     if (identity) await this.beforeStop(identity[1]!, identity[2]!);
     await this.runtime.stopContainer(name);
@@ -208,19 +208,19 @@ export class PetPlane {
   /** Gives a stopped VM its new launch configuration, if it changed; it applies when the VM starts. */
   private async applyLaunch(name: string, current: ContainerInfo, vm: PetVm): Promise<void> {
     if (current.labels[LABEL.launch] === vm.launch) return;
-    if (!this.runtime.configureLaunch) throw new Error("runtime does not support changing a pet VM's launch configuration");
+    if (!this.runtime.configureLaunch) throw new Error("runtime does not support changing a bot VM's launch configuration");
     await this.runtime.configureLaunch(name, { env: vm.spec.env ?? {}, labels: { [LABEL.launch]: vm.launch } });
   }
 
   /** Restarts the same owned VM, on its current launch configuration; never creates/removes it or discards its disks. */
   async restart(placed: PlacedPet, onLeave: () => Promise<void> = async () => {}, onStopped: () => Promise<void> = async () => {}): Promise<void> {
-    if (placed.enabled === false) throw new Error("pet is disabled; enable it before restarting");
+    if (placed.enabled === false) throw new Error("bot is disabled; enable it before restarting");
     const name = petContainer(placed.house, placed.pet);
     const current = await this.runtime.container(name);
-    if (!current || ownerOf(current) !== this.owner) throw new Error("pet VM is unavailable or belongs to another Household");
-    if (current.state === "paused") throw new Error("pet VM is paused; finish its backup before restarting");
+    if (!current || ownerOf(current) !== this.owner) throw new Error("bot VM is unavailable or belongs to another Household");
+    if (current.state === "paused") throw new Error("bot VM is paused; finish its backup before restarting");
     if (!this.runtime.stopContainer || !this.runtime.startContainer) throw new Error("runtime does not support VM restart");
-    if (placed.agent.sessionFile && !this.runtime.resetSession) throw new Error("runtime cannot reset this agent’s session");
+    if (placed.agent.sessionFile && !this.runtime.resetSession) throw new Error("runtime cannot reset this harness’s session");
     await this.prepareInstructions(placed);
     const vm = await this.vm(placed);
     this.runtime.configureEnvironmentSetup?.(name, placed.scout?.setup ?? placed.environment?.setup, placed.environment?.onStart);
@@ -239,7 +239,7 @@ export class PetPlane {
   private async prepareInstructions(placed: PlacedPet): Promise<void> {
     if (placed.scout || placed.sideworker || !this.instructions || !placed.agent.instructionsFile) return;
     try { await this.instructions.read(placed.house, placed.pet, placed.agent.instructionsFile, placed.agent.instructionOverrides); }
-    catch (error) { console.warn(`pet ${placed.house}/${placed.pet}: instructions unavailable: ${(error as Error).message}`); }
+    catch (error) { console.warn(`bot ${placed.house}/${placed.pet}: instructions unavailable: ${(error as Error).message}`); }
   }
 
   /** Waits for each pet to get ready, up to the timeout. */
@@ -280,7 +280,7 @@ export class PetPlane {
   async runEnvironmentSetup(house: string, pet: string, setup?: string, phase: EnvironmentPhase = "setup") {
     const name = petContainer(house, pet);
     const info = await this.runtime.container(name);
-    if (!info || ownerOf(info) !== this.owner || info.state !== "running") throw new Error("pet VM is unavailable");
+    if (!info || ownerOf(info) !== this.owner || info.state !== "running") throw new Error("bot VM is unavailable");
     if (!this.runtime.runEnvironmentSetup) throw new Error("runtime does not support environment setup");
     return this.runtime.runEnvironmentSetup(name, setup, phase);
   }

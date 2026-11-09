@@ -1,18 +1,18 @@
-import { Globe, MessagesSquare, PawPrint, Pickaxe, type LucideIcon } from "lucide-react";
+import { Globe, MessagesSquare, Bot, Pickaxe, type LucideIcon } from "lucide-react";
 import { DEFAULT_SIDEWORKER_LIMITS } from "../../src/core/resources";
 import { houseFeatures } from "../../src/core/house-features";
 import type { ReactNode } from "react";
-import type { HouseView } from "../api";
-import { housePath, petPath } from "../router";
+import type { WorkspaceView } from "../api";
+import { workspacePath, botPath } from "../router";
 import { Cell, List, ListRow, Page, Section } from "./layout";
 import { Link } from "./link";
-import { ownPets, petState, withWorkers } from "./pet-state";
+import { ownBots, petState, withWorkers } from "./bot-state";
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** A house's entry page: what it has at a glance (each a way to its page), then its pets, each with its sideworkers under it. */
-export function HouseOverviewPage({ house }: { house: HouseView }) {
-  const pets = ownPets(house.pets);
+/** A workspace's entry page: what it has at a glance (each a way to its page), then its bots, each with its sideworkers under it. */
+export function WorkspaceOverviewPage({ house }: { house: WorkspaceView }) {
+  const pets = ownBots(house.pets);
   const running = pets.filter((pet) => pet.state === "running").length;
   const workers = house.pets.length - pets.length;
   const limits = house.sideworkerLimits ?? DEFAULT_SIDEWORKER_LIMITS;
@@ -21,20 +21,20 @@ export function HouseOverviewPage({ house }: { house: HouseView }) {
   return (
     <Page title={house.name}>
       <div className="stats">
-        <Stat href={housePath(house.name, "pets")} icon={PawPrint} label="Pets" value={pets.length} sub={pets.length === 0 ? "none yet" : `${running} running`} />
-        <Stat href={housePath(house.name, "channels")} icon={MessagesSquare} label="Channels" value={house.channels.length} sub={closed ? `${closed} not open` : count(house.owners.length, "owner")} warn={closed > 0} />
-        <Stat href={housePath(house.name, "sideworkers")} icon={Pickaxe} label="Sideworkers" value={workers} sub={!houseFeatures(house).sideworkers || limits.maxWorkers === 0 ? "off in this house" : `of ${limits.maxWorkers} at most`} />
-        <Stat href={housePath(house.name, "network")} icon={Globe} label="Hosts allowed" value={house.allow.length} sub={temporary ? `${temporary} temporary` : "no temporary access"} />
+        <Stat href={workspacePath(house.name, "bots")} icon={Bot} label="Bots" value={pets.length} sub={pets.length === 0 ? "none yet" : `${running} running`} />
+        <Stat href={workspacePath(house.name, "channels")} icon={MessagesSquare} label="Channels" value={house.channels.length} sub={closed ? `${closed} not open` : count(house.owners.length, "owner")} warn={closed > 0} />
+        <Stat href={workspacePath(house.name, "sideworkers")} icon={Pickaxe} label="Sideworkers" value={workers} sub={!houseFeatures(house).sideworkers || limits.maxWorkers === 0 ? "off in this workspace" : `of ${limits.maxWorkers} at most`} />
+        <Stat href={workspacePath(house.name, "network")} icon={Globe} label="Hosts allowed" value={house.allow.length} sub={temporary ? `${temporary} temporary` : "no temporary access"} />
       </div>
       <Section
-        title="Pets"
+        title="Bots"
         actions={
-          <Link href={housePath(house.name, "pets")} className="btn small">
+          <Link href={workspacePath(house.name, "bots")} className="btn small">
             Manage
           </Link>
         }
       >
-        <List columns="minmax(0, 1fr) minmax(0, 1fr) auto" empty="No pets yet. Add one on the Pets page.">
+        <List columns="minmax(0, 1fr) minmax(0, 1fr) auto" empty="No bots yet. Add one on the Bots page.">
           {withWorkers(house.pets).map((pet) => {
             const { tone, label } = petState(pet.state);
             return (
@@ -44,7 +44,7 @@ export function HouseOverviewPage({ house }: { house: HouseView }) {
                   <span className="avatar" aria-hidden>
                     {pet.emoji}
                   </span>
-                  <Link href={petPath(house.name, pet.name)} className="strong ellipsis row-link">
+                  <Link href={botPath(house.name, pet.name)} className="strong ellipsis row-link">
                     {pet.title}
                   </Link>
                   {pet.title !== pet.name && <span className="id">{pet.name}</span>}

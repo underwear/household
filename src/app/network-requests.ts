@@ -194,7 +194,7 @@ export class NetworkRequests {
 
   list(house: string, pet: string): { allowed: AllowEntry[]; temporary: TemporaryGrant[] } {
     const policy = this.options.policy(house, pet);
-    if (!policy) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!policy) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     return { allowed: this.effective(house, pet, policy).allow, temporary: this.active(house, pet) };
   }
 
@@ -270,8 +270,8 @@ export class NetworkRequests {
       const title = this.options.petTitle(house, pet);
       if ("failed" in screened) return { domain, port, status: "unresolvable", message: "The domain does not resolve to any address; nothing was asked of your owner. Check the name." };
       if ("private" in screened) {
-        await this.options.notice(house, pet, `Denied ${title} access to ${shown(domain, port)}: it points to a private address (${screened.private}), which chat never grants. If it is needed, add it to the house's allowlist yourself.`).catch(() => {});
-        return { domain, port, status: "refused", message: "The domain resolves to an address that is not on the public internet. Household never grants such a domain from chat; your owner was told and may add it to the house's allowlist themselves." };
+        await this.options.notice(house, pet, `Denied ${title} access to ${shown(domain, port)}: it points to a private address (${screened.private}), which chat never grants. If it is needed, add it to the workspace's allowlist yourself.`).catch(() => {});
+        return { domain, port, status: "refused", message: "The domain resolves to an address that is not on the public internet. Household never grants such a domain from chat; your owner was told and may add it to the workspace's allowlist themselves." };
       }
       let { addresses } = screened;
       // Who asks for what, why (its own words, quoted), and the addresses a grant would reach: what the owner approves.

@@ -61,7 +61,7 @@ test("a second channel on the same bot is dispatched by chat: one poller, each c
   chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [{ ...drafts[1]!, id: 2, status: "delivered" }] });
   await waitFor(() => api.sent("sendMessage").some((params) => params.chat_id === 777 && String(params.text).includes("From General")));
   expect(api.sent("createForumTopic")).toHaveLength(2);
-  expect(api.sent("createForumTopic")).toEqual(expect.arrayContaining([{ chat_id: OLEG, name: "🐾 Sibling" }, { chat_id: 777, name: "🐾 Sibling" }]));
+  expect(api.sent("createForumTopic")).toEqual(expect.arrayContaining([{ chat_id: OLEG, name: "🤖 Sibling" }, { chat_id: 777, name: "🤖 Sibling" }]));
   expect(api.sent("sendMessage").every((params) => params.chat_id === 777)).toBe(true);
 });
 

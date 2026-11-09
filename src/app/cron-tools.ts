@@ -36,7 +36,7 @@ export function cronTools(crons: Crons): McpTool<PetIdentity>[] {
     {
       name: "cron_list",
       description:
-        "List your own Household scheduled tasks, recent runs and audit history. One Household timezone applies to all tasks; listed timestamps are UTC instants. A received run is queued, delivered means submitted, answered means the turn ended (not a guarantee the task succeeded), failed means delivery/session interrupted. No other pet's tasks are accessible.",
+        "List your own Household scheduled tasks, recent runs and audit history. One Household timezone applies to all tasks; listed timestamps are UTC instants. A received run is queued, delivered means submitted, answered means the turn ended (not a guarantee the task succeeded), failed means delivery/session interrupted. No other bot's tasks are accessible.",
       inputSchema: {
         type: "object",
         properties: {},

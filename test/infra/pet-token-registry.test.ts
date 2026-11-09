@@ -48,7 +48,7 @@ test("registry refuses malformed identities and symlinks without disclosing cred
   expect(() => new PetTokenRegistry(file)).toThrow("registry is invalid");
   const registry = new PetTokenRegistry(join(root, "valid"));
   const token = registry.tokenFor(a);
-  expect(() => registry.entries([{ house: "../outside", pet: "bad" }])).toThrow("invalid pet identity");
+  expect(() => registry.entries([{ house: "../outside", pet: "bad" }])).toThrow("invalid bot identity");
   expect(registry.tokenFor(a)).toBe(token);
 });
 
@@ -67,5 +67,5 @@ test("pet capabilities persist for underscore names without broadening house ide
   expect(new PetTokenRegistry(file).tokenFor(pet)).toBe(token);
   const policy: GatewayPolicy = { rules: [], tokens: registry.entries([pet]) };
   expect(identifyPet(policy, caller({ [PET_TOKEN_HEADER]: token }))).toEqual(pet);
-  expect(() => registry.tokenFor({ house: "my_house", pet: "valid" })).toThrow("invalid pet identity");
+  expect(() => registry.tokenFor({ house: "my_house", pet: "valid" })).toThrow("invalid bot identity");
 });

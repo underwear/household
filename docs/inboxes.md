@@ -1,19 +1,19 @@
-# House inboxes
+# Workspace inboxes
 
-An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the pets you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a pet's VM. Event contents are treated as untrusted data, never as your instructions.
+An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a bot's VM. Event contents are treated as untrusted data, never as your instructions.
 
 ## Add an inbox
 
-In **House → Inboxes**, choose **+ Add inbox**:
+In **Workspace → Inboxes**, choose **+ Add inbox**:
 
 1. **Source.** Pick what to watch (see [Sources](#sources)).
-2. **Connection.** Enter the address and credentials, then **Test and continue**. A test posts nothing, tells no pet and does not move the inbox forward.
+2. **Connection.** Enter the address and credentials, then **Test and continue**. A test posts nothing, tells no bot and does not move the inbox forward.
 3. **Delivery.** Name it and choose how often to check: every minute, 5 or 15 minutes, or any interval from 1 minute to 24 hours. Choose a channel and:
-   - **Post events in the channel** — on: one House message per event in that channel. Off: only the pets get them.
-   - **Pets** — for each pet in that channel, **Receives** and **Silent** (see [Pets](#pets)). With posting on, you may leave every pet off for a plain channel feed; with posting off, at least one pet must receive.
+   - **Post events in the channel** — on: one Workspace message per event in that channel. Off: only the bots get them.
+   - **Bots** — for each bot in that channel, **Receives** and **Silent** (see [Bots](#bots)). With posting on, you may leave every bot off for a plain channel feed; with posting off, at least one bot must receive.
    - **On the first check** — *Start from now* (default) skips what is already there; *Deliver what is there now* sends up to 50 current items, or the current state of a JSON or health check.
 
-Pets reply about an event in the inbox's channel.
+Bots reply about an event in the inbox's channel.
 
 ## Manage inboxes
 
@@ -22,26 +22,26 @@ Each inbox shows its state (Watching, Retrying, Needs attention, Paused), when i
 - **Check now** checks right away.
 - **Edit** changes anything. Changing the source or the channel is refused while events still wait for delivery: let them go out, or remove the inbox.
 - **Pause** stops checking and keeps its place; **Resume** goes on from there.
-- **Remove** stops it and drops waiting events. Posts already in the channel and the pets' event history stay.
+- **Remove** stops it and drops waiting events. Posts already in the channel and the bots' event history stay.
 
-## Pets
+## Bots
 
-A pet's **Inboxes** tab lists every inbox of its house with two switches:
+A bot's **Inboxes** tab lists every inbox of its workspace with two switches:
 
-- **Receives** — the pet gets the inbox's events. It must be in the inbox's channel first.
-- **Silent** — events go to the pet's inbox history only: it is not woken for them and can look them up when it needs to.
+- **Receives** — the bot gets the inbox's events. It must be in the inbox's channel first.
+- **Silent** — events go to the bot's inbox history only: it is not woken for them and can look them up when it needs to.
 
-The same switches are in the inbox's own form. The only pet of an inbox that does not post in its channel cannot switch off there: turn posting on or add another pet first.
+The same switches are in the inbox's own form. The only bot of an inbox that does not post in its channel cannot switch off there: turn posting on or add another bot first.
 
-A busy pet takes events when it is idle. A paused pet, or one whose VM was down, gets a short **catch-up digest** instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.
+A busy bot takes events when it is idle. A paused bot, or one whose VM was down, gets a short **catch-up digest** instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.
 
-Pets read and search their history with three tools:
+Bots read and search their history with three tools:
 
 - `inbox_list` — the inboxes it receives, and which of them are silent.
 - `inbox_history` — events by inbox and date, newest first.
 - `inbox_search` — events by words in their title, text and metadata.
 
-A pet sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.
+A bot sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.
 
 ## Sources
 
@@ -63,7 +63,7 @@ Every URL source accepts request headers for credentials. Redirects are not foll
 
 **RSS / Atom.** RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.
 
-**Health check.** A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the pets get one *down* event; the first passing check after it sends *recovered*. A site already down when you add it still alerts. The response body is ignored.
+**Health check.** A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the bots get one *down* event; the first passing check after it sends *recovered*. A site already down when you add it still alerts. The response body is ignored.
 
 **JSON watcher.** Any JSON endpoint. Watch the whole response, or list fields as [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) paths, one per line:
 
@@ -109,22 +109,22 @@ Household sends `GET <your URL>?limit=50`, adding `cursor=<value>` once you have
 | `text` | Required plain text, up to 16,000 characters |
 | `url` | Optional HTTP(S) link |
 | `occurredAt` | Optional time with a timezone |
-| `metadata` | Optional JSON object, up to 16 KiB; pets can search it |
+| `metadata` | Optional JSON object, up to 16 KiB; bots can search it |
 | `nextCursor` | Optional, up to 4,096 characters; where to continue next time |
 
 Without a cursor, return the latest 50 events; with one, the next events after it. Endpoints without cursors can return a recent window: Household remembers the last 5,000 IDs of each inbox.
 
 ## When something fails
 
-A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows **Needs attention** with the reason, and its pets get one notice; they get one more when it recovers. An inbox without pets shows the problem on the page only.
+A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows **Needs attention** with the reason, and its bots get one notice; they get one more when it recovers. An inbox without bots shows the problem on the page only.
 
 Good to know:
 
-- An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a pet may get an event it had already started on: the digest tells it so.
+- An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a bot may get an event it had already started on: the digest tells it so.
 - Checks see snapshots: an alert that fires and clears between two checks can be missed.
 - Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.
-- Switching posting on or off applies to new events; switching a pet to Silent applies at once.
-- The host can reach internal addresses your pets cannot: only you configure sources.
+- Switching posting on or off applies to new events; switching a bot to Silent applies at once.
+- The host can reach internal addresses your bots cannot: only you configure sources.
 
 ## References
 

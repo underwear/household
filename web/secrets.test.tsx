@@ -12,27 +12,27 @@ test("Settings · Secrets: its own section after the keys, each secret by name a
   expect(html).toContain("Loading…");
 });
 
-test("a new secret starts from a preset; its variable says what pets get; a change explains hot activation and deferred environment update", () => {
+test("a new secret starts from a preset; its variable says what bots get; a change explains hot activation and deferred environment update", () => {
   const fresh = renderToStaticMarkup(<SecretDialog houses={["work", "home"]} onClose={() => {}} save={async () => {}} />);
   expect(fresh).toContain('<option value="github">GitHub</option>');
   expect(fresh).toContain("Exact hosts, comma-separated.");
   expect(fresh).toContain("at their next VM start.");
   const edit = renderToStaticMarkup(<SecretDialog houses={["work", "home"]} secret={github} onClose={() => {}} save={async () => {}} />);
   expect(edit).not.toContain(">Preset<"); // a secret's name and preset are set once
-  expect(edit).toContain("Pets get household-secret-github here.");
+  expect(edit).toContain("Bots get household-secret-github here.");
   expect(edit).toContain('value="github.com, api.github.com"');
   expect(edit).not.toContain("at their next VM start."); // nothing that needs a new VM changed yet
-  expect(edit).toContain("Only pets in work.");
+  expect(edit).toContain("Only bots in work.");
 });
 
-test("keys and secrets can be restricted to the only existing house, excluding future houses", () => {
+test("keys and secrets can be restricted to the only existing workspace, excluding future workspaces", () => {
   const key = { name: "claude", provider: "anthropic" as const, kind: "subscription", value: "sk-ant-oat01-x", note: null, pets: [], houses: ["work"], allowOverage: false, allowance: null };
-  expect(renderToStaticMarkup(<KeyDialog houses={["work", "home"]} providers={["anthropic"]} keyView={key} onClose={() => {}} save={async () => {}} />)).toContain("Only pets in work.");
-  expect(renderToStaticMarkup(<KeyDialog houses={["work"]} providers={["anthropic"]} onClose={() => {}} save={async () => {}} />)).toContain(">Houses<");
+  expect(renderToStaticMarkup(<KeyDialog houses={["work", "home"]} providers={["anthropic"]} keyView={key} onClose={() => {}} save={async () => {}} />)).toContain("Only bots in work.");
+  expect(renderToStaticMarkup(<KeyDialog houses={["work"]} providers={["anthropic"]} onClose={() => {}} save={async () => {}} />)).toContain(">Workspaces<");
 });
 
-test("a secret can be restricted even when only one house exists", () => {
+test("a secret can be restricted even when only one workspace exists", () => {
   const html = renderToStaticMarkup(<SecretDialog houses={["work"]} onClose={() => {}} save={async () => {}} />);
-  expect(html).toContain(">Houses<");
-  expect(html).toContain("None ticked: every house.");
+  expect(html).toContain(">Workspaces<");
+  expect(html).toContain("None ticked: every workspace.");
 });

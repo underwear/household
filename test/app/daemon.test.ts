@@ -297,7 +297,7 @@ test("pets come up; the house gets the hosts its pets' keys go to; each pet's ke
     // `allow:` is empty in the config; the hosts the keys go to are what makes api.anthropic.com reachable.
     expect(report.subjects[0]!.policy.allow).toEqual([anthropic]);
     expect(report.pets.map((pet) => `${pet.pet} ${pet.state}`)).toEqual(["sibling running", "chair running"]);
-    expect(lines.some((line) => line.includes("pet work/sibling started"))).toBe(true);
+    expect(lines.some((line) => line.includes("bot work/sibling started"))).toBe(true);
     // Each key's value in the gateway's dir; the policy names which pet gets which, by pet, never by value.
     expect(readdirSync(paths.gatewaySecretsDir).sort()).toEqual(["household-agent-api", "key.api", "key.claude"]);
     expect(readFileSync(`${paths.gatewaySecretsDir}/key.claude`, "utf8")).toBe(KEY);
@@ -328,8 +328,8 @@ test("a pet without a key, or with one that is not its agent's, fails the reload
     runtime.calls = [];
     await Bun.write(paths.configFile, "keys:\n  a: {provider: anthropic, value: sk-ant-oat01-a}\n  b: {provider: anthropic, value: sk-ant-oat01-b}\n  gpt: {provider: openai, value: sk-x}\nhouses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling:\n      chair: {key: gpt}\n");
     const failed = callControl(paths.socket, "/reload");
-    await expect(failed).rejects.toThrow("pet work/sibling: no key: name the key it runs on (key:; one of: a, b)");
-    await expect(callControl(paths.socket, "/reload")).rejects.toThrow("pet work/chair: key 'gpt' is an openai key, and claude-code-tmux takes anthropic keys");
+    await expect(failed).rejects.toThrow("bot work/sibling: no key: name the key it runs on (key:; one of: a, b)");
+    await expect(callControl(paths.socket, "/reload")).rejects.toThrow("bot work/chair: key 'gpt' is an openai key, and claude-code-tmux takes anthropic keys");
     expect(runtime.calls).toEqual([]);
   } finally {
     await daemon.stop();
@@ -343,7 +343,7 @@ test("an unknown agent fails the reload before any container changes", async () 
   try {
     await Bun.write(paths.configFile, "houses:\n  work:\n    network: {allow: []}\n    pets:\n      x: {agent: codex}\n");
     runtime.calls = [];
-    await expect(callControl(paths.socket, "/reload")).rejects.toThrow("pet work/x: unknown agent 'codex'");
+    await expect(callControl(paths.socket, "/reload")).rejects.toThrow("bot work/x: unknown harness 'codex'");
     expect(runtime.calls).toEqual([]);
   } finally {
     await daemon.stop();
@@ -407,7 +407,7 @@ test("the agent API needs the secret and ignores unknown pets; send to an unknow
     expect(wrong.status).toBe(401);
     expect((await postEvent(paths, "ghost", { hook_event_name: "Stop" })).status).toBe(200);
     await expect(callControl(paths.socket, "/send", { house: "work", pet: "ghost", text: "x" })).rejects.toThrow(
-      "unknown pet work/ghost",
+      "unknown bot work/ghost",
     );
   } finally {
     await daemon.stop();
@@ -468,7 +468,7 @@ test("a turn on the person's message gets its live message in the pet's thread; 
     await hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "uptime", description: "Shows the uptime" }, tool_use_id: "c1" });
     await waitFor(() => channel.statuses.length === 1);
     // In the pet's own thread, though the person wrote in General: where its reply goes. What it does now, its words.
-    expect(channel.statuses).toEqual(["post status-1 🐾 Sibling: working Shows the uptime… [Stop]"]);
+    expect(channel.statuses).toEqual(["post status-1 🤖 Sibling: working Shows the uptime… [Stop]"]);
 
     // Hooks are answered at once, even while the channel hangs.
     channel.editHold = new Promise(() => {});
@@ -500,7 +500,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
   try {
     const channel = channels.get("work")!;
     await waitFor(() => channel.calls.length > 0);
-    expect(channel.calls[0]).toStartWith("notice 🐾 Sibling: 🐾 Sibling started.");
+    expect(channel.calls[0]).toStartWith("notice 🤖 Sibling: 🤖 Sibling started.");
 
     await channel.say(text("how's it going?"));
     await waitFor(() => channel.calls.includes("seen how's it going?"), 5_000); // after the batch window (1.2 s)
@@ -513,7 +513,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
     expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "household_connectors_google_accounts", "household_connectors_google_operations", "household_connectors_google_request", "preview_open", "preview_list", "preview_close", "secret_request", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "places", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
     const replyTo = (args: object) => callMcp(paths, "sibling", { method: "tools/call", params: { name: "reply", arguments: args } });
     expect((await replyTo({ text: "fine" })).result).toEqual({ content: [{ type: "text", text: '{"id":"m5","channel":"c1","place":"pet:sibling@c1"}' }] });
-    expect(channel.calls).toContain("post 🐾 Sibling: fine");
+    expect(channel.calls).toContain("post 🤖 Sibling: fine");
     expect((await replyTo({ text: "and here", channel: "c1" })).result.content[0].text).toBe('{"id":"m6","channel":"c1","place":"pet:sibling@c1"}');
     // Channels are Household's ids, and only the pet's own: a raw id is no way to post somewhere else.
     const refused = async (args: object) => {
@@ -525,7 +525,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
     expect(await refused({ text: "x", chat_id: 1 })).toBe("unknown arguments: chat_id (reply takes: place, text, format, buttons, channel)");
     expect(await refused({ text: "x", channel: 100200300 })).toBe(`100200300 ${raw}`);
     expect(await refused({ text: "x", channel: "General" })).toBe(`General ${raw}`);
-    expect(await refused({ text: "x", channel: "c2" })).toBe("there is no channel c2 in your house (yours: c1): use one of them, or leave channel out");
+    expect(await refused({ text: "x", channel: "c2" })).toBe("there is no channel c2 in your workspace (yours: c1): use one of them, or leave channel out");
     const react = (args: object) => callMcp(paths, "sibling", { method: "tools/call", params: { name: "react", arguments: args } });
     expect((await react({ channel: "c1", message: "m2", emoji: "👍" })).result).toEqual({ content: [{ type: "text", text: '{"id":"m2","reaction":"👍"}' }] });
     expect(channel.calls).toContain("react how's it going?: 👍"); // m2: the person's message, by its channel ref
@@ -536,7 +536,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
       expect((await react({ channel: "c1", message, emoji: "👍" })).result).toEqual({ content: [{ type: "text", text: `500 ${raw}` }], isError: true });
     }
     const ghost = await callMcp(paths, "ghost", { method: "tools/call", params: { name: "reply", arguments: { text: "x" } } });
-    expect(ghost.result).toEqual({ content: [{ type: "text", text: "unknown pet work/ghost" }], isError: true });
+    expect(ghost.result).toEqual({ content: [{ type: "text", text: "unknown bot work/ghost" }], isError: true });
   } finally {
     await daemon.stop();
   }
@@ -567,7 +567,7 @@ test("a dialog hook waits for the person's press in the chat and gets claude's a
     const posted = `post-${channel.calls.length}`;
     const { id, channel: where } = JSON.parse(reply.result.content[0].text);
     expect(where).toBe("c1");
-    expect(channel.calls.at(-1)).toBe("post 🐾 Sibling: More? {Yes|No}");
+    expect(channel.calls.at(-1)).toBe("post 🤖 Sibling: More? {Yes|No}");
     const bad = { name: "reply", arguments: { text: "x", buttons: ["Yes"] } };
     expect((await callMcp(paths, "sibling", { method: "tools/call", params: bad })).result).toEqual({
       content: [{ type: "text", text: 'buttons must be rows of labels, e.g. [["Yes", "No"]]' }],
@@ -607,13 +607,13 @@ test("claude's permission card retires old progress, preserves its waiting state
     const hook = event({ hook_event_name: "PermissionRequest", permission_mode: "bypassPermissions", tool_name: "Bash", tool_input });
     await waitFor(() => channel.calls.some((call) => call.includes("Sibling asks for permission")));
     const permissionRef = `post-${channel.calls.length}`;
-    expect(channel.calls.at(-1)).toBe('notice General: 🐾 Sibling asks for permission (an action inside its VM):\n\nBash: rm "$x/$f.gz"\n(Remove the extracted archive)\n\nNo answer in 30 s means no. {Yes|No}');
+    expect(channel.calls.at(-1)).toBe('notice General: 🤖 Sibling asks for permission (an action inside its VM):\n\nBash: rm "$x/$f.gz"\n(Remove the extracted archive)\n\nNo answer in 30 s means no. {Yes|No}');
     await waitFor(() => channel.statuses.at(-1) === "drop status-1", 5_000);
     // The permission card remains answerable. Further work gets a new status below it,
     // retaining the real outstanding permission instead of completing that call.
     const nextInput = { command: "df", description: "Shows disk space" };
     await event({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: nextInput, tool_use_id: "c2" });
-    await waitFor(() => channel.statuses.at(-1) === "post status-2 🐾 Sibling: working Waiting for permission: Remove the extracted archive [Stop]", 5_000);
+    await waitFor(() => channel.statuses.at(-1) === "post status-2 🤖 Sibling: working Waiting for permission: Remove the extracted archive [Stop]", 5_000);
     await channel.press(permissionRef, 0, "Yes", { place: "c1" });
     expect(await (await hook).json()).toEqual({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } });
     expect(channel.calls.at(-1)).toMatch(/^resolve post-\d+: Allowed$/);
@@ -654,9 +654,9 @@ test("a house whose token is not a bot's runs without a chat, says so in the log
   const daemon = await startDaemon({ ...deps, openChannels: openChannels({ state, events: deps.events, telegramApi }) });
   const problem = "its token is not a bot token (one looks like 123456789:AAH4x…, from @BotFather)";
   try {
-    expect(lines.some((line) => line.includes(`ERROR house work, channel Telegram Bot DM (threaded): ${problem}`))).toBe(true);
+    expect(lines.some((line) => line.includes(`ERROR workspace work, channel Telegram Bot DM (threaded): ${problem}`))).toBe(true);
     const missing = await callControl<ReloadReport>(paths.socket, "/reload");
-    expect(missing!.warnings).toEqual([`house work, channel Telegram Bot DM (threaded): ${problem}`]);
+    expect(missing!.warnings).toEqual([`workspace work, channel Telegram Bot DM (threaded): ${problem}`]);
     expect(lines.filter((line) => line.includes(problem))).toHaveLength(1); // logged once, not every reload
     await config.updateChannel("work", "1", { token: BOT });
     expect((await callControl<ReloadReport>(paths.socket, "/reload"))!.warnings).toEqual([]);
@@ -675,7 +675,7 @@ test("a bot serves one house, whatever its token", async () => {
   const telegramApi = "http://127.0.0.1:1"; // nothing answers: these channels only fail to poll
   const daemon = await startDaemon({ ...deps, openChannels: openChannels({ state, events: deps.events, telegramApi }) });
   try {
-    expect(lines.some((line) => line.includes("ERROR house home, channel Telegram Bot DM (threaded): its bot is house work's, and a bot serves one house; no chat there"))).toBe(true);
+    expect(lines.some((line) => line.includes("ERROR workspace home, channel Telegram Bot DM (threaded): its bot is house work's, and a bot serves one house; no chat there"))).toBe(true);
     expect((await status(paths.socket))!.subjects.map((s) => s.subject.name)).toEqual(["work", "home"]);
   } finally {
     await daemon.stop();
@@ -895,13 +895,13 @@ test("web VM restart uses latest saved setup, preserves the VM and recovers afte
     notices.length = 0;
     expect((await fetch(`${path}/restart`, { method: "POST", headers, body: "{}" })).status).toBe(200);
     expect(lifecycle).toEqual(["setup printf latest", "stop", "start"]);
-    expect(notices).toEqual(["notice 🐾 Sibling: 🐾 Sibling stopped.", "notice 🐾 Sibling: 🐾 Sibling started."]);
+    expect(notices).toEqual(["notice 🤖 Sibling: 🤖 Sibling stopped.", "notice 🤖 Sibling: 🤖 Sibling started."]);
     notices.length = 0;
     expect(runtime.containers.get("household.work.sibling")).toBe(identity);
     expect(runtime.calls.filter((entry) => entry.startsWith("run "))).toHaveLength(births);
     fail = true;
     expect((await fetch(`${path}/restart`, { method: "POST", headers, body: "{}" })).status).toBe(500);
-    expect(notices).toEqual(["notice 🐾 Sibling: 🐾 Sibling stopped."]);
+    expect(notices).toEqual(["notice 🤖 Sibling: 🤖 Sibling stopped."]);
     const execCount = runtime.execs.length;
     await callControl(paths.socket, "/send", { house: "work", pet: "sibling", text: "wait until recovery" });
     await Bun.sleep(20);
@@ -953,7 +953,7 @@ test("disabled pets stay stopped across daemon restart and enable reuses the sam
     await callControl(paths.socket, "/reload");
     expect((await status(paths.socket))!.pets[0]!.state).toBe("disabled");
     expect(vm!.state).toBe("stopped");
-    expect(notices).toEqual(["notice 🐾 Sibling: 🐾 Sibling stopped."]);
+    expect(notices).toEqual(["notice 🤖 Sibling: 🤖 Sibling stopped."]);
     notices.length = 0;
     await callControl(paths.socket, "/reload");
     expect(notices).toEqual([]);
@@ -965,7 +965,7 @@ test("disabled pets stay stopped across daemon restart and enable reuses the sam
     await config.updatePet("work", "sibling", { enabled: true });
     await callControl(paths.socket, "/reload");
     expect((await status(paths.socket))!.pets[0]!.state).toBe("running");
-    expect(channels.get("work")!.calls).toEqual(["notice 🐾 Sibling: 🐾 Sibling started."]);
+    expect(channels.get("work")!.calls).toEqual(["notice 🤖 Sibling: 🤖 Sibling started."]);
     expect(runtime.containers.get("household.work.sibling")).toBe(vm);
   } finally { await daemon.stop(); }
 });

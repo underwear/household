@@ -51,7 +51,7 @@ test("each pet is placed with the system prompt of its role", () => {
   const household: Household = { daemon: {}, keys, secrets: [], houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, features: { scouts: true }, pets: [pet, worker, scout], people: { owners: [] }, channels: [] }] };
   const [placedPet, placedWorker, placedScout] = placePets(agents, household);
   expect(placedPet!.instructions).toStartWith("Household runs you in a VM");
-  expect(placedWorker!.instructions).toStartWith("You are sideworker pet-w1, dispatched by pet pet in house work");
-  expect(placedScout!.instructions).toStartWith("You are scout general of house work, in a VM of your own that is deleted when you finish. Pet pet handed you one task");
+  expect(placedWorker!.instructions).toStartWith("You are sideworker pet-w1, dispatched by bot pet in workspace work");
+  expect(placedScout!.instructions).toStartWith("You are scout general of workspace work, in a VM of your own that is deleted when you finish. Bot pet handed you one task");
   expect(placedScout!.instructions).toEndWith("Your instructions\nBe careful.");
 });

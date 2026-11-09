@@ -45,7 +45,7 @@ test("features: one changes, the others and the preview settings stay", async ()
   const { paths, calls, said } = await daemon({ "GET /api/houses/work": { body: { features: { scouts: false, preview: false, sideworkers: true }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" } } } });
   await runScouts(paths, "features", ["work", "scouts=on"], {});
   expect(calls.at(-1)).toEqual({ method: "PUT", path: "/api/houses/work/features", body: { features: { scouts: true, preview: false, sideworkers: true }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" } } });
-  expect(said.at(-1)).toBe("house 'work': scouts on, preview off, sideworkers on");
+  expect(said.at(-1)).toBe("workspace 'work': scouts on, preview off, sideworkers on");
   await expect(runScouts(paths, "features", ["work", "scouts=yes"], {})).rejects.toThrow("not a feature change: 'scouts=yes'");
 });
 

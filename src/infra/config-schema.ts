@@ -228,7 +228,7 @@ export const sideworkerProfilesSchema = z.array(z.strictObject({
 })).superRefine((profiles, ctx) => {
   const names = new Set<string>();
   for (const [index, profile] of profiles.entries()) {
-    if (names.has(profile.name)) ctx.addIssue({ code: "custom", path: [index, "name"], message: "Profile names must be unique within a house" });
+    if (names.has(profile.name)) ctx.addIssue({ code: "custom", path: [index, "name"], message: "Profile names must be unique within a workspace" });
     names.add(profile.name);
   }
 });
@@ -262,7 +262,7 @@ export const capabilityDefinitionSchema = z.strictObject({
   if (!capability.network.any && capability.network.allow.length === 0) ctx.addIssue({ code: "custom", path: ["network"], message: "Name at least one host, or choose Any" });
 });
 export const capabilityDefinitionsSchema = z.array(capabilityDefinitionSchema).superRefine((capabilities, ctx) => {
-  if (new Set(capabilities.map(capability => capability.name)).size !== capabilities.length) ctx.addIssue({ code: "custom", message: "Capability names must be unique within a house" });
+  if (new Set(capabilities.map(capability => capability.name)).size !== capabilities.length) ctx.addIssue({ code: "custom", message: "Capability names must be unique within a workspace" });
 });
 export const scoutDefinitionSchema = z.strictObject({
   name, title: petTitle.optional(), emoji: emoji.optional(),
@@ -277,7 +277,7 @@ export const scoutDefinitionSchema = z.strictObject({
   resources: z.strictObject({ cpus: petCpuSchema.optional(), memoryMiB: petMemorySchema.optional() }).optional(),
 });
 export const scoutDefinitionsSchema = z.array(scoutDefinitionSchema).superRefine((scouts, ctx) => {
-  if (new Set(scouts.map(scout => scout.name)).size !== scouts.length) ctx.addIssue({ code: "custom", message: "Scout names must be unique within a house" });
+  if (new Set(scouts.map(scout => scout.name)).size !== scouts.length) ctx.addIssue({ code: "custom", message: "Scout names must be unique within a workspace" });
 });
 
 /**
@@ -371,7 +371,7 @@ export function parseHousehold(raw: unknown, source: string): Household {
   };
   const problems = [...household.houses.flatMap(channelProblems), ...botProblems(household.houses), ...telegramInboxProblems(household.houses)];
   for (const secret of household.secrets) {
-    if (secret.onlyForCapabilities?.length && !secret.houses?.length) problems.push(`capability-only secret '${secret.name}' must name its houses`);
+    if (secret.onlyForCapabilities?.length && !secret.houses?.length) problems.push(`capability-only secret '${secret.name}' must name its workspaces`);
   }
   for (const house of household.houses) {
     for (const capability of house.capabilities ?? []) for (const key of capability.keys) {

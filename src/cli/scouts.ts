@@ -10,54 +10,54 @@ import { api, follow, lineCount, textFrom } from "./commands";
  * its agent's screen). `--json` prints what the API answered, for scripts and agents.
  */
 
-export const FEATURES_USAGE = `  house features <house> [scouts|preview|sideworkers=on|off …]
-                                 the house's features: show them, or turn some on or off (scouts on for the first
+export const FEATURES_USAGE = `  house features <workspace> [scouts|preview|sideworkers=on|off …]
+                                 the workspace's features: show them, or turn some on or off (scouts on for the first
                                  time: the capabilities browser, media, dev and the General scout made of them)`;
 
-export const CAPABILITY_USAGE = `  house capability ls <house>    shared capabilities (kind, network, which scouts use them, last test) and pets' drafts
-  house capability templates <house>  the built-in capabilities a new one can start from
-  house capability show <house> <name>  one: its install script, network, keys, last test and revisions
-  house capability add <house> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2]
-  house capability set <house> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2]
+export const CAPABILITY_USAGE = `  house capability ls <workspace>    shared capabilities (kind, network, which scouts use them, last test) and bots' drafts
+  house capability templates <workspace>  the built-in capabilities a new one can start from
+  house capability show <workspace> <name>  one: its install script, network, keys, last test and revisions
+  house capability add <workspace> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2]
+  house capability set <workspace> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2]
                                  install: bash, as root, at the start of every run of a scout that has it; network:
                                  any (a tool) or only these hosts (access: its scouts reach only its hosts; list the
                                  hosts its install downloads from too)
-  house capability rm <house> <name>
-  house capability test <house> <name>  run its install in a fresh VM now; its log's tail, exit 1 when it failed
-  house capability restore <house> <name> <rev>   a revision back, as a new one
-  house capability duplicate <house> <name> <new-name>
-  house capability key add <house> <name> <secret> --via gateway|vm --host h1,h2 --env VAR [--header <name>] [--value <value>]
+  house capability rm <workspace> <name>
+  house capability test <workspace> <name>  run its install in a fresh VM now; its log's tail, exit 1 when it failed
+  house capability restore <workspace> <name> <rev>   a revision back, as a new one
+  house capability duplicate <workspace> <name> <new-name>
+  house capability key add <workspace> <name> <secret> --via gateway|vm --host h1,h2 --env VAR [--header <name>] [--value <value>]
                                  a key only its scouts get (value from stdin without --value): gateway puts it in the
                                  header to those hosts, the VM sees a placeholder; vm puts the value itself in VAR
-  house capability key rm <house> <name> <secret>
-  house capability skills <house> <name>  its skill files, copied into every scout that has it
-  house capability skills cat|put|rm <house> <name> <path> [<file>]
-  house capability drafts <house>  what pets proposed (capability_draft), waiting for review
-  house capability draft show|apply|discard <house> <id>`;
+  house capability key rm <workspace> <name> <secret>
+  house capability skills <workspace> <name>  its skill files, copied into every scout that has it
+  house capability skills cat|put|rm <workspace> <name> <path> [<file>]
+  house capability drafts <workspace>  what bots proposed (capability_draft), waiting for review
+  house capability draft show|apply|discard <workspace> <id>`;
 
-export const SCOUT_USAGE = `  house scout ls <house>         its scouts (capabilities, network, problems), settings and runs under way
-  house scout show <house> <name>  one: what it is, its access, what it runs on and its recent runs
-  house scout add <house> <name> --description <text> [--title <t>] [--emoji <e>] [--capabilities a,b] [--instructions <file>|-]
-                  [--repo <https url> [--branch <b>]] [--agent <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]] [--cpus <n>] [--memory <GiB>]
-  house scout set <house> <name> [the same flags]  ("" removes title, emoji, repo, agent, cpus or memory)
-                                 description: when a pet should call it; capabilities: shared ones, installed in order
-  house scout rm <house> <name>
-  house scout own <house> <name> give it a setup of its own (a capability named after it): edit it with house capability set
-  house scout instructions <house> <name>  /  house scout instructions set <house> <name> [<file>]
-  house scout settings <house> [--max <n>] [--cpus <n>] [--memory <GiB>] [--agent <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]]
-                                 how many scouts run at once, and the agent and allocation of scouts that set none
-  house scout run <house> <name> [--task <text>] [--pet <pet>] [--place <place-id>] [--placement same|thread] [--wait]
+export const SCOUT_USAGE = `  house scout ls <workspace>         its scouts (capabilities, network, problems), settings and runs under way
+  house scout show <workspace> <name>  one: what it is, its access, what it runs on and its recent runs
+  house scout add <workspace> <name> --description <text> [--title <t>] [--emoji <e>] [--capabilities a,b] [--instructions <file>|-]
+                  [--repo <https url> [--branch <b>]] [--harness <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]] [--cpus <n>] [--memory <GiB>]
+  house scout set <workspace> <name> [the same flags]  ("" removes title, emoji, repo, harness, cpus or memory)
+                                 description: when a bot should call it; capabilities: shared ones, installed in order
+  house scout rm <workspace> <name>
+  house scout own <workspace> <name> give it a setup of its own (a capability named after it): edit it with house capability set
+  house scout instructions <workspace> <name>  /  house scout instructions set <workspace> <name> [<file>]
+  house scout settings <workspace> [--max <n>] [--cpus <n>] [--memory <GiB>] [--harness <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]]
+                                 how many scouts run at once, and the harness and allocation of scouts that set none
+  house scout run <workspace> <name> [--task <text>] [--bot <bot>] [--place <place-id>] [--placement same|thread] [--wait]
                                  start it yourself, with no Run card (task from stdin without --task); its thread opens
-                                 in <pet>'s channel (default: the first pet in one), the pet hears nothing of it;
+                                 in <bot>'s channel (default: the first bot in one), the bot hears nothing of it;
                                  --wait: until it says it is done or ends, exit 1 unless it succeeded
-  house scout runs <house> [<name>]  runs, newest first
-  house scout status <house> <run>  a run: status, outcome, setup failure, tools, files, secret and network requests
-  house scout logs <house> <run> [--source setup|on-start|docker|kernel] [-n <lines>] [-f]
+  house scout runs <workspace> [<name>]  runs, newest first
+  house scout status <workspace> <run>  a run: status, outcome, setup failure, tools, files, secret and network requests
+  house scout logs <workspace> <run> [--source setup|on-start|docker|kernel] [-n <lines>] [-f]
                                  a log inside its VM while it runs (setup: its capabilities' install scripts)
-  house scout screen <house> <run>  its agent's terminal screen now (agents with one)
-  house scout send <house> <run> <text>  a message to it, as if you wrote in its thread
-  house scout cancel <house> <run>  stop it; its VM is deleted
-  (the agent's own log: house logs --pet <run>)`;
+  house scout screen <workspace> <run>  its harness's terminal screen now (harnesses with one)
+  house scout send <workspace> <run> <text>  a message to it, as if you wrote in its thread
+  house scout cancel <workspace> <run>  stop it; its VM is deleted
+  (the harness's own log: house logs --bot <run>)`;
 
 export interface ScoutValues {
   place?: string; placement?: string;
@@ -163,7 +163,7 @@ function agentOf(values: ScoutValues, current: ScoutAgent | undefined): ScoutAge
     if (value === "") delete merged[field];
     else merged[field] = value;
   }
-  if (!merged.agent || !merged.key) throw new HouseholdError("an agent needs --agent and --key (the key it runs on)");
+  if (!merged.agent || !merged.key) throw new HouseholdError("a harness needs --harness and --key (the key it runs on)");
   return Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== undefined)) as unknown as ScoutAgent;
 }
 
@@ -221,7 +221,7 @@ async function features(paths: Paths, args: string[], values: ScoutValues): Prom
     wanted[feature] = state === "on";
   }
   await api(paths, "PUT", `${house(name)}/features`, { features: wanted, preview: view.preview });
-  return out(values, wanted, () => console.log(`house '${name}': ${Object.entries(wanted).map(([feature, on]) => `${feature} ${on ? "on" : "off"}`).join(", ")}`));
+  return out(values, wanted, () => console.log(`workspace '${name}': ${Object.entries(wanted).map(([feature, on]) => `${feature} ${on ? "on" : "off"}`).join(", ")}`));
 }
 
 async function capability(paths: Paths, args: string[], values: ScoutValues): Promise<boolean> {
@@ -238,7 +238,7 @@ async function capability(paths: Paths, args: string[], values: ScoutValues): Pr
         const test = c.testing ? "testing…" : c.lastTest ? `test ${c.lastTest.ok ? "ok" : "FAILED"} ${time(new Date(c.lastTest.at).toISOString())}` : "never tested";
         say(`${c.name}  ${c.kind}  network: ${networkWords(c.network)}  keys: ${c.keyVariables.map((key) => key.secret).join(", ") || "-"}  used by: ${c.usedBy.join(", ") || "-"}  ${test}`);
       }
-      if (view.drafts.length) say(`\n${view.drafts.length} draft(s) from pets wait for review: house capability drafts ${h}`);
+      if (view.drafts.length) say(`\n${view.drafts.length} draft(s) from bots wait for review: house capability drafts ${h}`);
     });
   }
   if (verb === "templates" && !name) {
@@ -257,7 +257,7 @@ async function capability(paths: Paths, args: string[], values: ScoutValues): Pr
     const [action, houseName, id] = [h, name, rest[0]!];
     if (action === "show") {
       const draft = (await api<DraftView[]>(paths, "GET", `${house(houseName)}/capability-drafts`)).find((d) => d.id === id);
-      if (!draft) throw new HouseholdError(`no draft '${id}' in house '${houseName}'`);
+      if (!draft) throw new HouseholdError(`no draft '${id}' in workspace '${houseName}'`);
       return out(values, draft, () => {
         say(`draft ${draft.id}: capability ${draft.capability}, by ${draft.pet}`);
         say(`description  ${draft.definition.description || "-"}`);
@@ -331,7 +331,7 @@ async function capability(paths: Paths, args: string[], values: ScoutValues): Pr
     if (verb === "add") {
       const body = { name, ...(values.description !== undefined ? { description: values.description } : {}), ...(install !== undefined ? { install } : {}), ...(values.network !== undefined ? { network: network(values.network) } : {}) };
       const saved = await api(paths, "POST", `${house(h)}/capabilities`, body);
-      return out(values, saved, () => say(`capability '${name}' added to house '${h}'; try its install: house capability test ${h} ${name}`));
+      return out(values, saved, () => say(`capability '${name}' added to workspace '${h}'; try its install: house capability test ${h} ${name}`));
     }
     const { capability: c } = await api<{ capability: CapabilityView }>(paths, "GET", at(name));
     const body = {
@@ -384,12 +384,12 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
   if (verb === "ls" && !name) {
     const view = await api<{ scouts: ScoutView[]; runs: RunView[]; limits: Limits; agent: ScoutAgent | null }>(paths, "GET", `${house(h)}/scouts`);
     return out(values, view, () => {
-      if (view.scouts.length === 0) say("no scouts (turn them on: house features <house> scouts=on)");
+      if (view.scouts.length === 0) say("no scouts (turn them on: house features <workspace> scouts=on)");
       for (const s of view.scouts) {
         say(`${s.name}${s.title ? `  "${s.emoji ?? "🧭"} ${s.title}"` : ""}  capabilities: ${s.capabilities.join(", ") || "-"}${s.own ? " + own setup" : ""}  network: ${networkWords(s.network)}${s.problems.length ? `  ! ${s.problems.join("; ")}` : ""}`);
         say(`  ${firstLine(s.description, 110)}`);
       }
-      say(`\nsettings: up to ${view.limits.maxScouts} at once, ${view.limits.cpus} vCPU, ${gib(view.limits.memoryMiB)} each; agent: ${agentWords(view.agent)}`);
+      say(`\nsettings: up to ${view.limits.maxScouts} at once, ${view.limits.cpus} vCPU, ${gib(view.limits.memoryMiB)} each; harness: ${agentWords(view.agent)}`);
       const live = view.runs.filter((r) => !ENDED.includes(r.status));
       if (live.length) say(`running: ${live.map((r) => `${r.id} (${runName(r)}, ${r.status})`).join(", ")}`);
     });
@@ -403,7 +403,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       changed.limits = true;
     }
     const nextAgent = agentOf(values, agent ?? undefined);
-    if (nextAgent === null) usage(SCOUT_USAGE, "the house's scouts need an agent: --agent <a> --key <k>");
+    if (nextAgent === null) usage(SCOUT_USAGE, "the workspace's scouts need a harness: --harness <a> --key <k>");
     let shownAgent = agent;
     if (nextAgent) {
       shownAgent = await api<ScoutAgent>(paths, "PUT", `${house(h)}/scout-agent`, nextAgent);
@@ -412,7 +412,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
     return out(values, { limits, agent: shownAgent }, () => {
       say(`at once     ${limits.maxScouts}`);
       say(`each        ${limits.cpus} vCPU, ${gib(limits.memoryMiB)} (unless a scout sets its own)`);
-      say(`agent       ${agentWords(shownAgent)}`);
+      say(`harness       ${agentWords(shownAgent)}`);
       if (changed.limits || changed.agent) say("saved; runs under way keep what they started with");
     });
   }
@@ -444,9 +444,9 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       say(`network      ${networkWords(s.network)}${s.network.limitedBy.length ? `  (limited by ${s.network.limitedBy.join(", ")})` : ""}`);
       if (s.keysInVm.length) say(`keys in VM   ${s.keysInVm.map((k) => `$${k.env} (${k.capability})`).join(", ")}`);
       if (s.workspace) say(`workspace    ${s.workspace.repo}${s.workspace.branch ? ` @ ${s.workspace.branch}` : ""}`);
-      say(`agent        ${s.agent ? agentWords(s.agent) : `the house's: ${agentWords(view.defaults.agent)}`}`);
+      say(`harness        ${s.agent ? agentWords(s.agent) : `the workspace's: ${agentWords(view.defaults.agent)}`}`);
       const cpus = s.resources?.cpus ?? view.defaults.limits.cpus, memory = s.resources?.memoryMiB ?? view.defaults.limits.memoryMiB;
-      say(`allocation   ${cpus} vCPU, ${gib(memory)}${s.resources ? "" : " (the house's)"}`);
+      say(`allocation   ${cpus} vCPU, ${gib(memory)}${s.resources ? "" : " (the workspace's)"}`);
       say(`instructions ${s.instructions.trim() ? `${s.instructions.length} characters (house scout instructions ${h} ${s.name})` : "none"}`);
       if (s.problems.length) say(`problems     ${s.problems.join("; ")}`);
       const runs = view.runs.slice(-5).reverse();
@@ -470,10 +470,10 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
     if (agent !== undefined) fields.agent = agent;
     if (resources !== undefined) fields.resources = resources;
     if (verb === "add") {
-      if (!values.description) usage(SCOUT_USAGE, "a scout needs --description: when a pet should call it");
+      if (!values.description) usage(SCOUT_USAGE, "a scout needs --description: when a bot should call it");
       const body = Object.fromEntries(Object.entries({ name, ...fields }).filter(([, value]) => value !== null));
       const saved = await api(paths, "POST", `${house(h)}/scouts`, body);
-      return out(values, saved, () => say(`scout '${name}' added to house '${h}'; pets see it with their next message`));
+      return out(values, saved, () => say(`scout '${name}' added to workspace '${h}'; bots see it with their next message`));
     }
     if (Object.keys(fields).length === 0) usage(SCOUT_USAGE, "nothing to change");
     const saved = await api(paths, "PATCH", at(name), fields);

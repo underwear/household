@@ -386,7 +386,7 @@ test("a stopped VM's launch configuration replaces Household's environment, drop
   await env.runtime.runContainer({ name: "pet", image: "image", env: { MODEL: "small", ANTHROPIC_API_KEY: "placeholder" }, labels: { "household.launch": "old" } });
   env.labels.set("pet", { ...env.labels.get("pet"), "household.env-keys": "MODEL,ANTHROPIC_API_KEY" });
   const launch = { env: { MODEL: "big", CLAUDE_CODE_OAUTH_TOKEN: "placeholder-secret" }, labels: { "household.launch": "new" } };
-  await expect(env.runtime.configureLaunch("pet", launch)).rejects.toThrow("stop the pet VM");
+  await expect(env.runtime.configureLaunch("pet", launch)).rejects.toThrow("stop the bot VM");
   await env.runtime.stopContainer("pet");
   env.calls.length = 0;
   await env.runtime.configureLaunch("pet", launch);

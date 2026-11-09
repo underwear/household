@@ -1,6 +1,6 @@
 ---
 name: household-capabilities
-description: Draft a capability (software, network and needed keys) that scouts of this house are made of. Your human reviews, tests and applies it.
+description: Draft a capability (software, network and needed keys) that scouts of this workspace are made of. Your human reviews, tests and applies it.
 ---
 
 # Capabilities
@@ -17,7 +17,7 @@ of capabilities; your human edits them in the admin, with every change kept as a
   package managers (`apt-get install -y …`, `pip install --break-system-packages …`, `npm install -g …`, a vendor's
   install script). Pin a version in the script when it matters (`yt-dlp==2025.10.22`). Keep it quiet and fast:
   it runs every time. Fail loudly: a non-zero exit fails the run. It runs as root with umask 022, and Household
-  points per-user installers to shared places the agent can use: Playwright's browsers to /opt/household/playwright,
+  points per-user installers to shared places the harness can use: Playwright's browsers to /opt/household/playwright,
   pipx, uv tools, `cargo install` and `go install` to /usr/local/bin. Do not install into ~ (that is /root here).
 - **network** — `{any: true}` when the capability only needs software from the internet and does not limit
   anything (a browser, a downloader). `{any: false, allow: ["api.example.com", "db.example.com:5432"]}` when it brings

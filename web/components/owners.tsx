@@ -6,7 +6,7 @@ import { PlatformIcon } from "./icon";
 import { ListSection, type SectionProps } from "./section";
 
 /**
- * The house's owners, each on a platform (one some kind of channel is on: a select, even with one), by the id it
+ * The workspace's owners, each on a platform (one some kind of channel is on: a select, even with one), by the id it
  * knows them by, as the platform describes it, with a note of the owner's if they like (for them only): their
  * messages are the owner's; anyone else who writes is a guest.
  */
@@ -20,7 +20,7 @@ export function OwnersSection({ house, ask, save, platforms, noteMax }: SectionP
     <>
       <ListSection
         title="Owners"
-        hint="Pets obey owners only. Anyone else is a guest."
+        hint="Bots obey owners only. Anyone else is a guest."
         actions={
           <button className="btn small" onClick={() => setEditing("new")}>
             + Add owner
@@ -66,7 +66,7 @@ export function OwnersSection({ house, ask, save, platforms, noteMax }: SectionP
 
 /**
  * An owner's form: the platform (a select, even with one) and the id it knows them by, as the platform describes it,
- * then a note for the owner only (never told to a pet). Editing changes only the note: another id is another owner.
+ * then a note for the owner only (never told to a bot). Editing changes only the note: another id is another owner.
  */
 export function OwnerDialog({
   platforms,

@@ -1,46 +1,46 @@
 import { useEffect, useState } from "react";
 
-/** A house's pages, in navigation order; capabilities sit beside scouts (a tab of the Scouts page). */
-export const HOUSE_TABS = ["overview", "pets", "channels", "inboxes", "connectors", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "settings"] as const;
-export type HouseTab = (typeof HOUSE_TABS)[number];
-/** A pet's pages (tabs on its page), in order. */
-export const PET_TABS = ["overview", "agent", "instructions", "lifecycle", "channels", "inboxes", "tasks", "skills", "environment", "memory", "resources"] as const;
-export type PetTab = (typeof PET_TABS)[number];
+/** A workspace's pages, in navigation order; capabilities sit beside scouts (a tab of the Scouts page). */
+export const WORKSPACE_TABS = ["overview", "bots", "channels", "inboxes", "connectors", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "settings"] as const;
+export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
+/** A bot's pages (tabs on its page), in order. */
+export const BOT_TABS = ["overview", "harness", "instructions", "lifecycle", "channels", "inboxes", "tasks", "skills", "environment", "memory", "resources"] as const;
+export type BotTab = (typeof BOT_TABS)[number];
 /** A scout's pages (tabs on its page), in order. */
 export const SCOUT_TABS = ["overview", "instructions", "access", "runs"] as const;
 export type ScoutTab = (typeof SCOUT_TABS)[number];
 
 
-/** The screens so far: the houses, Household settings (keys, …), a page of one house, or a path that stands for another. */
-export type Route = { page: "houses" } | { page: "settings" } | { page: "house"; name: string; tab: HouseTab } | { page: "pet"; house: string; pet: string; tab: PetTab } | { page: "scout"; house: string; scout: string; tab: ScoutTab } | { page: "capability"; house: string; capability: string } | { page: "redirect"; to: string } | { page: "missing" };
+/** The screens so far: the workspaces, Household settings (keys, …), a page of one workspace, or a path that stands for another. */
+export type Route = { page: "workspaces" } | { page: "settings" } | { page: "workspace"; name: string; tab: WorkspaceTab } | { page: "bot"; workspace: string; bot: string; tab: BotTab } | { page: "scout"; workspace: string; scout: string; tab: ScoutTab } | { page: "capability"; workspace: string; capability: string } | { page: "redirect"; to: string } | { page: "missing" };
 
 /**
  * The pages by path pattern, first match wins; `:name` is one path segment (URI-decoded). A new screen is a line
- * here (`/houses/:house/pets/:pet`, `/houses/:house/gateway`, …) and a case in the app.
+ * here (`/workspaces/:workspace/bots/:bot`, `/workspaces/:workspace/gateway`, …) and a case in the app.
  */
 type RouteEntry = [pattern: string, route: (params: Record<string, string>) => Route];
 const ROUTES: RouteEntry[] = [
-  ["/", () => ({ page: "houses" })],
+  ["/", () => ({ page: "workspaces" })],
   ["/settings", () => ({ page: "settings" })],
   ["/logs", () => ({ page: "redirect", to: "/" })],
   ["/keys", () => ({ page: "redirect", to: "/settings" })],
-  ["/houses/:house/logs", ({ house }) => ({ page: "redirect", to: housePath(house!, "pets") })],
-  ["/houses/:house", ({ house }) => ({ page: "house", name: house!, tab: "overview" })],
-  ["/houses/:house/pets/:pet", ({ house, pet }) => ({ page: "pet", house: house!, pet: pet!, tab: "overview" })],
-  // A pet's logs are a panel from its header now.
-  ["/houses/:house/pets/:pet/logs", ({ house, pet }) => ({ page: "redirect", to: petPath(house!, pet!) })],
-  // A pet's sideworkers are on its house's Sideworkers page, under its name.
-  ["/houses/:house/pets/:pet/sideworkers", ({ house }) => ({ page: "redirect", to: housePath(house!, "sideworkers") })],
+  ["/workspaces/:workspace/logs", ({ workspace }) => ({ page: "redirect", to: workspacePath(workspace!, "bots") })],
+  ["/workspaces/:workspace", ({ workspace }) => ({ page: "workspace", name: workspace!, tab: "overview" })],
+  ["/workspaces/:workspace/bots/:bot", ({ workspace, bot }) => ({ page: "bot", workspace: workspace!, bot: bot!, tab: "overview" })],
+  // A bot's logs are a panel from its header now.
+  ["/workspaces/:workspace/bots/:bot/logs", ({ workspace, bot }) => ({ page: "redirect", to: botPath(workspace!, bot!) })],
+  // A bot's sideworkers are on its workspace's Sideworkers page, under its name.
+  ["/workspaces/:workspace/bots/:bot/sideworkers", ({ workspace }) => ({ page: "redirect", to: workspacePath(workspace!, "sideworkers") })],
   // Monitoring became part of Resources.
-  ["/houses/:house/pets/:pet/monitoring", ({ house, pet }) => ({ page: "redirect", to: petPath(house!, pet!, "resources") })],
-  ["/houses/:house/scouts/:scout", ({ house, scout }) => ({ page: "scout", house: house!, scout: scout!, tab: "overview" })],
-  ...SCOUT_TABS.filter((tab) => tab !== "overview").map((tab): RouteEntry => [`/houses/:house/scouts/:scout/${tab}`, ({ house, scout }) => ({ page: "scout", house: house!, scout: scout!, tab })]),
-  // Default and special scouts became one list of scouts; its limit, agent and resources a dialog on it.
-  ["/houses/:house/special-scouts/:scout", ({ house, scout }) => ({ page: "redirect", to: scoutPath(house!, scout!) })],
-  ...["special-scouts", "scout-default", "scout-resources"].map((old): RouteEntry => [`/houses/:house/${old}`, ({ house }) => ({ page: "redirect", to: housePath(house!, "scouts") })]),
-  ["/houses/:house/capabilities/:capability", ({ house, capability }) => ({ page: "capability", house: house!, capability: capability! })],
-  ...PET_TABS.filter((tab) => tab !== "overview").map((tab): RouteEntry => [`/houses/:house/pets/:pet/${tab}`, ({ house, pet }) => ({ page: "pet", house: house!, pet: pet!, tab })]),
-  ...HOUSE_TABS.map((tab): RouteEntry => [`/houses/:house/${tab}`, ({ house }) => ({ page: "house", name: house!, tab })]),
+  ["/workspaces/:workspace/bots/:bot/monitoring", ({ workspace, bot }) => ({ page: "redirect", to: botPath(workspace!, bot!, "resources") })],
+  ["/workspaces/:workspace/scouts/:scout", ({ workspace, scout }) => ({ page: "scout", workspace: workspace!, scout: scout!, tab: "overview" })],
+  ...SCOUT_TABS.filter((tab) => tab !== "overview").map((tab): RouteEntry => [`/workspaces/:workspace/scouts/:scout/${tab}`, ({ workspace, scout }) => ({ page: "scout", workspace: workspace!, scout: scout!, tab })]),
+  // Default and special scouts became one list of scouts; its limit, harness and resources a dialog on it.
+  ["/workspaces/:workspace/special-scouts/:scout", ({ workspace, scout }) => ({ page: "redirect", to: scoutPath(workspace!, scout!) })],
+  ...["special-scouts", "scout-default", "scout-resources"].map((old): RouteEntry => [`/workspaces/:workspace/${old}`, ({ workspace }) => ({ page: "redirect", to: workspacePath(workspace!, "scouts") })]),
+  ["/workspaces/:workspace/capabilities/:capability", ({ workspace, capability }) => ({ page: "capability", workspace: workspace!, capability: capability! })],
+  ...BOT_TABS.filter((tab) => tab !== "overview").map((tab): RouteEntry => [`/workspaces/:workspace/bots/:bot/${tab}`, ({ workspace, bot }) => ({ page: "bot", workspace: workspace!, bot: bot!, tab })]),
+  ...WORKSPACE_TABS.map((tab): RouteEntry => [`/workspaces/:workspace/${tab}`, ({ workspace }) => ({ page: "workspace", name: workspace!, tab })]),
 ];
 
 /** The params of `path` if it fits `pattern`, else undefined. */
@@ -64,6 +64,18 @@ function match(pattern: string, path: string): Record<string, string> | undefine
 
 /** The page at `path`; an unknown path is a missing page (said so, not passed over). */
 export function routeOf(path: string): Route {
+  // Keep bookmarks from the former terminology, changing structural segments only.
+  const parts = path.split("/");
+  if (parts[1] === "houses" || parts[1] === "workspaces") {
+    parts[1] = "workspaces";
+    if (parts[3] === "pets") parts[3] = "bots";
+    if (parts[3] === "bots" && parts[5] === "agent") parts[5] = "harness";
+    const canonical = parts.join("/");
+    if (canonical !== path) {
+      const found = routeOf(canonical);
+      return found.page === "missing" ? found : { page: "redirect", to: found.page === "redirect" ? found.to : canonical };
+    }
+  }
   for (const [pattern, route] of ROUTES) {
     const params = match(pattern, path);
     if (params) return route(params);
@@ -77,12 +89,12 @@ export function isCurrent(target: string, path: string): boolean {
   return path === target || path.startsWith(`${target.replace(/\/$/, "")}/`);
 }
 
-/** A page of a house: its overview unless another is named. */
-export const housePath = (name: string, tab: HouseTab = "overview") => `/houses/${encodeURIComponent(name)}${tab === "overview" ? "" : `/${tab}`}`;
+/** A page of a workspace: its overview unless another is named. */
+export const workspacePath = (name: string, tab: WorkspaceTab = "overview") => `/workspaces/${encodeURIComponent(name)}${tab === "overview" ? "" : `/${tab}`}`;
 
-/** A pet's own page in its house. */
-/** A page of a pet: its overview unless another is named. */
-export const petPath = (house: string, pet: string, tab: PetTab = "overview") => `${housePath(house, "pets")}/${encodeURIComponent(pet)}${tab === "overview" ? "" : `/${tab}`}`;
+/** A bot's own page in its workspace. */
+/** A page of a bot: its overview unless another is named. */
+export const botPath = (workspace: string, bot: string, tab: BotTab = "overview") => `${workspacePath(workspace, "bots")}/${encodeURIComponent(bot)}${tab === "overview" ? "" : `/${tab}`}`;
 
 /** Goes to `path` in the browser's history (the server answers every page path with the app). */
 export function navigate(path: string): void {
@@ -109,6 +121,6 @@ export function usePath(): string {
 }
 
 /** A page of a scout: its overview unless another is named. */
-export const scoutPath = (house: string, scout: string, tab: ScoutTab = "overview") => `${housePath(house, "scouts")}/${encodeURIComponent(scout)}${tab === "overview" ? "" : `/${tab}`}`;
+export const scoutPath = (workspace: string, scout: string, tab: ScoutTab = "overview") => `${workspacePath(workspace, "scouts")}/${encodeURIComponent(scout)}${tab === "overview" ? "" : `/${tab}`}`;
 
-export const capabilityPath = (house: string, capability: string) => `${housePath(house, "capabilities")}/${encodeURIComponent(capability)}`;
+export const capabilityPath = (workspace: string, capability: string) => `${workspacePath(workspace, "capabilities")}/${encodeURIComponent(capability)}`;

@@ -31,7 +31,7 @@ test("one bot, one house: another house's bot is refused; this house's other cha
   const checks = channelChecks(telegram.url);
   const kinds = knownChannelKinds();
   const both = household(house("work", [channel("1", TOKEN), channel("2", TOKEN)]), house("home", [channel("3", OTHER)]));
-  await expect(checkFields(kinds, checks, "telegram-private", { token: OTHER }, { household: both, house: "work" })).rejects.toThrow("is house home's bot, and a bot serves one house");
+  await expect(checkFields(kinds, checks, "telegram-private", { token: OTHER }, { household: both, house: "work" })).rejects.toThrow("is workspace home's bot, and a bot serves one workspace");
   const rotated = await checkFields(kinds, checks, "telegram-private", { token: NEW }, { household: both, house: "work", chat: "1" });
   expect(rotated).toEqual({ own: { token: NEW }, also: [{ chat: "2", fields: { token: NEW } }] });
 });

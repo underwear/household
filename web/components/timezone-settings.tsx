@@ -23,7 +23,7 @@ function offset(zone: string): string {
   }
 }
 
-/** Household's one time zone, for every schedule; pets get it with each message. Saved as soon as it is chosen. */
+/** Household's one time zone, for every schedule; bots get it with each message. Saved as soon as it is chosen. */
 export function TimezoneSettings() {
   const [saved, setSaved] = useState<string>();
   const [error, setError] = useState("");
@@ -52,7 +52,7 @@ export function TimezoneSettings() {
   };
   const zones = saved && !ZONES.includes(saved) ? [saved, ...ZONES] : ZONES;
   return (
-    <Section title="Time zone" hint="For scheduled tasks; pets get it with every message.">
+    <Section title="Time zone" hint="For scheduled tasks; bots get it with every message.">
       <div className="timezone">
         <SelectField
           label="Household time zone"

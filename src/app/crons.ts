@@ -17,7 +17,7 @@ export class Crons {
   ) {}
   private check(house: string, pet: string) {
     if (!this.exists(house, pet))
-      throw new CronError("Pet is not configured", 404);
+      throw new CronError("Bot is not configured", 404);
   }
   setTimezone(timezone: string) {
     this.store.setTimezone(timezone, this.clock.now());

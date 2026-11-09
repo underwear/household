@@ -163,7 +163,7 @@ test("fail closed: an unknown caller, a pet without a key, a key missing on the 
     at(undefined); // refused at its CONNECT: the proxy says so, fetch fails
     await expect(call("/v1/messages", { authorization: "Bearer placeholder" })).rejects.toThrow();
     at("keyless");
-    expect(await refused()).toEqual({ status: 403, body: "Household gateway: pet work/keyless has no key for localhost\n" });
+    expect(await refused()).toEqual({ status: 403, body: "Household gateway: bot work/keyless has no key for localhost\n" });
     at("sibling");
     delete secrets["key.one"];
     expect((await refused()).status).toBe(403);

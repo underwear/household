@@ -64,7 +64,7 @@ export class AgentModels {
 
   async list(name: string, keyName: string): Promise<AgentModelsView> {
     const agent = this.options.agents.get(name);
-    if (!agent) throw new NotFoundError(`unknown agent '${name}'`);
+    if (!agent) throw new NotFoundError(`unknown harness '${name}'`);
     const configured = await this.options.configured();
     const key = configured.keys.find(({ name }) => name === keyName);
     if (!key) throw new NotFoundError(`unknown key '${keyName}'`);

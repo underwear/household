@@ -90,9 +90,9 @@ export class Dialogs {
           return promise;
         }
       }
-      this.events.info(`pet ${target.pet}: dialog shown in the chat`);
+      this.events.info(`bot ${target.pet}: dialog shown in the chat`);
     } catch (error) {
-      this.events.error(`pet ${target.pet}: the dialog could not be shown (${(error as Error).message})`);
+      this.events.error(`bot ${target.pet}: the dialog could not be shown (${(error as Error).message})`);
       await this.finish(pending, undefined, "left to the terminal", "Could not be shown in full: answer in the terminal");
     }
     return promise;
@@ -179,7 +179,7 @@ export class Dialogs {
     pending.outcome = outcome;
     this.pending = this.pending.filter((open) => open !== pending);
     pending.settle(answer);
-    this.events.info(`pet ${pending.target.pet}: dialog ${how}`);
+    this.events.info(`bot ${pending.target.pet}: dialog ${how}`);
     const open = pending.cards.filter((card, i) => card !== undefined && pending.answers[i] === undefined);
     await Promise.all(open.map((card) => pending.target.board.resolve(card!, outcome)));
   }

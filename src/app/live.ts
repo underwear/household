@@ -356,7 +356,7 @@ export class Live {
         await channel.typing!(place, typing.controller.signal);
       } catch (error) {
         if (typing.controller.signal.aborted) return;
-        this.log.error(`pet ${live.house}/${live.pet}: typing not sent: ${(error as Error).message}`);
+        this.log.error(`bot ${live.house}/${live.pet}: typing not sent: ${(error as Error).message}`);
         if (error instanceof StatusGone) return;
         if (error instanceof RateLimited) delay = Math.max(delay, error.retryAfterMs);
       }
@@ -484,7 +484,7 @@ export class Live {
     const { channel, place } = live.spot;
     const lane = this.lane(channel);
     if (Math.max(lane.blockedUntil, lane.lastCall + this.timing.chatGapMs) > this.clock.now()) return this.plan(live); // the chat was used meanwhile
-    const name = `pet ${live.house}/${live.pet}`;
+    const name = `bot ${live.house}/${live.pet}`;
     if ((live.state === "done" || live.retiring) && live.ref) {
       live.busy = true;
       lane.lastCall = this.clock.now();
@@ -533,7 +533,7 @@ export class Live {
     } catch (error) {
       lane.blockedUntil = this.clock.now() + (error instanceof RateLimited ? error.retryAfterMs : BACKOFF_MS);
       const last = ++live.drops >= 2;
-      this.log.error(`pet ${live.house}/${live.pet}: live message not removed: ${(error as Error).message}${last ? "; left without its button" : ""}`);
+      this.log.error(`bot ${live.house}/${live.pet}: live message not removed: ${(error as Error).message}${last ? "; left without its button" : ""}`);
       if (last) await channel.editStatus(live.ref!, { state: "over", title: "Done" }).catch(() => {});
       return last;
     }

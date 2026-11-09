@@ -50,14 +50,14 @@ test("secrets sit after the keys in household.yaml; a value, hosts, houses and h
   await expect(config.addSecret("github", { value: "x", hosts: ["a.com"], env: "A" })).rejects.toThrow("already exists");
   await expect(config.addSecret("wild", { value: "x", hosts: ["*.github.com"], env: "A" })).rejects.toThrow("never a wildcard");
   await expect(config.addSecret("proxy", { value: "x", hosts: ["a.com"], env: "HTTPS_PROXY" })).rejects.toThrow("set by Household");
-  await expect(config.updateSecret("github", { houses: ["mars"] })).rejects.toThrow("unknown house 'mars'");
+  await expect(config.updateSecret("github", { houses: ["mars"] })).rejects.toThrow("unknown workspace 'mars'");
   await config.removeSecret("github");
   expect((await config.load()).secrets).toEqual([]);
 });
 
 test("a key for some houses only: their pets may run on it, another house's pet is refused", async () => {
   const { config } = store();
-  await expect(config.updateKey("claude", { houses: ["work"] })).rejects.toThrow("pet home/cat: key 'claude' is not for house 'home' (its houses: work)");
+  await expect(config.updateKey("claude", { houses: ["work"] })).rejects.toThrow("bot home/cat: key 'claude' is not for workspace 'home' (its workspaces: work)");
   await config.addKey("home-key", { provider: "anthropic", value: "sk-ant-oat01-home", houses: ["home"] });
   await config.updatePet("home", "cat", { key: "home-key" });
   await config.updateKey("claude", { houses: ["work"] });

@@ -39,7 +39,7 @@ export async function update(options: UpdateOptions = {}): Promise<{ tag: string
   const releases = dirname(dirname(dirname(binary)));
   const home = dirname(releases);
   if (basename(releases) !== "releases" || !existsSync(join(home, "current"))) {
-    throw new HouseholdError(`this house was not installed by install.sh (${binary}): run it to install, curl -fsSL https://agents-household.dev/install.sh | sh`);
+    throw new HouseholdError(`this workspace was not installed by install.sh (${binary}): run it to install, curl -fsSL https://agents-household.dev/install.sh | sh`);
   }
   const tag = options.tag ?? await newestTag(fetchImpl);
   if (tag === `v${VERSION}` && readlinkSync(join(home, "current")) === join("releases", tag)) {
@@ -64,7 +64,7 @@ export async function update(options: UpdateOptions = {}): Promise<{ tag: string
     rmSync(join(releases, tag), { recursive: true, force: true });
     renameSync(join(staging, `household-${tag}-${platform}`), join(releases, tag));
     const ok = await runCommand([join(releases, tag, "bin", "house"), "--version"]);
-    if (!ok.ok) throw new HouseholdError(`the downloaded house does not run; ${previous} stays current`);
+    if (!ok.ok) throw new HouseholdError(`the downloaded workspace does not run; ${previous} stays current`);
     // One rename: a link swapped over another, never a moment without one.
     symlinkSync(join("releases", tag), join(home, "current.new"));
     renameSync(join(home, "current.new"), join(home, "current"));

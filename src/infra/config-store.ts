@@ -126,8 +126,8 @@ export class ConfigStore {
       if (create && exists) throw new HouseholdError("An inbox with this name already exists");
       if (!create && !exists) throw new NotFoundError("Inbox not found");
       const channel = h.channels.find(c => c.chat === inbox.channel);
-      if (!channel) throw new HouseholdError("Choose a channel in this house");
-      if (inbox.pets.some(name => !h.pets.some(p => p.name === name && !p.scout && !p.sideworker) || !channel.pets.includes(name))) throw new HouseholdError("Subscribers must be pets placed in the selected channel");
+      if (!channel) throw new HouseholdError("Choose a channel in this workspace");
+      if (inbox.pets.some(name => !h.pets.some(p => p.name === name && !p.scout && !p.sideworker) || !channel.pets.includes(name))) throw new HouseholdError("Subscribers must be bots placed in the selected channel");
       setIn(doc, ["houses", house, "inboxes"], doc.createNode(exists ? current.map(i => i.name === inbox.name ? inbox : i) : [...current, inbox]));
     });
   }
@@ -144,7 +144,7 @@ export class ConfigStore {
       const next = { ...inbox, pets, quiet: (inbox.quiet ?? []).filter(p => p !== pet).concat(subscribed && quiet ? [pet] : []) };
       if (subscribed && !inbox.pets.includes(pet)) {
         const channel = h.channels.find(c => c.chat === inbox.channel);
-        if (!h.pets.some(p => p.name === pet && !p.scout && !p.sideworker) || !channel?.pets.includes(pet)) throw new HouseholdError("Place the pet in the inbox's channel first");
+        if (!h.pets.some(p => p.name === pet && !p.scout && !p.sideworker) || !channel?.pets.includes(pet)) throw new HouseholdError("Place the bot in the inbox's channel first");
       }
       const parsed = houseInboxSchema.safeParse(next);
       if (!parsed.success) throw new HouseholdError(parsed.error.issues[0]?.message ?? "Invalid inbox");
@@ -437,7 +437,7 @@ export class ConfigStore {
         const path = ["houses", house, "channels", index];
         if (channel.default === pet) {
           if (channel.pets.length > 2) {
-            throw new HouseholdError(`${pet} is the default of channel ${channel.name ?? channel.kind} (chat ${channel.chat}), which has other pets: make another one its default first`);
+            throw new HouseholdError(`${pet} is the default of channel ${channel.name ?? channel.kind} (chat ${channel.chat}), which has other bots: make another one its default first`);
           }
           doc.deleteIn([...path, "default"]);
         }
@@ -650,7 +650,7 @@ export class ConfigStore {
 
 function knownHouse(household: Household, name: string): House {
   const house = findHouse(household, name);
-  if (!house) throw new NotFoundError(`unknown house '${name}'`);
+  if (!house) throw new NotFoundError(`unknown workspace '${name}'`);
   return house;
 }
 
@@ -740,7 +740,7 @@ function keysFirst(doc: Document): void {
 
 function knownPet(household: Household, house: string, pet: string): House {
   const found = knownHouse(household, house);
-  if (!found.pets.some(({ name }) => name === pet)) throw new NotFoundError(`house '${house}' has no pet '${pet}'`);
+  if (!found.pets.some(({ name }) => name === pet)) throw new NotFoundError(`workspace '${house}' has no bot '${pet}'`);
   return found;
 }
 
@@ -748,7 +748,7 @@ function knownPet(household: Household, house: string, pet: string): House {
 function channelIndex(household: Household, house: string, chat: string): number {
   const { channels } = knownHouse(household, house);
   const index = channels.findIndex((channel) => channel.chat === chat.trim());
-  if (index < 0) throw new NotFoundError(`house '${house}' has no channel of chat '${chat}' (its chats: ${channels.map((channel) => channel.chat).join(", ") || "none"})`);
+  if (index < 0) throw new NotFoundError(`workspace '${house}' has no channel of chat '${chat}' (its chats: ${channels.map((channel) => channel.chat).join(", ") || "none"})`);
   return index;
 }
 
@@ -904,7 +904,7 @@ function setOwnerNote(doc: Document, path: string[], owner: Owner, note: string 
   ownerList(doc, path);
   const list = doc.getIn(path, true);
   const index = isSeq(list) ? list.items.findIndex((item) => itemOwnerId(item) === owner.id) : -1;
-  if (!isSeq(list) || index < 0) throw new NotFoundError(`house '${house}' has no owner ${owner.platform} ${owner.id}`);
+  if (!isSeq(list) || index < 0) throw new NotFoundError(`workspace '${house}' has no owner ${owner.platform} ${owner.id}`);
   const item = list.items[index];
   const said = note?.trim();
   if (isMap(item)) {

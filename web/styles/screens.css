@@ -10,7 +10,7 @@
 .command .prompt { color: var(--faint); }
 .note { font: 400 var(--text-sm)/1.5 var(--font-mono); color: var(--faint); overflow-wrap: break-word; }
 
-/* A house's overview: what it has, a tile each, each a way to its page; one column on a phone. */
+/* A workspace's overview: what it has, a tile each, each a way to its page; one column on a phone. */
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); max-width: 960px; }
 .stat { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; padding: var(--space-5) 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
 .stat:hover { background: var(--hover); }
@@ -19,21 +19,21 @@
 .stat-sub { font: 400 var(--text-sm)/1.3 var(--font-sans); color: var(--faint); min-width: 0; }
 .stat-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The Resources tile: its meters in place of a number. */
-.stat > .pet-card-resources { margin-top: var(--space-1); padding-top: 0; border-top: 0; }
+.stat > .bot-card-resources { margin-top: var(--space-1); padding-top: 0; border-top: 0; }
 @media (width < 600px) {
   .stats { grid-template-columns: minmax(0, 1fr); }
   .stat { flex-direction: row; align-items: baseline; flex-wrap: wrap; column-gap: var(--space-4); }
   .stat-label { flex: 1 0 100%; }
 }
 
-/* A pet's page: its state, then what it runs (a key–value list). */
-.pet-state { display: flex; align-items: center; gap: var(--space-3); font: 500 var(--text-base)/1 var(--font-sans); }
+/* A bot's page: its state, then what it runs (a key–value list). */
+.bot-state { display: flex; align-items: center; gap: var(--space-3); font: 500 var(--text-base)/1 var(--font-sans); }
 .title-emoji { display: inline-block; margin-right: 0.4em; }
 
 /* Keys: a key's value in full, broken anywhere. */
 .key-value { overflow-wrap: anywhere; }
 
-/* Keys: where a key is used, a house per line. */
+/* Keys: where a key is used, a workspace per line. */
 .used-in { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); color: var(--muted); }
 .used-in .label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--faint); }
 
@@ -55,41 +55,41 @@
   .network-format dd { margin-bottom: var(--space-2); }
 }
 
-/* A pet's setup script: its last run and whether the script is saved, its log and status files under them. */
+/* A bot's setup script: its last run and whether the script is saved, its log and status files under them. */
 .setup-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-4); font: 400 var(--text-md)/1.45 var(--font-sans); color: var(--muted); }
 .setup-status .unsaved { color: var(--busy); }
 .setup-paths { flex-basis: 100%; line-height: 1.6; overflow-wrap: anywhere; }
 
-/* Channels: the pets in a channel, a chip each; the default one says so. */
-.channel-pets { display: flex; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
+/* Channels: the bots in a channel, a chip each; the default one says so. */
+.channel-bots { display: flex; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
 .chip-note { margin-left: 2px; padding-left: 6px; border-left: 1px solid var(--line); color: var(--faint); font-size: var(--text-xs); }
 
-/* Pets: a card per pet, each opening its page; two to a row, one on a phone. */
-.pet-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); max-width: 1200px; }
-.pet-card { display: flex; flex-direction: column; gap: var(--space-4); height: 100%; min-width: 0; padding: var(--space-5) 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
-.pet-card:hover { background: var(--hover); border-color: var(--muted); }
-.pet-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.pet-card-state { display: inline-flex; align-items: center; gap: var(--space-2); font: 500 var(--text-sm)/1 var(--font-sans); color: var(--muted); }
-.pet-card-runs { display: flex; flex-direction: column; gap: 3px; font: 400 var(--text-sm)/1.3 var(--font-mono); color: var(--muted); min-width: 0; }
-.pet-empty { border: 1px dashed var(--line); border-radius: var(--radius-lg); margin: 0; }
+/* Bots: a card per bot, each opening its page; two to a row, one on a phone. */
+.bot-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); max-width: 1200px; }
+.bot-card { display: flex; flex-direction: column; gap: var(--space-4); height: 100%; min-width: 0; padding: var(--space-5) 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.bot-card:hover { background: var(--hover); border-color: var(--muted); }
+.bot-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.bot-card-state { display: inline-flex; align-items: center; gap: var(--space-2); font: 500 var(--text-sm)/1 var(--font-sans); color: var(--muted); }
+.bot-card-runs { display: flex; flex-direction: column; gap: 3px; font: 400 var(--text-sm)/1.3 var(--font-mono); color: var(--muted); min-width: 0; }
+.bot-empty { border: 1px dashed var(--line); border-radius: var(--radius-lg); margin: 0; }
 .avatar.large { width: 40px; height: 40px; border-radius: 10px; font-size: 22px; }
 @media (width < 600px) {
-  .pet-cards { grid-template-columns: minmax(0, 1fr); }
+  .bot-cards { grid-template-columns: minmax(0, 1fr); }
 }
 /* The model and how it runs, on one line: its chips keep their size, a long model name gives way with an ellipsis. */
-.pet-card-model { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.pet-card-model > .ellipsis { flex: 0 1 auto; min-width: 3ch; }
-.pet-card-model .tag { flex: none; display: inline-flex; align-items: center; gap: 3px; font-family: var(--font-sans); color: var(--muted); }
-.pet-card-model .pet-card-mode { display: block; flex: 0 1 auto; min-width: 4ch; overflow: hidden; text-overflow: ellipsis; }
-.pet-card-model .tag > svg { flex: none; color: var(--faint); }
-.pet-card-channels { display: flex; flex-direction: column; gap: var(--space-1); font: 400 var(--text-sm)/1.3 var(--font-sans); color: var(--muted); min-width: 0; }
-.pet-card-channel { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.pet-card-channel > svg { flex: none; color: var(--faint); }
-/* A pet card's CPU and RAM at its foot: name, a bar of the VM's share in use, «used / allocated». */
-.pet-card-resources { display: grid; grid-template-columns: max-content minmax(32px, 1fr) max-content; gap: var(--space-2) var(--space-3); align-items: center; margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--line); font: 400 var(--text-sm)/1.2 var(--font-sans); }
-.pet-card-meter { display: contents; }
-.pet-card-meter-label { color: var(--muted); font-size: var(--text-xs); font-weight: 500; }
-.pet-card-meter-value { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bot-card-model { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.bot-card-model > .ellipsis { flex: 0 1 auto; min-width: 3ch; }
+.bot-card-model .tag { flex: none; display: inline-flex; align-items: center; gap: 3px; font-family: var(--font-sans); color: var(--muted); }
+.bot-card-model .bot-card-mode { display: block; flex: 0 1 auto; min-width: 4ch; overflow: hidden; text-overflow: ellipsis; }
+.bot-card-model .tag > svg { flex: none; color: var(--faint); }
+.bot-card-channels { display: flex; flex-direction: column; gap: var(--space-1); font: 400 var(--text-sm)/1.3 var(--font-sans); color: var(--muted); min-width: 0; }
+.bot-card-channel { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.bot-card-channel > svg { flex: none; color: var(--faint); }
+/* A bot card's CPU and RAM at its foot: name, a bar of the VM's share in use, «used / allocated». */
+.bot-card-resources { display: grid; grid-template-columns: max-content minmax(32px, 1fr) max-content; gap: var(--space-2) var(--space-3); align-items: center; margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--line); font: 400 var(--text-sm)/1.2 var(--font-sans); }
+.bot-card-meter { display: contents; }
+.bot-card-meter-label { color: var(--muted); font-size: var(--text-xs); font-weight: 500; }
+.bot-card-meter-value { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Plain tmux snapshots stay selectable and keep their own scroll position between updates. */
 .terminal-dialog, .panel-dialog { max-width: 1100px; height: min(800px, 100%); }
@@ -97,7 +97,7 @@
 .terminal-dialog { max-width: min(1600px, 100%); height: min(1100px, 100%); }
 .terminal-screen.fit { line-height: 1.25; }
 .terminal-probe { position: absolute; visibility: hidden; white-space: pre; font: 400 100px/1 var(--font-mono); pointer-events: none; }
-/* A panel over the page (a pet's logs): its body fills the card, the scroller the rest of it. */
+/* A panel over the page (a bot's logs): its body fills the card, the scroller the rest of it. */
 .panel-dialog-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: 14px 22px 20px; }
 .panel-dialog-body > .log { flex: 1 1 auto; height: auto; min-height: 0; }
 .terminal-description { padding: 14px 22px; flex-shrink: 0; }
@@ -106,7 +106,7 @@
 .terminal-screen { flex: 1 1 auto; min-height: 0; margin: 0 22px 20px; padding: var(--space-3); overflow: auto; overscroll-behavior: contain; overflow-anchor: none; white-space: pre; font: 400 var(--text-sm)/1.5 var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-md); user-select: text; }
 
 /*
- * Skills: the house's skills on the left (each with its description; the open one with its files), the open file
+ * Skills: the workspace's skills on the left (each with its description; the open one with its files), the open file
  * on the right, filling the window's height. One column on a phone, the list above the file.
  */
 .skills { display: grid; grid-template-columns: 272px minmax(0, 1fr); height: max(520px, calc(100dvh - 210px)); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
@@ -192,7 +192,7 @@
   .skills-doc-foot > :first-child { display: none; }
 }
 
-/* A pet's scheduled tasks: a row each (its mark, name, when, the start of what it says); runs fold open. */
+/* A bot's scheduled tasks: a row each (its mark, name, when, the start of what it says); runs fold open. */
 .avatar.task { background: var(--hover); color: var(--muted); }
 .task-when { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; row-gap: 2px; font: 400 var(--text-sm)/1.4 var(--font-sans); color: var(--muted); }
 .task-when code { font-size: var(--text-xs); color: var(--ink); }
@@ -239,7 +239,7 @@
 .timezone { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .timezone > .field { flex: 0 1 420px; min-width: 240px; }
 
-/* A pet's channels: who else is in each (small chips), and a switch for whether this pet is. */
+/* A bot's channels: who else is in each (small chips), and a switch for whether this bot is. */
 .channel-company { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 /* A link among a row's ids (a Slack DM's way in) reads as a link, not as one more id. */
 .id .text-link { font-family: var(--font-sans); font-size: var(--text-sm); }
@@ -254,7 +254,7 @@ button.switch::before { content: none; }
 @media (prefers-reduced-motion: reduce) { .switch, .switch-knob { transition: none; } }
 
 /*
- * A pet's memory: like Skills, its notes on the left (search, core pinned, the rest a tree by dot segments) and the
+ * A bot's memory: like Skills, its notes on the left (search, core pinned, the rest a tree by dot segments) and the
  * open note on the right (the Skills editor's header, body and footer).
  */
 .memory { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: max(480px, calc(100dvh - 285px)); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
@@ -312,7 +312,7 @@ button.memory-chevron:hover { color: var(--ink); }
 }
 @media (prefers-reduced-motion: reduce) { .memory-chevron svg { transition: none; } }
 
-/* A pet's environment: the setup script in the Skills editor's frame, a nudge to restart after a save, the last run. */
+/* A bot's environment: the setup script in the Skills editor's frame, a nudge to restart after a save, the last run. */
 .script { display: flex; flex-direction: column; height: max(360px, calc(100dvh - 520px)); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; background: var(--bg); }
 .script-saved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 10px var(--space-4); border: 1px solid color-mix(in oklch, var(--idle) 45%, transparent); border-radius: var(--radius-md); background: color-mix(in oklch, var(--idle) 8%, transparent); font-size: var(--text-md); }
 .script-run { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
@@ -322,11 +322,11 @@ button.memory-chevron:hover { color: var(--ink); }
 .script-run dd { margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
 .script-none { border: 1px dashed var(--line); border-radius: var(--radius-lg); margin: 0; }
 
-/* A pet's Skills tab: they are the house's, so a line pointing there. */
+/* A bot's Skills tab: they are the workspace's, so a line pointing there. */
 
-/* A disabled pet: said above its tabs, with the way back on. */
-.pet-off { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); max-width: 960px; padding: 10px var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--side); }
-.pet-off-text { flex: 1 1 260px; font-size: var(--text-md); color: var(--muted); }
+/* A disabled bot: said above its tabs, with the way back on. */
+.bot-off { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); max-width: 960px; padding: 10px var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--side); }
+.bot-off-text { flex: 1 1 260px; font-size: var(--text-md); color: var(--muted); }
 .script.tall { height: max(420px, calc(100dvh - 300px)); }
 /* A capability's install script: usually a few lines, one of several sections on its page. */
 .script.short { height: 280px; }
@@ -335,7 +335,7 @@ button.memory-chevron:hover { color: var(--ink); }
 .key-help { display: flex; flex-direction: column; gap: var(--space-2); }
 .key-help > span { display: block; }
 
-/* A pet's VM, now and over a range: a tile per metric with its history as an area, then each core as a bar. */
+/* A bot's VM, now and over a range: a tile per metric with its history as an area, then each core as a bar. */
 .monitor-state { font-size: var(--text-md); color: var(--muted); }
 .monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
 .monitor-card { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-4) var(--space-4) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-lg); }
@@ -360,7 +360,7 @@ button.memory-chevron:hover { color: var(--ink); }
 .monitor-core-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .monitor-bar > span { transition: none; } }
 
-/* A pet's environment: its two scripts on the left (when each runs, how it last went), the editor on the right. */
+/* A bot's environment: its two scripts on the left (when each runs, how it last went), the editor on the right. */
 .env { height: max(480px, calc(100dvh - 300px)); }
 .env-name { display: flex; align-items: center; gap: var(--space-3); }
 .env-last { display: flex; align-items: center; gap: 6px; margin-top: var(--space-2); font: 400 var(--text-xs)/1.2 var(--font-sans); color: var(--muted); }
@@ -404,18 +404,18 @@ button.memory-chevron:hover { color: var(--ink); }
   .log-text { grid-column: 1 / -1; }
 }
 
-/* A sideworker's row under the pet that started it: an arrow under the pet's avatar, its own one step in. */
+/* A sideworker's row under the bot that started it: an arrow under the bot's avatar, its own one step in. */
 .sideworker-branch { flex: none; width: 28px; text-align: center; color: var(--faint); }
 
-/* A built-in skill's text, opened under the list (a house with no skills of its own): framed like the editor's preview. */
+/* A built-in skill's text, opened under the list (a workspace with no skills of its own): framed like the editor's preview. */
 .builtin-skill { margin-top: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
-/* A pet's overview with a fourth tile (its sideworkers): four in a row, two on a narrower screen. */
+/* A bot's overview with a fourth tile (its sideworkers): four in a row, two on a narrower screen. */
 .stats:has(> :nth-child(4)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (width < 1024px) { .stats:has(> :nth-child(4)) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (width < 600px) { .stats:has(> :nth-child(4)) { grid-template-columns: minmax(0, 1fr); } }
 
-/* Household's built-in skills under the house's in the skills list: a small label over them. */
+/* Household's built-in skills under the workspace's in the skills list: a small label over them. */
 .skills-nav-group { display: flex; align-items: center; gap: 6px; margin: var(--space-5) 12px var(--space-2); font: 500 var(--text-xs)/1 var(--font-sans); color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* A command's last lines under the button that ran it (a scout's login Check): framed, scrolls when long. */
@@ -426,10 +426,10 @@ button.memory-chevron:hover { color: var(--ink); }
 /* A scout's access: what its capabilities make (network, keys in its VM), beside the one Save. */
 .access-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-radius: var(--radius-lg); background: var(--side); }
 
-/* Inboxes: a source's state and timings, its failure under it; header rows of its form; a pet's two switches. */
+/* Inboxes: a source's state and timings, its failure under it; header rows of its form; a bot's two switches. */
 .inbox-times { font-size: var(--text-sm); white-space: nowrap; }
-.cell.lines > .pet-state { font-size: var(--text-md); }
-.pet-state .tag { margin-left: var(--space-1); }
+.cell.lines > .bot-state { font-size: var(--text-md); }
+.bot-state .tag { margin-left: var(--space-1); }
 .inbox-problem { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-1); padding-left: var(--space-3); border-left: 2px solid var(--danger); font-size: var(--text-sm); }
 .inbox-more { align-self: flex-start; }
 .inbox-header-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: var(--space-2); align-items: center; }
@@ -438,13 +438,13 @@ button.memory-chevron:hover { color: var(--ink); }
 textarea.control.inbox-pointers { min-height: 6em; }
 .dialog .list .list-actions, .list-actions:has(.switch-field) { gap: var(--space-5); }
 @media (width < 600px) {
-  /* A pet's inboxes: its two switches under the inbox's name, where the name has room. */
+  /* A bot's inboxes: its two switches under the inbox's name, where the name has room. */
   .inbox-subscriptions .list-row { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); }
   .inbox-subscriptions .list-actions { justify-content: flex-start; padding-left: calc(28px + var(--space-3)); }
   .form-grid.inbox-health { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* House connectors: a provider's letter in the list's square mark. */
+/* Workspace connectors: a provider's letter in the list's square mark. */
 .avatar.connector-mark { font: 600 var(--text-sm)/1 var(--font-sans); }
 /* An account's address wraps rather than lose its domain: work and personal ones differ there. */
 .connector-email { overflow-wrap: anywhere; }

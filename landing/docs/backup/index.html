@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Back up and move — Household docs</title>
-  <meta name="description" content="Save every house and pet into one file with house export, restore it with house import, or move Household to another machine.">
+  <meta name="description" content="Save every workspace and bot into one file with house export, restore it with house import, or move Household to another machine.">
   <meta property="og:title" content="Back up and move Household">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/backup/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,24 +170,24 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="./" aria-current="page">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="./" aria-current="page">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Operating</p><h1>Back up and move Household</h1>
-<p>One command saves everything — every house, every pet — into one file; another puts it back, on this machine or a new one. There is no export of a single house or pet yet, and no backup button in the admin (<strong>Backup</strong> in its menu is still <em>soon</em>).</p>
+<p>One command saves everything — every workspace, every bot — into one file; another puts it back, on this machine or a new one. There is no export of a single workspace or bot yet, and no backup button in the admin (<strong>Backup</strong> in its menu is still <em>soon</em>).</p>
 <h2 id="back-up">Back up</h2>
 <pre><code class="language-sh"># Saves household-YYYYMMDD-HHMM.tar.gz in the current folder, or where you say:
 house export
 house export ~/backups/house.tar.gz
 </code></pre>
-<p>The daemon can keep running: each pet pauses for a moment while its files are copied, and messages to it wait. Close all sideworkers first.</p>
+<p>The daemon can keep running: each bot pauses for a moment while its files are copied, and messages to it wait. Close all sideworkers first.</p>
 <p>The archive holds:</p>
 <ul>
-<li>the config, <code>household.yaml</code>: houses, pets, channels, owners, network rules, inboxes, keys, secrets and bot tokens;</li>
+<li>the config, <code>household.yaml</code>: workspaces, bots, channels, owners, network rules, inboxes, keys, secrets and bot tokens;</li>
 <li>the database: chat history, memory, scheduled tasks, inbox events;</li>
-<li>every pet's home folder: its projects, sessions, skills, instructions and anything it installed there;</li>
-<li>the house's shared skills, ChatGPT subscription logins, and the certificate pets trust.</li>
+<li>every bot's home folder: its projects, sessions, skills, instructions and anything it installed there;</li>
+<li>the workspace's shared skills, ChatGPT subscription logins, and the certificate bots trust.</li>
 </ul>
-<p>Not included: logs, and what a pet installed outside its home — its Setup script brings that back on the first start.</p>
+<p>Not included: logs, and what a bot installed outside its home — its Setup script brings that back on the first start.</p>
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>The archive contains your keys and tokens in plain form.</strong> It is saved readable only by you (mode 600); keep it like a password file.</p>
 <h2 id="restore">Restore</h2>
 <p>Stop the daemon (<code>Ctrl-C</code> in its terminal), then:</p>
@@ -195,7 +195,7 @@ house export ~/backups/house.tar.gz
 house doctor
 house start
 </code></pre>
-<p>On a machine that already has a Household, import refuses to overwrite anything. <code>--force</code> replaces it: the current config, database and certificate are moved aside as <code>*.bak-…</code> files, and the pets' home folders are replaced.</p>
+<p>On a machine that already has a Household, import refuses to overwrite anything. <code>--force</code> replaces it: the current config, database and certificate are moved aside as <code>*.bak-…</code> files, and the bots' home folders are replaced.</p>
 <p>A backup from an older Household restores with a warning. One from a newer Household is refused: <code>house update</code> first.</p>
 <h2 id="move-to-another-machine">Move to another machine</h2>
 <ol>
@@ -205,7 +205,7 @@ house start
 </ol>
 <p>Stop the daemon on the old machine before starting the new one: both would answer the same bots.</p>
 <h2 id="just-the-config">Just the config</h2>
-<p><code>household.yaml</code> is a plain file in <code>~/.config/household/</code>. You can keep a copy, edit it by hand and run <code>house reload</code> to apply it. It alone does not carry chat history, memory or the pets' files: for those, use <code>house export</code>.</p>
+<p><code>household.yaml</code> is a plain file in <code>~/.config/household/</code>. You can keep a copy, edit it by hand and run <code>house reload</code> to apply it. It alone does not carry chat history, memory or the bots' files: for those, use <code>house export</code>.</p>
 <p>When a new version has to migrate the config or the database, Household copies both aside first, as it starts. <code>house migrate backups</code> lists those copies; <code>house migrate restore &lt;name&gt;</code> puts one back.</p>
 </article>
 

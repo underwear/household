@@ -44,18 +44,18 @@ test("config checks: the default is required with two pets, pets must be the hou
   expect(channelProblems(house([dm]))).toEqual([]);
   expect(channelProblems(house([{ ...dm, pets: ["sibling", "diet"], default: "sibling" }]))).toEqual([]);
   expect(channelProblems(house([{ ...dm, pets: ["sibling", "diet"] }]))).toEqual([
-    "houses.work.channels[0]: default is required when a channel has two pets or more (one of sibling, diet)",
+    "houses.work.channels[0]: default is required when a channel has two bots or more (one of sibling, diet)",
   ]);
   expect(channelProblems(house([{ ...dm, pets: ["sibling", "ghost", "sibling"], default: "diet" }]))).toEqual([
-    "houses.work.channels[0].pets: 'ghost' is not a pet of house work",
+    "houses.work.channels[0].pets: 'ghost' is not a bot of workspace work",
     "houses.work.channels[0].pets: 'sibling' is listed twice",
-    "houses.work.channels[0].default: 'diet' is not one of the channel's pets",
+    "houses.work.channels[0].default: 'diet' is not one of the channel's bots",
   ]);
   expect(channelProblems(house([dm, { ...dm, name: "again", token: "another-secret" }]))).toEqual([
     "houses.work.channels[1]: the same chat as an earlier channel (telegram-private, chat 100200300)",
   ]);
   // Names, titles and aliases of two pets of one channel, case aside; the same pets in different channels are fine.
   const pets = [{ name: "sibling", aliases: ["Síbling"] }, { name: "diet", title: "SÍBLING" }];
-  expect(channelProblems(house([{ ...dm, pets: ["sibling", "diet"], default: "sibling" }], pets))).toEqual(["houses.work.channels[0]: pets sibling and diet both answer to 'SÍBLING'"]);
+  expect(channelProblems(house([{ ...dm, pets: ["sibling", "diet"], default: "sibling" }], pets))).toEqual(["houses.work.channels[0]: bots sibling and diet both answer to 'SÍBLING'"]);
   expect(channelProblems(house([dm, { ...dm, chat: "1", pets: ["diet"] }], pets))).toEqual([]);
 });

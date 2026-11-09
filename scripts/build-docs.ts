@@ -1,15 +1,14 @@
 /** Rebuild the published doc pages from their reviewed Markdown sources (docs/*.md), with one shared navigation. */
 const template = await Bun.file("landing/docs/index.html").text();
 const pages = [
-  { slug: "connectors", source: "docs/connectors.md", title: "Google connectors", heading: "Google connectors", crumb: "Connected services", description: "Connect Gmail, Drive and Calendar to a house; choose pets, inspect read-only tools, and manage local OAuth credentials." },
-  { slug: "start", source: "docs/start.md", title: "Quick start", heading: "Quick start", crumb: "Getting started", description: "Install Household, run house onboard and house start, then write to your first pet." },
-  { slug: "pets", source: "docs/pets.md", title: "Pets", heading: "Pets", crumb: "Pets", description: "What a pet is — a Claude Code or Codex agent in its own microVM that lives in your messenger — how it differs from sideworkers and scouts, and every tab of its page." },
-  { slug: "sideworkers", source: "docs/sideworkers.md", title: "Sideworkers", heading: "Sideworkers", crumb: "Pets", description: "Extra agents a pet starts for one job, in VMs of their own: coding in another project with its own CLAUDE.md or AGENTS.md, a thread you can talk in, parallel work." },
-  { slug: "inboxes", source: "docs/inboxes.md", title: "Inboxes", heading: "House inboxes", crumb: "Sources and delivery", description: "Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your pets. Setup, sources, per-pet switches and the custom HTTP format." },
-  { slug: "scouts", source: "docs/scouts.md", title: "Scouts", heading: "Scouts", crumb: "Pets", description: "Specialists your pets call for one task, each in its own VM with only the access you give it: the untrusted internet, production keys, closed networks. Every run waits for your Run." },
-  { slug: "previews", source: "docs/previews.md", title: "HTTP previews", heading: "HTTP previews", crumb: "Pets", description: "A pet shows you a web app from its VM by a link: you approve each one, it lives 15 minutes, and you choose who can open it." },
-  { slug: "mcp", source: "docs/mcp.md", title: "MCP servers", heading: "Adding MCP servers", crumb: "Pets", description: "Give a pet any MCP server: ask it, and it adds the server to its own Claude Code or Codex, with the hosts and keys you approve." },
-  { slug: "backup", source: "docs/backup.md", title: "Back up and move", heading: "Back up and move Household", crumb: "Operating", description: "Save every house and pet into one file with house export, restore it with house import, or move Household to another machine." },
+  { slug: "start", source: "docs/start.md", title: "Quick start", heading: "Quick start", crumb: "Getting started", description: "Install Household, run house onboard and house start, then write to your first bot." },
+  { slug: "bots", source: "docs/bots.md", title: "Bots", heading: "Bots", crumb: "Bots", description: "What a bot is — an assistant powered by a Claude Code or Codex harness in its own microVM that lives in your messenger — how it differs from sideworkers and scouts, and every tab of its page." },
+  { slug: "sideworkers", source: "docs/sideworkers.md", title: "Sideworkers", heading: "Sideworkers", crumb: "Bots", description: "Extra assistants a bot starts for one job, in VMs of their own: coding in another project with its own CLAUDE.md or AGENTS.md, a thread you can talk in, parallel work." },
+  { slug: "inboxes", source: "docs/inboxes.md", title: "Inboxes", heading: "Workspace inboxes", crumb: "Sources and delivery", description: "Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your bots. Setup, sources, per-bot switches and the custom HTTP format." },
+  { slug: "scouts", source: "docs/scouts.md", title: "Scouts", heading: "Scouts", crumb: "Bots", description: "Specialists your bots call for one task, each in its own VM with only the access you give it: the untrusted internet, production keys, closed networks. Every run waits for your Run." },
+  { slug: "previews", source: "docs/previews.md", title: "HTTP previews", heading: "HTTP previews", crumb: "Bots", description: "A bot shows you a web app from its VM by a link: you approve each one, it lives 15 minutes, and you choose who can open it." },
+  { slug: "mcp", source: "docs/mcp.md", title: "MCP servers", heading: "Adding MCP servers", crumb: "Bots", description: "Give a bot any MCP server: ask it, and it adds the server to its own Claude Code or Codex, with the hosts and keys you approve." },
+  { slug: "backup", source: "docs/backup.md", title: "Back up and move", heading: "Back up and move Household", crumb: "Operating", description: "Save every workspace and bot into one file with house export, restore it with house import, or move Household to another machine." },
 ];
 const WARNING = '<svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 const nav = (current: string) =>
@@ -38,3 +37,8 @@ for (const page of pages) {
   await Bun.write(`landing/docs/${page.slug}/index.html`, html);
   console.log(`Built landing/docs/${page.slug}/index.html`);
 }
+
+// Keep published bookmarks working after the terminology change.
+await Bun.write("landing/docs/pets/index.html", `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bots — Household docs</title><link rel="canonical" href="https://agents-household.dev/docs/bots/"><meta http-equiv="refresh" content="0; url=../bots/"></head><body><p>The documentation has moved to <a href="../bots/">Bots</a>.</p><script>location.replace("../bots/" + location.search + location.hash.replaceAll("pet", "bot"));</script></body></html>
+`);

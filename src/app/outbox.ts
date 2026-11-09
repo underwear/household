@@ -37,10 +37,10 @@ export function outboxTool(files: Pick<PetOutboxFiles, "read">, chat: Pick<Chat,
         const attachment: OutgoingAttachment = { kind, bytes, name: posix.basename(args.path), caption: args.caption as string | undefined };
         signal?.throwIfAborted();
         const sent = await chat.sendAttachment(house, pet, attachment, args.channel as string | undefined, signal, args.place as string | undefined);
-        log.info(`pet ${house}/${pet}: sent ${kind} (${bytes.length} bytes), message ${sent.id} in ${sent.channel}`);
+        log.info(`bot ${house}/${pet}: sent ${kind} (${bytes.length} bytes), message ${sent.id} in ${sent.channel}`);
         return JSON.stringify(sent);
       } catch (error) {
-        log.error(`pet ${house}/${pet}: outgoing ${kind} failed`);
+        log.error(`bot ${house}/${pet}: outgoing ${kind} failed`);
         throw error;
       }
     },

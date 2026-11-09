@@ -71,8 +71,8 @@ test("each file is saved in the pet's inbox under Household's name; one that can
   expect(readFileSync(join(day, "m3-photo.jpg"), "utf8")).toBe("jpeg");
   expect(api.sent("getFile").map(({ file_id }) => file_id)).toEqual(["voice", "voice", "voice", "photo", "keys", "gone"]);
   expect(places.every((place) => place === "c1.sibling")).toBe(true);
-  expect(lines).toContain("ERROR pet work/sibling: voice of m3 not downloaded: file: 502 refused");
-  expect(lines).toContain(`pet work/sibling: photo of m3 saved to .household/inbox/${today}/m3-photo.jpg`);
+  expect(lines).toContain("ERROR bot work/sibling: voice of m3 not downloaded: file: 502 refused");
+  expect(lines).toContain(`bot work/sibling: photo of m3 saved to .household/inbox/${today}/m3-photo.jpg`);
   expect(lines.some((line) => line.includes(TOKEN))).toBe(false);
 });
 

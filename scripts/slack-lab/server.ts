@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** Local, synthetic protocol lab. Real SlackChannel + Chat; scripted agent, no Slack account or VM. */
+/** Local, synthetic protocol lab. Real SlackChannel + Chat; scripted harness, no Slack account or VM. */
 import { Chat } from "../../src/app/chat";
 import { Dialogs } from "../../src/app/dialogs";
 import { SlackBot, SlackChannel } from "../../src/channel-adapters/slack";
@@ -57,7 +57,7 @@ async function runPet(pet: string, draft: MessageDraft): Promise<void> {
     const input = draft.text.toLowerCase();
     if (/доступ|access|network/.test(input)) {
       const result = await chat.ownerCard("lab", pet, { text: "Доступ к api.example.com\nЛокальная демонстрация: реальная сеть не меняется.", start: "waiting", view: state => state === "waiting" ? { choices: [["На 15 минут"], ["Постоянно"], ["Отказать"]] } : { outcome: state }, press: (_state, index) => ["Разрешено на 15 минут", "Разрешено постоянно", "Отказано"][index]! }, controller.signal);
-      if (result) await chat.reply("lab", pet, `Решение получено: *${result}*.\nВ настоящем канале эта же карточка управляет запросом House.`, undefined, "c1");
+      if (result) await chat.reply("lab", pet, `Решение получено: *${result}*.\nВ настоящем канале эта же карточка управляет запросом workspace.`, undefined, "c1");
     } else if (/долг|long|stop/.test(input)) {
       await chat.notice("lab", pet, "Запущена долгая демонстрационная работа. Нажми Stop в статусе — House её остановит.");
       for (let i = 0; i < 20; i++) {

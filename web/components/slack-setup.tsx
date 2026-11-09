@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { api, type ChannelFields, type ChannelKindView, type ChannelView, type HouseView } from "../api";
+import { api, type ChannelFields, type ChannelKindView, type ChannelView, type WorkspaceView } from "../api";
 import { Dialog } from "./dialog";
 import { CheckList, SelectField, TextField } from "./fields";
-import { channelLabel } from "./houses";
+import { channelLabel } from "./workspaces";
 
-const STEPS = ["App", "Your account", "Pets"] as const;
+const STEPS = ["App", "Your account", "Bots"] as const;
 const APPS = "https://api.slack.com/apps";
 const GUIDE = "https://github.com/underwear/household/blob/main/docs/slack.md#install";
 
@@ -14,11 +14,11 @@ export const slackUrl = (chat: string) => `https://app.slack.com/client/${chat.r
 
 /**
  * A Slack Bot DM's form. A new one in three steps: the app's two tokens, the owner's member ID (the admin finds the
- * bot DM from it), then its name and pets. Editing is one form, as every other channel's: tokens, its DM (read
- * only, with a way to it), name, pets and default, note.
+ * bot DM from it), then its name and bots. Editing is one form, as every other channel's: tokens, its DM (read
+ * only, with a way to it), name, bots and default, note.
  */
 export function SlackSetup({ house, spec, channel, onClose, back, save }: {
-  house: HouseView; spec: ChannelKindView; channel?: ChannelView; onClose: () => void;
+  house: WorkspaceView; spec: ChannelKindView; channel?: ChannelView; onClose: () => void;
   back: () => void; save: (kind: string, fields: ChannelFields) => Promise<void>;
 }) {
   const [step, setStep] = useState(channel ? 2 : 0);
@@ -26,7 +26,7 @@ export function SlackSetup({ house, spec, channel, onClose, back, save }: {
   const [appToken, setAppToken] = useState(channel?.fields.appToken ?? "");
   const [member, setMember] = useState("");
   const [destination, setDestination] = useState<{ chat: string; owner: string; url: string }>();
-  const [pets, setPets] = useState(channel?.pets ?? []);
+  const [pets, setBots] = useState(channel?.pets ?? []);
   const [first, setFirst] = useState(channel?.default ?? "");
   const [name, setName] = useState(channel?.ownName ?? "Slack");
   const [note, setNote] = useState(channel?.note ?? "");
@@ -66,7 +66,7 @@ export function SlackSetup({ house, spec, channel, onClose, back, save }: {
             setStep(2);
             return "stay";
           }
-          if (pets.length > 1 && !pets.includes(first)) throw new Error("Choose the default pet: it replies in Messages.");
+          if (pets.length > 1 && !pets.includes(first)) throw new Error("Choose the default bot: it replies in Messages.");
           await save(spec.kind, {
             ...(channel ? {} : { chat: destination!.chat, slackMember: member.trim() }),
             own: { token: token.trim(), appToken: appToken.trim() },
@@ -89,16 +89,16 @@ export function SlackSetup({ house, spec, channel, onClose, back, save }: {
             )}
             {step === 0 && (
               <>
-                <p className="dialog-text">Paste the two tokens of your installed Slack app, from its {link(APPS, "settings")}. They stay on this host; pets never get them.</p>
+                <p className="dialog-text">Paste the two tokens of your installed Slack app, from its {link(APPS, "settings")}. They stay on this host; bots never get them.</p>
                 {tokens}
                 <p className="hint">No app yet? Create one from the Household manifest and install it in your workspace: {link(GUIDE, "installation guide")}.</p>
               </>
             )}
             {step === 1 && (
               <>
-                <p className="dialog-text">The Slack account you talk to your pets from. Its DM with the bot is found for you; nothing is sent.</p>
+                <p className="dialog-text">The Slack account you talk to your bots from. Its DM with the bot is found for you; nothing is sent.</p>
                 <TextField label="Your member ID" mono placeholder="U0123456789" value={member} onChange={setMember} hint="In Slack: your profile → More (⋯) → Copy member ID." />
-                <p className="hint danger">This account becomes an owner of {house.name}: it can command its pets and approve their requests.</p>
+                <p className="hint danger">This account becomes an owner of {house.name}: it can command its bots and approve their requests.</p>
               </>
             )}
             {step === 2 && (
@@ -119,7 +119,7 @@ export function SlackSetup({ house, spec, channel, onClose, back, save }: {
                 )}
                 <TextField label="Name" value={name} onChange={setName} placeholder={spec.label} />
                 <CheckList
-                  label="Pets"
+                  label="Bots"
                   options={available.map((pet) => ({
                     value: pet.name,
                     label: (
@@ -129,8 +129,8 @@ export function SlackSetup({ house, spec, channel, onClose, back, save }: {
                     ),
                   }))}
                   checked={pets}
-                  onToggle={(pet) => setPets(pets.includes(pet) ? pets.filter((other) => other !== pet) : [...pets, pet])}
-                  empty="The house has no pets yet: add them to this channel later."
+                  onToggle={(pet) => setBots(pets.includes(pet) ? pets.filter((other) => other !== pet) : [...pets, pet])}
+                  empty="The workspace has no bots yet: add them to this channel later."
                 />
                 {chosen.length > 1 && (
                   <SelectField

@@ -9,7 +9,7 @@ import { TextField } from "./fields";
 import { Cell, List, ListRow, Page, Section } from "./layout";
 import { Link } from "./link";
 import { MarkdownEditor } from "./markdown-editor";
-import { housePath } from "../router";
+import { workspacePath } from "../router";
 
 const draftKey = (house: string, path: string) => `household:skill-draft:${house}:${path}`;
 const hasDraft = (house: string, path: string) => {
@@ -87,27 +87,27 @@ export function SkillPreview({ content, parseFrontmatter = true }: { content: st
 }
 
 /**
- * A house's skills: every pet in it reads (and may edit) the same files. Its skills on the left, each with its
+ * A workspace's skills: every bot in it reads (and may edit) the same files. Its skills on the left, each with its
  * description and, when chosen, its files; under them Household's built-in ones, read-only. The chosen file on the
  * right, in an editor or as it reads. Unsaved edits are kept in the browser per file (sessionStorage), and a save
- * says which revision it replaces, so a pet's edit in the meantime is not overwritten.
+ * says which revision it replaces, so a bot's edit in the meantime is not overwritten.
  */
 export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout, worker = false, notify }: {
   house: string;
-  /** A pet's Skills tab: its own skills; a line says what else it has (the house's, Household's). */
+  /** A bot's Skills tab: its own skills; a line says what else it has (the workspace's, Household's). */
   pet?: string;
   /** A capability's skills: copied into every scout that has it. */
   capability?: string;
-  /** The pet's title, as the tab says it. */
+  /** The bot's title, as the tab says it. */
   title?: string;
-  /** The pet is a sideworker: its directory is a project, whose skills are the project's, not its own. */
+  /** The bot is a sideworker: its directory is a project, whose skills are the project's, not its own. */
   worker?: boolean;
   notify: (message: string, warning?: boolean) => void;
 }) {
   const scope = scout ? `${house}/capability/${scout}` : pet ? `${house}/${pet}` : house;
-  const [workspacePath, setWorkspacePath] = useState<string>();
+  const [skillDirectory, setSkillDirectory] = useState<string>();
   const [sharedNames, setSharedNames] = useState<Set<string>>();
-  // Household's own skills: listed under the house's, counted on a pet's tab.
+  // Household's own skills: listed under the workspace's, counted on a bot's tab.
   const [builtin, setBuiltin] = useState<BuiltinSkill[]>([]);
   const [shownBuiltin, setShownBuiltin] = useState<BuiltinSkill>();
   useEffect(() => {
@@ -120,17 +120,17 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
       if (scout) return capabilityApi.skills(house, scout);
       if (!pet) return api.skills(house);
       const result = await api.petSkills(house, pet);
-      setWorkspacePath(result.path);
+      setSkillDirectory(result.path);
       return result.entries;
     },
     read: (path: string) => scout ? capabilityApi.skill(house, scout, path) : pet ? api.petSkillFile(house, pet, path) : api.skillFile(house, path),
-    save: (path: string, content: string, revision: string | null) => scout ? capabilityApi.saveSkill(house, scout, path, content, revision) : pet ? api.savePetSkillFile(house, pet, path, content, revision) : api.saveSkillFile(house, path, content, revision),
-    delete: (path: string, revision: string) => scout ? capabilityApi.deleteSkill(house, scout, path, revision) : pet ? api.deletePetSkillFile(house, pet, path, revision) : api.deleteSkillFile(house, path, revision),
+    save: (path: string, content: string, revision: string | null) => scout ? capabilityApi.saveSkill(house, scout, path, content, revision) : pet ? api.saveBotSkillFile(house, pet, path, content, revision) : api.saveSkillFile(house, path, content, revision),
+    delete: (path: string, revision: string) => scout ? capabilityApi.deleteSkill(house, scout, path, revision) : pet ? api.deleteBotSkillFile(house, pet, path, revision) : api.deleteSkillFile(house, path, revision),
   };
   useEffect(() => {
     if (!pet && !scout) return;
     let active = true;
-    // A pet's skill named as one of the house's: the agent sees two, so say so.
+    // A bot's skill named as one of the workspace's: the harness sees two, so say so.
     api.skills(house).then(rows => { if (active) setSharedNames(new Set(skillsOf(rows).filter(skill => skill.files.some(({ path }) => path === `${skill.name}/SKILL.md`)).map(skill => skill.name))); }, () => {});
     return () => { active = false; };
   }, [house, pet, scout]);
@@ -244,7 +244,7 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
       if (contentRef.current === next.content) sessionStorage.removeItem(draftKey(scope, file.path));
       else sessionStorage.setItem(draftKey(scope, file.path), JSON.stringify({ content: contentRef.current, revision: next.revision }));
       setFile(next);
-      notify(`${file.path} saved ${scout ? `for capability ${scout}` : pet ? `for ${pet}` : `for every pet in ${house}`}`);
+      notify(`${file.path} saved ${scout ? `for capability ${scout}` : pet ? `for ${pet}` : `for every bot in ${house}`}`);
       await refresh();
       if (file.path.endsWith("/SKILL.md")) void describe([file.path.split("/")[0]!]);
     } catch (e) {
@@ -271,7 +271,7 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
     file &&
     dialog.open({
       title: `Delete ${file.path}?`,
-      body: scout ? "This file is removed from the capability’s skills." : pet ? `This file is removed from ${pet}’s workspace.` : "Every pet in the house loses this file.",
+      body: scout ? "This file is removed from the capability’s skills." : pet ? `This file is removed from ${pet}’s workspace.` : "Every bot in the workspace loses this file.",
       confirmLabel: "Delete file",
       danger: true,
       onConfirm: async () => {
@@ -287,7 +287,7 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
   const removeSkill = (skill: Skill) =>
     dialog.open({
       title: `Delete the skill ${skill.name}?`,
-      body: `${skill.files.length === 1 ? "Its file goes" : `All ${skill.files.length} of its files go`} ${scout ? "from the capability’s skills" : pet ? `from ${pet}’s workspace` : "for every pet in the house"}.`,
+      body: `${skill.files.length === 1 ? "Its file goes" : `All ${skill.files.length} of its files go`} ${scout ? "from the capability’s skills" : pet ? `from ${pet}’s workspace` : "for every bot in the workspace"}.`,
       confirmLabel: "Delete skill",
       danger: true,
       onConfirm: async () => {
@@ -313,18 +313,18 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
 
   const fileName = file?.path.split("/").slice(1).join("/");
   const markdownFile = !!file && isMarkdown(file.path);
-  // A pet's: where its own are, and what else its agent sees (the house's and Household's, on Shared Skills).
-  const hint = scout ? <>Copied into every scout that has this capability, with the house’s <Link href={housePath(house, "skills")} className="text-link">Shared Skills</Link> and Household’s built-in ones.</> : pet ? (
+  // A bot's: where its own are, and what else its harness sees (the workspace's and Household's, on Shared Skills).
+  const hint = scout ? <>Copied into every scout that has this capability, with the workspace’s <Link href={workspacePath(house, "skills")} className="text-link">Shared Skills</Link> and Household’s built-in ones.</> : pet ? (
     <>
-      {worker ? "The project's, in its working directory" : `Only ${title} has them, whatever its agent`}
-      {workspacePath && <>: <span className="mono">{workspacePath}</span></>}.{" "}
+      {worker ? "The project's, in its working directory" : `Only ${title} has them, whatever its harness`}
+      {skillDirectory && <>: <span className="mono">{skillDirectory}</span></>}.{" "}
       It also gets{" "}
-      <Link href={housePath(house, "skills")} className="text-link">
+      <Link href={workspacePath(house, "skills")} className="text-link">
         {sharedNames ? `${sharedNames.size} shared` : "the shared"} and {builtin.length || "the"} built-in skills
       </Link>.
     </>
   ) : (
-    `Shared by every pet in ${house}. Pets can edit them too.`
+    `Shared by every bot in ${house}. Bots can edit them too.`
   );
   const newSkill = !loading && skills.length > 0 && <button className="btn small" onClick={() => setAdding({})}>+ New skill</button>;
   const body = (
@@ -444,7 +444,7 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
                     <SkillPreview content={shownBuiltin.content} />
                   </div>
                   <footer className="skills-doc-foot">
-                    <span>Household's own: every pet has it.</span>
+                    <span>Household's own: every bot has it.</span>
                     <span>Changes with Household's updates.</span>
                   </footer>
                 </>
@@ -491,7 +491,7 @@ export function SkillsPage({ house, pet, capability: scout, title = pet ?? scout
                       <kbd>⌘</kbd>
                       <kbd>S</kbd> saves
                     </span>
-                    <span>Pets see a new skill from their next session.</span>
+                    <span>Bots see a new skill from their next session.</span>
                   </footer>
                 </>
               ) : (
@@ -557,7 +557,7 @@ function AddSkillDialog({ save, skill, taken, onClose, onCreated }: { save: (pat
           if (problem) return "stay"; // said at its field
           const initial = skill
             ? ""
-            : `---\nname: ${trimmed}\ndescription: ${JSON.stringify(description.trim() || "Describe when a pet should use this skill.")}\n---\n\n# ${trimmed}\n\nWrite the instructions here.\n`;
+            : `---\nname: ${trimmed}\ndescription: ${JSON.stringify(description.trim() || "Describe when a bot should use this skill.")}\n---\n\n# ${trimmed}\n\nWrite the instructions here.\n`;
           await save(path, initial, null);
           await onCreated(path);
         },
@@ -566,7 +566,7 @@ function AddSkillDialog({ save, skill, taken, onClose, onCreated }: { save: (pat
         ) : (
           <>
             <TextField label="Name" mono value={name} onChange={(value) => setName(value.toLowerCase().replace(/\s+/g, "-"))} placeholder="code-review" maxLength={64} hint="The skill's folder and name." error={problem} />
-            <TextField label="When to use it" value={description} onChange={setDescription} placeholder="Review a diff for bugs before merging" hint="Pets read this to decide when to use it." />
+            <TextField label="When to use it" value={description} onChange={setDescription} placeholder="Review a diff for bugs before merging" hint="Bots read this to decide when to use it." />
           </>
         ),
       }}
@@ -575,7 +575,7 @@ function AddSkillDialog({ save, skill, taken, onClose, onCreated }: { save: (pat
 }
 
 /**
- * Household's own skills, for a house with none of its own (no workspace to list them in): every pet has them,
+ * Household's own skills, for a workspace with none of its own (no workspace to list them in): every bot has them,
  * nobody edits them here (they change with Household). A row opens its text below the list.
  */
 export function BuiltinSkills({ skills }: { skills: BuiltinSkill[] }) {
@@ -583,7 +583,7 @@ export function BuiltinSkills({ skills }: { skills: BuiltinSkill[] }) {
   if (!skills.length) return null;
   const shown = skills.find((skill) => skill.name === open);
   return (
-    <Section width="wide" title="Built-in" hint="Household's own: every pet has them, read-only.">
+    <Section width="wide" title="Built-in" hint="Household's own: every bot has them, read-only.">
       <List columns="minmax(0, 1fr) auto">
         {skills.map((skill) => (
           <ListRow key={skill.name} actions={<button type="button" className="btn small" aria-expanded={open === skill.name} onClick={() => setOpen(open === skill.name ? undefined : skill.name)}>{open === skill.name ? "Hide" : "View"}</button>}>

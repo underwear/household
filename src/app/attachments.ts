@@ -49,7 +49,7 @@ export class AttachmentFetcher {
   }
 
   private async one(house: string, pet: string, home: string, id: string, place: string | undefined, attachment: Attachment): Promise<Attachment> {
-    const name = `pet ${house}/${pet}: ${attachment.kind} of ${id}`;
+    const name = `bot ${house}/${pet}: ${attachment.kind} of ${id}`;
     let bytes: Uint8Array;
     try {
       bytes = await this.downloaded(house, place, attachment);

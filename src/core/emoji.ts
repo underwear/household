@@ -1,5 +1,5 @@
 /** A pet's mark when its config gives none. */
-export const DEFAULT_PET_EMOJI = "🐾";
+export const DEFAULT_PET_EMOJI = "🤖";
 
 const RGI_EMOJI = /^\p{RGI_Emoji}$/v;
 const TEXT_DEFAULT = /^\p{Emoji}$/u;

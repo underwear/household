@@ -1,3 +1,4 @@
+import { normalizeCommand } from "./terminology";
 import { readFileSync } from "node:fs";
 import type { ApiAnswer, ApiCall } from "../app/daemon";
 import { formatLogLine, formatLogTime, LOG_KINDS, readLog, type LogFilter, type LogKind, type LogPage } from "../app/household-log";
@@ -16,42 +17,42 @@ import type { Paths } from "../infra/paths";
  * routes, checks and errors as the browser's. Reading the Household log (`house logs`) needs no daemon.
  */
 
-export const MORE_USAGE = `  house show <house>             a house: its pets and their state, channels, owners, allowlist and temporary access
-  house delete <house>           remove a house (refused while it has pets or channels)
-  house revoke <house> <host[:port]>  end a pet's temporary access to a host
+export const MORE_USAGE = `  house workspace show <workspace>             a workspace: its bots and their state, channels, owners, allowlist and temporary access
+  house workspace delete <workspace>           remove a workspace (refused while it has bots or channels)
+  house workspace revoke <workspace> <host[:port]>  end a bot's temporary access to a host
   house timezone [<zone>]        the Household timezone (IANA, e.g. Europe/Madrid): show it, or set it
   house key set <name> [--note <text>] [--value <value>]
                                  change a key's note or value (the value from stdin when neither is given)
-  house channel set <house> <chat> [--pets a,b] [--default a] [--name <name>] [--note <text>] [--token <token>] [--app-token <xapp-token>]
-  house owner set <house> <platform> <id> --note <text>
-  house pet show <house> <pet>   a pet: what runs it, its allocation, its state and what it uses now
-  house pet enable <house> <pet>
-  house pet disable <house> <pet> [--now]
+  house channel set <workspace> <chat> [--bots a,b] [--default a] [--name <name>] [--note <text>] [--token <token>] [--app-token <xapp-token>]
+  house owner set <workspace> <platform> <id> --note <text>
+  house bot show <workspace> <bot>   a bot: what runs it, its allocation, its state and what it uses now
+  house bot enable <workspace> <bot>
+  house bot disable <workspace> <bot> [--now]
                                  stop its VM (files and memory stay); it is asked to save its work first, unless --now
-  house pet restart <house> <pet> [--now]
-                                 restart its VM: a fresh agent session; it saves its work first, unless --now
-  house pet screen <house> <pet>  the agent's terminal screen now (agents with one)
-  house pet env <house> <pet>    its setup and on-start scripts and how they last ran
-  house pet env set <house> <pet> setup|on-start [<file>]
+  house bot restart <workspace> <bot> [--now]
+                                 restart its VM: a fresh harness session; it saves its work first, unless --now
+  house bot screen <workspace> <bot>  the harness's terminal screen now (harnesses with one)
+  house bot env <workspace> <bot>    its setup and on-start scripts and how they last ran
+  house bot env set <workspace> <bot> setup|on-start [<file>]
                                  save a script from a file or stdin (empty: none); saving runs nothing
-  house pet env run <house> <pet> setup|on-start  run the saved script in the VM now (up to five minutes)
-  house pet instructions <house> <pet>  its instructions file
-  house pet instructions set <house> <pet> [<file>]  replace them from a file or stdin
-  house pet tasks <house> <pet>  its scheduled tasks and their recent runs
-  house pet tasks add <house> <pet> --name <name> (--at <YYYY-MM-DDTHH:MM> | --cron <expression>) [--text <prompt>]
+  house bot env run <workspace> <bot> setup|on-start  run the saved script in the VM now (up to five minutes)
+  house bot instructions <workspace> <bot>  its instructions file
+  house bot instructions set <workspace> <bot> [<file>]  replace them from a file or stdin
+  house bot tasks <workspace> <bot>  its scheduled tasks and their recent runs
+  house bot tasks add <workspace> <bot> --name <name> (--at <YYYY-MM-DDTHH:MM> | --cron <expression>) [--text <prompt>]
                                  schedule a prompt (from stdin without --text), in the Household timezone
-  house pet tasks set <house> <pet> <id> [--name <name>] [--at <time> | --cron <expression>] [--text <prompt>]
-  house pet tasks rm <house> <pet> <id>
-  house pet memory <house> <pet> [--grep <words>] [--deleted]  its memory keys, each with the start of its value
-  house pet memory get|set|rm <house> <pet> <key> [--value <text>]
+  house bot tasks set <workspace> <bot> <id> [--name <name>] [--at <time> | --cron <expression>] [--text <prompt>]
+  house bot tasks rm <workspace> <bot> <id>
+  house bot memory <workspace> <bot> [--grep <words>] [--deleted]  its memory keys, each with the start of its value
+  house bot memory get|set|rm <workspace> <bot> <key> [--value <text>]
                                  one entry: show it, write it (from stdin without --value), delete it
-  house pet logs <house> <pet> [--source setup|on-start|docker|kernel] [-n <lines>] [-f]
+  house bot logs <workspace> <bot> [--source setup|on-start|docker|kernel] [-n <lines>] [-f]
                                  a log inside its VM (default: setup); -f follows it
-  house skills <house>           the house's shared skills, file by file
-  house skills cat|put|rm <house> <path> [<file>]
+  house skills <workspace>           the workspace's shared skills, file by file
+  house skills cat|put|rm <workspace> <path> [<file>]
                                  one skill file: show it, write it (from a file or stdin), delete it
-  house logs [--house <house>] [--pet <pet>] [--kind daemon,agent,network] [--problems] [--grep <words>] [-n <lines>] [-f]
-                                 the Household log: the daemon, the pets' agents and their network; -f follows it`;
+  house logs [--workspace <workspace>] [--bot <bot>] [--kind daemon,harness,network] [--problems] [--grep <words>] [-n <lines>] [-f]
+                                 the Household log: the daemon, the bots' harnesses and their network; -f follows it`;
 
 export interface MoreValues {
   note?: string;
@@ -120,13 +121,13 @@ const gib = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
 
 async function showHouse(paths: Paths, house: string): Promise<void> {
   const view = await api<HouseView>(paths, "GET", housePath(house));
-  console.log(`house ${view.name}`);
+  console.log(`workspace ${view.name}`);
   for (const pet of view.pets) {
-    console.log(`  pet ${pet.name}  "${pet.display}"  ${pet.enabled ? pet.state : "disabled"}  ${pet.agent} ${pet.model}  ${allocation(pet)}${pet.problem ? `  ! ${pet.problem}` : ""}`);
+    console.log(`  bot ${pet.name}  "${pet.display}"  ${pet.enabled ? pet.state : "disabled"}  ${pet.agent} ${pet.model}  ${allocation(pet)}${pet.problem ? `  ! ${pet.problem}` : ""}`);
   }
-  for (const channel of view.channels) console.log(`  channel ${channel.name}  ${channel.kind}  chat ${channel.chat}  pets: ${channel.pets.join(", ") || "-"}${channel.problem ? `  ! ${channel.problem}` : ""}`);
+  for (const channel of view.channels) console.log(`  channel ${channel.name}  ${channel.kind}  chat ${channel.chat}  bots: ${channel.pets.join(", ") || "-"}${channel.problem ? `  ! ${channel.problem}` : ""}`);
   for (const owner of view.owners) console.log(`  owner ${owner.platform} ${owner.id}${owner.note ? `  (${owner.note})` : ""}`);
-  console.log(`  allow: ${view.allow.map((entry) => entry.host + (entry.byAgent ? " (agent)" : "")).join(", ") || "-"}`);
+  console.log(`  allow: ${view.allow.map((entry) => entry.host + (entry.byAgent ? " (harness)" : "")).join(", ") || "-"}`);
   for (const grant of view.temporary ?? []) console.log(`  temporary: ${JSON.stringify(grant)}`);
 }
 
@@ -137,13 +138,13 @@ const down = (sample: MetricSample) =>
 async function showPet(paths: Paths, house: string, name: string): Promise<void> {
   const [view, metrics] = await Promise.all([api<HouseView>(paths, "GET", housePath(house)), api<Record<string, MetricSample | null>>(paths, "GET", `${housePath(house)}/metrics`)]);
   const pet = view.pets.find((each) => each.name === name);
-  if (!pet) throw new HouseholdError(`house '${house}' has no pet '${name}'`);
+  if (!pet) throw new HouseholdError(`workspace '${house}' has no bot '${name}'`);
   const now = metrics[name];
   const channels = view.channels.filter((channel) => channel.pets.includes(name)).map((channel) => channel.name);
   const rows: [string, string][] = [
-    ["pet", `${pet.name}  "${pet.display}"${pet.aliases.length ? `  aliases: ${pet.aliases.join(", ")}` : ""}`],
+    ["bot", `${pet.name}  "${pet.display}"${pet.aliases.length ? `  aliases: ${pet.aliases.join(", ")}` : ""}`],
     ["state", pet.enabled ? pet.state : "disabled"],
-    ["agent", `${pet.agent}  model ${pet.model}  effort ${pet.reasoningEffort ?? "default"}${pet.mode ? `  mode ${pet.mode}` : ""}${Object.entries(pet.settings).map(([key, value]) => `  ${key} ${value}`).join("")}`],
+    ["harness", `${pet.agent}  model ${pet.model}  effort ${pet.reasoningEffort ?? "default"}${pet.mode ? `  mode ${pet.mode}` : ""}${Object.entries(pet.settings).map(([key, value]) => `  ${key} ${value}`).join("")}`],
     ["key", pet.key ?? "-"],
     ["allocation", `${allocation(pet)} RAM (changes apply on the next restart)`],
     ["now", now?.status === "ok" ? `CPU ${now.cpu?.toFixed(1) ?? "?"}%  RAM ${now.memory ? gib(now.memory.used) : "?"}  disk ${now.disks?.system ? `${gib(now.disks.system.used)} of ${gib(now.disks.system.total)}` : "?"}${down(now)}` : "no sample"],
@@ -191,7 +192,7 @@ async function memoryEntry(paths: Paths, house: string, pet: string, key: string
 }
 
 async function showLog(paths: Paths, values: MoreValues): Promise<void> {
-  const kinds = values.kind?.split(",").map((kind) => kind.trim()).filter(Boolean);
+  const kinds = values.kind?.split(",").map((kind) => (kind.trim() === "harness" ? "agent" : kind.trim())).filter(Boolean);
   if (kinds?.some((kind) => !LOG_KINDS.includes(kind as LogKind))) throw new HouseholdError(`--kind: ${LOG_KINDS.join(", ")}`);
   const filter: LogFilter = { house: values.house, pet: values.pet, kinds: kinds as LogKind[] | undefined, problems: values.problems, query: values.grep };
   const print = (page: LogPage) => {
@@ -226,19 +227,20 @@ async function showPetLog(paths: Paths, house: string, pet: string, values: More
 
 /** Runs one of these commands; false when `command` and `args` are none of them. */
 export async function runMore(paths: Paths, command: string | undefined, args: string[], values: MoreValues): Promise<boolean> {
+  ({ command, args } = normalizeCommand(command, args));
   const [a, b, c, d] = args;
   const say = (text: string) => console.log(text);
   if (command === "logs" && args.length === 0) return showLog(paths, values).then(() => true);
   if (command === "show" && args.length === 1) return showHouse(paths, a!).then(() => true);
   if (command === "delete" && args.length === 1) {
     await api(paths, "DELETE", housePath(a!));
-    say(`house '${a}' deleted`);
+    say(`workspace '${a}' deleted`);
     return true;
   }
   if (command === "revoke" && args.length === 2) {
     const [host, port] = b!.split(":");
     await api(paths, "DELETE", `${housePath(a!)}/temporary/${enc(host!)}${port ? `?port=${enc(port)}` : ""}`);
-    say(`house '${a}': temporary access to ${b} ended`);
+    say(`workspace '${a}': temporary access to ${b} ended`);
     return true;
   }
   if (command === "timezone" && args.length <= 1) {
@@ -256,12 +258,12 @@ export async function runMore(paths: Paths, command: string | undefined, args: s
     const pets = values.pets?.split(",").map((pet) => pet.trim()).filter(Boolean);
     const fields = { pets, default: values.default, name: values.name, note: values.note, token: values.token, appToken: values["app-token"] };
     await api(paths, "PATCH", `${housePath(b!)}/channels/${enc(c!)}`, Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
-    say(`house '${b}': channel of chat ${c} changed`);
+    say(`workspace '${b}': channel of chat ${c} changed`);
     return true;
   }
   if (command === "owner" && a === "set" && args.length === 4 && values.note !== undefined) {
     await api(paths, "PATCH", `${housePath(b!)}/owners/${enc(c!)}/${enc(d!)}`, { note: values.note || null });
-    say(`house '${b}': owner ${c} ${d} changed`);
+    say(`workspace '${b}': owner ${c} ${d} changed`);
     return true;
   }
   if (command === "skills" && args.length === 1) {
@@ -290,19 +292,19 @@ export async function runMore(paths: Paths, command: string | undefined, args: s
   if (verb === "show" && rest.length === 0) return showPet(paths, house, pet).then(() => true);
   if (verb === "enable" && rest.length === 0) {
     await api(paths, "PATCH", at, { enabled: true });
-    say(`pet '${pet}' of house '${house}' enabled: its VM starts`);
+    say(`bot '${pet}' of workspace '${house}' enabled: its VM starts`);
     return true;
   }
   if (verb === "disable" && rest.length === 0) {
-    if (!values.now) say("asking the agent to save its work (up to three minutes)…");
+    if (!values.now) say("asking the harness to save its work (up to three minutes)…");
     await api(paths, "POST", `${at}/disable`, { mode: values.now ? "now" : "notify" });
-    say(`pet '${pet}' of house '${house}' disabled: its VM is stopped, its files and memory stay`);
+    say(`bot '${pet}' of workspace '${house}' disabled: its VM is stopped, its files and memory stay`);
     return true;
   }
   if (verb === "restart" && rest.length === 0) {
-    if (!values.now) say("asking the agent to save its work (up to three minutes)…");
+    if (!values.now) say("asking the harness to save its work (up to three minutes)…");
     await api(paths, "POST", `${at}/environment/restart`, { mode: values.now ? "now" : "notify" });
-    say(`pet '${pet}' of house '${house}' restarted`);
+    say(`bot '${pet}' of workspace '${house}' restarted`);
     return true;
   }
   if (verb === "screen" && rest.length === 0) {
@@ -323,7 +325,7 @@ export async function runMore(paths: Paths, command: string | undefined, args: s
   if (verb === "env" && sub === "run" && subRest.length === 1) {
     say("running (up to five minutes)…");
     const run = await api<EnvironmentRun>(paths, "POST", `${subAt}/environment/run`, { phase: phaseOf(subRest[0]) });
-    say(`${run.status}: log ${run.logPath}, status ${run.statusPath} (read it: house pet logs ${subHouse} ${subPet} --source ${subRest[0]})`);
+    say(`${run.status}: log ${run.logPath}, status ${run.statusPath} (read it: house bot logs ${subHouse} ${subPet} --source ${subRest[0]})`);
     process.exitCode = run.status === "failed" ? 1 : 0;
     return true;
   }

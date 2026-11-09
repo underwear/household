@@ -17,9 +17,9 @@ test("an agent's own settings: each one it has, with one of its options; placed 
   expect(agentOf(agents, pet, keys)).not.toHaveProperty("settings");
   expect(agentOf(agents, { ...pet, settings: {} }, keys)).not.toHaveProperty("settings");
   expect(agentOf(agents, { ...pet, settings: { subagentModel: "haiku" } }, keys)).toMatchObject({ settings: { subagentModel: "haiku" } });
-  expect(agentOf(agents, { ...pet, settings: { subagentModel: "gpt-9" } }, keys)).toMatchObject({ problem: "unknown value 'gpt-9' for setting 'subagentModel' of agent claude-code-tmux (its values: opus, sonnet, haiku, fable)" });
-  expect(agentOf(agents, { ...pet, settings: { turbo: "on" } }, keys)).toMatchObject({ problem: "unknown setting 'turbo' for agent claude-code-tmux (its settings: claudeAiConnectors, subagentModel)" });
-  expect(agentOf(agents, { ...pet, agent: plain.name, settings: { subagentModel: "haiku" } }, keys)).toMatchObject({ problem: "agent plain has no settings: leave settings out" });
+  expect(agentOf(agents, { ...pet, settings: { subagentModel: "gpt-9" } }, keys)).toMatchObject({ problem: "unknown value 'gpt-9' for setting 'subagentModel' of harness claude-code-tmux (its values: opus, sonnet, haiku, fable)" });
+  expect(agentOf(agents, { ...pet, settings: { turbo: "on" } }, keys)).toMatchObject({ problem: "unknown setting 'turbo' for harness claude-code-tmux (its settings: claudeAiConnectors, subagentModel)" });
+  expect(agentOf(agents, { ...pet, agent: plain.name, settings: { subagentModel: "haiku" } }, keys)).toMatchObject({ problem: "harness plain has no settings: leave settings out" });
   const household: Household = { daemon: {}, keys, secrets: [], houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ ...pet, settings: { subagentModel: "sonnet" } }], people: { owners: [] }, channels: [] }] };
   expect(placePets(agents, household)[0]).toMatchObject({ settings: { subagentModel: "sonnet" } });
 });

@@ -15,7 +15,7 @@
 /* One column of short entries (hosts): half a wide screen; a workspace (Skills, Memory): all of it. */
 .section.narrow { max-width: 680px; }
 .section.wide { max-width: none; }
-/* A table straight on a page (the houses): room for its columns, not the whole screen. */
+/* A table straight on a page (the workspaces): room for its columns, not the whole screen. */
 .page > .list { max-width: 1200px; }
 /* Sections of one page are told apart by a rule and room above each after the first. */
 .section + .section { border-top: 1px solid var(--line); padding-top: var(--space-6); margin-top: var(--space-3); }

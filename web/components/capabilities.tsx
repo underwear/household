@@ -3,9 +3,9 @@ import { Boxes, FlaskConical, Globe, KeyRound, Wrench } from "lucide-react";
 import { houseFeatures } from "../../src/core/house-features";
 import { NAME_PATTERN } from "../../src/core/names";
 import { envProblem } from "../../src/core/secrets";
-import type { HouseView } from "../api";
+import type { WorkspaceView } from "../api";
 import { capabilityApi, type CapabilityDetailView, type CapabilityDraftView, type CapabilityInput, type CapabilityTemplate, type CapabilityView } from "../scout-api";
-import { capabilityPath, housePath, navigate, scoutPath } from "../router";
+import { capabilityPath, workspacePath, navigate, scoutPath } from "../router";
 import { Dialog, useDialog } from "./dialog";
 import { ChoiceList, SelectField, TextField } from "./fields";
 import { Cell, Cluster, List, ListRow, Page, Panel, Section, Stack, Tabs } from "./layout";
@@ -32,13 +32,13 @@ const networkWords = (network: CapabilityInput["network"]) => network.any ? "Any
 /** The Scouts page's tabs: the scouts (and their runs), and the capabilities they are built from. */
 export function ScoutsTabs({ house, current, count }: { house: string; current: "scouts" | "capabilities"; /** How many capabilities. */ count?: number }) {
   return <Tabs label="Scouts" items={[
-    { label: "Scouts", href: housePath(house, "scouts"), current: current === "scouts" },
-    { label: "Capabilities", href: housePath(house, "capabilities"), current: current === "capabilities", ...(count === undefined ? {} : { count }) },
+    { label: "Scouts", href: workspacePath(house, "scouts"), current: current === "scouts" },
+    { label: "Capabilities", href: workspacePath(house, "capabilities"), current: current === "capabilities", ...(count === undefined ? {} : { count }) },
   ]} />;
 }
 
-/** The house's capabilities: what its scouts can be made of; pets' drafts waiting on top. */
-export function CapabilitiesPage({ house, refresh, notify }: { house: HouseView; refresh: () => Promise<void>; notify: Notify }) {
+/** The workspace's capabilities: what its scouts can be made of; bots' drafts waiting on top. */
+export function CapabilitiesPage({ house, refresh, notify }: { house: WorkspaceView; refresh: () => Promise<void>; notify: Notify }) {
   const [view, setView] = useState<{ capabilities: CapabilityView[]; drafts: CapabilityDraftView[] }>();
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
@@ -46,14 +46,14 @@ export function CapabilitiesPage({ house, refresh, notify }: { house: HouseView;
   const enabled = houseFeatures(house).scouts;
   const load = useCallback(async () => { setView(await capabilityApi.list(house.name)); setError(undefined); }, [house.name]);
   useEffect(() => { if (enabled) void load().catch((e: Error) => setError(e.message)); }, [load, enabled]);
-  if (!enabled) return <Page title="Scouts"><p className="hint">Scouts are off in this house. <Link href={housePath(house.name, "settings")} className="text-link">Turn them on in Settings</Link></p></Page>;
+  if (!enabled) return <Page title="Scouts"><p className="hint">Scouts are off in this workspace. <Link href={workspacePath(house.name, "settings")} className="text-link">Turn them on in Settings</Link></p></Page>;
   const fresh = view?.drafts.filter(draft => !view.capabilities.some(capability => capability.name === draft.capability)) ?? [];
   return (
     <Page title="Scouts" actions={<button type="button" className="btn primary" onClick={() => setAdding(true)}>+ New capability</button>}>
       <ScoutsTabs house={house.name} current="capabilities" count={view?.capabilities.length} />
       {error && <p className="error" role="alert">{error}</p>}
       {fresh.length > 0 && (
-        <Section title="New from pets" hint="Proposed capabilities. Nothing exists until you apply one.">
+        <Section title="New from bots" hint="Proposed capabilities. Nothing exists until you apply one.">
           <List>
             {fresh.map(draft => (
               <ListRow key={draft.id} actions={<button type="button" className="btn small" onClick={() => setReviewing(draft)}>Review</button>}>
@@ -89,7 +89,7 @@ export function CapabilitiesPage({ house, refresh, notify }: { house: HouseView;
   );
 }
 
-const petTitle = (house: HouseView, pet: string) => { const found = house.pets.find(each => each.name === pet); return found ? `${found.emoji} ${found.title}` : pet; };
+const petTitle = (house: WorkspaceView, pet: string) => { const found = house.pets.find(each => each.name === pet); return found ? `${found.emoji} ${found.title}` : pet; };
 
 /** A new capability: its name, and a template to start from (or nothing). */
 function NewCapabilityDialog({ house, taken, onClose, created }: { house: string; taken: string[]; onClose: () => void; created: (name: string) => Promise<void> }) {
@@ -114,15 +114,15 @@ function NewCapabilityDialog({ house, taken, onClose, created }: { house: string
             options={[{ value: "", label: "Nothing: an empty script" }, ...templates.map(each => ({ value: each.name, label: each.label }))]} />
           {chosen && <p className="hint">{chosen.description}</p>}
           <p className="hint">No scout has it until you tick it in the scout's Access.</p>
-          <TextField label="Name" mono value={name} onChange={setName} error={nameError || undefined} maxLength={31} placeholder="heroku-prod" hint="Scouts and their pets know it by this name." />
+          <TextField label="Name" mono value={name} onChange={setName} error={nameError || undefined} maxLength={31} placeholder="heroku-prod" hint="Scouts and their bots know it by this name." />
         </>
       ),
     }} />
   );
 }
 
-/** A pet's draft beside what is in force: field by field, then Apply (a new revision) or Discard. */
-function DraftDialog({ house, draft, current, onClose, done }: { house: HouseView; draft: CapabilityDraftView; current?: CapabilityInput; onClose: () => void; done: (applied: boolean) => Promise<void> }) {
+/** A bot's draft beside what is in force: field by field, then Apply (a new revision) or Discard. */
+function DraftDialog({ house, draft, current, onClose, done }: { house: WorkspaceView; draft: CapabilityDraftView; current?: CapabilityInput; onClose: () => void; done: (applied: boolean) => Promise<void> }) {
   const [error, setError] = useState<string>();
   const fields: [string, string, string][] = [
     ["Description", current?.description ?? "", draft.definition.description],
@@ -161,7 +161,7 @@ function DraftDialog({ house, draft, current, onClose, done }: { house: HouseVie
  * A capability: what it is, its install script, its network, its keys, its skills and its history. One Save makes a
  * new revision of description, install and network; keys are added and removed on their own (each a secret).
  */
-export function CapabilityPage({ house, name, refresh, notify }: { house: HouseView; name: string; refresh: () => Promise<void>; notify: Notify }) {
+export function CapabilityPage({ house, name, refresh, notify }: { house: WorkspaceView; name: string; refresh: () => Promise<void>; notify: Notify }) {
   const [view, setView] = useState<CapabilityDetailView>();
   const [error, setError] = useState<string>();
   const [form, setForm] = useState<CapabilityInput>();
@@ -180,7 +180,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: HouseV
     return next;
   }, [house.name, name]);
   useEffect(() => { void load().catch((e: Error) => setError(e.message)); }, [load]);
-  if (!houseFeatures(house).scouts) return <Page title={name}><p className="hint">Scouts are off in this house. <Link href={housePath(house.name, "settings")} className="text-link">Turn them on in Settings</Link></p></Page>;
+  if (!houseFeatures(house).scouts) return <Page title={name}><p className="hint">Scouts are off in this workspace. <Link href={workspacePath(house.name, "settings")} className="text-link">Turn them on in Settings</Link></p></Page>;
   if (!view || !form) return <Page title={name}>{error ? <p className="error" role="alert">{error}</p> : <p className="hint">Loading…</p>}</Page>;
   const capability = view.capability;
   const saved = { description: capability.description, install: capability.install, network: capability.network };
@@ -201,7 +201,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: HouseV
   const last = capability.lastTest;
   const draft = view.drafts[0];
   return (
-    <Page title={<span className="mono">{name}</span>} back={capability.owner ? { href: scoutPath(house.name, capability.owner, "access"), label: capability.ownerTitle ?? capability.owner } : { href: housePath(house.name, "capabilities"), label: "Capabilities" }} actions={
+    <Page title={<span className="mono">{name}</span>} back={capability.owner ? { href: scoutPath(house.name, capability.owner, "access"), label: capability.ownerTitle ?? capability.owner } : { href: workspacePath(house.name, "capabilities"), label: "Capabilities" }} actions={
       <>
         <button type="button" className="btn" disabled={testing || dirty} title={dirty ? "Save first: the test runs what is saved" : undefined} onClick={() => void test()}>
           <FlaskConical size={15} strokeWidth={1.75} aria-hidden /> {testing ? "Testing…" : "Test install"}
@@ -210,11 +210,11 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: HouseV
       </>
     }>
       {error && <p className="error" role="alert">{error}</p>}
-      {capability.owner && <p className="hint">The own setup of scout <Link href={scoutPath(house.name, capability.owner, "access")} className="text-link">{capability.ownerTitle ?? capability.owner}</Link>: no other scout and no pet can use it. It goes when the scout is deleted.</p>}
+      {capability.owner && <p className="hint">The own setup of scout <Link href={scoutPath(house.name, capability.owner, "access")} className="text-link">{capability.ownerTitle ?? capability.owner}</Link>: no other scout and no bot can use it. It goes when the scout is deleted.</p>}
       {draft && (
-        <div className="pet-off" role="status">
-          <span className="pet-state"><span className="dot busy" /> Draft</span>
-          <span className="pet-off-text">From {petTitle(house, draft.pet)}, {ago(draft.at)}. Nothing changes until you apply it.</span>
+        <div className="bot-off" role="status">
+          <span className="bot-state"><span className="dot busy" /> Draft</span>
+          <span className="bot-off-text">From {petTitle(house, draft.pet)}, {ago(draft.at)}. Nothing changes until you apply it.</span>
           <button type="button" className="btn small" onClick={() => setReviewing(draft)}>Review</button>
         </div>
       )}
@@ -225,7 +225,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: HouseV
           : <Stat icon={Wrench} label="Used by" value={capability.usedBy.length} sub={capability.usedBy.join(", ") || "no scout yet: tick it in a scout's Access"} links={capability.usedBy.map(scout => scoutPath(house.name, scout, "access"))} />}
         <Stat icon={FlaskConical} label="Last test" value={last ? (last.ok ? "Passed" : "Failed") : "—"} sub={last ? `${ago(last.at)} · ${last.seconds} s` : "never tested"} warn={!!last && !last.ok} />
       </div>
-      <Section width="narrow" title="Description" hint="What it gives a scout, and which variables it uses. Pets read it.">
+      <Section width="narrow" title="Description" hint="What it gives a scout, and which variables it uses. Bots read it.">
         <TextField label="Description" hideLabel value={form.description} onChange={description => setForm({ ...form, description })} placeholder="Heroku CLI for prod: logs, config, pg:psql (HEROKU_API_KEY)" />
       </Section>
       <Section title="Install" hint="Bash, run as root at the start of every run of a scout that has it. Fetch software with package managers; pin versions here if needed.">
@@ -273,7 +273,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: HouseV
           </>
         )}
       </Section>
-      <Section width="narrow" title="Keys" hint="Secrets this capability brings, kept only for it: never a pet's. Added and removed at once, not with Save." actions={<button type="button" className="btn small" onClick={() => setAddingKey(true)}>+ Add key</button>}>
+      <Section width="narrow" title="Keys" hint="Secrets this capability brings, kept only for it: never a bot's. Added and removed at once, not with Save." actions={<button type="button" className="btn small" onClick={() => setAddingKey(true)}>+ Add key</button>}>
         <List empty="No keys.">
           {capability.keyVariables.map(key => (
             <ListRow key={key.secret} actions={
@@ -312,7 +312,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: HouseV
         <Panel>
           <Cluster justify="between">
             <Stack gap={1}><strong>Delete capability</strong><span className="hint">{capability.usedBy.length ? `In scouts ${capability.usedBy.join(", ")}: untick it there first.` : "Its history, skills and test results go. Its keys stay, kept for no one."}</span></Stack>
-            <button type="button" className="btn danger small" disabled={capability.usedBy.length > 0} onClick={() => dialog.open({ title: `Delete ${name}?`, body: "Its history, skills and test results are removed.", confirmLabel: "Delete capability", danger: true, onConfirm: async () => { await capabilityApi.remove(house.name, name); await refresh(); navigate(housePath(house.name, "capabilities")); } })}>Delete…</button>
+            <button type="button" className="btn danger small" disabled={capability.usedBy.length > 0} onClick={() => dialog.open({ title: `Delete ${name}?`, body: "Its history, skills and test results are removed.", confirmLabel: "Delete capability", danger: true, onConfirm: async () => { await capabilityApi.remove(house.name, name); await refresh(); navigate(workspacePath(house.name, "capabilities")); } })}>Delete…</button>
           </Cluster>
         </Panel>
       </Section>}

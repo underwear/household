@@ -36,6 +36,6 @@ export function keyFor(keys: AgentKey[], named: string | undefined, providers: r
   const key = keys.find((candidate) => candidate.name === named);
   if (!key) return { problem: `unknown key '${named}' (${which})` };
   if (!providers.includes(key.provider)) return { problem: `key '${named}' is an ${key.provider} key, and ${takes}` };
-  if (!fitting.includes(key)) return { problem: `key '${named}' is not for house '${house}' (its houses: ${key.houses!.join(", ")})` };
+  if (!fitting.includes(key)) return { problem: `key '${named}' is not for workspace '${house}' (its workspaces: ${key.houses!.join(", ")})` };
   return key;
 }

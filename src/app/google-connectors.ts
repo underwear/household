@@ -40,12 +40,12 @@ export class GoogleConnectors {
   }
   private house(name: string) {
     const house = this.houses.find(h => h.name === name);
-    if (!house) throw new HouseholdError("House not found");
+    if (!house) throw new HouseholdError("Workspace not found");
     return house;
   }
   private pets(house: string, pets: string[]) {
     const configured = this.house(house).pets;
-    if (pets.some(name => !configured.some(p => p.name === name && !p.scout && !p.sideworker))) throw new HouseholdError("Select configured pets from this house");
+    if (pets.some(name => !configured.some(p => p.name === name && !p.scout && !p.sideworker))) throw new HouseholdError("Select configured bots from this workspace");
     return [...new Set(pets)];
   }
   list(house: string) {
@@ -54,7 +54,7 @@ export class GoogleConnectors {
   }
   begin(house: string, input: unknown, origin: string, binding: string) {
     const parsed = googleConnectSchema.safeParse(input);
-    if (!parsed.success) throw new HouseholdError("Select services and pets for this connection");
+    if (!parsed.success) throw new HouseholdError("Select services and bots for this connection");
     const pets = this.pets(house, parsed.data.pets);
     if (!this.client.id || !this.client.secret) throw new HouseholdError("Google OAuth is not configured in this build");
     const base = new URL(origin);
@@ -141,9 +141,9 @@ export class GoogleConnectors {
   private allowed(caller: PetIdentity, id: string, service: GoogleService, write = false) {
     const parent = this.parent(caller);
     const c = parent && this.read().find(c => c.id === id && c.house === caller.house && c.pets.includes(parent) && c.services.includes(service));
-    if (!c) throw new HouseholdError("Google connection or service unavailable to this pet");
-    if (write && !c.writable?.includes(service)) throw new HouseholdError(`This account's ${service} is read only; the owner can reconnect it with Read and write on the house's Connectors page`);
-    if (c.needsReconnect) throw new HouseholdError("Reconnect this Google account in the house's Connectors page");
+    if (!c) throw new HouseholdError("Google connection or service unavailable to this bot");
+    if (write && !c.writable?.includes(service)) throw new HouseholdError(`This account's ${service} is read only; the owner can reconnect it with Read and write on the workspace's Connectors page`);
+    if (c.needsReconnect) throw new HouseholdError("Reconnect this Google account in the workspace's Connectors page");
     return c;
   }
   private async access(c: Connection): Promise<string> {

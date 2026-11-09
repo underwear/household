@@ -291,7 +291,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
 
   /** After a write: the reload, and the answer with the house as written (none for a delete). */
   const written = async (household: Household, name: string, what: string, status = 200): Promise<Response> => {
-    events.info(`web: house ${name} ${what}`);
+    events.info(`web: workspace ${name} ${what}`);
     try {
       await deps.apply();
     } catch {
@@ -304,24 +304,24 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
 
   const instructionTarget = async (house: string, pet: string) => {
     const configured = findHouse(await loadEffective(), house)?.pets.find(item => item.name === pet);
-    if (!configured) throw new NotFoundError("pet not found");
+    if (!configured) throw new NotFoundError("bot not found");
     const adapter = deps.agents.get(configured.agent ?? DEFAULT_AGENT);
     if (!adapter?.instructionsFile || !deps.instructions) throw new InstructionFileError("Instructions are unavailable for this adapter", 503);
     return { store: deps.instructions, adapter };
   };
   const skills = async (house: string) => {
-    if (!findHouse(await config.load(), house)) throw new NotFoundError("house not found");
+    if (!findHouse(await config.load(), house)) throw new NotFoundError("workspace not found");
     if (!deps.skills) throw new SkillFileError("Skills unavailable", 503);
     return deps.skills;
   };
   const petSkills = async (house: string, pet: string) => {
     const configured = findHouse(await loadEffective(), house)?.pets.find(item => item.name === pet);
-    if (!configured) throw new NotFoundError("pet not found");
+    if (!configured) throw new NotFoundError("bot not found");
     const adapter = deps.agents.get(configured.agent ?? DEFAULT_AGENT);
     if (!adapter?.workspaceSkillsDirectory || !deps.petSkills) throw new SkillFileError("Workspace skills are unavailable for this adapter", 503);
     const home = configured.sideworker?.parentHome ?? adapter.home;
     const cwd = configured.sideworker?.cwd ?? `${home}/work`;
-    if (cwd !== home && !cwd.startsWith(`${home}/`)) throw new SkillFileError("The skills editor is available for working directories in the shared pet home", 409);
+    if (cwd !== home && !cwd.startsWith(`${home}/`)) throw new SkillFileError("The skills editor is available for working directories in the shared bot home", 409);
     const relative = cwd.slice(home.length).replace(/^\//, "");
     // A pet's own are in .agents/skills, which every harness reads (infra/guest-skills.ts links them); a
     // sideworker's directory is a project unless it shares the parent's personal workspace.
@@ -338,7 +338,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       return written(await config.setHouseFeatures(house!, settings), house!, "house features changed");
     }],
     ["GET", at("/sideworkers"), async ({ params: [house] }) => {
-      if (!findHouse(await config.load(), house!)) throw new NotFoundError("house not found");
+      if (!findHouse(await config.load(), house!)) throw new NotFoundError("workspace not found");
       return json(deps.sideworkers?.list(house!) ?? []);
     }],
     ["DELETE", at("/sideworkers/([^/]+)"), async ({ params: [house, name] }) => {
@@ -350,7 +350,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const { profiles } = await bodyOf(request, z.strictObject({ profiles: sideworkerProfilesSchema }));
       const household = await config.load();
       const current = findHouse(household, house!);
-      if (!current) throw new NotFoundError("house not found");
+      if (!current) throw new NotFoundError("workspace not found");
       const problems = sideworkerProfileProblems(deps.agents, { ...current, sideworkerProfiles: profiles }, household.keys);
       if (problems.length) throw new HouseholdError(problems.join("; "));
       return written(await config.setSideworkerProfiles(house!, profiles), house!, "sideworker profiles changed");
@@ -467,7 +467,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     }],
     ["DELETE", /^\/api\/houses\/([^/]+)\/temporary\/([^/]+)$/, async ({ request, params: [name, domain] }) => {
       const household = await config.load();
-      if (!findHouse(household, name!)) throw new NotFoundError(`unknown house '${name}'`);
+      if (!findHouse(household, name!)) throw new NotFoundError(`unknown workspace '${name}'`);
       if (!deps.networkRequests) return failure(503, "temporary network grants are unavailable");
       const query = new URL(request.url).searchParams;
       const ports = query.getAll("port");
@@ -475,15 +475,15 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const port = requestPort(ports.length === 0 ? undefined : Number(ports[0]));
       // A grant is one pet's: which pet's goes is said, never guessed.
       const pets = query.getAll("pet");
-      if (pets.length !== 1 || !PET_NAME_PATTERN.test(pets[0]!)) throw new HouseholdError("pet must name the pet holding the grant");
+      if (pets.length !== 1 || !PET_NAME_PATTERN.test(pets[0]!)) throw new HouseholdError("bot must name the bot holding the grant");
       await deps.networkRequests.revoke(name!, pets[0]!, requestDomain(domain!), port);
-      events.info(`web: house ${name} revoked ${pets[0]}'s temporary access to ${domain}:${port}`);
+      events.info(`web: workspace ${name} revoked ${pets[0]}'s temporary access to ${domain}:${port}`);
       return json({ house: await viewOf(household, name!) } satisfies WriteView);
     }],
     ["POST", at("/slack/resolve"), async ({ request, params: [name] }) => {
       const { token, appToken, member } = await bodyOf(request, z.strictObject({ token: z.string(), appToken: z.string(), member: z.string() }));
       const household = await config.load();
-      if (!findHouse(household, name!)) throw new NotFoundError(`unknown house '${name}'`);
+      if (!findHouse(household, name!)) throw new NotFoundError(`unknown workspace '${name}'`);
       await checkFields(deps.channelKinds, deps.checks, "slack-private", { token, appToken }, { household, house: name! });
       return json(await resolveSlackDm(token.trim(), member));
     }],
@@ -492,7 +492,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       if (slackMember !== undefined && kind !== "slack-private") throw new HouseholdError("Slack member is only for Slack channels.");
       ownFields(kind, own, { chat });
       const household = await config.load();
-      if (!findHouse(household, name!)) throw new NotFoundError(`unknown house '${name}'`); // before Telegram is asked
+      if (!findHouse(household, name!)) throw new NotFoundError(`unknown workspace '${name}'`); // before Telegram is asked
       const { own: kept, also } = await checkFields(deps.channelKinds, deps.checks, kind, own, { household, house: name! });
       const destination = slackMember === undefined ? undefined : await resolveSlackDm(kept.token!, slackMember);
       if (destination && destination.chat !== chat) throw new HouseholdError("Slack destination changed. Go back and find your DM again.");
@@ -503,15 +503,15 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const { chat: _, name: shown, note, pets, default: first, ...own } = await bodyOf(request, channelBody);
       const household = await config.load();
       const house = findHouse(household, name!);
-      if (!house) throw new NotFoundError(`unknown house '${name}'`); // before Telegram is asked
+      if (!house) throw new NotFoundError(`unknown workspace '${name}'`); // before Telegram is asked
       const known = house.channels.find((channel) => channel.chat === chat!.trim());
-      if (!known) throw new NotFoundError(`house '${name}' has no channel of chat '${chat}'`);
+      if (!known) throw new NotFoundError(`workspace '${name}' has no channel of chat '${chat}'`);
       ownFields(known.kind, own);
       // A new token of its bot goes to the house's other channels on that bot too (`also`): one token per bot.
       const { own: kept, also } = await checkFields(deps.channelKinds, deps.checks, known.kind, own, { household, house: name!, chat: known.chat });
       const fields = { ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }) };
       const after = await config.updateChannel(name!, chat!.trim(), fields, also);
-      if (also.length > 0) events.info(`web: house ${name}: its bot's new token also went to its channels of chat ${also.map((other) => other.chat).join(", ")}`);
+      if (also.length > 0) events.info(`web: workspace ${name}: its bot's new token also went to its channels of chat ${also.map((other) => other.chat).join(", ")}`);
       return written(after, name!, `changed its channel of chat ${chat}`);
     }],
     ["DELETE", at("/channels/([^/]+)"), async ({ params: [name, chat] }) =>
@@ -611,12 +611,12 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     }],
     ["GET", at("/inboxes"), async ({ params: [house] }) => {
       if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
-      if (!findHouse(await config.load(), house!)) throw new NotFoundError("House not found");
+      if (!findHouse(await config.load(), house!)) throw new NotFoundError("Workspace not found");
       return json(deps.houseInboxes.list(house!));
     }],
     ["POST", at("/inboxes/test"), async ({ request, params: [house] }) => {
       if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
-      if (!findHouse(await config.load(), house!)) throw new NotFoundError("House not found");
+      if (!findHouse(await config.load(), house!)) throw new NotFoundError("Workspace not found");
       return json(await deps.houseInboxes.test(await bodyOf(request, houseInboxSchema)));
     }],
     ["POST", at("/inboxes"), async ({ request, params: [house] }) => {
@@ -675,7 +675,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       if (!deps.environment) return failure(503, "environment setup is unavailable");
       const fields = await bodyOf(request, z.strictObject({ setup: z.string().nullable().optional(), onStart: z.string().nullable().optional() }));
       const view = await deps.environment.updateEnvironment(house!, pet!, fields);
-      events.info(`web: house ${house} changed pet ${pet} environment`);
+      events.info(`web: workspace ${house} changed bot ${pet} environment`);
       return json(view);
     }],
     ["POST", at("/pets/([^/]+)/disable"), async ({ request, params: [house, pet] }) => {
@@ -688,7 +688,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const { mode } = await bodyOf(request, z.strictObject({ mode: z.enum(["now", "notify"]).optional() }));
       if (!deps.environment) return failure(503, "environment setup is unavailable");
       const view = await deps.environment.restartEnvironment(house!, pet!, mode);
-      events.info(`web: house ${house} restarted pet ${pet} VM`);
+      events.info(`web: workspace ${house} restarted bot ${pet} VM`);
       return json(view);
     }],
     ["POST", at("/pets/([^/]+)/environment/run"), async ({ request, params: [house, pet] }) => {

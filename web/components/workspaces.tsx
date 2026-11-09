@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { api, type ChannelView, type HouseView, type PlatformView } from "../api";
-import { housePath } from "../router";
+import { api, type ChannelView, type WorkspaceView, type PlatformView } from "../api";
+import { workspacePath } from "../router";
 import { Dialog } from "./dialog";
 import { TextField } from "./fields";
 import { Cell, Chip, Cluster, List, ListRow, Page, Stack } from "./layout";
 import { PlatformIcon } from "./icon";
-import { ownPets, petState } from "./pet-state";
+import { ownBots, petState } from "./bot-state";
 import { Link } from "./link";
 import { written } from "./section";
 
@@ -14,36 +14,36 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 /** A channel in a word or two: its own name if it has one, then its kind's label. */
 export const channelLabel = (channel: ChannelView) => (channel.ownName ? `${channel.name} · ${channel.label}` : channel.label);
 
-/** Every host the house reaches, saying how many come with its pets' agents. */
-function allowSummary(house: HouseView): string {
+/** Every host the workspace reaches, saying how many come with its bots' harnesses. */
+function allowSummary(house: WorkspaceView): string {
   const byAgent = house.allow.filter((entry) => entry.byAgent).length;
-  return plural(house.allow.length, "host") + (byAgent ? ` (${byAgent} by agent)` : "");
+  return plural(house.allow.length, "host") + (byAgent ? ` (${byAgent} by harness)` : "");
 }
 
-/** Household · Houses: every house, with its pets, allowlist and channels at a glance. */
-export function HousesPage({ houses, platforms, onNewHouse }: { houses: HouseView[]; platforms: PlatformView[]; onNewHouse: () => void }) {
+/** Household · Workspaces: every workspace, with its bots, allowlist and channels at a glance. */
+export function WorkspacesPage({ houses, platforms, onNewWorkspace }: { houses: WorkspaceView[]; platforms: PlatformView[]; onNewWorkspace: () => void }) {
   return (
     <Page
-      title="Houses"
+      title="Workspaces"
       actions={
-        <button className="btn primary" onClick={onNewHouse}>
-          + New house
+        <button className="btn primary" onClick={onNewWorkspace}>
+          + New workspace
         </button>
       }
     >
-      <HousesTable houses={houses} platforms={platforms} />
+      <WorkspacesTable houses={houses} platforms={platforms} />
     </Page>
   );
 }
 
-export function HousesTable({ houses, platforms }: { houses: HouseView[]; platforms: PlatformView[] }) {
+export function WorkspacesTable({ houses, platforms }: { houses: WorkspaceView[]; platforms: PlatformView[] }) {
   return (
-    <List columns="minmax(0, 1fr) auto minmax(0, 1fr) auto" head={["House", "Allowlist", "Channels", ""]} empty="No houses yet.">
+    <List columns="minmax(0, 1fr) auto minmax(0, 1fr) auto" head={["Workspace", "Allowlist", "Channels", ""]} empty="No workspaces yet.">
       {houses.map((house) => (
         <ListRow
           key={house.name}
           actions={
-            <Link href={housePath(house.name)} className="btn small">
+            <Link href={workspacePath(house.name)} className="btn small">
               Open
             </Link>
           }
@@ -51,11 +51,11 @@ export function HousesTable({ houses, platforms }: { houses: HouseView[]; platfo
           <Cell>
             <Stack gap={2}>
               <span className="strong ellipsis">{house.name}</span>
-              {ownPets(house.pets).length === 0 ? (
-                <span className="hint">no pets</span>
+              {ownBots(house.pets).length === 0 ? (
+                <span className="hint">no bots</span>
               ) : (
                 <Cluster gap={2}>
-                {ownPets(house.pets).map((pet) => {
+                {ownBots(house.pets).map((pet) => {
                   const state = petState(pet.state);
                   return (
                     <Chip key={pet.name} title={`${pet.display} · ${state.label}`} lead={<span className={`dot ${state.tone}`} aria-label={state.label} />}>
@@ -87,19 +87,19 @@ export function HousesTable({ houses, platforms }: { houses: HouseView[]; platfo
   );
 }
 
-/** Asks for a name and creates the house (as `house create`); the daemon's error, if any, shows in the dialog. */
-export function NewHouseDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string, warning?: string) => Promise<void> }) {
+/** Asks for a name and creates the workspace (as `workspace create`); the daemon's error, if any, shows in the dialog. */
+export function NewWorkspaceDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string, warning?: string) => Promise<void> }) {
   const [name, setName] = useState("");
   return (
     <Dialog
       onClose={onClose}
       spec={{
-        title: "New house",
-        body: "Its own pets, channels and network access.",
-        confirmLabel: "Create house",
+        title: "New workspace",
+        body: "Its own bots, channels and network access.",
+        confirmLabel: "Create workspace",
         onConfirm: async () => {
           const created = name.trim();
-          await onCreated(created, await written(api.createHouse(created)));
+          await onCreated(created, await written(api.createWorkspace(created)));
         },
         children: (
           <TextField

@@ -4,7 +4,7 @@ export const CODEX_MODES = {
     { id: "auto", label: "Auto", description: "Works in the workspace; asks before crossing its boundaries." },
     { id: "autoReview", label: "Approve for me", description: "A separate reviewer decides requests to cross workspace boundaries." },
     { id: "readOnly", label: "Read-only", description: "Reads files; asks before changes or network access." },
-    { id: "bypassPermissions", label: "Full access inside pet", description: "Runs freely inside the pet; Household still controls allowed hosts." },
+    { id: "bypassPermissions", label: "Full access inside bot", description: "Runs freely inside the bot; Household still controls allowed hosts." },
   ],
   default: "auto",
   aliases: { manual: "auto" },

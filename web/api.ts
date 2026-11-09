@@ -1,16 +1,16 @@
 import type { GoogleConnectorsView, GoogleConnectionView, GoogleService } from "../src/core/google-connectors";
 export type { GoogleConnectorsView, GoogleConnectionView, GoogleService };
-import type { HouseInbox, InboxView } from "../src/core/house-inboxes";
-export type { HouseInbox, InboxView };
+import type { HouseInbox as WorkspaceInbox, InboxView } from "../src/core/house-inboxes";
+export type { WorkspaceInbox, InboxView };
 export interface PreviewView { id: string; house: string; pet: string; port: number; title: string; status: "pending" | "opening" | "active"; url?: string; expires_at?: string; requested_at: string }
-import type { HouseFeatures, PreviewSettings } from "../src/core/house-features";
-import type { PetLifecycle } from "../src/core/lifecycle";
+import type { HouseFeatures as WorkspaceFeatures, PreviewSettings } from "../src/core/house-features";
+import type { PetLifecycle as BotLifecycle } from "../src/core/lifecycle";
 import type { SideworkerRecord } from "../src/app/sideworkers";
 import type { SideworkerLimits, SideworkerProfile } from "../src/core/household";
 import type { MetricSample, MetricsView } from "../src/core/metrics";
 import type { LogKind, LogLine, LogPage } from "../src/app/household-log";
-import type { PetLogSource, PetLogView } from "../src/app/pet-logs";
-export type { LogKind, LogLine, LogPage, PetLogSource, PetLogView };
+import type { PetLogSource as BotLogSource, PetLogView as BotLogView } from "../src/app/pet-logs";
+export type { LogKind, LogLine, LogPage, BotLogSource, BotLogView };
 import type { InstructionFile } from "../src/infra/pet-instructions";
 export type { InstructionFile };
 import type { MemoryEntry, MemoryPage, MemorySummary } from "../src/core/memory";
@@ -23,9 +23,9 @@ import type { EnvironmentView } from "../src/app/environment";
 import type { EnvironmentSetupResult } from "../src/infra/environment-setup";
 export type { EnvironmentView };
 // The web UI's only way to the daemon: its JSON API. The types are the server's (type-only: nothing of it is bundled).
-import type { AgentModelsView, AgentView, AllowView, ChannelKindView, ChannelView, HouseView, KeysView, KeyView, MeView, OwnerView, PetView, PlatformView, SecretView, WriteView } from "../src/app/web-views";
+import type { AgentModelsView as HarnessModelsView, AgentView as HarnessView, AllowView, ChannelKindView, ChannelView, HouseView as WorkspaceView, KeysView, KeyView, MeView, OwnerView, PetView as BotView, PlatformView, SecretView, WriteView } from "../src/app/web-views";
 
-export type { AgentModelsView, AgentView, AllowView, ChannelKindView, ChannelView, HouseView, KeysView, KeyView, MeView, OwnerView, PetView, PlatformView, SecretView, WriteView };
+export type { HarnessModelsView, HarnessView, AllowView, ChannelKindView, ChannelView, WorkspaceView, KeysView, KeyView, MeView, OwnerView, BotView, PlatformView, SecretView, WriteView };
 
 /**
  * A channel as the forms send it: its chat (when it is added), its kind's own fields (by the kind's keys), and
@@ -44,7 +44,7 @@ export interface ChannelFields {
 }
 
 /** A pet's settings as the forms send them: `title` null for its name's. */
-export interface PetFields {
+export interface BotFields {
   cpus?: number | null;
   memoryMiB?: number | null;
   enabled?: boolean;
@@ -58,12 +58,12 @@ export interface PetFields {
   reasoningEffort?: string | null;
   /** One of its agent's permission modes; null for an agent without modes. */
   mode: string | null;
-  /** Its agent's own settings (`AgentView.settings`): null for a setting's Default; left out: untouched. */
+  /** Its agent's own settings (`HarnessView.settings`): null for a setting's Default; left out: untouched. */
   settings?: Record<string, string | null> | null;
   /** The key it runs on; null for the only one that fits. */
   key: string | null;
   /** Its scheduled restarts; null removes them. */
-  lifecycle?: PetLifecycle | null;
+  lifecycle?: BotLifecycle | null;
 }
 
 /** A key as the forms send it: `note` null for none. */
@@ -127,7 +127,7 @@ export const api = {
   closeSideworker: (house: string, name: string) => call<void>("DELETE", `${housePath(house)}/sideworkers/${encodeURIComponent(name)}`),
   previews: (house: string, pet: string) => call<PreviewView[]>("GET", `${housePath(house)}/pets/${encodeURIComponent(pet)}/previews`),
   closePreview: (house: string, pet: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/pets/${encodeURIComponent(pet)}/previews/${encodeURIComponent(id)}`),
-  setHouseFeatures: (house: string, settings: { features: HouseFeatures; preview: PreviewSettings }) => call<WriteView>("PUT", `${housePath(house)}/features`, settings),
+  setWorkspaceFeatures: (house: string, settings: { features: WorkspaceFeatures; preview: PreviewSettings }) => call<WriteView>("PUT", `${housePath(house)}/features`, settings),
   setSideworkerProfiles: (house: string, profiles: SideworkerProfile[]) => call<WriteView>("PUT", `${housePath(house)}/sideworker-profiles`, { profiles }),
   setSideworkerLimits: (house: string, limits: SideworkerLimits) => call<WriteView>("PUT", `${housePath(house)}/sideworker-limits`, limits),
   instructions: (house: string, pet: string) => call<InstructionFile>("GET", `${under(house, "pets", pet)}/instructions`),
@@ -148,8 +148,8 @@ export const api = {
   deleteCron: (house: string, pet: string, id: string, revision: number) => call<CronJob>("DELETE", `${under(house, "pets", pet)}/crons/${encodeURIComponent(id)}`, {revision}),
   petSkills: (house: string, pet: string) => call<{ path: string; entries: SkillEntry[] }>("GET", `${under(house, "pets", pet)}/skills`),
   petSkillFile: (house: string, pet: string, path: string) => call<SkillFile>("GET", `${under(house, "pets", pet)}/skills/file?path=${encodeURIComponent(path)}`),
-  savePetSkillFile: (house: string, pet: string, path: string, content: string, revision: string | null) => call<SkillFile>("PUT", `${under(house, "pets", pet)}/skills/file`, { path, content, revision }),
-  deletePetSkillFile: (house: string, pet: string, path: string, revision: string) => call<void>("DELETE", `${under(house, "pets", pet)}/skills/file`, { path, revision }),
+  saveBotSkillFile: (house: string, pet: string, path: string, content: string, revision: string | null) => call<SkillFile>("PUT", `${under(house, "pets", pet)}/skills/file`, { path, content, revision }),
+  deleteBotSkillFile: (house: string, pet: string, path: string, revision: string) => call<void>("DELETE", `${under(house, "pets", pet)}/skills/file`, { path, revision }),
   skills: (house: string) => call<SkillEntry[]>("GET", `${housePath(house)}/skills`),
   builtinSkills: () => call<BuiltinSkill[]>("GET", "/api/builtin-skills"),
   skillFile: (house: string, path: string) => call<SkillFile>("GET", `${housePath(house)}/skills/file?path=${encodeURIComponent(path)}`),
@@ -162,20 +162,20 @@ export const api = {
     for (const [name, value] of Object.entries(query)) if (value !== undefined && value !== "" && value !== false) params.set(name, Array.isArray(value) ? value.join(",") : String(value));
     return call<LogPage>("GET", `/api/logs?${params}`, undefined, signal);
   },
-  petLog: (house: string, pet: string, source: PetLogSource, read: { lines?: number; after?: string }, signal?: AbortSignal) =>
-    call<PetLogView>("GET", `${under(house, "pets", pet)}/logs?source=${source}${read.after === undefined ? `&lines=${read.lines ?? 300}` : `&after=${encodeURIComponent(read.after)}`}`, undefined, signal),
+  petLog: (house: string, pet: string, source: BotLogSource, read: { lines?: number; after?: string }, signal?: AbortSignal) =>
+    call<BotLogView>("GET", `${under(house, "pets", pet)}/logs?source=${source}${read.after === undefined ? `&lines=${read.lines ?? 300}` : `&after=${encodeURIComponent(read.after)}`}`, undefined, signal),
   houseMetrics: (house: string) => call<Record<string, MetricSample | null>>("GET", `${housePath(house)}/metrics`),
   metrics: (house: string, pet: string, range: "1h" | "24h" | "7d") => call<MetricsView>("GET", `${under(house, "pets", pet)}/metrics?range=${range}`),
   environment: (house: string, pet: string) => call<EnvironmentView>("GET", `${under(house, "pets", pet)}/environment`),
   updateEnvironment: (house: string, pet: string, fields: { setup?: string | null; onStart?: string | null }) => call<EnvironmentView>("PATCH", `${under(house, "pets", pet)}/environment`, fields),
-  disablePet: (house: string, pet: string, mode: "now" | "notify") => call<void>("POST", `${under(house, "pets", pet)}/disable`, { mode }),
+  disableBot: (house: string, pet: string, mode: "now" | "notify") => call<void>("POST", `${under(house, "pets", pet)}/disable`, { mode }),
   restartEnvironment: (house: string, pet: string, mode: "now" | "notify" = "now") => call<void>("POST", `${under(house, "pets", pet)}/environment/restart`, { mode }),
   runEnvironment: (house: string, pet: string, phase: "setup" | "onStart" = "setup") => call<EnvironmentSetupResult>("POST", `${under(house, "pets", pet)}/environment/run`, { phase }),
-  agentModels: (agent: string, key: string) => call<AgentModelsView>("GET", `/api/agents/${encodeURIComponent(agent)}/models?key=${encodeURIComponent(key)}`),
+  agentModels: (agent: string, key: string) => call<HarnessModelsView>("GET", `/api/agents/${encodeURIComponent(agent)}/models?key=${encodeURIComponent(key)}`),
   me: () => call<MeView>("GET", "/api/me"),
-  houses: () => call<HouseView[]>("GET", "/api/houses"),
-  createHouse: (name: string) => call<WriteView>("POST", "/api/houses", { name }),
-  deleteHouse: (name: string) => call<WriteView>("DELETE", housePath(name)),
+  houses: () => call<WorkspaceView[]>("GET", "/api/houses"),
+  createWorkspace: (name: string) => call<WriteView>("POST", "/api/houses", { name }),
+  deleteWorkspace: (name: string) => call<WriteView>("DELETE", housePath(name)),
   // One host at a time, so a tab showing an old list cannot undo what another changed.
   allowHost: (name: string, host: string) => call<WriteView>("POST", `${housePath(name)}/allow`, { host }),
   allowHosts: (name: string, hosts: readonly string[]) => call<WriteView>("POST", `${housePath(name)}/allow/bulk`, { hosts }),
@@ -186,9 +186,9 @@ export const api = {
   shareGoogle: (house: string, id: string, pets: string[]) => call<GoogleConnectionView>("PATCH", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`, { pets }),
   disconnectGoogle: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`),
   inboxes: (house: string) => call<InboxView[]>("GET", `${housePath(house)}/inboxes`),
-  testInbox: (house: string, inbox: HouseInbox) => call<{ count: number; message: string }>("POST", `${housePath(house)}/inboxes/test`, inbox),
-  addInbox: (house: string, inbox: HouseInbox) => call<WriteView>("POST", `${housePath(house)}/inboxes`, inbox),
-  updateInbox: (house: string, inbox: HouseInbox) => call<WriteView>("PUT", under(house, "inboxes", inbox.name), inbox),
+  testInbox: (house: string, inbox: WorkspaceInbox) => call<{ count: number; message: string }>("POST", `${housePath(house)}/inboxes/test`, inbox),
+  addInbox: (house: string, inbox: WorkspaceInbox) => call<WriteView>("POST", `${housePath(house)}/inboxes`, inbox),
+  updateInbox: (house: string, inbox: WorkspaceInbox) => call<WriteView>("PUT", under(house, "inboxes", inbox.name), inbox),
   subscribeInbox: (house: string, name: string, pet: string, subscriber: { subscribed: boolean; quiet: boolean }) => call<WriteView>("PUT", `${under(house, "inboxes", name)}/subscribers/${encodeURIComponent(pet)}`, subscriber),
   removeInbox: (house: string, name: string) => call<WriteView>("DELETE", under(house, "inboxes", name)),
   pollInbox: (house: string, name: string) => call<InboxView>("POST", `${under(house, "inboxes", name)}/poll`),
@@ -196,15 +196,15 @@ export const api = {
   addChannel: (house: string, kind: string, { own, ...common }: ChannelFields) => call<WriteView>("POST", `${housePath(house)}/channels`, { kind, ...own, ...common }),
   updateChannel: (house: string, chat: string, { own, ...common }: ChannelFields) => call<WriteView>("PATCH", under(house, "channels", chat), { ...own, ...common }),
   /** Who is in a channel and who gets what is addressed to none, the rest of it as it is. */
-  placePets: (house: string, chat: string, pets: string[], first: string | null) => call<WriteView>("PATCH", under(house, "channels", chat), { pets, default: first }),
+  placeBots: (house: string, chat: string, pets: string[], first: string | null) => call<WriteView>("PATCH", under(house, "channels", chat), { pets, default: first }),
   removeChannel: (house: string, chat: string) => call<WriteView>("DELETE", under(house, "channels", chat)),
   addOwner: (house: string, platform: string, id: string, note?: string | null) => call<WriteView>("POST", `${housePath(house)}/owners`, { platform, id, note }),
   updateOwner: (house: string, platform: string, id: string, note: string | null) => call<WriteView>("PATCH", `${under(house, "owners", platform)}/${encodeURIComponent(id)}`, { note }),
   removeOwner: (house: string, platform: string, id: string) => call<WriteView>("DELETE", `${under(house, "owners", platform)}/${encodeURIComponent(id)}`),
   /** A new pet, in the house's channels of `channels` (their chats) from the start. */
-  addPet: (house: string, name: string, pet: PetFields, channels: string[] = []) => call<WriteView>("POST", `${housePath(house)}/pets`, { name, ...pet, channels }),
-  updatePet: (house: string, name: string, pet: Partial<PetFields>) => call<WriteView>("PATCH", under(house, "pets", name), pet),
-  removePet: (house: string, name: string) => call<WriteView>("DELETE", under(house, "pets", name)),
+  addBot: (house: string, name: string, pet: BotFields, channels: string[] = []) => call<WriteView>("POST", `${housePath(house)}/pets`, { name, ...pet, channels }),
+  updateBot: (house: string, name: string, pet: Partial<BotFields>) => call<WriteView>("PATCH", under(house, "pets", name), pet),
+  removeBot: (house: string, name: string) => call<WriteView>("DELETE", under(house, "pets", name)),
   keys: () => call<KeyView[]>("GET", "/api/keys"),
   addKey: (name: string, key: KeyFields) => call<KeysView>("POST", "/api/keys", { name, ...key }),
   updateKey: (name: string, key: KeyFields) => call<KeysView>("PATCH", `/api/keys/${encodeURIComponent(name)}`, key),

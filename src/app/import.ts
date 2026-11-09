@@ -107,7 +107,7 @@ export async function importHousehold(
         blocked.push(`container ${info.name} is ${whose}: its home is not this Household's to replace`);
       } else if (["running", "paused", "starting", "stopping", "unknown"].includes(info.state)) {
         // On its way up or down, or with an agent in a state the runtime cannot read, a VM may write its home too.
-        blocked.push(`pet ${house}/${pet} is ${info.state}: stop it first (msb stop ${info.name})`);
+        blocked.push(`bot ${house}/${pet} is ${info.state}: stop it first (msb stop ${info.name})`);
       }
     }
     if (blocked.length > 0) throw new HouseholdError(blocked.join("\n"));

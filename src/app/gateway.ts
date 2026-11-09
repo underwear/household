@@ -42,5 +42,5 @@ export interface PetKeys {
  */
 export function petCredentials(policy: GatewayPolicy, pet: PetIdentity, target: Endpoint): CredentialRule[] | { refused: string } {
   const rules = credentialsOf(policy, pet).filter((rule) => sameEndpoint(rule.target, target));
-  return rules.length > 0 ? rules : { refused: `pet ${pet.house}/${pet.pet} has no key for ${target.host}` };
+  return rules.length > 0 ? rules : { refused: `bot ${pet.house}/${pet.pet} has no key for ${target.host}` };
 }

@@ -162,7 +162,7 @@ const SETTINGS = [
   {
     key: "claudeAiConnectors",
     label: "Claude.ai connectors",
-    description: "Use this account’s Claude.ai connectors for this pet and its sideworkers. Scouts always run without them. Also allows other MCP servers configured in the agent’s environment.",
+    description: "Use this account’s Claude.ai connectors for this bot and its sideworkers. Scouts always run without them. Also allows other MCP servers configured in the harness’s environment.",
     checkbox: true,
     petOnly: true,
     options: [{ id: "true", label: "Enabled" }, { id: "false", label: "Disabled" }],
@@ -173,7 +173,7 @@ const SETTINGS = [
     label: "Subagent model",
     description: "What claude's subagents (Agent tool, Explore, Plan…) run on.",
     options: MODELS.map((id) => ({ id, label: id })),
-    defaultLabel: "the pet's own model",
+    defaultLabel: "the bot's own model",
   },
 ] as const;
 

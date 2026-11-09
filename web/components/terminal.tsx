@@ -4,7 +4,7 @@ import { useFocusTrap } from "./focus-trap";
 import { focusPage } from "./layout";
 import { pollTerminal } from "./terminal-poll";
 
-/** The pet's tmux window (claude-code-tmux entrypoint.sh: `-x 160 -y 48`): the Console fits it whole, without scrolling. */
+/** The bot's tmux window (claude-code-tmux entrypoint.sh: `-x 160 -y 48`): the Console fits it whole, without scrolling. */
 const SCREEN = { cols: 160, rows: 48 };
 const LINE_HEIGHT = 1.25;
 /** The smallest and largest text the fit picks, in px: smaller is unreadable, larger wastes the screen. */
@@ -16,7 +16,7 @@ export function fitFont(box: { width: number; height: number }, charWidth: numbe
   return Math.max(FONT.min, Math.min(FONT.max, Math.floor(size * 10) / 10));
 }
 
-/** A snapshot viewer: no keyboard input is forwarded to the pet. */
+/** A snapshot viewer: no keyboard input is forwarded to the bot. */
 export function TerminalDialog({ house, pet, title, onClose }: { house: string; pet: string; title: string; onClose: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLPreElement>(null);

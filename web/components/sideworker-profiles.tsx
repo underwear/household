@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { NAME_PATTERN } from "../../src/core/names";
 import type { SideworkerProfile } from "../../src/core/household";
-import { api, type AgentView, type HouseView, type KeyView } from "../api";
+import { api, type HarnessView, type WorkspaceView, type KeyView } from "../api";
 import { Dialog, useDialog } from "./dialog";
 import { TextField } from "./fields";
-import { keysFor, modeLabel, useAgentForm } from "./pets";
+import { keysFor, modeLabel, useHarnessForm } from "./bots";
 import { ListSection, written } from "./section";
 
-/** What a pet may start a sideworker on: its own settings (always), or one of the house's profiles the owner added. */
+/** What a bot may start a sideworker on: its own settings (always), or one of the workspace's profiles the owner added. */
 export function SideworkerProfiles({ house, agents, keys, refresh, notify }: {
-  house: HouseView; agents: AgentView[]; keys: KeyView[]; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void;
+  house: WorkspaceView; agents: HarnessView[]; keys: KeyView[]; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void;
 }) {
   const profiles = house.sideworkerProfiles ?? [];
   const [editing, setEditing] = useState<SideworkerProfile | "new">();
@@ -23,9 +23,9 @@ export function SideworkerProfiles({ house, agents, keys, refresh, notify }: {
     <ListSection
       title="Profiles"
       width="narrow"
-      hint="A sideworker runs on its pet's own agent and model, unless the pet asks for one of these."
+      hint="A sideworker runs on its bot's own harness and model, unless the bot asks for one of these."
       actions={<button type="button" className="btn small" onClick={() => setEditing("new")}>+ Add profile</button>}
-      empty="None yet: every sideworker runs on its pet's settings."
+      empty="None yet: every sideworker runs on its bot's settings."
       items={[
         ...profiles.map((profile) => ({
           key: profile.name,
@@ -43,11 +43,11 @@ export function SideworkerProfiles({ house, agents, keys, refresh, notify }: {
 }
 
 export function SideworkerProfileDialog({ profile, agents, keys, taken, onClose, save }: {
-  profile?: SideworkerProfile; agents: AgentView[]; keys: KeyView[]; taken: string[]; onClose: () => void; save: (profile: SideworkerProfile) => Promise<void>;
+  profile?: SideworkerProfile; agents: HarnessView[]; keys: KeyView[]; taken: string[]; onClose: () => void; save: (profile: SideworkerProfile) => Promise<void>;
 }) {
   const [name, setName] = useState(profile?.name ?? "");
   const adapter = agents.find(agent => agent.name === profile?.agent);
-  const form = useAgentForm(agents, keys, profile ? {
+  const form = useHarnessForm(agents, keys, profile ? {
     agent: profile.agent, key: profile.key, model: profile.model ?? adapter?.defaultModel ?? "",
     mode: profile.mode ?? adapter?.defaultMode ?? null, reasoningEffort: profile.reasoningEffort ?? null,
   } : undefined);
@@ -64,6 +64,6 @@ export function SideworkerProfileDialog({ profile, agents, keys, taken, onClose,
       const { agent, key, model, mode, reasoningEffort } = form.value;
       await save({ name: trimmed, agent: agent!, key: key!, ...(model ? { model } : {}), ...(mode ? { mode } : {}), ...(reasoningEffort ? { reasoningEffort } : {}) });
     },
-    children: <><TextField label="Profile name" value={name} onChange={setName} maxLength={31} mono placeholder="code-review" hint="What a pet asks for." error={nameError} />{form.fields}</>,
+    children: <><TextField label="Profile name" value={name} onChange={setName} maxLength={31} mono placeholder="code-review" hint="What a bot asks for." error={nameError} />{form.fields}</>,
   }} />;
 }

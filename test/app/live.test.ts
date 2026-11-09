@@ -6,7 +6,7 @@ import type { DialogQuestion } from "../../src/core/dialog";
 import { fakeClock } from "../helpers";
 import { FakeChannel } from "./fake-channel";
 
-const PLACE: Place = { id: "pet:sibling@c", kind: "pet-thread", title: "🐾 Sibling" };
+const PLACE: Place = { id: "pet:sibling@c", kind: "pet-thread", title: "🤖 Sibling" };
 
 /** Lets the channel's promises (posts, edits) settle. */
 const settle = async () => {
@@ -60,7 +60,7 @@ test("while working: one line with the stop button, edited only when it changes;
   expect(channel.statuses).toEqual([]); // nothing to show yet
   tool("c1", "Extracting all files from the archive");
   await tick(0);
-  expect(channel.statuses).toEqual(["post status-1 🐾 Sibling: working Extracting all files from the archive… [Stop]"]);
+  expect(channel.statuses).toEqual(["post status-1 🤖 Sibling: working Extracting all files from the archive… [Stop]"]);
   expect(live.owns("status-1" as PostRef)).toBe(live.turnOf("work", "sibling")); // a press on it is this turn's
   done("c1");
   await tick(60_000);
@@ -108,7 +108,7 @@ test('stopped: "Stopped at action N" (true: that line shows); one queued behind 
   expect(live.halt(turn)).toBe(false); // over already
   on({ kind: "tool-started", tool: "Grep", summary: "x", action: { kind: "search", target: "x" }, turn: "t2", call: "g" });
   await tick(1_000);
-  expect(channel.statuses.at(-1)).toBe('post status-2 🐾 Sibling: working Searching for "x"… [Stop]');
+  expect(channel.statuses.at(-1)).toBe('post status-2 🤖 Sibling: working Searching for "x"… [Stop]');
   // A stop that found the agent idle (stopped in its terminal): the turn is just over, its post goes.
   live.ended(live.turnOf("work", "sibling")!);
   await tick(1_000);
@@ -173,7 +173,7 @@ test(`the agent's own prompt continues the turn going on; a typed one waits behi
   await tick(1_000);
   await tick(1_000);
   expect(channel.statuses).toContain("drop status-1");
-  expect(channel.statuses).toContain("post status-2 🐾 Sibling: working read b… [Stop]");
+  expect(channel.statuses).toContain("post status-2 🤖 Sibling: working read b… [Stop]");
   // No Stop for b (Escape in the terminal): c's first event says b is over.
   start("c");
   step("c", "c4", "grep");
@@ -192,7 +192,7 @@ test("failures: a 429 holds the chat as long as asked, others 3 s; a post that c
   channel.statusFailures = [10_000, "no answer in time"];
   tool("c2", "two");
   await tick(1_000);
-  expect(errors).toEqual(["pet work/sibling: live message not updated: rate limited for 10 s"]);
+  expect(errors).toEqual(["bot work/sibling: live message not updated: rate limited for 10 s"]);
   await tick(9_000);
   expect(errors).toHaveLength(1); // held for the 10 s asked
   await tick(1_000);
@@ -206,8 +206,8 @@ test("failures: a 429 holds the chat as long as asked, others 3 s; a post that c
   await tick(1_000);
   await tick(3_000);
   expect(errors.slice(-2)).toEqual([
-    "pet work/sibling: live message not removed: Bad Request: message to delete not found",
-    "pet work/sibling: live message not removed: 500 Internal Server Error; left without its button",
+    "bot work/sibling: live message not removed: Bad Request: message to delete not found",
+    "bot work/sibling: live message not removed: 500 Internal Server Error; left without its button",
   ]);
   expect(channel.statuses.at(-1)).toBe("edit status-1: over Done");
   // A working post that can never change again: given up, its turn goes on showing nothing.
@@ -218,7 +218,7 @@ test("failures: a 429 holds the chat as long as asked, others 3 s; a post that c
   channel.statusFailures = ["gone: Bad Request: message to edit not found"];
   live.progress("work", "sibling", { kind: "tool-started", tool: "Bash", summary: "y", action: { kind: "run", says: "y" }, turn: "t2", call: "y" });
   await tick(1_000);
-  expect(errors.at(-1)).toBe("pet work/sibling: live message not updated: Bad Request: message to edit not found; given up");
+  expect(errors.at(-1)).toBe("bot work/sibling: live message not updated: Bad Request: message to edit not found; given up");
   const shown = channel.statuses.length;
   live.progress("work", "sibling", { kind: "tool-started", tool: "Bash", summary: "z", action: { kind: "run", says: "z" }, turn: "t2", call: "z" });
   await tick(5_000);
@@ -229,13 +229,13 @@ test("failures: a 429 holds the chat as long as asked, others 3 s; a post that c
 test("one chat's posts go a gap apart, whatever pet they are of", async () => {
   const { live, channel, spot, tool, on, tick } = setup();
   live.start("work", "sibling", "t1", spot());
-  live.start("work", "chair", "u1", spot({ place: { ...PLACE, id: "pet:chair@c", title: "🐾 Chair" } }));
+  live.start("work", "chair", "u1", spot({ place: { ...PLACE, id: "pet:chair@c", title: "🤖 Chair" } }));
   tool("c1", "one");
   on({ kind: "tool-started", tool: "Bash", summary: "two", action: { kind: "run", says: "two" }, turn: "u1", call: "d1" }, "chair");
   await tick(0);
-  expect(channel.statuses).toEqual(["post status-1 🐾 Sibling: working one… [Stop]"]);
+  expect(channel.statuses).toEqual(["post status-1 🤖 Sibling: working one… [Stop]"]);
   await tick(1_000);
-  expect(channel.statuses.at(-1)).toBe("post status-2 🐾 Chair: working two… [Stop]");
+  expect(channel.statuses.at(-1)).toBe("post status-2 🤖 Chair: working two… [Stop]");
 });
 
 test("reloads: a reopened channel ends the turn through the new one, a pet gone from its place ends it, a channel not open lets it go", async () => {
@@ -261,7 +261,7 @@ test("reloads: a reopened channel ends the turn through the new one, a pet gone 
   live.sync(() => ({ placed: true })); // its channel cannot open now
   live.finish("work", "sibling", "t3");
   await tick(10_000);
-  expect(reopened.statuses.at(-1)).toBe("post reopened-2 🐾 Sibling: working three… [Stop]"); // let go: left as it is
+  expect(reopened.statuses.at(-1)).toBe("post reopened-2 🤖 Sibling: working three… [Stop]"); // let go: left as it is
 });
 
 for (const end of ["finish", "halt", "lost", "stop", "reload"] as const) {
@@ -358,7 +358,7 @@ test("review preceding a command is buffered by exact id; missing and stale targ
   on({ kind: "tool-review", review: "missing", turn: "t1", status: "approved" });
   on({ kind: "tool-review", review: "stale", call: "other", turn: "old-turn", status: "approved" });
   await tick(0);
-  expect(channel.statuses.at(-1)).toBe("post status-1 🐾 Sibling: working Unrelated action… [Stop]");
+  expect(channel.statuses.at(-1)).toBe("post status-1 🤖 Sibling: working Unrelated action… [Stop]");
   tool("command", "Reviewed action");
   await tick(1_000);
   expect(channel.statuses.at(-1)).toContain("Reviewed action…\n\nReview: approved ✅");
@@ -428,7 +428,7 @@ test("outward messages retire a segment, preserve typing, waits and total Stop c
   tool("old", "Late duplicate old command");
   tool("new", "New command");
   await tick(0);
-  expect(channel.statuses.at(-1)).toBe("post status-2 🐾 Sibling: working New command… [Stop]");
+  expect(channel.statuses.at(-1)).toBe("post status-2 🤖 Sibling: working New command… [Stop]");
   expect(live.owns("status-1" as PostRef)).toBeUndefined();
   expect(live.owns("status-2" as PostRef)).toBe(turn);
   live.halt(turn);
@@ -458,7 +458,7 @@ test("a reply during initial status posting serializes retirement before the nex
   await tick(2_000);
   expect(channel.statuses.at(-1)).toBe("drop status-1");
   await tick(1_000);
-  expect(channel.statuses.at(-1)).toContain("post status-2 🐾 Sibling: working Second…\n\nReview: approved");
+  expect(channel.statuses.at(-1)).toContain("post status-2 🤖 Sibling: working Second…\n\nReview: approved");
 });
 
 test("different places, channels, and an old captured turn cannot rotate the active status", async () => {
@@ -477,7 +477,7 @@ test("different places, channels, and an old captured turn cannot rotate the act
   live.replied(turn, spot());
   await tick(1_000);
   await tick(1_000);
-  expect(channel.statuses.at(-1)).toBe("post status-2 🐾 Sibling: working New turn… [Stop]");
+  expect(channel.statuses.at(-1)).toBe("post status-2 🤖 Sibling: working New turn… [Stop]");
 });
 
 
@@ -490,7 +490,7 @@ test("a new unscoped negative review after an outward message stays visible as a
   await tick(1_000);
   on({ kind: "tool-review", review: "new-denial", status: "denied", scope: "network access", turn: "t1" });
   await tick(1_000);
-  expect(channel.statuses.at(-1)).toBe("post status-2 🐾 Sibling: working Review (network access): denied ⛔ [Stop]");
+  expect(channel.statuses.at(-1)).toBe("post status-2 🤖 Sibling: working Review (network access): denied ⛔ [Stop]");
   tool("new", "Next command");
   await tick(1_000);
   expect(channel.statuses.at(-1)).toContain("Next command…\n\nReview (network access): denied");

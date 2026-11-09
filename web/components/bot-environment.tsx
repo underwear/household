@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Play, RotateCcw } from "lucide-react";
-import { api, type EnvironmentView, type PetView } from "../api";
+import { api, type EnvironmentView, type BotView } from "../api";
 import { useDialog } from "./dialog";
 import { Section } from "./layout";
 import { MarkdownEditor } from "./markdown-editor";
@@ -20,7 +20,7 @@ const SCRIPTS: Record<Phase, { file: string; title: string; when: string; about:
   onStart: {
     file: "on-start.sh",
     title: "On start",
-    when: "At every boot, before the agent",
+    when: "At every boot, before the harness",
     about: "Starts services on every boot. Keep it safe to repeat; background long-running processes.",
     run: "onStartLastRun",
   },
@@ -32,9 +32,9 @@ const SCRIPTS: Record<Phase, { file: string; title: string; when: string; about:
  */
 export const TEMPLATES: Record<Phase, string> = {
   setup: `#!/usr/bin/env bash
-# Setup: runs once, when this pet's VM is created, as the pet user (sudo works).
-# Restarts do not repeat it; after a change, Run now. The pet can edit it too.
-# Hosts it downloads from must be on the house's Network allowlist.
+# Setup: runs once, when this bot's VM is created, as the bot user (sudo works).
+# Restarts do not repeat it; after a change, Run now. The bot can edit it too.
+# Hosts it downloads from must be on the workspace's Network allowlist.
 set -euo pipefail
 
 echo "Setting up $(hostname)"
@@ -43,7 +43,7 @@ echo "Setting up $(hostname)"
 # sudo apt-get install -y jq ripgrep
 `,
   onStart: `#!/usr/bin/env bash
-# On start: runs at every VM boot, before the agent, as the pet user.
+# On start: runs at every VM boot, before the harness, as the bot user.
 # Keep it safe to repeat; start long-running services in the background.
 set -euo pipefail
 
@@ -61,11 +61,11 @@ const OUTCOME: Record<Run["status"], { label: string; tone: string }> = {
 };
 
 /**
- * A pet's environment: its two Bash scripts (Setup, once when the VM is created; On start, at every boot), run as
- * the pet user and saved in household.yaml; the pet edits them as well. An empty one shows its example (TEMPLATES). Like Skills: the scripts on the left with how each last ran, the chosen
+ * A bot's environment: its two Bash scripts (Setup, once when the VM is created; On start, at every boot), run as
+ * the bot user and saved in household.yaml; the bot edits them as well. An empty one shows its example (TEMPLATES). Like Skills: the scripts on the left with how each last ran, the chosen
  * one in the editor on the right. Saving runs nothing; Run now runs the saved script in the current VM.
  */
-export function PetEnvironment({ house, pet }: { house: string; pet: PetView }) {
+export function BotEnvironment({ house, pet }: { house: string; pet: BotView }) {
   const [view, setView] = useState<EnvironmentView>();
   const [drafts, setDrafts] = useState<Record<Phase, string>>({ setup: "", onStart: "" });
   const [phase, setPhase] = useState<Phase>("setup");
@@ -113,7 +113,7 @@ export function PetEnvironment({ house, pet }: { house: string; pet: PetView }) 
     const which = phase;
     dialog.open({
       title: `Run ${SCRIPTS[which].file} now?`,
-      body: "Runs the saved script in the current VM; the agent keeps working. Up to 15 minutes.",
+      body: "Runs the saved script in the current VM; the harness keeps working. Up to 15 minutes.",
       confirmLabel: "Run now",
       busyLabel: "Running…",
       onConfirm: async () => {
@@ -125,7 +125,7 @@ export function PetEnvironment({ house, pet }: { house: string; pet: PetView }) 
   const last = view?.[script.run] ?? null;
   const offline = pet.enabled === false;
   return (
-    <Section width="wide" hint={`Bash, run as the pet user with sudo. ${pet.title} can edit and run them too. Stored in household.yaml: no secrets.`}>
+    <Section width="wide" hint={`Bash, run as the bot user with sudo. ${pet.title} can edit and run them too. Stored in household.yaml: no secrets.`}>
       <div className="skills env">
         <nav className="skills-nav" aria-label="Scripts">
           <ul>
@@ -187,7 +187,7 @@ export function PetEnvironment({ house, pet }: { house: string; pet: PetView }) 
             <button
               type="button"
               className="btn small env-run"
-              title={offline ? "The pet is disabled" : dirty(phase) ? "Save first" : undefined}
+              title={offline ? "The bot is disabled" : dirty(phase) ? "Save first" : undefined}
               disabled={!view || busy || offline || dirty(phase) || !saved(phase)}
               onClick={run}
             >
@@ -224,7 +224,7 @@ export function PetEnvironment({ house, pet }: { house: string; pet: PetView }) 
                 <kbd>S</kbd> saves · saving runs nothing
               </span>
             )}
-            <span>Bash · as the pet user</span>
+            <span>Bash · as the bot user</span>
           </footer>
         </section>
       </div>

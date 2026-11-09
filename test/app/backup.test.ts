@@ -111,8 +111,8 @@ test("export: one archive (mode 600) of the manifest, the config (keys and token
   expect(lines).toEqual([
     `database: snapshot, schema ${SCHEMA_VERSION}`,
     "tls: ca.crt, ca.key",
-    `pet work/sibling: home ${HOME} (paused while saved)`,
-    "pet work/stool: no home yet, skipped",
+    `bot work/sibling: home ${HOME} (paused while saved)`,
+    "bot work/stool: no home yet, skipped",
   ]);
   const dir = tempDir();
   await unpackFile(file, dir, 1e9);
@@ -157,7 +157,7 @@ test("export: the default name is household-<YYYYMMDD-HHMM>.tar.gz in the curren
   }
   expect(runtime.calls).toEqual([`save ${HOME}`]);
   expect(runtime.containers.get(SIBLING)!.state).toBe("paused");
-  expect(lines).toContain(`pet work/sibling: home ${HOME} (it was paused, left so)`);
+  expect(lines).toContain(`bot work/sibling: home ${HOME} (it was paused, left so)`);
 });
 
 test("export refuses to write over a file, and needs a config and a database", async () => {
@@ -238,11 +238,11 @@ test("import refuses to replace a config, a database or a home with files unless
 test("import refuses, even with --force, a pet that is running, paused or between states, and a container of another Household or not Household's", async () => {
   const { file } = await exported();
   const cases: [string, Record<string, string> | "mine", string][] = [
-    ["running", "mine", `pet work/sibling is running: stop it first (msb stop ${SIBLING})`],
-    ["paused", "mine", `pet work/sibling is paused: stop it first (msb stop ${SIBLING})`],
+    ["running", "mine", `bot work/sibling is running: stop it first (msb stop ${SIBLING})`],
+    ["paused", "mine", `bot work/sibling is paused: stop it first (msb stop ${SIBLING})`],
     // On its way up or down, or its agent in a state the runtime cannot read: it may still write its home.
-    ["stopping", "mine", `pet work/sibling is stopping: stop it first (msb stop ${SIBLING})`],
-    ["unknown", "mine", `pet work/sibling is unknown: stop it first (msb stop ${SIBLING})`],
+    ["stopping", "mine", `bot work/sibling is stopping: stop it first (msb stop ${SIBLING})`],
+    ["unknown", "mine", `bot work/sibling is unknown: stop it first (msb stop ${SIBLING})`],
     ["exited", { "household.owner": "0123456789ab" }, `container ${SIBLING} is another Household's (instance 0123456789ab): its home is not this Household's to replace`],
     ["exited", {}, `container ${SIBLING} is not Household's: its home is not this Household's to replace`],
   ];

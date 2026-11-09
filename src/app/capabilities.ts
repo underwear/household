@@ -51,7 +51,7 @@ export class Capabilities {
 
   private async house(house: string) {
     const found = (await this.config.load()).houses.find(h => h.name === house);
-    if (!found) throw new NotFoundError(`unknown house '${house}'`);
+    if (!found) throw new NotFoundError(`unknown workspace '${house}'`);
     return found;
   }
   async list(house: string) { return (await this.house(house)).capabilities ?? []; }
@@ -110,7 +110,7 @@ export class Capabilities {
   async draft(caller: PetIdentity, input: { name: unknown; description?: unknown; install?: unknown; network?: unknown; needs_keys?: unknown }) {
     if (typeof input.name !== "string" || !NAME_PATTERN.test(input.name)) throw new HouseholdError("name: lowercase letters, digits and hyphens, starting with a letter");
     const house = await this.house(caller.house);
-    if (!house.pets.some(pet => pet.name === caller.pet)) throw new HouseholdError("Only a pet of this house may draft its capabilities");
+    if (!house.pets.some(pet => pet.name === caller.pet)) throw new HouseholdError("Only a bot of this workspace may draft its capabilities");
     const current = (house.capabilities ?? []).find(capability => capability.name === input.name);
     if (current?.owner) throw new HouseholdError(`${input.name} belongs to a scout blueprint; only your human edits it`);
     if (!current && this.drafts(caller.house).filter(each => !(house.capabilities ?? []).some(c => c.name === each.capability)).length >= 10) throw new HouseholdError("Ten new capabilities already wait for your human; ask them to review those first");
@@ -168,7 +168,7 @@ export function capabilityTools(capabilities: Capabilities, envOf: (house: strin
   return [
     {
       name: "capabilities",
-      description: "List the house's shared capabilities, the bricks your human builds scouts from: name, description, kind (tool: no network limit; access: a host list or keys), hosts and the environment variables of their keys (names only). You call scouts, not capabilities; this is for drafting one. Read household-capabilities before drafting.",
+      description: "List the workspace's shared capabilities, the bricks your human builds scouts from: name, description, kind (tool: no network limit; access: a host list or keys), hosts and the environment variables of their keys (names only). You call scouts, not capabilities; this is for drafting one. Read household-capabilities before drafting.",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       available: enabled,
       async call(caller) { return JSON.stringify(await capabilities.catalog(caller, secret => envOf(caller.house, secret))); },

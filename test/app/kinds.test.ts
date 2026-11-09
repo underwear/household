@@ -38,8 +38,8 @@ test("pets given more than the host has: a line per pet and resource, the defaul
   const houses = [{ ...house([]), pets }];
   expect(hostProblems({ cpus: 16, memoryMiB: 8192 }, houses)).toEqual([]); // all of the host: fits
   expect(hostProblems({ cpus: 4, memoryMiB: 4096 }, houses)).toEqual([
-    "pet work/big: 16 vCPU, more than this host's 4",
-    "pet work/big: 8 GiB of RAM, more than this host's 4 GiB",
+    "bot work/big: 16 vCPU, more than this host's 4",
+    "bot work/big: 8 GiB of RAM, more than this host's 4 GiB",
   ]);
-  expect(hostProblems({ cpus: 1, memoryMiB: 1024 }, [{ ...house([]), pets: [{ name: "cat" }] }])).toEqual(["pet work/cat: 2 vCPU, more than this host's 1"]); // the default too
+  expect(hostProblems({ cpus: 1, memoryMiB: 1024 }, [{ ...house([]), pets: [{ name: "cat" }] }])).toEqual(["bot work/cat: 2 vCPU, more than this host's 1"]); // the default too
 });

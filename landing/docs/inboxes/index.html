@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inboxes — Household docs</title>
-  <meta name="description" content="Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your pets. Setup, sources, per-pet switches and the custom HTTP format.">
-  <meta property="og:title" content="House inboxes">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta name="description" content="Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your bots. Setup, sources, per-bot switches and the custom HTTP format.">
+  <meta property="og:title" content="Workspace inboxes">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/inboxes/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,47 +170,47 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
-    <article><p class="crumb">Sources and delivery</p><h1>House inboxes</h1>
-<p>An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the pets you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a pet's VM. Event contents are treated as untrusted data, never as your instructions.</p>
+    <article><p class="crumb">Sources and delivery</p><h1>Workspace inboxes</h1>
+<p>An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a bot's VM. Event contents are treated as untrusted data, never as your instructions.</p>
 <h2 id="add-an-inbox">Add an inbox</h2>
-<p>In <strong>House → Inboxes</strong>, choose <strong>+ Add inbox</strong>:</p>
+<p>In <strong>Workspace → Inboxes</strong>, choose <strong>+ Add inbox</strong>:</p>
 <ol>
 <li><strong>Source.</strong> Pick what to watch (see <a href="#sources">Sources</a>).</li>
-<li><strong>Connection.</strong> Enter the address and credentials, then <strong>Test and continue</strong>. A test posts nothing, tells no pet and does not move the inbox forward.</li>
+<li><strong>Connection.</strong> Enter the address and credentials, then <strong>Test and continue</strong>. A test posts nothing, tells no bot and does not move the inbox forward.</li>
 <li><strong>Delivery.</strong> Name it and choose how often to check: every minute, 5 or 15 minutes, or any interval from 1 minute to 24 hours. Choose a channel and:
 <ul>
-<li><strong>Post events in the channel</strong> — on: one House message per event in that channel. Off: only the pets get them.</li>
-<li><strong>Pets</strong> — for each pet in that channel, <strong>Receives</strong> and <strong>Silent</strong> (see <a href="#pets">Pets</a>). With posting on, you may leave every pet off for a plain channel feed; with posting off, at least one pet must receive.</li>
+<li><strong>Post events in the channel</strong> — on: one Workspace message per event in that channel. Off: only the bots get them.</li>
+<li><strong>Bots</strong> — for each bot in that channel, <strong>Receives</strong> and <strong>Silent</strong> (see <a href="#bots">Bots</a>). With posting on, you may leave every bot off for a plain channel feed; with posting off, at least one bot must receive.</li>
 <li><strong>On the first check</strong> — <em>Start from now</em> (default) skips what is already there; <em>Deliver what is there now</em> sends up to 50 current items, or the current state of a JSON or health check.</li>
 </ul>
 </li>
 </ol>
-<p>Pets reply about an event in the inbox's channel.</p>
+<p>Bots reply about an event in the inbox's channel.</p>
 <h2 id="manage-inboxes">Manage inboxes</h2>
 <p>Each inbox shows its state (Watching, Retrying, Needs attention, Paused), when it was last checked, when it checks next, and how many events wait for delivery. <strong>Recent events</strong> under the list shows what arrived lately.</p>
 <ul>
 <li><strong>Check now</strong> checks right away.</li>
 <li><strong>Edit</strong> changes anything. Changing the source or the channel is refused while events still wait for delivery: let them go out, or remove the inbox.</li>
 <li><strong>Pause</strong> stops checking and keeps its place; <strong>Resume</strong> goes on from there.</li>
-<li><strong>Remove</strong> stops it and drops waiting events. Posts already in the channel and the pets' event history stay.</li>
+<li><strong>Remove</strong> stops it and drops waiting events. Posts already in the channel and the bots' event history stay.</li>
 </ul>
-<h2 id="pets">Pets</h2>
-<p>A pet's <strong>Inboxes</strong> tab lists every inbox of its house with two switches:</p>
+<h2 id="bots">Bots</h2>
+<p>A bot's <strong>Inboxes</strong> tab lists every inbox of its workspace with two switches:</p>
 <ul>
-<li><strong>Receives</strong> — the pet gets the inbox's events. It must be in the inbox's channel first.</li>
-<li><strong>Silent</strong> — events go to the pet's inbox history only: it is not woken for them and can look them up when it needs to.</li>
+<li><strong>Receives</strong> — the bot gets the inbox's events. It must be in the inbox's channel first.</li>
+<li><strong>Silent</strong> — events go to the bot's inbox history only: it is not woken for them and can look them up when it needs to.</li>
 </ul>
-<p>The same switches are in the inbox's own form. The only pet of an inbox that does not post in its channel cannot switch off there: turn posting on or add another pet first.</p>
-<p>A busy pet takes events when it is idle. A paused pet, or one whose VM was down, gets a short <strong>catch-up digest</strong> instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.</p>
-<p>Pets read and search their history with three tools:</p>
+<p>The same switches are in the inbox's own form. The only bot of an inbox that does not post in its channel cannot switch off there: turn posting on or add another bot first.</p>
+<p>A busy bot takes events when it is idle. A paused bot, or one whose VM was down, gets a short <strong>catch-up digest</strong> instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.</p>
+<p>Bots read and search their history with three tools:</p>
 <ul>
 <li><code>inbox_list</code> — the inboxes it receives, and which of them are silent.</li>
 <li><code>inbox_history</code> — events by inbox and date, newest first.</li>
 <li><code>inbox_search</code> — events by words in their title, text and metadata.</li>
 </ul>
-<p>A pet sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.</p>
+<p>A bot sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.</p>
 <h2 id="sources">Sources</h2>
 <table>
 <thead>
@@ -231,7 +231,7 @@
 <p>Every URL source accepts request headers for credentials. Redirects are not followed: enter the final URL.</p>
 <p><strong>Mail.</strong> Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes and STARTTLS ports (143, 110) are not supported. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.</p>
 <p><strong>RSS / Atom.</strong> RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.</p>
-<p><strong>Health check.</strong> A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the pets get one <em>down</em> event; the first passing check after it sends <em>recovered</em>. A site already down when you add it still alerts. The response body is ignored.</p>
+<p><strong>Health check.</strong> A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the bots get one <em>down</em> event; the first passing check after it sends <em>recovered</em>. A site already down when you add it still alerts. The response body is ignored.</p>
 <p><strong>JSON watcher.</strong> Any JSON endpoint. Watch the whole response, or list fields as <a href="https://www.rfc-editor.org/rfc/rfc6901">JSON Pointer</a> paths, one per line:</p>
 <pre><code class="language-text">/price
 /status
@@ -269,20 +269,20 @@
 <tr><td><code>text</code></td><td>Required plain text, up to 16,000 characters</td></tr>
 <tr><td><code>url</code></td><td>Optional HTTP(S) link</td></tr>
 <tr><td><code>occurredAt</code></td><td>Optional time with a timezone</td></tr>
-<tr><td><code>metadata</code></td><td>Optional JSON object, up to 16 KiB; pets can search it</td></tr>
+<tr><td><code>metadata</code></td><td>Optional JSON object, up to 16 KiB; bots can search it</td></tr>
 <tr><td><code>nextCursor</code></td><td>Optional, up to 4,096 characters; where to continue next time</td></tr>
 </tbody>
 </table>
 <p>Without a cursor, return the latest 50 events; with one, the next events after it. Endpoints without cursors can return a recent window: Household remembers the last 5,000 IDs of each inbox.</p>
 <h2 id="when-something-fails">When something fails</h2>
-<p>A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows <strong>Needs attention</strong> with the reason, and its pets get one notice; they get one more when it recovers. An inbox without pets shows the problem on the page only.</p>
+<p>A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows <strong>Needs attention</strong> with the reason, and its bots get one notice; they get one more when it recovers. An inbox without bots shows the problem on the page only.</p>
 <p>Good to know:</p>
 <ul>
-<li>An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a pet may get an event it had already started on: the digest tells it so.</li>
+<li>An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a bot may get an event it had already started on: the digest tells it so.</li>
 <li>Checks see snapshots: an alert that fires and clears between two checks can be missed.</li>
 <li>Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.</li>
-<li>Switching posting on or off applies to new events; switching a pet to Silent applies at once.</li>
-<li>The host can reach internal addresses your pets cannot: only you configure sources.</li>
+<li>Switching posting on or off applies to new events; switching a bot to Silent applies at once.</li>
+<li>The host can reach internal addresses your bots cannot: only you configure sources.</li>
 </ul>
 <h2 id="references">References</h2>
 <ul>
@@ -292,7 +292,7 @@
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#add-an-inbox">Add an inbox</a></li><li><a href="#manage-inboxes">Manage inboxes</a></li><li><a href="#pets">Pets</a></li><li><a href="#sources">Sources</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#when-something-fails">When something fails</a></li><li><a href="#references">References</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#add-an-inbox">Add an inbox</a></li><li><a href="#manage-inboxes">Manage inboxes</a></li><li><a href="#bots">Bots</a></li><li><a href="#sources">Sources</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#when-something-fails">When something fails</a></li><li><a href="#references">References</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

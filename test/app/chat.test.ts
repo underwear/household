@@ -188,11 +188,11 @@ test("General's notes: once a batch from the inbox is delivered, one pair (where
   await waitFor(() => channel.calls.filter((call) => call.startsWith("notice")).length === 5);
   await Bun.sleep(20);
   expect(channel.calls.filter((call) => call.startsWith("notice"))).toEqual([
-    'notice 🐾 Chair: "did not arrive" not sent: the agent seems to be in a dialog. `house pet attach`', // where it came from: chair's place there
-    'notice General: Passed 3 messages to the thread "🐾 Chair"',
-    'notice 🐾 Chair: From General: "one" and 2 more',
-    'notice General: Passed to the thread "🐾 Chair"',
-    'notice 🐾 Chair: From General: "four"',
+    'notice 🤖 Chair: "did not arrive" not sent: the agent seems to be in a dialog. `house pet attach`', // where it came from: chair's place there
+    'notice General: Passed 3 messages to the thread "🤖 Chair"',
+    'notice 🤖 Chair: From General: "one" and 2 more',
+    'notice General: Passed to the thread "🤖 Chair"',
+    'notice 🤖 Chair: From General: "four"',
   ]);
   await chat.stop();
 });
@@ -247,12 +247,12 @@ test("a message carrying Household's tag anywhere is rejected by the security sy
     "reject work/sibling batch: ok",
   ]);
   expect(channel.calls).toEqual([
-    `notice 🐾 Sibling: ${notice}`,
+    `notice 🤖 Sibling: ${notice}`,
     `notice General: ${notice}`,
-    `notice 🐾 Chair: ${notice}`,
+    `notice 🤖 Chair: ${notice}`,
     `notice General: ${notice}`,
-    `notice 🐾 Sibling: ${notice}`,
-    `notice 🐾 Sibling: ${notice}`,
+    `notice 🤖 Sibling: ${notice}`,
+    `notice 🤖 Sibling: ${notice}`,
     `notice General: ${notice}`,
   ]);
   expect(lines.filter((line) => line.includes("was rejected by the security system: it carries a Household tag"))).toHaveLength(7);
@@ -290,7 +290,7 @@ test("chat-facing agent notifications are shown as Household notices in the pet'
   try {
     chat.onDelivery({ kind: "notification", house: "work", pet: "sibling", text: "Auto-review: allowed" });
     await waitFor(() => opened[0]!.calls.some((call) => call.includes("Auto-review")));
-    expect(opened[0]!.calls).toEqual(["notice 🐾 Sibling: Auto-review: allowed"]);
+    expect(opened[0]!.calls).toEqual(["notice 🤖 Sibling: Auto-review: allowed"]);
   } finally { await chat.stop(); }
 });
 
@@ -299,7 +299,7 @@ test("content Household cannot take yet gets a notice in the pet's place", async
   await chat.setHouses([work()]);
   await opened[0]!.say({ kind: "unsupported", ref: ref("3"), from: { ref: OWNER, name: "Oleg" }, external: {}, what: "poll" });
   expect(calls).toEqual([]);
-  expect(opened[0]!.calls).toEqual(["notice 🐾 Sibling: Polls can't be passed on yet"]);
+  expect(opened[0]!.calls).toEqual(["notice 🤖 Sibling: Polls can't be passed on yet"]);
   await chat.stop();
 });
 
@@ -334,11 +334,11 @@ test("a reply goes to the pet's place and answers what it was given; it fails, w
   const { chat, calls, opened } = setup();
   await chat.setHouses([work(), { ...work([]), name: "home" }]);
   expect(await chat.reply("work", "chair", "done")).toMatchObject({ id: "m1", channel: "c1" });
-  expect(opened[0]!.calls).toEqual(["post 🐾 Chair: done"]);
+  expect(opened[0]!.calls).toEqual(["post 🤖 Chair: done"]);
   expect(calls).toEqual(["answered work/chair"]);
   await expect(chat.reply("work", "chair", "  ")).rejects.toThrow("the text is empty");
-  await expect(chat.reply("work", "ghost", "x")).rejects.toThrow("unknown pet work/ghost");
-  await expect(chat.reply("home", "sibling", "x")).rejects.toThrow("house home has no chat set up");
+  await expect(chat.reply("work", "ghost", "x")).rejects.toThrow("unknown bot work/ghost");
+  await expect(chat.reply("home", "sibling", "x")).rejects.toThrow("workspace home has no chat set up");
   opened[0]!.failure = "sendMessage: 400 Bad Request: chat not found";
   await expect(chat.reply("work", "sibling", "x")).rejects.toThrow("chat not found");
   expect(calls).toEqual(["answered work/chair"]);
@@ -364,23 +364,23 @@ test("failed messages become notices; a notice that cannot be sent goes to the l
   chat.onDelivery({ kind: "failed", house: "work", pet: "sibling", messages: [message({ text: "lengthy ".repeat(20) })], why: "stuck" });
   chat.onDelivery({ kind: "failed", house: "work", pet: "sibling", messages: [message({ text: "question" })], why: "interrupted" });
   await waitFor(() => channel.calls.length === 2);
-  expect(channel.calls[0]).toStartWith('notice 🐾 Sibling: "lengthy lengthy');
+  expect(channel.calls[0]).toStartWith('notice 🤖 Sibling: "lengthy lengthy');
   expect(channel.calls[0]).toContain('…" not sent');
-  expect(channel.calls[1]).toBe('notice 🐾 Sibling: Household restarted while answering "question". No reply will come: write again.');
+  expect(channel.calls[1]).toBe('notice 🤖 Sibling: Household restarted while answering "question". No reply will come: write again.');
   // A batch fails as one, and so do all messages a restart cut off.
   const two = [message({ text: "one" }), message({ id: 2, text: "two" })];
   chat.onDelivery({ kind: "failed", house: "work", pet: "sibling", messages: two, why: "stuck" });
   chat.onDelivery({ kind: "failed", house: "work", pet: "sibling", messages: two, why: "interrupted" });
   await waitFor(() => channel.calls.length === 4);
   expect(channel.calls.slice(2)).toEqual([
-    'notice 🐾 Sibling: "one" and 1 more not sent: the agent seems to be in a dialog. `house pet attach`',
-    'notice 🐾 Sibling: Household restarted while answering "one" and 1 more. No reply will come: write again.',
+    'notice 🤖 Sibling: "one" and 1 more not sent: the agent seems to be in a dialog. `house pet attach`',
+    'notice 🤖 Sibling: Household restarted while answering "one" and 1 more. No reply will come: write again.',
   ]);
   channel.failure = "chat not found";
   await chat.notice("work", "sibling", "container restarted");
-  expect(lines.at(-1)).toContain("ERROR pet work/sibling: notice not sent (chat not found): container restarted");
+  expect(lines.at(-1)).toContain("ERROR bot work/sibling: notice not sent (chat not found): container restarted");
   await chat.notice("home", "cat", "no such house");
-  expect(lines.at(-1)).toContain("pet home/cat: notice (no chat): no such house");
+  expect(lines.at(-1)).toContain("bot home/cat: notice (no chat): no such house");
   await chat.stop();
 });
 
@@ -394,7 +394,7 @@ test("channels follow the config on every reload: new ones open, gone ones stop,
   expect(opened).toHaveLength(1);
   expect(opened[0]!.stopped).toBe(false);
   await chat.reply("work", "sibling", "x");
-  expect(opened[0]!.calls).toEqual(["post 🐾 Sibling: x"]); // the new title, same channel
+  expect(opened[0]!.calls).toEqual(["post 🤖 Sibling: x"]); // the new title, same channel
   await opened[0]!.say(text("in General"));
   expect(calls).toEqual([
     "answered work/sibling",
@@ -408,7 +408,7 @@ test("channels follow the config on every reload: new ones open, gone ones stop,
   expect(opened).toHaveLength(2);
   expect(opened[0]!.stopped).toBe(true);
   await opened[0]!.say(text("too late"));
-  expect(lines.at(-1)).toContain("house work: a text through channel telegram-private:1, which is closing, was dropped");
+  expect(lines.at(-1)).toContain("workspace work: a text through channel telegram-private:1, which is closing, was dropped");
   await opened[1]!.say(text("hey"));
   expect(calls).toEqual([`send work/sibling hey: {"event":{"kind":"message","id":"m1"},${FROM},"channel":{"id":"c2","kind":"telegram-private","name":"Telegram Bot DM (threaded)","audience":"private","meta":{"message":1}}}\n\nhey`]);
   // Another bot for the same chat: reopened.
@@ -431,12 +431,12 @@ test("every reload gives each pet's place in each open channel its title now: a 
   await chat.setHouses([work()]);
   const channel = opened[0]!;
   const titles = () => Object.fromEntries(channel.titles);
-  expect(Object.values(titles()).sort()).toEqual(["🐾 Chair", "🐾 Sibling"]);
+  expect(Object.values(titles()).sort()).toEqual(["🤖 Chair", "🤖 Sibling"]);
   const owl = work();
   owl.pets = owl.pets.map((pet) => (pet.name === "sibling" ? { ...pet, emoji: "🦉" } : pet));
   await chat.setHouses([owl]);
   expect(opened).toHaveLength(1);
-  expect(Object.values(titles()).sort()).toEqual(["🐾 Chair", "🦉 Sibling"]);
+  expect(Object.values(titles()).sort()).toEqual(["🤖 Chair", "🦉 Sibling"]);
   await chat.reply("work", "sibling", "here");
   expect(channel.calls.at(-1)).toBe("post 🦉 Sibling: here");
 });
@@ -454,7 +454,7 @@ test("a channel that cannot open says why, and opens on a later reload", async (
   );
   await late.setHouses([work()]);
   expect(late.problem("work", KEY)).toBe(problem);
-  await expect(late.reply("work", "sibling", "x")).rejects.toThrow("channel Telegram Bot DM (threaded) of house work is not open");
+  await expect(late.reply("work", "sibling", "x")).rejects.toThrow("channel Telegram Bot DM (threaded) of workspace work is not open");
   problem = undefined;
   await late.setHouses([work()]);
   expect(late.problem("work", KEY)).toBeUndefined();
@@ -480,7 +480,7 @@ test("a reply's buttons: a press goes to the pet as a message, the buttons give 
   await chat.setHouses([work()]);
   const channel = opened[0]!;
   await chat.reply("work", "sibling", "Buy an elephant? He is big,\nbut kind, and there is room for all of us", [["Yes", "  No\n"], ["Later"]]);
-  expect(channel.calls).toEqual(["post 🐾 Sibling: Buy an elephant? He is big,\nbut kind, and there is room for all of us {Yes|No}{Later}"]);
+  expect(channel.calls).toEqual(["post 🤖 Sibling: Buy an elephant? He is big,\nbut kind, and there is room for all of us {Yes|No}{Later}"]);
   await channel.press("post-1", 0, "Yes", { place: SIBLING, external: { thread: 100 } });
   await channel.press("post-1", 1, "No", { place: SIBLING }); // before the buttons went
   expect(channel.calls.slice(1)).toEqual(["resolve post-1: Yes"]);
@@ -512,11 +512,11 @@ test("permissions are not counted with dialogs: an agent that asks often still g
   const channel = opened[0]!;
   for (let i = 0; i < 4; i++) void chat.ask("work", "sibling", { kind: "permission", tool: "Bash", detail: `rm ${i}` }); // over the dialog burst of 2
   await waitFor(() => channel.calls.filter((call) => call.includes("asks for permission")).length === 4);
-  expect(channel.calls[0]).toBe("notice 🐾 Sibling: 🐾 Sibling asks for permission (an action inside its VM):\n\nBash: rm 0\n\nNo answer in 30 s means no. {Yes|No}");
+  expect(channel.calls[0]).toBe("notice 🤖 Sibling: 🤖 Sibling asks for permission (an action inside its VM):\n\nBash: rm 0\n\nNo answer in 30 s means no. {Yes|No}");
   // A dialog seen only on screen (after a restart, or asked without the hook): the person is told where to answer.
   chat.onDelivery({ kind: "dialog", house: "work", pet: "sibling", dialog: "unknown" });
   await waitFor(() => channel.calls.some((call) => call.includes("is waiting for an answer in the terminal")));
-  expect(channel.calls.at(-1)).toBe("notice 🐾 Sibling: Sibling is waiting for an answer in the terminal: `house pet attach`");
+  expect(channel.calls.at(-1)).toBe("notice 🤖 Sibling: Sibling is waiting for an answer in the terminal: `house pet attach`");
   await chat.stop();
 });
 
@@ -527,7 +527,7 @@ test("a pet's dialog is put to the person: a press or text in the pet's place an
   const pressed = chat.ask("work", "sibling", color);
   await waitFor(() => channel.calls.length === 1);
   await Bun.sleep(1); // the card is posted, and its dialog knows it
-  expect(channel.calls[0]).toStartWith("notice 🐾 Sibling: 🐾 Sibling asks:");
+  expect(channel.calls[0]).toStartWith("notice 🤖 Sibling: 🤖 Sibling asks:");
   await channel.press("post-1", 0, "Red", { place: SIBLING });
   expect(await pressed).toEqual({ kind: "answers", answers: [{ chosen: ["Red"] }] });
 
@@ -558,15 +558,15 @@ test("dialogs have their own budget: replies do not use it up; over it, a dialog
   await chat.setHouses([work(), { ...work([]), name: "home" }]);
   const channel = opened[0]!;
   expect(await chat.ask("home", "sibling", color)).toBeUndefined();
-  expect(lines.at(-1)).toContain("pet home/sibling: a dialog stays in the terminal (no chat)");
+  expect(lines.at(-1)).toContain("bot home/sibling: a dialog stays in the terminal (no chat)");
 
   for (let i = 0; i < 3; i++) await chat.reply("work", "chair", `r${i}`); // the reply burst
   const asked = [chat.ask("work", "chair", color), chat.ask("work", "chair", color)]; // the dialog burst is 2
   await waitFor(() => channel.calls.filter((call) => call.includes("Chair asks")).length === 2);
   expect(await chat.ask("work", "chair", color)).toBeUndefined();
   expect(await chat.ask("work", "chair", color)).toBeUndefined();
-  expect(lines.filter((line) => line.includes("ERROR pet work/chair: a dialog stays in the terminal (too many dialogs)"))).toHaveLength(2);
-  await waitFor(() => channel.calls.some((call) => call.startsWith("notice 🐾 Chair: Too many questions in a row")));
+  expect(lines.filter((line) => line.includes("ERROR bot work/chair: a dialog stays in the terminal (too many dialogs)"))).toHaveLength(2);
+  await waitFor(() => channel.calls.some((call) => call.startsWith("notice 🤖 Chair: Too many questions in a row")));
   expect(channel.calls.filter((call) => call.includes("questions in a row"))).toHaveLength(1);
   await chat.stop();
   expect(await Promise.all(asked)).toEqual([undefined, undefined]); // Household stopped: back to the terminal
@@ -651,7 +651,7 @@ test("a pet reacts only within its own journal, in a channel it is in: what it g
   await expect(chat.react("work", "sibling", "c1", "1234", "👍")).rejects.toThrow("1234 is not a Household id: use an id from a header (event.id, from.id, channel.id)");
   await expect(chat.react("work", "sibling", "c1", "c1", "👍")).rejects.toThrow("c1 is a channel id, not a message id (m<n>)");
   // The channel is checked first: only one the pet is placed in, never a fallback.
-  await expect(chat.react("work", "sibling", "c2", "m1", "👍")).rejects.toThrow("there is no channel c2 in your house (yours: c1): use one of them, or leave channel out");
+  await expect(chat.react("work", "sibling", "c2", "m1", "👍")).rejects.toThrow("there is no channel c2 in your workspace (yours: c1): use one of them, or leave channel out");
   await expect(chat.react("work", "sibling", "m1", "m1", "👍")).rejects.toThrow("m1 is a message id, not a channel id (c<n>)");
   await chat.react("work", "chair", "c1", chairs, "🔥");
   channel!.failure = "Telegram does not take 🐾 as a reaction";
@@ -690,13 +690,13 @@ test("a reply's channel is Household's id of one the pet is placed in (its place
   await chat.setHouses([work([DM, { ...FAMILY, pets: ["chair"] }])]);
   expect(await chat.reply("work", "sibling", "here", undefined, "c1")).toMatchObject({ id: "m1", channel: "c1" });
   await expect(chat.reply("work", "sibling", "x", undefined, "c2")).rejects.toThrow("c2 is not one of your channels (yours: c1): use one of them, or leave channel out");
-  await expect(chat.reply("work", "sibling", "x", undefined, "c42")).rejects.toThrow("there is no channel c42 in your house (yours: c1)");
+  await expect(chat.reply("work", "sibling", "x", undefined, "c42")).rejects.toThrow("there is no channel c42 in your workspace (yours: c1)");
   await expect(chat.reply("work", "sibling", "x", undefined, "21837")).rejects.toThrow("21837 is not a Household id: use an id from a header (event.id, from.id, channel.id)");
   await expect(chat.reply("work", "sibling", "x", undefined, "sibling")).rejects.toThrow("sibling is not a Household id");
   await expect(chat.reply("work", "sibling", "x", undefined, "m1")).rejects.toThrow("m1 is a message id, not a channel id (c<n>)");
   expect(await chat.reply("work", "chair", "in the family", undefined, "c2")).toMatchObject({ id: "m1", channel: "c2" }); // ids per channel
-  expect(opened[0]!.calls).toEqual(["post 🐾 Sibling: here"]);
-  expect(opened[1]!.calls).toEqual(["post 🐾 Chair: in the family"]);
+  expect(opened[0]!.calls).toEqual(["post 🤖 Sibling: here"]);
+  expect(opened[1]!.calls).toEqual(["post 🤖 Chair: in the family"]);
   await chat.stop();
 });
 
@@ -817,7 +817,7 @@ test("two channels: each message is routed in its own channel, its header names 
   const familyInbox = inboxKey(channelKey(FAMILY));
   chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("Chair, hello"), header: { ...message().header!, channel: { ...CHANNEL, id: "c2" } } }, familyInbox)] });
   await waitFor(() => family!.calls.filter((call) => call.startsWith("notice")).length === 2);
-  expect(family!.calls.filter((call) => call.startsWith("notice"))).toEqual(['notice General: Passed to the thread "🐾 Sibling"', 'notice 🐾 Sibling: From General: "hello"']);
+  expect(family!.calls.filter((call) => call.startsWith("notice"))).toEqual(['notice General: Passed to the thread "🤖 Sibling"', 'notice 🤖 Sibling: From General: "hello"']);
   expect(dm!.calls).toEqual([]);
   // The pet's conversation: the channels it is in; the family's thread is its place there (internal).
   expect(chat.conversation("work", "sibling")!.channels).toEqual([{ ...CHANNEL, replyFormat: telegramPrivate.replyFormat }, { id: "c2", kind: "telegram-private", name: "Family", audience: "private", replyFormat: telegramPrivate.replyFormat }]);
@@ -835,11 +835,11 @@ test("request place is pinned through delivery elsewhere; explicit place overrid
   chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "t1", messages: [message({}, origin)] });
   chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({}, SIBLING)] });
   expect(await chat.reply("work", "sibling", "pinned")).toMatchObject({ channel: "c2", place: "inbox@c2" });
-  expect(opened[1]!.calls).toContain("post 🐾 Sibling: pinned");
+  expect(opened[1]!.calls).toContain("post 🤖 Sibling: pinned");
   expect(chat.spawnPlace("work", "sibling")).toEqual({ channel: channelKey(FAMILY), origin, publicOrigin: "inbox@c2" });
   expect(await chat.reply("work", "sibling", "explicit", undefined, undefined, "regular", "pet:sibling@c1")).toMatchObject({ channel: "c1", place: "pet:sibling@c1" });
   await expect(chat.reply("work", "sibling", "no", undefined, "c1", "regular", "inbox@c2")).rejects.toThrow("not both");
-  await expect(chat.reply("work", "sibling", "no", undefined, undefined, "regular", "pet:chair@c1")).rejects.toThrow("another pet");
+  await expect(chat.reply("work", "sibling", "no", undefined, undefined, "regular", "pet:chair@c1")).rejects.toThrow("another bot");
   await chat.setHouses([work([DM])]);
   await expect(chat.reply("work", "sibling", "gone")).rejects.toThrow("inaccessible place");
   chat.onDelivery({ kind: "turn-finished", house: "work", pet: "sibling", turn: "t1" });
@@ -899,12 +899,12 @@ test("a pet in no channel cannot reply; a channel without pets hears nothing; co
   const { chat, calls, opened, lines } = setup();
   await chat.setHouses([{ ...work([{ ...DM, pets: ["sibling"], default: undefined }, { ...FAMILY, pets: [] }]) }]);
   const [dm, family] = opened;
-  await expect(chat.reply("work", "chair", "x")).rejects.toThrow("chair is placed in no channel of house work; the reply was not sent");
+  await expect(chat.reply("work", "chair", "x")).rejects.toThrow("chair is placed in no channel of workspace work; the reply was not sent");
   expect(await chat.ask("work", "chair", color)).toBeUndefined();
   await family!.say(text("who is here?"));
-  expect(lines.at(-1)).toContain("a message through channel Family, which has no pets, was ignored");
+  expect(lines.at(-1)).toContain("a message through channel Family, which has no bots, was ignored");
   await dm!.say({ kind: "unsupported", ref: ref("v"), from: { ref: OWNER, name: "Oleg" }, external: {}, what: "poll" });
-  expect(dm!.calls).toEqual(["notice 🐾 Sibling: Polls can't be passed on yet"]);
+  expect(dm!.calls).toEqual(["notice 🤖 Sibling: Polls can't be passed on yet"]);
   expect(calls).toEqual([]);
   await chat.stop();
 });
@@ -940,7 +940,7 @@ test("a message in the place of a pet no longer in that channel goes to nobody: 
   await channel.say(text("stool?", { place: CHAIR }));
   await channel.say(text("stool!", { ref: ref("again"), place: CHAIR }));
   expect(calls).toEqual([]);
-  expect(channel.calls).toEqual(["notice 🐾 Chair: 🐾 Chair is no longer in this channel"]);
+  expect(channel.calls).toEqual(["notice 🤖 Chair: 🤖 Chair is no longer in this channel"]);
   expect(lines.filter((line) => line.includes(`in the place of chair (${CHAIR}), which is no longer in that channel, was not delivered`))).toHaveLength(2);
   await chat.stop();
 });
@@ -965,7 +965,7 @@ test("a stuck batch's notice goes to the channel it came from, not where the pet
   // The pet was last written to in the family's chat; a batch from the private chat that got stuck is told there.
   chat.onDelivery({ kind: "failed", house: "work", pet: "sibling", messages: [message({ text: "stuck" }, SIBLING)], why: "stuck" });
   await waitFor(() => dm!.calls.some((call) => call.startsWith("notice")));
-  expect(dm!.calls.at(-1)).toStartWith('notice 🐾 Sibling: "stuck" not sent');
+  expect(dm!.calls.at(-1)).toStartWith('notice 🤖 Sibling: "stuck" not sent');
   expect(family!.calls.some((call) => call.includes("stuck"))).toBe(false);
   await chat.stop();
 });
@@ -1035,7 +1035,7 @@ test("a turn on chat messages gets its live message in the pet's place there, on
   expect(channel.statuses).toEqual([]);
   step("t1", "c1", "Lists files");
   await waitFor(() => channel.statuses.length === 1);
-  expect(channel.statuses).toEqual(["post status-1 🐾 Sibling: working Lists files… [Stop]"]);
+  expect(channel.statuses).toEqual(["post status-1 🤖 Sibling: working Lists files… [Stop]"]);
   // Not a chat message: no id, no record.
   expect(records.recordByRef("work", "status-1" as PostRef)).toBeUndefined();
   // The pet's own prompt continues the turn; its reply goes first through the chat.
@@ -1044,7 +1044,7 @@ test("a turn on chat messages gets its live message in the pet's place there, on
   await chat.reply("work", "sibling", "done");
   await waitFor(() => channel.statuses.at(-1) === "drop status-1");
   step("t2", "c3", "Continues after reply");
-  await waitFor(() => channel.statuses.at(-1) === "post status-2 🐾 Sibling: working Continues after reply… [Stop]");
+  await waitFor(() => channel.statuses.at(-1) === "post status-2 🤖 Sibling: working Continues after reply… [Stop]");
   // A reload takes the pet out of the channel: its turn is over.
   await chat.setHouses([work([{ ...DM, pets: ["chair"], default: "chair" }])]);
   await waitFor(() => channel.statuses.at(-1)!.startsWith("edit status-2: over Interrupted"));
@@ -1092,7 +1092,7 @@ test("stop: the live message's button (owner only, a toast; only its own turn) a
   const third = await turn("t3");
   await channel.say(text("/stop", { ref: ref("s4"), place: SIBLING, external: {} }));
   await waitFor(() => channel.calls.some((call) => call.includes("did not stop")));
-  expect(channel.statuses.at(-1)).toBe(`post ${third} 🐾 Sibling: working Sleeps… [Stop]`); // still working
+  expect(channel.statuses.at(-1)).toBe(`post ${third} 🤖 Sibling: working Sleeps… [Stop]`); // still working
   await channel.say(text("/stop", { ref: ref("s5"), place: SIBLING, external: {} }));
   await waitFor(() => channel.calls.some((call) => call.includes('"half typed" was left unsent')));
   // Stopped before any action showed: a short notice says so.
@@ -1332,8 +1332,8 @@ test("peer correspondence uses a channel's native quotation when supported", asy
   } });
   await chat.peerMessage("work", "sibling", "chair", "First line\nSecond line");
   expect(quotes).toEqual([
-    { place: "🐾 Sibling", heading: "💬 Sibling → Chair:", body: "First line\nSecond line" },
-    { place: "🐾 Chair", heading: "💬 Sibling → Chair:", body: "First line\nSecond line" },
+    { place: "🤖 Sibling", heading: "💬 Sibling → Chair:", body: "First line\nSecond line" },
+    { place: "🤖 Chair", heading: "💬 Sibling → Chair:", body: "First line\nSecond line" },
   ]);
   expect(opened[0]!.calls.filter(call => call.startsWith("post "))).toEqual([]);
   expect(calls).toEqual([]);
@@ -1358,14 +1358,14 @@ test("sideworker delegated turns show native progress and stop controls in their
   expect(channel.statuses).toEqual([]);
   turn("chair", "delegated", internal);
   await waitFor(() => channel.statuses.length === 1);
-  expect(channel.statuses[0]).toBe("post status-1 🐾 Chair: working Running tests… [Stop]");
+  expect(channel.statuses[0]).toBe("post status-1 🤖 Chair: working Running tests… [Stop]");
   chat.onDelivery({ kind: "turn-finished", house: "work", pet: "chair", turn: "delegated" });
   await waitFor(() => channel.statuses.at(-1) === "drop status-1");
   chat.onDelivery({ kind: "failed", house: "work", pet: "sibling", messages: [internal], why: "interrupted" });
   expect(channel.calls).toEqual([]);
   chat.onDelivery({ kind: "failed", house: "work", pet: "chair", messages: [internal], why: "interrupted" });
   await waitFor(() => channel.calls.length === 1);
-  expect(channel.calls[0]).toContain("notice 🐾 Chair: Household restarted");
+  expect(channel.calls[0]).toContain("notice 🤖 Chair: Household restarted");
   await chat.stop();
 });
 
@@ -1384,7 +1384,7 @@ test("sideworker permissions use the same owner-approved VM-scoped Household car
   await channel.press("post-1", 0, "Yes");
   expect(await asked).toEqual({ kind: "allow" });
   await chat.notice("work", "chair", "Chair stopped.");
-  expect(channel.calls.at(-1)).toBe("notice 🐾 Chair: Chair stopped.");
+  expect(channel.calls.at(-1)).toBe("notice 🤖 Chair: Chair stopped.");
   await chat.stop();
 });
 
@@ -1398,7 +1398,7 @@ test("a worker's final notice uses its captured topic after routing removal and 
   expect(channel.calls).toEqual([]); // capturing never announces a successful close in advance
   await chat.setHouses([{ ...work([{ ...DM, pets: ["sibling"] }]), pets: [house.pets[0]!] }]);
   await finish();
-  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has finished; its VM was removed. Conversation history stays here."]);
+  expect(channel.calls).toEqual(["notice 🤖 Chair: Sideworker Chair has finished; its VM was removed. Conversation history stays here."]);
   channel.failure = "offline";
   await expect(finish()).resolves.toBeUndefined();
   expect(lines.at(-1)).toContain("notice not sent (offline)");
@@ -1668,7 +1668,7 @@ test("a spawn notice goes in the parent's place with a button to the worker's ow
   const channel = opened[0]!;
   const notice = await chat.announce("work", "sibling", "<b>✅ Spawned new sideworker chair</b>", "chair");
   expect(notice).toEqual({ place: SIBLING, ref: expect.any(String) });
-  expect(channel.calls[0]).toBe("notice 🐾 Sibling: <b>✅ Spawned new sideworker chair</b>");
+  expect(channel.calls[0]).toBe("notice 🤖 Sibling: <b>✅ Spawned new sideworker chair</b>");
   expect(channel.threads.has(CHAIR)).toBe(true); // the link made its place first
   expect(channel.replaced).toEqual([{ ref: notice!.ref, text: "<b>✅ Spawned new sideworker chair</b>", link: { label: "Open thread", url: `https://chat.example/${encodeURIComponent(CHAIR)}` } }]);
   await chat.rewrite("work", notice!, "<b>⏹ finished</b>");
@@ -1688,7 +1688,7 @@ test("an owner card tells its handle once it is up, to rewrite it after it is an
   void chat.ownerCard("work", "sibling", card, new AbortController().signal);
   await waitFor(() => handle !== undefined);
   expect(handle).toEqual({ place: SIBLING, ref: expect.any(String) });
-  expect(opened[0]!.calls[0]).toContain("notice 🐾 Sibling: Run?");
+  expect(opened[0]!.calls[0]).toContain("notice 🤖 Sibling: Run?");
   await chat.stop();
 });
 
@@ -1705,7 +1705,7 @@ test("a closed worker's places are deleted, not told; where it had none, the not
   expect(channel.removed).toEqual([CHAIR]);
   expect(channel.calls).toEqual([]);
   await finish(); // its thread is gone already: the notice instead
-  expect(channel.calls).toEqual(["notice 🐾 Chair: Sideworker Chair has finished; its VM was removed. Conversation history stays here."]);
+  expect(channel.calls).toEqual(["notice 🤖 Chair: Sideworker Chair has finished; its VM was removed. Conversation history stays here."]);
   await chat.stop();
 });
 
@@ -1735,13 +1735,13 @@ test("public place headers and shared helper addressing preserve the actual loca
   opened[0]!.removePlace = async place => { removed.push(place.id); return true; };
   await opened[0]!.say(text("sw-shared, test", { place: SIBLING }));
   expect(calls.some(line => line.startsWith("send work/sw-shared"))).toBe(true);
-  expect(headers[0].place).toEqual({id: "pet:sibling@c1", kind: "pet-thread", title: "🐾 Sibling"});
+  expect(headers[0].place).toEqual({id: "pet:sibling@c1", kind: "pet-thread", title: "🤖 Sibling"});
   chat.onDelivery({ kind: "turn-started", house: "work", pet: "sw-shared", turn: "shared", messages: [message({}, SIBLING)] });
   const sent = await chat.reply("work", "sw-shared", "here");
   expect(sent).toMatchObject({ place: "pet:sibling@c1" });
   const own = records.recordById("work", "c1", sent.id)!;
   expect(own.place).toBe(SIBLING);
-  expect(opened[0]!.calls).toContain("post 🐾 Sw-shared: here");
+  expect(opened[0]!.calls).toContain("post 🤖 Sw-shared: here");
   calls.length = 0;
   await opened[0]!.say(text("follow-up", { place: SIBLING, replyTo: own.ref }));
   expect(calls.some(line => line.startsWith("send work/sw-shared"))).toBe(true);

@@ -5,7 +5,7 @@ description: Temporarily share an HTTP app or dev server from your own VM with y
 
 # HTTP previews
 
-Check the house feature status in your instructions. This skill remains available when previews are disabled; ask your human to enable HTTP previews in house settings. Never work around a disabled feature with tunnels or host listeners.
+Check the workspace feature status in your instructions. This skill remains available when previews are disabled; ask your human to enable HTTP previews in workspace settings. Never work around a disabled feature with tunnels or host listeners.
 
 1. Start the application inside your VM. Verify it locally on its port. Docker containers must publish their port into the VM (`docker run -p 3000:3000 …`); the app inside the container generally binds to `0.0.0.0`.
 2. Before publishing, check that the app exposes no secrets, private files, debugger, or unprotected administrative operations. Preview visitors have **no authentication**. A public port can be discovered quickly by scanning; a random port is not protection.

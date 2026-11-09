@@ -197,7 +197,7 @@ test("a message that may sit typed in the input is never typed again; the next o
     await waitFor(() => has("message delivered") === 1);
     await Bun.sleep(50);
     expect(sent.map((attempt) => attempt.text)).toEqual(["one", "two"]);
-    expect(has("ERROR pet work/sibling: message typed but not submitted (no Enter)")).toBe(1);
+    expect(has("ERROR bot work/sibling: message typed but not submitted (no Enter)")).toBe(1);
   } finally {
     delivery.stop();
   }
@@ -269,7 +269,7 @@ test("events over the pet's rate are dropped and counted in one line", async () 
     for (let i = 0; i < 30; i++) await post({ kind: "notification", text: `n${i}` });
     expect(has("notification: n")).toBe(10);
     await waitFor(() => has("dropped") === 1);
-    expect(lines.at(-1)).toContain("ERROR pet work/sibling: dropped 20 events over 1/s");
+    expect(lines.at(-1)).toContain("ERROR bot work/sibling: dropped 20 events over 1/s");
   } finally {
     delivery.stop();
   }
@@ -359,7 +359,7 @@ test("an edit goes to the pet Chat names, never to the one that got the original
     await post({ kind: "dialog-opened", dialog: "question", summary: "?" }); // nothing goes out
     send("helo", "m1"); // queued for sibling
     // Chair is no pet this Delivery runs: the edit is for chair all the same, not moved to sibling.
-    expect(() => delivery.send("work", "chair", { text: "hello", origin: "chat", ref: "m1.1" as MessageRef, edits: "m1" as MessageRef })).toThrow("unknown pet work/chair");
+    expect(() => delivery.send("work", "chair", { text: "hello", origin: "chat", ref: "m1.1" as MessageRef, edits: "m1" as MessageRef })).toThrow("unknown bot work/chair");
     expect(statuses()).toEqual(["helo:received"]);
     expect(store.unfinished("work", "chair")).toEqual([]);
   } finally {

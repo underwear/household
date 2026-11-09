@@ -1,9 +1,9 @@
 import { SlackSetup, slackUrl } from "./slack-setup";
 import { useState } from "react";
-import { api, type ChannelFields, type ChannelKindView, type ChannelView, type HouseView, type PlatformView } from "../api";
+import { api, type ChannelFields, type ChannelKindView, type ChannelView, type WorkspaceView, type PlatformView } from "../api";
 import { Dialog } from "./dialog";
 import { CheckList, ChoiceList, SelectField, TextField } from "./fields";
-import { channelLabel } from "./houses";
+import { channelLabel } from "./workspaces";
 import { PlatformIcon } from "./icon";
 import { Cell, FormGrid, List, ListRow, Page, Section } from "./layout";
 import { OwnersSection } from "./owners";
@@ -19,7 +19,7 @@ export interface ChannelsPageProps extends SectionProps {
 }
 
 /**
- * A house's Channels page: its channels (each with its pets and default, and why it is not open if it is not;
+ * A workspace's Channels page: its channels (each with its bots and default, and why it is not open if it is not;
  * add, edit, remove), then its owners.
  */
 export function ChannelsPage({ house, ask, save, kinds, platforms, noteMax }: ChannelsPageProps) {
@@ -45,7 +45,7 @@ export function ChannelsPage({ house, ask, save, kinds, platforms, noteMax }: Ch
         </button>
       }
     >
-      <Section hint="Chats this house is in.">
+      <Section hint="Chats this workspace is in.">
         <List columns="minmax(0, 1fr) fit-content(50%) auto" empty="No channels.">
           {house.channels.map((channel) => (
             <ListRow key={channel.chat} actions={<RowActions onEdit={() => setEditing(channel)} onRemove={() => remove(channel)} />}>
@@ -70,17 +70,17 @@ export function ChannelsPage({ house, ask, save, kinds, platforms, noteMax }: Ch
                   {channel.problem && <span className="error">{channel.problem}</span>}
                 </span>
               </Cell>
-              <Cell label="Pets" wrap>
+              <Cell label="Bots" wrap>
                 {channel.pets.length === 0 ? (
-                  <span className="faint">No pets</span>
+                  <span className="faint">No bots</span>
                 ) : (
-                  <span className="channel-pets" aria-label={`Pets: ${channel.pets.map((name) => petsByName.get(name)?.display ?? name).join(", ")}`}>
+                  <span className="channel-bots" aria-label={`Bots: ${channel.pets.map((name) => petsByName.get(name)?.display ?? name).join(", ")}`}>
                     {channel.pets.map((name) => {
                       const pet = petsByName.get(name);
                       const isDefault = channel.default === name && channel.pets.length > 1;
                       return (
                         <span key={name} className={isDefault ? "chip default" : "chip"} title={isDefault ? "Gets unaddressed messages" : undefined}>
-                          <span aria-hidden>{pet?.emoji ?? "🐾"}</span>
+                          <span aria-hidden>{pet?.emoji ?? "🤖"}</span>
                           <span className="ellipsis">{pet?.title ?? name}</span>
                           {isDefault && <span className="chip-note">default</span>}
                         </span>
@@ -112,7 +112,7 @@ export function ChannelsPage({ house, ask, save, kinds, platforms, noteMax }: Ch
 }
 
 interface ChannelDialogProps {
-  house: HouseView;
+  house: WorkspaceView;
   kinds: ChannelKindView[];
   /** The kinds' platforms (their icons). */
   platforms?: PlatformView[];
@@ -127,7 +127,7 @@ interface ChannelDialogProps {
 
 /**
  * A channel's form, in two steps: its kind (each with a line on it; shown even when there is one), then that
- * kind's own fields and its chat as the kind describes them, and what every channel has (name, pets, default);
+ * kind's own fields and its chat as the kind describes them, and what every channel has (name, bots, default);
  * Back and on to the same kind keeps what was typed. Editing starts at the second step, its kind fixed, its chat
  * read only: another chat is another channel. A wide field (a bot token) is on a row of its own; the others go two
  * to a row with the chat. The config's errors show in it.
@@ -142,9 +142,9 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
   const [typedFor, setTypedFor] = useState(channel?.kind ?? chosenKind);
   const [name, setName] = useState(channel?.ownName ?? "");
   const [note, setNote] = useState(channel?.note ?? "");
-  const [pets, setPets] = useState(channel?.pets ?? []);
+  const [pets, setBots] = useState(channel?.pets ?? []);
   const [first, setFirst] = useState(channel?.default ?? "");
-  const toggle = (pet: string) => setPets(pets.includes(pet) ? pets.filter((other) => other !== pet) : [...pets, pet]);
+  const toggle = (pet: string) => setBots(pets.includes(pet) ? pets.filter((other) => other !== pet) : [...pets, pet]);
   // The channel's own order (who was there first), new ones at the end.
   const chosen = pets.flatMap((name) => house.pets.filter((pet) => pet.name === name));
   const spec = kinds.find((candidate) => candidate.kind === kind);
@@ -195,7 +195,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
             name: name.trim() || null,
             note: note.trim() || null,
             pets: chosen.map((pet) => pet.name),
-            // Only with two pets or more: one is the default anyway.
+            // Only with two bots or more: one is the default anyway.
             default: chosen.length > 1 && pets.includes(first) ? first : null,
           }),
         children: (
@@ -237,7 +237,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
             })()}
             <TextField label="Name" value={name} onChange={setName} placeholder={spec.label} />
             <CheckList
-              label="Pets"
+              label="Bots"
               options={house.pets.filter(pet => !pet.sideworker).map((pet) => ({
                 value: pet.name,
                 label: (
@@ -248,7 +248,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
               }))}
               checked={pets}
               onToggle={toggle}
-              empty="The house has no pets yet."
+              empty="The workspace has no bots yet."
             />
             {chosen.length > 1 && (
               <SelectField

@@ -87,7 +87,7 @@ export function sideworkerBackupStamp(path: string): string {
   const db = new Database(path, { readonly: true });
   try {
     const value = (key: string) => db.query<{ value: string }, [string]>("SELECT value FROM state WHERE key = ?").get(key)?.value;
-    if (JSON.parse(value(SIDEWORKER_STATE_KEY) ?? "[]").length) throw new HouseholdError("Close all sideworkers before backup or restore: they share pet files and their sessions are not included in backups yet.");
+    if (JSON.parse(value(SIDEWORKER_STATE_KEY) ?? "[]").length) throw new HouseholdError("Close all sideworkers before backup or restore: they share bot files and their sessions are not included in backups yet.");
     // Used names persist after close, so a worker created and closed during export also invalidates it.
     return value(`${SIDEWORKER_STATE_KEY}.used-names`) ?? "[]";
   } finally { db.close(); }

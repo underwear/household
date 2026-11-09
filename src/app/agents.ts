@@ -61,7 +61,7 @@ export function placePets(agents: Agents, { houses, keys, secrets = [], timezone
   const placed = houses.flatMap((house) =>
     house.pets.flatMap((pet) => {
       const found = agentOf(agents, pet, keys, house.name);
-      if ("problem" in found) unknown.push(`pet ${house.name}/${pet.name}: ${found.problem}`);
+      if ("problem" in found) unknown.push(`bot ${house.name}/${pet.name}: ${found.problem}`);
       if ("problem" in found) return [];
       const mode = found.mode === undefined ? {} : { mode: found.mode };
       const role: PromptRole = pet.scout ? { kind: "scout", name: pet.scout.definition, parent: pet.scout.parent, house: house.name, instructions: pet.scout.instructions }
@@ -78,19 +78,19 @@ export function placePets(agents: Agents, { houses, keys, secrets = [], timezone
 export function agentOf(agents: Agents, pet: Pet, keys: AgentKey[], house?: string): { agent: AgentAdapter; model: string; reasoningEffort?: string; mode?: string; settings?: Record<string, string>; key: AgentKey; use: KeyUse } | { problem: string } {
   const name = pet.agent ?? DEFAULT_AGENT;
   const agent = agents.get(name);
-  if (!agent) return { problem: `unknown agent '${name}' (known agents: ${[...agents.keys()].join(", ")})` };
+  if (!agent) return { problem: `unknown harness '${name}' (known harnesses: ${[...agents.keys()].join(", ")})` };
   const model = pet.model ?? agent.defaultModel;
-  if (!agent.models.includes(model) && !agent.acceptsModel?.(model)) return { problem: `unknown model '${model}' for agent ${name} (its models: ${agent.models.join(", ")})` };
+  if (!agent.models.includes(model) && !agent.acceptsModel?.(model)) return { problem: `unknown model '${model}' for harness ${name} (its models: ${agent.models.join(", ")})` };
   const reasoningEffort = pet.reasoningEffort;
   if (reasoningEffort !== undefined && !agent.acceptsReasoningEffort?.(model, reasoningEffort)) {
     const options = agent.modelOptions?.(model)?.supportedReasoningEfforts?.map(({ reasoningEffort }) => reasoningEffort) ?? [];
-    return { problem: `unsupported reasoning effort '${reasoningEffort}' for model '${model}' of agent ${name}${options.length ? ` (its efforts: ${options.join(", ")})` : ": leave reasoningEffort out"}` };
+    return { problem: `unsupported reasoning effort '${reasoningEffort}' for model '${model}' of harness ${name}${options.length ? ` (its efforts: ${options.join(", ")})` : ": leave reasoningEffort out"}` };
   }
   const namedMode = pet.mode ?? agent.modes?.default;
   const mode = namedMode === undefined ? undefined : agent.modes?.aliases?.[namedMode] ?? namedMode;
   const modes = agent.modes?.options.map(({ id }) => id) ?? [];
   if (pet.mode !== undefined && (mode === undefined || !modes.includes(mode))) {
-    return { problem: modes.length === 0 ? `agent ${name} has no permission modes: leave mode out` : `unknown mode '${pet.mode}' for agent ${name} (its modes: ${modes.join(", ")})` };
+    return { problem: modes.length === 0 ? `harness ${name} has no permission modes: leave mode out` : `unknown mode '${pet.mode}' for harness ${name} (its modes: ${modes.join(", ")})` };
   }
   const settings = settingsOf(agent, pet.settings);
   if ("problem" in settings) return settings;
@@ -109,11 +109,11 @@ function settingsOf(agent: AgentAdapter, given: Pet["settings"]): { settings?: R
   const entries = Object.entries(given ?? {});
   if (entries.length === 0) return {};
   const known = agent.settings ?? [];
-  if (known.length === 0) return { problem: `agent ${agent.name} has no settings: leave settings out` };
+  if (known.length === 0) return { problem: `harness ${agent.name} has no settings: leave settings out` };
   for (const [key, value] of entries) {
     const setting = known.find((each) => each.key === key);
-    if (!setting) return { problem: `unknown setting '${key}' for agent ${agent.name} (its settings: ${known.map((each) => each.key).join(", ")})` };
-    if (!setting.options.some((option) => option.id === value)) return { problem: `unknown value '${value}' for setting '${key}' of agent ${agent.name} (its values: ${setting.options.map((option) => option.id).join(", ")})` };
+    if (!setting) return { problem: `unknown setting '${key}' for harness ${agent.name} (its settings: ${known.map((each) => each.key).join(", ")})` };
+    if (!setting.options.some((option) => option.id === value)) return { problem: `unknown value '${value}' for setting '${key}' of harness ${agent.name} (its values: ${setting.options.map((option) => option.id).join(", ")})` };
   }
   return { settings: Object.fromEntries(entries) };
 }
@@ -123,7 +123,7 @@ export const agentCheck = (agents: Agents) => (household: Household) =>
   household.houses.flatMap((house) => [
     ...house.pets.flatMap((pet) => {
       const found = agentOf(agents, pet, household.keys, house.name);
-      return "problem" in found ? [`pet ${house.name}/${pet.name}: ${found.problem}`] : [];
+      return "problem" in found ? [`bot ${house.name}/${pet.name}: ${found.problem}`] : [];
     }),
     ...sideworkerProfileProblems(agents, house, household.keys),
     // A scout with its own agent.

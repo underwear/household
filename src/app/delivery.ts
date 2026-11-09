@@ -110,7 +110,7 @@ export class Delivery {
         existing.home = home;
         continue;
       }
-      const onDropped = (count: number) => this.events.error(`pet ${house}/${pet}: dropped ${count} events over ${this.timing.eventsPerSecond}/s`);
+      const onDropped = (count: number) => this.events.error(`bot ${house}/${pet}: dropped ${count} events over ${this.timing.eventsPerSecond}/s`);
       const box = new Mailbox(agent, this.timing, onDropped, this.clock);
       box.home = home;
       this.boxes.set(name, box);
@@ -118,7 +118,7 @@ export class Delivery {
       for (const message of unfinished) if (message.origin === "inbox" && message.status !== "received") this.mark(message, "received");
       this.restore(house, pet, box, unfinished.filter((message) => message.status === "received"));
       this.fail(house, pet, unfinished.filter((message) => message.status !== "received"), "interrupted");
-      if (box.inbox.size > 0) this.events.info(`pet ${house}/${pet}: ${box.inbox.size} queued message(s) from before the restart`);
+      if (box.inbox.size > 0) this.events.info(`bot ${house}/${pet}: ${box.inbox.size} queued message(s) from before the restart`);
       void this.flush(house, pet);
     }
   }
@@ -204,7 +204,7 @@ export class Delivery {
     // header stays the original's, same sender and place; the edit's own facts (its date) are not shown.
     if (latest?.pet === pet && latest.status === "received" && !box?.sending.some((sending) => sending.id === latest.id) && box?.replace(latest.id, draft.text)) {
       this.store.setText(latest.id, draft.text);
-      this.events.info(`pet ${house}/${pet}: queued message edited`);
+      this.events.info(`bot ${house}/${pet}: queued message edited`);
       return this.state(house, pet);
     }
     return this.queue(house, pet, draft);
@@ -238,7 +238,7 @@ export class Delivery {
    */
   async interrupt(house: string, pet: string, answerDialogs: () => Promise<boolean>): Promise<{ status: "stopped" | "idle" | "failed"; leftover?: string }> {
     const box = this.boxes.get(key(house, pet));
-    const name = `pet ${house}/${pet}`;
+    const name = `bot ${house}/${pet}`;
     if (!box) return { status: "idle" };
     if (box.asking.length > 0 && (await answerDialogs())) {
       box.inbox.stopped();
@@ -309,7 +309,7 @@ export class Delivery {
   async prepareRestart(house: string, pet: string, timeoutMs = 180_000, action: "restart" | "disable" = "restart", notice?: string): Promise<() => void> {
     const name = key(house, pet);
     const box = this.box(house, pet);
-    if (this.restarting.has(name)) throw new Error("pet is already restarting");
+    if (this.restarting.has(name)) throw new Error("bot is already restarting");
     const text = notice ?? `Household will ${action === "disable" ? "stop" : "restart"} your VM shortly. Save your work and any important context to Household memory now, then finish this turn. Do not start new work or post to Telegram. You have at most three minutes; files and installed packages will be preserved.`;
     let active = true;
     let accepted = false;
@@ -327,7 +327,7 @@ export class Delivery {
     this.restarting.set(name, observe);
     const cancelDeadline = this.clock.after(timeoutMs, () => {
       active = false;
-      this.events.info(`pet ${house}/${pet}: restart grace period expired`);
+      this.events.info(`bot ${house}/${pet}: restart grace period expired`);
       finish();
     });
     const release = () => {
@@ -347,12 +347,12 @@ export class Delivery {
         if (this.boxes.get(name) !== box || this.suspended.has(name)) { finish(); return; }
         if (!box.flushing && canSubmit() && await box.agent.isIdle?.(exec)) {
           if (!canSubmit()) continue;
-          this.events.info(`pet ${house}/${pet}: notifying agent before VM restart`);
+          this.events.info(`bot ${house}/${pet}: notifying harness before VM restart`);
           const result = await box.agent.send(exec, text, canSubmit);
           if (result.status === "sent") return;
           // Stuck means submission is uncertain; never type the notice a second time.
           if (result.status === "stuck") {
-            this.events.error(`pet ${house}/${pet}: restart notification submission uncertain`);
+            this.events.error(`bot ${house}/${pet}: restart notification submission uncertain`);
             return;
           }
         }
@@ -361,7 +361,7 @@ export class Delivery {
     };
     // A hung probe/send must not hold the grace period open. Submission checks the deadline too.
     void notify().catch(error => {
-      this.events.error(`pet ${house}/${pet}: restart notification failed: ${String(error)}`);
+      this.events.error(`bot ${house}/${pet}: restart notification failed: ${String(error)}`);
       finish();
     });
     await done;
@@ -382,7 +382,7 @@ export class Delivery {
     box.queue(message);
     if (unfetched(message)) void this.fetch(house, pet, box, message);
     if (draft.origin === "inbox" && (this.suspended.has(key(house, pet)) || box.inbox.activity !== "idle")) box.inbox.markInboxCatchup();
-    this.events.info(`pet ${house}/${pet}: message queued (pet is ${box.inbox.activity}, ${box.inbox.size} waiting)`);
+    this.events.info(`bot ${house}/${pet}: message queued (bot is ${box.inbox.activity}, ${box.inbox.size} waiting)`);
     void this.flush(house, pet);
     return this.state(house, pet);
   }
@@ -394,7 +394,7 @@ export class Delivery {
 
   private box(house: string, pet: string): Mailbox {
     const box = this.boxes.get(key(house, pet));
-    if (!box) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!box) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     return box;
   }
 
@@ -501,7 +501,7 @@ export class Delivery {
         message.attachments = attachments;
         this.store.setAttachments(message.id, attachments);
       })
-      .catch((error) => this.events.error(`pet ${house}/${pet}: files of message ${message.id} not kept: ${(error as Error).message}`))
+      .catch((error) => this.events.error(`bot ${house}/${pet}: files of message ${message.id} not kept: ${(error as Error).message}`))
       .finally(() => box.fetching.delete(message.id));
     box.fetching.set(message.id, fetching);
     return fetching;
@@ -516,7 +516,7 @@ export class Delivery {
     if (!box || box.flushing || this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet))) return;
     box.flushing = true;
     box.retry.cancel();
-    const name = `pet ${house}/${pet}`;
+    const name = `bot ${house}/${pet}`;
     try {
       for (let next = box.inbox.next(this.timing.batchMax); next.messages.length > 0; next = box.inbox.next(this.timing.batchMax)) {
         if (this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet))) return;
@@ -581,7 +581,7 @@ export class Delivery {
         box.retry.reset();
         const what = messages.length === 1 ? "message" : `batch of ${messages.length} messages`;
         if (result.status === "stuck") {
-          this.events.error(`${name}: ${what} typed but not submitted (${result.reason}); see \`house pet attach\``);
+          this.events.error(`${name}: ${what} typed but not submitted (${result.reason}); see \`house bot attach\``);
           this.fail(house, pet, messages, "stuck");
           continue;
         }

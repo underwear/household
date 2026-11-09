@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryTree, memoryTree } from "./components/pet-memory";
+import { MemoryTree, memoryTree } from "./components/bot-memory";
 import { SkillPreview } from "./components/skills";
-import { routeOf, petPath } from "./router";
+import { routeOf, botPath } from "./router";
 
-test("memory routes remain per pet; the tree keeps a parent that is a note selectable, once, and leaves core out", () => {
-  expect(routeOf(petPath("work", "owl", "memory"))).toEqual({ page: "pet", house: "work", pet: "owl", tab: "memory" });
-  const entries = ["core", "projects", "projects.household", "projects.household.deploy", "people.anya"].map((key) => ({ key, revision: 1, updated: "", actor: "pet", deleted: false, excerpt: "" }));
+test("memory routes remain per bot; the tree keeps a parent that is a note selectable, once, and leaves core out", () => {
+  expect(routeOf(botPath("work", "owl", "memory"))).toEqual({ page: "bot", workspace: "work", bot: "owl", tab: "memory" });
+  const entries = ["core", "projects", "projects.household", "projects.household.deploy", "people.anya"].map((key) => ({ key, revision: 1, updated: "", actor: "bot", deleted: false, excerpt: "" }));
   const nodes = memoryTree(entries);
   expect(nodes.map(({ key }) => key)).toEqual(["projects", "people"]); // core is pinned above the tree
   expect(nodes[1]!.entry).toBeUndefined(); // people: only a namespace

@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { NotApplied, type HouseView, type WriteView } from "../api";
+import { NotApplied, type WorkspaceView, type WriteView } from "../api";
 import type { DialogSpec } from "./dialog";
 import { Cell, List, ListRow, Section, type SectionWidth } from "./layout";
 
-/** What a section of House settings gets: the house, a confirmation dialog, and how to save. */
+/** What a section of Workspace settings gets: the workspace, a confirmation dialog, and how to save. */
 export interface SectionProps {
-  house: HouseView;
+  house: WorkspaceView;
   ask: (spec: DialogSpec) => void;
-  /** Runs a write, then refetches the houses (whatever happened) and says `done`, or the warning. */
+  /** Runs a write, then refetches the workspaces (whatever happened) and says `done`, or the warning. */
   save: (write: Promise<WriteView>, done: string) => Promise<void>;
 }
 

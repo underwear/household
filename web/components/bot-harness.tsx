@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { api, type AgentView, type KeyView, type PetView } from "../api";
+import { api, type HarnessView, type KeyView, type BotView } from "../api";
 import { Cluster, Section } from "./layout";
-import { keysFor, useAgentForm } from "./pets";
+import { keysFor, useHarnessForm } from "./bots";
 import { written } from "./section";
 
 /**
- * A pet's Agent tab: what runs it (agent, key, model, reasoning effort, permission mode), saved together. A change
- * that needs a new agent session says so before Save; its files and memory stay.
+ * A bot's Harness tab: what runs it (harness, key, model, reasoning effort, permission mode), saved together. A change
+ * that needs a new harness session says so before Save; its files and memory stay.
  */
-export function PetAgent({ house, pet, agents, keys, refresh, notify }: { house: string; pet: PetView; agents: AgentView[]; keys: KeyView[]; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
-  const form = useAgentForm(agents, keysFor(keys, house), pet);
+export function BotHarness({ house, pet, agents, keys, refresh, notify }: { house: string; pet: BotView; agents: HarnessView[]; keys: KeyView[]; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
+  const form = useHarnessForm(agents, keysFor(keys, house), pet);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const save = async () => {
@@ -17,7 +17,7 @@ export function PetAgent({ house, pet, agents, keys, refresh, notify }: { house:
     setBusy(true);
     setError(undefined);
     try {
-      const warning = await written(api.updatePet(house, pet.name, form.value));
+      const warning = await written(api.updateBot(house, pet.name, form.value));
       notify(warning ?? (form.restarts ? `${pet.title} saved; restarting` : `${pet.title} saved`), warning !== undefined);
       await refresh();
     } catch (failure) {
@@ -27,7 +27,7 @@ export function PetAgent({ house, pet, agents, keys, refresh, notify }: { house:
     }
   };
   return (
-    <Section width="narrow" title="Agent">
+    <Section width="narrow" title="Harness">
       <form
         className="stack gap-4"
         onSubmit={(event) => {

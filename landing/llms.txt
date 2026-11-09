@@ -1,39 +1,37 @@
 # Household
 
-> Household runs terminal agents (Claude Code, Codex) as personal assistants you talk to in Telegram. Each agent
-> ("pet") lives in its own microVM; a daemon on the user's Mac or Linux machine proxies all its traffic through an
-> allowlist and puts API keys into requests on the way out, so agents only ever see placeholders.
+> Household runs personal assistant bots in Telegram, powered by Claude Code or Codex harnesses. Each bot
+> lives in its own microVM within a workspace; a daemon on the user's Mac or Linux machine proxies its traffic
+> through an allowlist and puts API keys into requests on the way out, so bots only ever see placeholders.
 
-Setting it up is done when the user writes to their Telegram bot and a pet answers. Work through the
+Setting it up is done when the user writes to their Telegram bot and a bot answers. Work through the
 [setup checklist](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md).
 Household installs with `curl -fsSL https://agents-household.dev/install.sh | sh` (no Bun, Docker or sudo);
-`house onboard` then walks the user through the rest in their terminal (key, house, bot, pet), and `house update`
+`house onboard` then walks the user through the rest in their terminal (harness key, workspace, Telegram channel, assistant bot), and `house update`
 moves to a newer release.
 
-Install the `household` agent skill too, for running Household afterwards:
+Install the `household` skill too, for running Household afterwards:
 
 - Claude Code: `claude plugin marketplace add underwear/household && claude plugin install household@household`
 - Codex: `codex plugin marketplace add underwear/household && codex plugin add household@household`
 
 ## Docs
 
-- [Quick start](https://agents-household.dev/docs/start/): install, house onboard, house start, then write to your pet
-- [Pets](https://agents-household.dev/docs/pets/): what a pet is, how it differs from sideworkers and scouts, and every tab of its page in the admin
-- [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra agents a pet starts for one job: another project's CLAUDE.md or AGENTS.md, a thread you can talk in, limits and profiles
-- [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-pet subscriptions and silent delivery; the custom HTTP format
-- [Scouts](https://agents-household.dev/docs/scouts/): specialists a pet calls for one task in their own VM; capabilities, network limits, owner approval (Run), secrets, results and threads
-- [HTTP previews](https://agents-household.dev/docs/previews/): a pet shows a web app from its VM by a 15-minute link you approve; who can open it; limits
-- [MCP servers](https://agents-household.dev/docs/mcp/): give a pet any MCP server by asking it; hosts and keys it needs, what persists, limits
+- [Quick start](https://agents-household.dev/docs/start/): install, house onboard, house start, then write to your bot
+- [Bots](https://agents-household.dev/docs/bots/): what a bot is, how it differs from sideworkers and scouts, and every tab of its page in the admin
+- [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra assistants a bot starts for one job: another project's CLAUDE.md or AGENTS.md, a thread you can talk in, limits and profiles
+- [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-bot subscriptions and silent delivery; the custom HTTP format
+- [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; capabilities, network limits, owner approval (Run), secrets, results and threads
+- [HTTP previews](https://agents-household.dev/docs/previews/): a bot shows a web app from its VM by a 15-minute link you approve; who can open it; limits
+- [MCP servers](https://agents-household.dev/docs/mcp/): give a bot any MCP server by asking it; hosts and keys it needs, what persists, limits
 - [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, what a backup holds, moving to another machine
 
-- [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): the checklist from a bare machine to a pet answering in Telegram
-- [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): what Household can do (pets, network, secrets, scouts), updates, backups
-- [Debugging](https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md): where to look when a pet, scout or channel does not work
+- [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): the checklist from a bare machine to a bot answering in Telegram
+- [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): what Household can do (bots, network, secrets, scouts), updates, backups
+- [Debugging](https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md): where to look when a bot, scout or channel does not work
 - [Skill overview](https://github.com/underwear/household/blob/main/plugins/household/skills/household/SKILL.md): concepts
 
 ## Source
 
 - [Repository](https://github.com/underwear/household): TypeScript on Bun; `house --help` lists every command
 - [License](https://github.com/underwear/household/blob/main/LICENSE): AGPL-3.0
-
-- [Google connectors](https://agents-household.dev/docs/connectors/): house-level Gmail, Drive and Calendar OAuth, per-pet access, read-only tools and local tokens

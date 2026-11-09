@@ -151,7 +151,7 @@ export class CronStore {
         )
         .get(house, pet)!.n;
       if (count >= 100)
-        throw new CronError("At most 100 pending tasks per pet", 409);
+        throw new CronError("At most 100 pending tasks per bot", 409);
       const id = randomUUID();
       const date = new Date(now).toISOString();
       this.db.run(

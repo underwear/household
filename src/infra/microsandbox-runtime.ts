@@ -75,7 +75,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
   private readonly passing = new Map<string, "starting" | "stopping">();
 
   constructor(private readonly options: MicrosandboxOptions) {
-    for (const port of [options.proxyPort, options.relayPort]) if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("invalid House service port");
+    for (const port of [options.proxyPort, options.relayPort]) if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("invalid Workspace service port");
     if (!Number.isInteger(options.cpus ?? 2) || (options.cpus ?? 2) < 1) throw new Error("invalid microsandbox CPU limit");
     this.run = options.run ?? run;
   }
@@ -344,7 +344,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
   }
   async configureLaunch(name: string, { env, labels }: { env: Record<string, string>; labels: Record<string, string> }): Promise<void> {
     const item = this.json(await this.checked(["inspect", name, "--format", "json"]));
-    if (item.status === "Running" || item.status === "Paused") throw new Error("stop the pet VM before changing its launch configuration");
+    if (item.status === "Running" || item.status === "Paused") throw new Error("stop the bot VM before changing its launch configuration");
     const before = String(item.config?.labels?.[ENV_KEYS_LABEL] ?? "").split(",").filter(Boolean);
     const args = ["modify", name];
     for (const [key, value] of Object.entries(env)) args.push("--env", `${key}=${value}`);

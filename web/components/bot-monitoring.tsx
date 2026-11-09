@@ -32,10 +32,10 @@ const SERVICES = [
 ] as const;
 
 /**
- * A pet's VM, sampled every minute (seven days kept): what it uses now, a compact tile each (CPU, memory, its disks)
- * with how it went over the chosen range; each core on demand. No agent turns are spent on it.
+ * A bot's VM, sampled every minute (seven days kept): what it uses now, a compact tile each (CPU, memory, its disks)
+ * with how it went over the chosen range; each core on demand. No harness turns are spent on it.
  */
-export function PetUsage({ house, pet }: { house: string; pet: string }) {
+export function BotUsage({ house, pet }: { house: string; pet: string }) {
   const [range, setRange] = useState<Range>("1h");
   const [cores, setCores] = useState(false);
   const [view, setView] = useState<MetricsView>();
@@ -93,7 +93,7 @@ export function PetUsage({ house, pet }: { house: string; pet: string }) {
         </div>
       }
     >
-      <span className="pet-state monitor-state">
+      <span className="bot-state monitor-state">
         <span className={`dot ${state.tone}`} />
         {state.text}
       </span>
@@ -101,7 +101,7 @@ export function PetUsage({ house, pet }: { house: string; pet: string }) {
         const health = current?.services?.[service];
         if (!health) return null; // an image without it, or no fresh sample
         return (
-          <span key={service} className="pet-state monitor-state">
+          <span key={service} className="bot-state monitor-state">
             <span className={`dot ${health === "up" ? "idle" : "danger"}`} />
             {health === "up" ? `${title} is up` : `${title} is down: Household restarts it (log: /var/log/household-docker.log in the VM)`}
           </span>
@@ -173,7 +173,7 @@ export function PetUsage({ house, pet }: { house: string; pet: string }) {
           ))}
         </div>
       )}
-      <p className="hint">Memory excludes reclaimable cache. Disks exclude the pet's home, which lives on the host.</p>
+      <p className="hint">Memory excludes reclaimable cache. Disks exclude the bot's home, which lives on the host.</p>
     </Section>
   );
 }

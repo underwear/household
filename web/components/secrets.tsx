@@ -4,12 +4,12 @@ import { api, type SecretFields, type SecretView } from "../api";
 import { DEFAULT_SECRET_HEADER, SECRET_PRESETS, envProblem, secretPlaceholder } from "../../src/core/secrets";
 import { Dialog, useDialog } from "./dialog";
 import { CheckList, SelectField, TextField } from "./fields";
-import { HousesField, masked } from "./keys";
+import { WorkspacesField, masked } from "./keys";
 import { Cell, List, ListRow, Section } from "./layout";
 import { RowActions, written } from "./section";
 
 /**
- * Household settings · Secrets: the owner's own tokens (GitHub, npm, …). Pets hold a placeholder in a variable;
+ * Household settings · Secrets: the owner's own tokens (GitHub, npm, …). Bots hold a placeholder in a variable;
  * the gateway puts the value in its place, in one header, only on requests to the secret's hosts.
  */
 export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; noteMax?: number; notify: (text: string, warning?: boolean) => void }) {
@@ -30,7 +30,7 @@ export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; 
   const remove = (secret: SecretView) =>
     dialog.open({
       title: `Remove secret ${secret.name}?`,
-      body: "Pets stop getting it right away. They keep running.",
+      body: "Bots stop getting it right away. They keep running.",
       confirmLabel: "Remove",
       danger: true,
       onConfirm: () => save(api.removeSecret(secret.name), `Secret ${secret.name} removed`),
@@ -40,7 +40,7 @@ export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; 
   return (
     <Section
       title="Secrets"
-      hint="Your own tokens. Pets get a placeholder; the gateway swaps in the value only for the hosts you name."
+      hint="Your own tokens. Bots get a placeholder; the gateway swaps in the value only for the hosts you name."
       actions={
         <button className="btn" onClick={() => setEditing("new")}>
           + Add secret
@@ -69,7 +69,7 @@ export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; 
             <Cell lines>
               <span className="id ellipsis" title={secret.hosts.join(", ")}>{secret.hosts.join(", ")}</span>
               <span className="muted">
-                {masked(secret.value)} · {secret.houses ? secret.houses.join(", ") : "every house"}
+                {masked(secret.value)} · {secret.houses ? secret.houses.join(", ") : "every workspace"}
                 {secret.header !== DEFAULT_SECRET_HEADER && ` · ${secret.header}`}
               </span>
             </Cell>
@@ -95,10 +95,10 @@ const hostsOf = (text: string) => text.split(/[\s,]+/).map((host) => host.trim()
 
 /**
  * A secret's form: a preset (new ones) fills its hosts and variable; then its name, value, hosts, variable, header,
- * houses and note. Gateway rules update immediately; placeholder variables refresh at the next VM start.
+ * workspaces and note. Gateway rules update immediately; placeholder variables refresh at the next VM start.
  */
 export function SecretDialog({ houses, noteMax, secret, onClose, save }: { houses: string[]; noteMax?: number; secret?: SecretView; onClose: () => void; save: (name: string, fields: SecretFields) => Promise<void> }) {
-  const [scouts, setScouts] = useState<{ house: string; name: string; title: string }[]>([]); // the houses' capabilities
+  const [scouts, setScouts] = useState<{ house: string; name: string; title: string }[]>([]); // the workspaces' capabilities
   const [onlyForScouts, setOnlyForScouts] = useState<string[]>(secret?.onlyForCapabilities ?? []);
   const [scoutError, setScoutError] = useState<string>();
   useEffect(() => { let active = true; Promise.all(houses.map(async house => ({ house, view: await capabilityApi.list(house).catch(() => ({ capabilities: [] })) }))).then(found => { if (active) setScouts(found.flatMap(({ house, view }) => view.capabilities.map(c => ({ house, name: c.name, title: c.name })))); }, e => active && setScoutError(e.message)); return () => { active = false; }; }, [houses.join("\n")]);
@@ -121,7 +121,7 @@ export function SecretDialog({ houses, noteMax, secret, onClose, save }: { house
         confirmLabel: secret ? "Save" : "Add secret",
         onConfirm: async () => {
           if (envError) throw new Error(`Variable: ${envError}`);
-          if (onlyForScouts.length && !only.length) throw new Error("Choose the house of these capabilities.");
+          if (onlyForScouts.length && !only.length) throw new Error("Choose the workspace of these capabilities.");
           await save(name.trim(), { onlyForCapabilities: onlyForScouts.length ? onlyForScouts : (secret?.onlyForCapabilities ? [] : null), value: value.trim(), hosts: hostsOf(hosts), env: env.trim(), header: header.trim() || null, houses: only.length ? only : null, note: note.trim() || null });
         },
         children: (
@@ -146,18 +146,18 @@ export function SecretDialog({ houses, noteMax, secret, onClose, save }: { house
             <TextField label="Hosts" mono value={hosts} onChange={setHosts} placeholder="github.com, api.github.com" hint="Exact hosts, comma-separated. Network access must be allowed separately." />
             <div className="form-grid">
               <TextField label="Variable" mono value={env} onChange={setEnv} placeholder="GITHUB_TOKEN" error={envError || undefined}
-                hint={name.trim() ? `Pets get ${secretPlaceholder(name.trim())} here.` : undefined} />
+                hint={name.trim() ? `Bots get ${secretPlaceholder(name.trim())} here.` : undefined} />
               <TextField label="Header" mono value={header} onChange={setHeader} hint="Where the placeholder is swapped, Basic credentials included." />
             </div>
-            {houses.length > 0 && <HousesField houses={houses} checked={only} onChange={setOnly} />}
-            <CheckList label="Only for capabilities" checked={onlyForScouts} options={[...new Set(scouts.filter(s => !only.length || only.includes(s.house)).map(s => s.name))].map(name => ({ value: name, label: scouts.filter(s => s.name === name && (!only.length || only.includes(s.house))).map(s => houses.length > 1 ? `${s.title} (${s.house})` : s.title).join(", ") }))} onToggle={name => setOnlyForScouts(previous => previous.includes(name) ? previous.filter(s => s !== name) : [...previous, name])} empty="No capabilities in the selected houses." />
+            {houses.length > 0 && <WorkspacesField houses={houses} checked={only} onChange={setOnly} />}
+            <CheckList label="Only for capabilities" checked={onlyForScouts} options={[...new Set(scouts.filter(s => !only.length || only.includes(s.house)).map(s => s.name))].map(name => ({ value: name, label: scouts.filter(s => s.name === name && (!only.length || only.includes(s.house))).map(s => houses.length > 1 ? `${s.title} (${s.house})` : s.title).join(", ") }))} onToggle={name => setOnlyForScouts(previous => previous.includes(name) ? previous.filter(s => s !== name) : [...previous, name])} empty="No capabilities in the selected workspaces." />
 
             {scoutError && <p className="error">Could not load capabilities: {scoutError}</p>}
             <TextField label="Note" hint="Only you see this." value={note} onChange={setNote} maxLength={noteMax} />
             <p className="hint">
               {onlyForScouts.length > 0
-                ? "Only scouts with the ticked capabilities get it; pets and sideworkers never do, not even as a placeholder. Easier: add keys on the capability's own page."
-                : <>Works right away, no restart.{variableChanges && <> Pets get {env.trim() ? <span className="mono">{env.trim()}</span> : "the variable"} at their next VM start.</>}</>}
+                ? "Only scouts with the ticked capabilities get it; bots and sideworkers never do, not even as a placeholder. Easier: add keys on the capability's own page."
+                : <>Works right away, no restart.{variableChanges && <> Bots get {env.trim() ? <span className="mono">{env.trim()}</span> : "the variable"} at their next VM start.</>}</>}
             </p>
           </>
         ),

@@ -177,9 +177,9 @@ export class Scouts {
   run(house: string, id: string) { return this.runs.find(r => r.house === house && r.id === id); }
   isScout(c: PetIdentity) { return !!this.run(c.house,c.pet); }
   private require(c: PetIdentity, id: string) { const r = this.run(c.house,id); if (!r || r.probe) throw new Error("Unknown scout run"); return r; }
-  private parent(c: PetIdentity,id:string) { const r=this.require(c,id); if (r.parent!==c.pet) throw new Error("Only the calling pet may do this"); return r; }
+  private parent(c: PetIdentity,id:string) { const r=this.require(c,id); if (r.parent!==c.pet) throw new Error("Only the calling bot may do this"); return r; }
   private self(c: PetIdentity) { const r=this.require(c,c.pet); if (terminal(r.status)) throw new Error("This scout has ended"); return r; }
-  private async house(c: PetIdentity) { const h=(await this.deps.configured()).houses.find(h=>h.name===c.house); if (!h || !houseFeatures(h).scouts || !h.pets.some(p=>p.name===c.pet && p.enabled!==false)) throw new Error("Scouts are disabled or caller is not an enabled pet"); return h; }
+  private async house(c: PetIdentity) { const h=(await this.deps.configured()).houses.find(h=>h.name===c.house); if (!h || !houseFeatures(h).scouts || !h.pets.some(p=>p.name===c.pet && p.enabled!==false)) throw new Error("Scouts are disabled or caller is not an enabled bot"); return h; }
   enabled(c: PetIdentity, houses: House[]) { return !!houses.find(h=>h.name===c.house && houseFeatures(h).scouts && h.pets.some(p=>p.name===c.pet)); }
   /** Blueprints a pet may call by name: what they are for, and the shared capabilities they tick (their own stays unnamed). */
   async catalog(c: PetIdentity) { const house=await this.house(c); return (house.scouts??[]).map(scout=>({name:scout.name,title:scout.title,description:scout.description,capabilities:scout.capabilities,network:scoutNetworkWords(scout,house.capabilities??[])})); }
@@ -239,8 +239,8 @@ export class Scouts {
       const origin = capturedChannel ?? (!this.deps.channel && !this.deps.place && house.channels.filter(ch=>ch.pets.includes(c.pet)).length === 1 ? channelKey(house.channels.find(ch=>ch.pets.includes(c.pet))!) : undefined);
       if(!origin || !house.channels.some(ch=>channelKey(ch)===origin && ch.pets.includes(c.pet)))throw new Error("The calling conversation is no longer available; start the scout from an attached channel");
       const limits=scoutLimits(house);
-      if(this.runs.filter(r=>r.house===c.house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("House scout limit reached; cancel a run first");
-      if(input.capabilities!==undefined)throw new Error("Call a scout by name (scout); pets no longer assemble one from capabilities. Use scouts for the list");
+      if(this.runs.filter(r=>r.house===c.house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("Workspace scout limit reached; cancel a run first");
+      if(input.capabilities!==undefined)throw new Error("Call a scout by name (scout); bots no longer assemble one from capabilities. Use scouts for the list");
       if(typeof blueprint!=="string"||!blueprint)throw new Error("scout: a name from the scouts tool");
       const def=house.scouts?.find(s=>s.name===blueprint);
       if(!def)throw new Error("Unknown scout; use scouts for the list");
@@ -248,7 +248,7 @@ export class Scouts {
       const names=blueprintCapabilities(def,all),runtime=scoutRuntime(house,def);
       const problems=scoutProblems({capabilities:names},all,()=>undefined);
       if(problems.length)throw new Error(problems.join("; "));
-      if(!runtime.agent)throw new Error("Your human has not chosen an agent for this scout yet (Scouts → Settings in the admin)");
+      if(!runtime.agent)throw new Error("Your human has not chosen a harness for this scout yet (Scouts → Settings in the admin)");
       const definition:ScoutRunDefinition={...structuredClone(base),capabilities:names,...structuredClone(runtime.agent),resources:runtime.resources};
       const used=names.flatMap(name=>all.filter(capability=>capability.name===name));
       const runtimeWords=def.agent||def.resources?[definition.model??definition.agent,`${definition.resources.cpus} vCPU`,`${Math.round(definition.resources.memoryMiB/102.4)/10} GiB`].join(" · "):undefined;
@@ -269,10 +269,10 @@ export class Scouts {
    */
   async ownerSpawn(house:string,scout:string,input:{task:unknown;pet?:unknown;place?:unknown;placement?:unknown}) {
     const h=(await this.deps.configured()).houses.find(each=>each.name===house);
-    if(!h)throw new Error("Unknown house");
-    if(input.pet!==undefined&&(typeof input.pet!=="string"||!input.pet))throw new Error("pet: a pet of the house");
+    if(!h)throw new Error("Unknown workspace");
+    if(input.pet!==undefined&&(typeof input.pet!=="string"||!input.pet))throw new Error("pet: a bot of the workspace");
     const pet=(input.pet as string|undefined)??h.pets.find(p=>p.enabled!==false&&h.channels.some(ch=>ch.pets.includes(p.name)))?.name;
-    if(!pet)throw new Error("A scout's thread opens in a pet's channel: this house has no enabled pet in a channel");
+    if(!pet)throw new Error("A scout's thread opens in a bot's channel: this workspace has no enabled bot in a channel");
     return this.spawn({house,pet},{scout,task:input.task,place:input.place,placement:input.placement},true);
   }
   private async begin(r:ScoutRun,values:Record<string,string>) {
@@ -511,9 +511,9 @@ export class Scouts {
       const config=await this.deps.configured(),h=config.houses.find(h=>h.name===house);
       if(!h||!houseFeatures(h).scouts)throw new Error("Scouts are disabled");
       const owner=capability.owner?h.scouts?.find(s=>s.name===capability.owner):undefined,runtime=scoutRuntime(h,owner);
-      if(!runtime.agent)throw new Error(owner?"Choose an agent first (Scouts → Settings, or this scout's own)":"Choose the scouts' agent first (Scouts → Settings)");
+      if(!runtime.agent)throw new Error(owner?"Choose a harness first (Scouts → Settings, or this scout's own)":"Choose the scouts' harness first (Scouts → Settings)");
       const limits=scoutLimits(h);
-      if(this.runs.filter(r=>r.house===house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("House scout limit reached");
+      if(this.runs.filter(r=>r.house===house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("Workspace scout limit reached");
       const definition:ScoutRunDefinition={name:capability.name,description:`Test of ${capability.name}`,instructions:"",capabilities:[capability.name],...structuredClone(runtime.agent),resources:runtime.resources};
       const run:ScoutRun={probe:true,id:`scout-${randomBytes(5).toString('hex')}`,house,scout:capability.name,parent:h.pets[0]?.name??"owner",task:"Test install",report:"owner",status:"running",createdAt:this.now(),startedAt:this.now(),steps:0,actions:[],secretRequests:[],files:[],definition,capabilities:[structuredClone(capability)]};
       this.runs.push(run);this.save();return run;

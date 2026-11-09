@@ -26,5 +26,5 @@ export class ScoutSecretRequests {
     void this.scouts.ownerSecret(c,request.key,value,controller.signal).catch(()=>input.notice("Secret delivery failed. Nothing was saved to the house.")).catch(()=>{}).finally(()=>{clearTimeout(timer);this.pending.delete(c.pet);});
     return true;
   }
-  tool():McpTool<PetIdentity>{return {name:'secret_request',description:'Ask your human to supply one secret for this run only through /secret. Use after calling pet cannot provide it. No house vault write.',inputSchema:{type:'object',additionalProperties:false,required:['key'],properties:{key:{type:'string'}}},available:c=>this.scouts.isScout(c),call:async(c,a)=>JSON.stringify(await this.request(c,a.key))};}
+  tool():McpTool<PetIdentity>{return {name:'secret_request',description:'Ask your human to supply one secret for this run only through /secret. Use after calling bot cannot provide it. No workspace vault write.',inputSchema:{type:'object',additionalProperties:false,required:['key'],properties:{key:{type:'string'}}},available:c=>this.scouts.isScout(c),call:async(c,a)=>JSON.stringify(await this.request(c,a.key))};}
 }

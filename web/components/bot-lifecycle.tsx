@@ -1,8 +1,8 @@
 import { useEffect, useId, useState } from "react";
-import { api, type PetView } from "../api";
+import { api, type BotView } from "../api";
 import {
   DEFAULT_LIFECYCLE, DEFAULT_SHUTDOWN_MESSAGE, DEFAULT_WAKE_UP_MESSAGE, describeLifecycle, normalLifecycle, WEEKDAYS,
-  type LifecycleEvery, type PetLifecycle, type Weekday,
+  type LifecycleEvery, type PetLifecycle as BotLifecycle, type Weekday,
 } from "../../src/core/lifecycle";
 import { Field, SelectField, StepperField, SwitchList } from "./fields";
 import { Cluster, Section } from "./layout";
@@ -21,8 +21,8 @@ interface Form {
   wakeUp: string;
 }
 
-/** The form for a lifecycle; a pet without one gets the defaults, switched off. */
-function formOf(lifecycle: PetLifecycle | null | undefined): Form {
+/** The form for a lifecycle; a bot without one gets the defaults, switched off. */
+function formOf(lifecycle: BotLifecycle | null | undefined): Form {
   const value = lifecycle ?? { ...DEFAULT_LIFECYCLE, enabled: false };
   return {
     enabled: value.enabled,
@@ -37,7 +37,7 @@ function formOf(lifecycle: PetLifecycle | null | undefined): Form {
 }
 
 /** What the form saves, or why it cannot. */
-function lifecycleOf(form: Form): PetLifecycle | string {
+function lifecycleOf(form: Form): BotLifecycle | string {
   const notice = Number(form.notice);
   if (!Number.isInteger(notice) || notice < 1 || notice > 60) return "Notice is 1 to 60 minutes.";
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.at)) return "Pick a time.";
@@ -54,15 +54,15 @@ function lifecycleOf(form: Form): PetLifecycle | string {
   });
 }
 
-/** The parts that go into the pet's instructions: a change to them starts it a new session. */
-const scheduleOf = (lifecycle: PetLifecycle | null | undefined) =>
+/** The parts that go into the bot's instructions: a change to them starts it a new session. */
+const scheduleOf = (lifecycle: BotLifecycle | null | undefined) =>
   lifecycle?.enabled ? JSON.stringify([lifecycle.every, lifecycle.at, lifecycle.weekday, lifecycle.day, lifecycle.notice]) : "off";
 
 /**
- * A pet's Lifecycle tab: its scheduled restart (how often, when, how much notice), the shutdown message it gets before
+ * A bot's Lifecycle tab: its scheduled restart (how often, when, how much notice), the shutdown message it gets before
  * one and the wake-up message after. Times are the household's timezone.
  */
-export function PetLifecycleTab({ house, pet, refresh, notify }: { house: string; pet: PetView; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
+export function BotLifecycleTab({ house, pet, refresh, notify }: { house: string; pet: BotView; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
   const [form, setForm] = useState(() => formOf(pet.lifecycle));
   const [timezone, setTimezone] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -87,7 +87,7 @@ export function PetLifecycleTab({ house, pet, refresh, notify }: { house: string
     setBusy(true);
     setError(undefined);
     try {
-      const warning = await written(api.updatePet(house, pet.name, { lifecycle: value }));
+      const warning = await written(api.updateBot(house, pet.name, { lifecycle: value }));
       notify(warning ?? "Lifecycle saved", warning !== undefined);
       await refresh();
     } catch (failure) {
@@ -136,7 +136,7 @@ export function PetLifecycleTab({ house, pet, refresh, notify }: { house: string
               </Field>
               <StepperField
                 label="Shutdown notice"
-                hint="How long before the restart the shutdown message comes. It restarts as soon as the agent finishes wrapping up, or when the time is up."
+                hint="How long before the restart the shutdown message comes. It restarts as soon as the harness finishes wrapping up, or when the time is up."
                 value={form.notice}
                 onChange={(notice) => set("notice", notice)}
                 step={1}
@@ -150,11 +150,11 @@ export function PetLifecycleTab({ house, pet, refresh, notify }: { house: string
       </Section>
       {form.enabled && (
         <>
-          <Section width="narrow" title="Shutdown message" hint="Sent to the agent before a scheduled restart." actions={form.shutdown !== DEFAULT_SHUTDOWN_MESSAGE && <button type="button" className="btn small" onClick={() => set("shutdown", DEFAULT_SHUTDOWN_MESSAGE)}>Reset to default</button>}>
+          <Section width="narrow" title="Shutdown message" hint="Sent to the harness before a scheduled restart." actions={form.shutdown !== DEFAULT_SHUTDOWN_MESSAGE && <button type="button" className="btn small" onClick={() => set("shutdown", DEFAULT_SHUTDOWN_MESSAGE)}>Reset to default</button>}>
             <label htmlFor={shutdownId} className="visually-hidden">Shutdown message</label>
             <textarea id={shutdownId} className="control task-instructions" rows={5} maxLength={4000} value={form.shutdown} onChange={(event) => set("shutdown", event.target.value)} />
           </Section>
-          <Section width="narrow" title="Wake-up message" hint="Sent to the agent once it is back after a scheduled restart." actions={form.wakeUp !== DEFAULT_WAKE_UP_MESSAGE && <button type="button" className="btn small" onClick={() => set("wakeUp", DEFAULT_WAKE_UP_MESSAGE)}>Reset to default</button>}>
+          <Section width="narrow" title="Wake-up message" hint="Sent to the harness once it is back after a scheduled restart." actions={form.wakeUp !== DEFAULT_WAKE_UP_MESSAGE && <button type="button" className="btn small" onClick={() => set("wakeUp", DEFAULT_WAKE_UP_MESSAGE)}>Reset to default</button>}>
             <label htmlFor={wakeUpId} className="visually-hidden">Wake-up message</label>
             <textarea id={wakeUpId} className="control task-instructions" rows={5} maxLength={4000} value={form.wakeUp} onChange={(event) => set("wakeUp", event.target.value)} />
           </Section>

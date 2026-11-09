@@ -3,7 +3,7 @@
 //   bin/house                the compiled CLI and daemon (bun build --compile)
 //   bin/codex                Household's own Codex, the version pinned in package.json (checked against bun.lock)
 //   msb/                     microsandbox, the pinned version, as its release ships it (msb is signed: untouched)
-//   share/builtin-skills     mounted into pets' VMs, so a real directory
+//   share/builtin-skills     mounted into bots' VMs, so a real directory
 //   share/web                the web UI, built here (a compiled house has no bundler inputs)
 // Usage: bun scripts/build-release.ts <darwin-arm64|linux-x64|linux-arm64>
 // A darwin binary is built on macOS, which signs it (ad hoc); Apple silicon runs nothing unsigned.

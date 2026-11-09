@@ -46,11 +46,11 @@ export class PetTokenRegistry {
         this.pets.set(identityKey(entry), { house: entry.house, pet: entry.pet, token: entry.token }); seen.add(entry.token);
       }
       chmodSync(path, 0o600);
-    } catch { throw new HouseholdError("pet capability registry is invalid; its credentials were not loaded"); }
+    } catch { throw new HouseholdError("bot capability registry is invalid; its credentials were not loaded"); }
   }
 
   tokenFor(identity: PetIdentity): string {
-    if (!validPet(identity)) throw new HouseholdError("invalid pet identity for capability registry");
+    if (!validPet(identity)) throw new HouseholdError("invalid bot identity for capability registry");
     const key = identityKey(identity);
     const current = this.pets.get(key);
     if (current) return current.token;
@@ -60,7 +60,7 @@ export class PetTokenRegistry {
 
   /** Publish exactly the wanted identities; removed pets lose their capability permanently. */
   entries(wanted: PetIdentity[]): PetTokenIdentity[] {
-    if (!wanted.every(validPet)) throw new HouseholdError("invalid pet identity for capability registry");
+    if (!wanted.every(validPet)) throw new HouseholdError("invalid bot identity for capability registry");
     const names = new Set(wanted.map(identityKey));
     let changed = false;
     for (const key of this.pets.keys()) if (!names.has(key)) { this.pets.delete(key); changed = true; }
@@ -72,7 +72,7 @@ export class PetTokenRegistry {
 
   private save(): void {
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    if (lstatSync(this.path, { throwIfNoEntry: false })?.isSymbolicLink()) throw new HouseholdError("pet capability registry must be a plain file");
+    if (lstatSync(this.path, { throwIfNoEntry: false })?.isSymbolicLink()) throw new HouseholdError("bot capability registry must be a plain file");
     const tmp = `${this.path}.${randomBytes(8).toString("hex")}.tmp`;
     writeFileSync(tmp, JSON.stringify({ version: 1, pets: [...this.pets.values()] }) + "\n", { mode: 0o600, flag: "wx" });
     renameSync(tmp, this.path);

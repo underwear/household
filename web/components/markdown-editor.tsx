@@ -27,7 +27,7 @@ const theme = EditorView.theme({
   ".cm-panel input, .cm-panel button": { font: "inherit" },
   ".cm-searchMatch": { backgroundColor: "color-mix(in oklch, var(--busy) 30%, transparent)" },
   ".cm-searchMatch-selected": { backgroundColor: "color-mix(in oklch, var(--busy) 55%, transparent)" },
-  // A skill's frontmatter (the name and description agents read first): quieter than the body, in one tone.
+  // A skill's frontmatter (the name and description harnesses read first): quieter than the body, in one tone.
   ".cm-frontmatter": { color: "var(--muted)" },
   ".cm-frontmatter span": { color: "inherit !important", fontWeight: "inherit !important", textDecoration: "none !important" },
 });

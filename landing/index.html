@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Household — a home for your agents</title>
-  <meta name="description" content="A harness for harnesses: terminal agents like Claude Code and Codex, each in its own sandbox, reachable from the messenger you already use.">
-  <meta property="og:title" content="Household — a home for your agents">
-  <meta property="og:description" content="A harness for harnesses. Your terminal agents, in your messenger.">
+  <title>Household — a home for your harnesses</title>
+  <meta name="description" content="Your assistant bots, powered by Claude Code or Codex harnesses, each in its own sandbox and reachable from the messenger you already use.">
+  <meta property="og:title" content="Household — a home for your harnesses">
+  <meta property="og:description" content="Your bots, powered by Claude Code or Codex, in your messenger.">
   <meta property="og:url" content="https://agents-household.dev/">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -55,7 +55,7 @@
     main { max-width: 1120px; margin: 0 auto; padding: 72px 24px 48px; }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 48px; align-items: center; margin-top: 48px; }
     .hero-text { container-type: inline-size; }
-    /* Each line of the headline on one line: its size follows the text column (9cqi ≈ "A home for your agents." in full). */
+    /* Each line of the headline on one line: its size follows the text column (9cqi ≈ "A home for your harnesses." in full). */
     .hero h1 { margin-top: 0; font-size: clamp(28px, 9cqi, 60px); }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 18px; }
     .brand svg { width: 32px; height: 32px; }
@@ -154,7 +154,7 @@
       main { padding-top: 40px; }
       h1 { margin-top: 48px; }
     }
-    /* Demo: a pet's thread, played message by message. */
+    /* Demo: a bot's thread, played message by message. */
     .thread {
       background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
       box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.08);
@@ -173,7 +173,7 @@
     .line.in { opacity: 1; transform: none; }
     .bubble { max-width: 84%; padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.42; }
     .me { align-self: flex-end; background: #3a5a46; color: #eef6f0; border-bottom-right-radius: 5px; }
-    .pet { align-self: flex-start; background: var(--tile); border-bottom-left-radius: 5px; }
+    .bot { align-self: flex-start; background: var(--tile); border-bottom-left-radius: 5px; }
     .sys { align-self: center; font-size: 13px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .ask { align-self: flex-start; width: min(340px, 90%); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 14.5px; background: var(--bg); }
     .ask b { font-weight: 600; }
@@ -225,14 +225,14 @@
 
     <div class="hero">
       <div class="hero-text">
-      <h1>A home for your agents.<br><span class="soft">A home for your pets.</span></h1>
-      <p class="lead">A harness for harnesses. Household wraps terminal agents like Claude Code and Codex, gives each its own sandbox, and lets you talk to it from the messenger you already use.</p>
+      <h1>A home for your harnesses.<br><span class="soft">A home for your bots.</span></h1>
+      <p class="lead">A workspace for your bots. Household runs each assistant with a harness like Claude Code or Codex in its own sandbox, and lets you talk to it from the messenger you already use.</p>
       <div class="actions">
         <a class="btn primary" href="#start">Get started<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         <a class="btn" href="docs/"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>Read the docs</a>
       </div>
       </div>
-      <div class="thread" aria-label="Two pets at work">
+      <div class="thread" aria-label="Two bots at work">
         <div class="thread-head">
           <div class="tabs" role="tablist">
             <button class="tab on" type="button" role="tab" data-t="assistant"><span class="avatar">🦉</span><span class="who"><b>Assistant</b><small><span class="live"></span>everyday tasks</small></span><span class="badge"></span></button>
@@ -276,7 +276,7 @@
       <h2>Get started</h2>
       <div class="ways">
         <div class="way">
-        <h3>With your agent</h3>
+        <h3>With your harness</h3>
         <p>Give it this prompt:</p>
         <div class="prompt">
           <div class="prompt-head"><span class="prompt-name">prompt.md</span><button class="btn" type="button" data-copy><svg class="i todo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><svg class="i done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="todo">Copy</span><span class="done">Copied</span></button></div>
@@ -313,28 +313,28 @@ Read <span class="md-link">https://agents-household.dev/llms.txt</span> and help
       });
     }
 
-    // The demo: two pets' threads. Assistant hunts a flat; then Ops' tab lights up and the night's incident plays there.
+    // The demo: two bots' threads. Assistant hunts a flat; then Ops' tab lights up and the night's incident plays there.
     const STORIES = {
       assistant: [
         { me: "Find me a flat in Barcelona: 2 rooms, a balcony, under €1,500. No ground floors, I've suffered enough." },
-        { pet: "On it. I'll send a scout to look around." },
+        { bot: "On it. I'll send a scout to look around." },
         { sys: "🕵️ scout flat-hunter started" },
         { ask: "<b>flat-hunter</b> wants to reach <b>idealista.com</b>" },
-        { sys: "✓ allowed for this house" },
-        { pet: "Found 3. The best: Gràcia, 3rd floor, balcony with a plant that looks emotionally available. €1,420." },
+        { sys: "✓ allowed for this workspace" },
+        { bot: "Found 3. The best: Gràcia, 3rd floor, balcony with a plant that looks emotionally available. €1,420." },
         { me: "Book a viewing for Saturday" },
-        { pet: "Done: Saturday 11:00. I put it in your calendar and told the plant." },
+        { bot: "Done: Saturday 11:00. I put it in your calendar and told the plant." },
       ],
       ops: [
         { grafana: "firing" },
-        { pet: "Up before you. api-2 is out of disk." },
+        { bot: "Up before you. api-2 is out of disk." },
         { cmd: "du -sh /var/log/app  →  41G" },
-        { pet: "Logs grew 41 GB overnight. Rotating them and restarting the API." },
+        { bot: "Logs grew 41 GB overnight. Rotating them and restarting the API." },
         { cmd: "logrotate -f /etc/logrotate.d/app" },
         { cmd: "systemctl restart api" },
         { grafana: "resolved" },
         { me: "Morning. Anything happen?" },
-        { pet: "A small fire at 3 am. Put it out, wrote the postmortem, opened a PR that caps the log size. You slept through it, as planned." },
+        { bot: "A small fire at 3 am. Put it out, wrote the postmortem, opened a PR that caps the log size. You slept through it, as planned." },
       ],
     };
     const GRAFANA_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#f46800"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff" stroke-width="2.2"/><path d="M12 6.8V3.5M17.2 12h3.3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -367,9 +367,9 @@ Read <span class="md-link">https://agents-household.dev/llms.txt</span> and help
     async function story(t, mine, fast = false) {
       for (const step of STORIES[t]) {
         if (mine !== run) return;
-        if (step.pet) {
-          if (!fast) { const dots = add(t, el("typing", "<i></i><i></i><i></i>")); await wait(900 + step.pet.length * 12); dots.remove(); }
-          add(t, el("bubble pet", step.pet));
+        if (step.bot) {
+          if (!fast) { const dots = add(t, el("typing", "<i></i><i></i><i></i>")); await wait(900 + step.bot.length * 12); dots.remove(); }
+          add(t, el("bubble bot", step.bot));
         } else if (step.me) add(t, el("bubble me", step.me));
         else if (step.sys) add(t, el("sys", step.sys));
         else if (step.cmd) add(t, el("cmd", step.cmd));

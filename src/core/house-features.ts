@@ -2,9 +2,9 @@ import { z } from "zod";
 
 /** House-owned capabilities. Skills stay discoverable even when their capability is disabled. */
 export const HOUSE_FEATURES = {
-  scouts: { label: "Scouts", description: "Call house specialists with their own access; messages back to pets require owner approval.", default: false },
+  scouts: { label: "Scouts", description: "Call workspace specialists with their own access; messages back to bots require owner approval.", default: false },
   preview: { label: "HTTP previews", description: "Publish an application from your VM for up to 15 minutes, with owner approval for every publication.", default: false },
-  sideworkers: { label: "Sideworkers", description: "Delegate work to additional agent VMs within the house's resource limits.", default: true },
+  sideworkers: { label: "Sideworkers", description: "Delegate work to additional harness VMs within the workspace's resource limits.", default: true },
 } as const;
 export type HouseFeatures = { -readonly [K in keyof typeof HOUSE_FEATURES]: boolean };
 export interface PreviewSettings { bindAddress: string; publicHost: string }

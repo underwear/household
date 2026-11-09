@@ -58,27 +58,27 @@ export async function onboard(deps: OnboardDeps): Promise<void> {
     for (const line of await present(deps, before)) t.say(`  ${line}`);
     t.say(dim("This keeps all of it: every step offers what you have, or adds something new next to it."));
   } else {
-    t.say("One house, one pet, a Telegram bot to talk to it. Ctrl-C stops at any point; what is done stays.");
+    t.say("One workspace, one bot, a Telegram bot to talk to it. Ctrl-C stops at any point; what is done stays.");
   }
   for (const problem of await deps.missing()) t.say(yellow(`  ! ${problem}`));
 
-  step(t, 1, "Agent and its key");
-  const agent = await choose<Agent>(t, "Which agent will your pet run?", [
+  step(t, 1, "Harness and its key");
+  const agent = await choose<Agent>(t, "Which harness will your bot run?", [
     { value: "claude-code-tmux", label: `Claude Code ${dim("— a Claude Pro or Max subscription (or an Anthropic API key)")}` },
     { value: "codex-app-server", label: `Codex ${dim("— a ChatGPT Plus or Pro subscription (or an OpenAI API key)")}` },
   ]);
   const key = await agentKey(deps, agent, outcome);
 
-  step(t, 2, "House");
-  t.say(dim("A house is a trust zone: its own network allowlist, secrets, Telegram bot and owners."));
+  step(t, 2, "Workspace");
+  t.say(dim("A workspace is a trust zone: its own network allowlist, secrets, Telegram bot and owners."));
   const { house, created } = await houseOf(deps, outcome);
 
   step(t, 3, "Telegram");
-  t.say(dim("Each house talks to you through its own bot; every pet and scout gets a thread in its chat. (More messengers are coming.)"));
+  t.say(dim("Each workspace talks to you through its own bot; every bot and scout gets a thread in its chat. (More messengers are coming.)"));
   const channel = await telegram(deps, house, outcome);
 
-  step(t, 4, "Pet");
-  t.say(dim("A pet is an agent in its own VM, with a home and memory that stay between sessions."));
+  step(t, 4, "Bot");
+  t.say(dim("A bot is an assistant powered by a harness in its own VM, with a home and memory that stay between sessions."));
   const pet = await petOf(deps, house, agent, key, channel.chat, outcome);
 
   const current = houseFeatures(findHouse(await config.load(), house)!);
@@ -88,29 +88,29 @@ export async function onboard(deps: OnboardDeps): Promise<void> {
     return on ? current[name] : !current[name];
   };
   step(t, 5, "Scouts");
-  t.say(dim("Scouts are one-task helpers in their own VMs — a browser, media tools, dev tools. Your pet calls one by name"));
-  t.say(dim("and you approve each run in the chat, so the pet itself never needs that access."));
+  t.say(dim("Scouts are one-task helpers in their own VMs — a browser, media tools, dev tools. Your bot calls one by name"));
+  t.say(dim("and you approve each run in the chat, so the bot itself never needs that access."));
   const scouts = await feature("scouts", "scouts");
 
   step(t, 6, "Sideworkers");
-  t.say(dim("Sideworkers are like subagents for longer work: your pet starts an extra agent in its own VM, and you can talk"));
-  t.say(dim("to it on its own, in parallel — one developing a project, say, while your pet carries on with the rest."));
+  t.say(dim("Sideworkers are like subagents for longer work: your bot starts an extra bot in its own VM, and you can talk"));
+  t.say(dim("to it on its own, in parallel — one developing a project, say, while your bot carries on with the rest."));
   const sideworkers = await feature("sideworkers", "sideworkers");
   const now = findHouse(await config.load(), house)!;
   await config.setHouseFeatures(house, { features: { ...houseFeatures(now), scouts, sideworkers }, preview: previewSettings(now) });
 
   const up = await deps.daemonUp();
   if (up) await deps.notifyDaemon();
-  t.say(`\n${green("✓ Done.")} House ${bold(house)}: pet ${bold(pet)} in ${channel.bot}; scouts ${scouts ? "on" : "off"}, sideworkers ${sideworkers ? "on" : "off"}.`);
+  t.say(`\n${green("✓ Done.")} Workspace ${bold(house)}: bot ${bold(pet)} in ${channel.bot}; scouts ${scouts ? "on" : "off"}, sideworkers ${sideworkers ? "on" : "off"}.`);
   if (outcome.added.length) t.say(`  Added: ${outcome.added.join(", ")}.`);
   if (outcome.kept.length) t.say(dim(`  Kept as it was: ${outcome.kept.join(", ")}.`));
   t.say(`
-  ${bold("house start")}       run Household ${dim("(a new pet's first start downloads its image: a minute or two)")}
+  ${bold("house start")}       run Household ${dim("(a new bot's first start downloads its image: a minute or two)")}
   ${bold("house dashboard")}   sign in to the web admin: a one-time link, opened in your browser
   ${bold("house status")}      what runs;  ${bold("house doctor")}  what is missing;  ${bold("house --help")}  everything else
 
-${bold("Bonus:")} the household skill lets your coding agent set up and run Household for you
-${dim("(as a login service, more pets, secrets, scouts):")}
+${bold("Bonus:")} the household skill lets your coding assistant set up and run Household for you
+${dim("(as a login service, more bots, secrets, scouts):")}
   Claude Code  claude plugin marketplace add underwear/household && claude plugin install household@household
   Codex        codex plugin marketplace add underwear/household && codex plugin add household@household`);
   if (up) return t.say(`\nHousehold is running and has the changes: write to ${channel.bot}.`);
@@ -125,8 +125,8 @@ async function present(deps: OnboardDeps, household: Household): Promise<string[
   const lines = household.keys.length ? [`keys: ${household.keys.map((key) => `${key.name} (${key.provider})`).join(", ")}`] : [];
   for (const house of household.houses) {
     const bot = await botOf(deps, house);
-    const pets = house.pets.map((pet) => pet.name).join(", ") || "no pets";
-    lines.push(`house ${house.name}: ${bot ? `${bot.name}, ` : ""}${pets}`);
+    const pets = house.pets.map((pet) => pet.name).join(", ") || "no bots";
+    lines.push(`workspace ${house.name}: ${bot ? `${bot.name}, ` : ""}${pets}`);
   }
   return lines;
 }
@@ -179,7 +179,7 @@ async function agentKey(deps: OnboardDeps, agent: Agent, outcome: Outcome): Prom
           return name;
         } catch (error) {
           t.say(yellow(`  ${(error as Error).message}`));
-          if (!(await confirm(t, "Try again?"))) throw new HouseholdError("no key, so no pet: run `house onboard` again when Codex can sign in");
+          if (!(await confirm(t, "Try again?"))) throw new HouseholdError("no key, so no bot: run `house onboard` again when Codex can sign in");
         }
       }
     }
@@ -213,18 +213,18 @@ async function houseOf(deps: OnboardDeps, outcome: Outcome): Promise<{ house: st
   const { terminal: t, config } = deps;
   const houses = (await config.load()).houses;
   if (houses.length) {
-    const picked = await choose(t, "Which house?", [
-      ...houses.map((house) => ({ value: house.name, label: `Add to '${house.name}' ${dim(`— ${house.pets.map((pet) => pet.name).join(", ") || "no pets yet"}`)}` })),
-      { value: "", label: "A new house" },
+    const picked = await choose(t, "Which workspace?", [
+      ...houses.map((house) => ({ value: house.name, label: `Add to '${house.name}' ${dim(`— ${house.pets.map((pet) => pet.name).join(", ") || "no bots yet"}`)}` })),
+      { value: "", label: "A new workspace" },
     ]);
-    if (picked) { outcome.kept.push(`house ${picked}`); return { house: picked, created: false }; }
+    if (picked) { outcome.kept.push(`workspace ${picked}`); return { house: picked, created: false }; }
   }
-  const house = await until(t, () => askOr(t, "Name", freeName(houses.map((house) => house.name), "my-house")), async (name) => {
+  const house = await until(t, () => askOr(t, "Name", freeName(houses.map((house) => house.name), "my-workspace")), async (name) => {
     if (findHouse(await config.load(), name)) throw new Error(`'${name}' is taken: pick it from the list instead, or another name`);
     await config.createHouse(name);
     return name;
   });
-  outcome.added.push(`house ${house}`);
+  outcome.added.push(`workspace ${house}`);
   return { house, created: true };
 }
 
@@ -235,7 +235,7 @@ async function telegram(deps: OnboardDeps, house: string, outcome: Outcome): Pro
   if (present) {
     const keep = await choose(t, `'${house}' talks through ${present.name}.`, [
       { value: "keep", label: "Keep it" },
-      { value: "replace", label: `Another bot in the same chat ${dim("— a new token; owners and pets stay")}` },
+      { value: "replace", label: `Another bot in the same chat ${dim("— a new token; owners and bots stay")}` },
     ]);
     if (keep === "keep") { outcome.kept.push(present.name); return { chat: present.chat, bot: present.name }; }
     botHowTo(t);
@@ -280,13 +280,13 @@ async function petOf(deps: OnboardDeps, house: string, agent: Agent, key: string
   if (pets.length) {
     const keep = await choose(t, `'${house}' has ${pets.map((pet) => `${pet.name} ${dim(`(${pet.agent ?? "claude-code-tmux"}, key ${pet.key})`)}`).join(", ")}.`, [
       { value: "keep", label: "Keep them as they are" },
-      { value: "add", label: `Add another pet ${dim(`(${agent}, key ${key})`)}` },
+      { value: "add", label: `Add another bot ${dim(`(${agent}, key ${key})`)}` },
     ]);
-    if (keep === "keep") { outcome.kept.push(`pets ${pets.map((pet) => pet.name).join(", ")}`); return pets[0]!.name; }
+    if (keep === "keep") { outcome.kept.push(`bots ${pets.map((pet) => pet.name).join(", ")}`); return pets[0]!.name; }
   }
   const pet = await until(t, () => askOr(t, "Name", freeName(pets.map((each) => each.name), "assistant")), (name) => {
     assertName("pet", name);
-    if (pets.some((each) => each.name === name)) throw new Error(`'${name}' is already in the house: another name`);
+    if (pets.some((each) => each.name === name)) throw new Error(`'${name}' is already in the workspace: another name`);
     return name;
   });
   const title = await askOr(t, "Its name in the chat", pet.charAt(0).toUpperCase() + pet.slice(1));
@@ -303,7 +303,7 @@ async function petOf(deps: OnboardDeps, house: string, agent: Agent, key: string
     return memoryMiB;
   });
   await config.addPet(house, pet, { agent, key, title, cpus, memoryMiB, lifecycle: DEFAULT_LIFECYCLE }, [chat]);
-  outcome.added.push(`pet ${pet}`);
+  outcome.added.push(`bot ${pet}`);
   return pet;
 }
 

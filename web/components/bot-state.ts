@@ -1,4 +1,4 @@
-/** A pet container's Docker state as a colour (the design's tones) and a word. */
+/** A bot container's Docker state as a colour (the design's tones) and a word. */
 export function petState(state: string): { tone: "idle" | "busy" | "danger" | "off"; label: string } {
   if (state === "disabled") return { tone: "off", label: "Disabled" };
   if (state === "running") return { tone: "idle", label: "Running" };
@@ -7,17 +7,17 @@ export function petState(state: string): { tone: "idle" | "busy" | "danger" | "o
   return { tone: "busy", label: state.charAt(0).toUpperCase() + state.slice(1) };
 }
 
-type Pet = { name: string; sideworker?: { parent: string } };
+type Bot = { name: string; sideworker?: { parent: string } };
 
-/** A house's own pets, without the sideworkers they started. */
-export const ownPets = <P extends Pet>(pets: P[]) => pets.filter((pet) => !pet.sideworker);
+/** A workspace's own bots, without the sideworkers they started. */
+export const ownBots = <P extends Bot>(pets: P[]) => pets.filter((pet) => !pet.sideworker);
 
-/** The sideworkers a pet started. */
-export const workersOf = <P extends Pet>(pets: P[], parent: string) => pets.filter((pet) => pet.sideworker?.parent === parent);
+/** The sideworkers a bot started. */
+export const workersOf = <P extends Bot>(pets: P[], parent: string) => pets.filter((pet) => pet.sideworker?.parent === parent);
 
-/** Each pet, then the sideworkers it started (a worker whose parent is gone, last): how lists nest them. */
-export const withWorkers = <P extends Pet>(pets: P[]) => [
-  ...ownPets(pets).flatMap((pet) => [pet, ...workersOf(pets, pet.name)]),
+/** Each bot, then the sideworkers it started (a worker whose parent is gone, last): how lists nest them. */
+export const withWorkers = <P extends Bot>(pets: P[]) => [
+  ...ownBots(pets).flatMap((pet) => [pet, ...workersOf(pets, pet.name)]),
   ...pets.filter((pet) => pet.sideworker && !pets.some((each) => each.name === pet.sideworker!.parent)),
 ];
 

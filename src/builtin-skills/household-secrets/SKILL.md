@@ -5,7 +5,7 @@ description: Use a token, password or other credential, or ask your human for on
 
 # Secrets
 
-Credentials your human gives the house are kept by Household, not by you. In your VM a secret is a placeholder:
+Credentials your human gives the workspace are kept by Household, not by you. In your VM a secret is a placeholder:
 an environment variable (its name chosen in the request, like `GITHUB_TOKEN`) holding `household-secret-<name>`.
 When a request to that secret's hosts carries the placeholder in the secret's header, the Household proxy puts the
 real value there on the way out. The value is not placed in your VM. Use only the intended service: a malicious service could echo credentials back in its response.
@@ -27,10 +27,10 @@ Call `secret_request({name, env, domains, reason})`, for example:
 {"name":"github-atlas-read","env":"ATLAS_GITHUB_TOKEN","domains":["api.github.com"],"reason":"Read Atlas issues with a read-only repository token"}
 ```
 
-Choose a unique secret name and a unique env name for the house. Multiple tokens may use the same domains;
+Choose a unique secret name and a unique env name for the workspace. Multiple tokens may use the same domains;
 select the appropriate placeholder for each task. Collisions are refused, never silently overwritten.
 Household creates a request and tells the owner to send `/secret <value>`, then confirm the
-name, env, domains and masked value. There is only one active request per house (including confirmation),
+name, env, domains and masked value. There is only one active request per workspace (including confirmation),
 with a shared 10-minute deadline. The owner can cancel it. The tool returns promptly; wait for Household's
 internal notification. Do not ask the owner to compose domain lists.
 Without an active request the owner can still use `/secret <name> <value> <domain>[,<domain>…]` manually.
@@ -38,12 +38,12 @@ Never ask your owner to paste a token as a normal message, and never put a real 
 
 When approved, use the supplied `household-secret-<name>` directly in the Authorization header. It works
 immediately without a VM restart; the environment variable is populated at the next VM start. Until then you may export the supplied placeholder under the requested env name in your shell. Secrets are
-shared by the house, including sideworkers. Network access is separate: request `network_request` if needed.
+shared by the workspace, including sideworkers. Network access is separate: request `network_request` if needed.
 An existing name cannot be overwritten from chat; ask your owner to rotate it in the admin. For a custom header,
-use the admin secret editor. Open-network houses cannot request secrets.
+use the admin secret editor. Open-network workspaces cannot request secrets.
 
 Telegram command entry is not end-to-end encrypted. Household deletes the command before processing it and
-keeps its value out of pet sessions, journals and logs, but it has already passed through Telegram's servers.
+keeps its value out of bot sessions, journals and logs, but it has already passed through Telegram's servers.
 
 ## When the proxy cannot help
 

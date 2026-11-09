@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Scouts — Household docs</title>
-  <meta name="description" content="Specialists your pets call for one task, each in its own VM with only the access you give it: the untrusted internet, production keys, closed networks. Every run waits for your Run.">
+  <meta name="description" content="Specialists your bots call for one task, each in its own VM with only the access you give it: the untrusted internet, production keys, closed networks. Every run waits for your Run.">
   <meta property="og:title" content="Scouts">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/scouts/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,47 +170,47 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="./" aria-current="page">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="./" aria-current="page">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
-    <article><p class="crumb">Pets</p><h1>Scouts</h1>
-<p>A scout is a specialist your pets can call for one task: &quot;buy two bus tickets&quot;, &quot;find out why prod returns 500&quot;, &quot;download this video&quot;. It works in its own fresh VM, with only the access you gave it, and is deleted when the task is done.</p>
-<p>Scouts are how pets touch what is risky or valuable without holding it themselves: the open, untrusted internet, a production key, a closed network. A pet never sees a scout's keys, and a scout sees none of the pet's files or memory.</p>
+    <article><p class="crumb">Bots</p><h1>Scouts</h1>
+<p>A scout is a specialist your bots can call for one task: &quot;buy two bus tickets&quot;, &quot;find out why prod returns 500&quot;, &quot;download this video&quot;. It works in its own fresh VM, with only the access you gave it, and is deleted when the task is done.</p>
+<p>Scouts are how bots touch what is risky or valuable without holding it themselves: the open, untrusted internet, a production key, a closed network. A bot never sees a scout's keys, and a scout sees none of the bot's files or memory.</p>
 <h2 id="turn-them-on">Turn them on</h2>
-<p>In <strong>House → Settings</strong>, switch on <strong>Scouts</strong>. The first time, the house gets ready-made capabilities (a browser, media tools, dev tools) and the <strong>General</strong> scout made of them: the open tools on the open internet.</p>
+<p>In <strong>Workspace → Settings</strong>, switch on <strong>Scouts</strong>. The first time, the workspace gets ready-made capabilities (a browser, media tools, dev tools) and the <strong>General</strong> scout made of them: the open tools on the open internet.</p>
 <h2 id="set-up-a-scout">Set up a scout</h2>
-<p><strong>House → Scouts → + New scout</strong>. A scout is set up like a skill:</p>
+<p><strong>Workspace → Scouts → + New scout</strong>. A scout is set up like a skill:</p>
 <ul>
-<li><strong>Name, title and description</strong> — the description says when to call it; pets choose by it.</li>
+<li><strong>Name, title and description</strong> — the description says when to call it; bots choose by it.</li>
 <li><strong>Instructions</strong> — how it should work.</li>
 <li><strong>Access</strong> — the <strong>capabilities</strong> it is made of, a setup of its own if it needs one, and optionally a repository to start in.</li>
-<li><strong>Agent and resources</strong> — its own, or the house's defaults.</li>
+<li><strong>Harness and resources</strong> — its own, or the workspace's defaults.</li>
 </ul>
 <p>A <strong>capability</strong> is one thing a scout can do: an install script, the network it needs and the keys it uses. They live on the <strong>Capabilities</strong> tab, each with <strong>Test install</strong> and a history of changes. Keep them small (a browser; a CLI and its key): a scout combines several. Network works like this:</p>
 <ul>
 <li>A capability that needs only software (a browser, a downloader) leaves the network <strong>open</strong>.</li>
 <li>A capability that brings access to something valuable lists its <strong>hosts</strong>: a scout that has it reaches only the hosts of its capabilities. So a scout with a production key cannot wander off to the open internet.</li>
 </ul>
-<p>You add the keys' values yourself. Pets can <strong>draft</strong> a capability they need; nothing changes until you apply it.</p>
-<p><strong>Settings</strong> on the Scouts page: how many scouts may run at once, and the agent, CPU and memory of scouts that set none.</p>
+<p>You add the keys' values yourself. Bots can <strong>draft</strong> a capability they need; nothing changes until you apply it.</p>
+<p><strong>Settings</strong> on the Scouts page: how many scouts may run at once, and the harness, CPU and memory of scouts that set none.</p>
 <h2 id="a-run">A run</h2>
 <ol>
-<li><strong>A pet calls a scout</strong> by name with a short task and what counts as success.</li>
-<li><strong>You approve.</strong> A <strong>Run</strong> card shows in the chat: who calls whom, the task, the capabilities, the network, the keys inside its VM and the names of any secrets the pet passes. Nothing starts until you press <strong>Run</strong>; unanswered, it is cancelled after 10 minutes.</li>
+<li><strong>A bot calls a scout</strong> by name with a short task and what counts as success.</li>
+<li><strong>You approve.</strong> A <strong>Run</strong> card shows in the chat: who calls whom, the task, the capabilities, the network, the keys inside its VM and the names of any secrets the bot passes. Nothing starts until you press <strong>Run</strong>; unanswered, it is cancelled after 10 minutes.</li>
 <li><strong>It works in its own thread</strong> (<strong>Open thread</strong> on the card). Talk to it there; the result — text and files — comes to you in that thread.</li>
-<li><strong>Its pet gets facts, not text:</strong> status, steps, how many domains, file handles. A scout's words or files reach the pet only when you pass them, one at a time. Whatever comes from a scout is treated as untrusted.</li>
-<li><strong>It says it is done</strong> with an outcome (success, failed, blocked). On its card, <strong>Close</strong> deletes its VM; <strong>Keep</strong> leaves it running for more. A scout has no time limit: its pet is reminded when it idles for 30 minutes and should cancel it when it is finished or stuck.</li>
+<li><strong>Its bot gets facts, not text:</strong> status, steps, how many domains, file handles. A scout's words or files reach the bot only when you pass them, one at a time. Whatever comes from a scout is treated as untrusted.</li>
+<li><strong>It says it is done</strong> with an outcome (success, failed, blocked). On its card, <strong>Close</strong> deletes its VM; <strong>Keep</strong> leaves it running for more. A scout has no time limit: its bot is reminded when it idles for 30 minutes and should cancel it when it is finished or stuck.</li>
 </ol>
 <h2 id="secrets">Secrets</h2>
 <p>You decide every one:</p>
 <ul>
-<li>Keys of capabilities are yours: you set them in the admin, and the pet never sees them.</li>
-<li>A pet that passes a secret it knows (a card number, an email for a new account) names it on the Run card; you approve it with the run.</li>
+<li>Keys of capabilities are yours: you set them in the admin, and the bot never sees them.</li>
+<li>A bot that passes a secret it knows (a card number, an email for a new account) names it on the Run card; you approve it with the run.</li>
 <li>A scout that asks for a secret mid-task needs your approval too, or it asks you directly in its thread.</li>
 </ul>
 <h2 id="threads">Threads</h2>
-<p>A scout's thread stays after the run, as history. A pet can ask to delete it: a <strong>Delete thread / Keep</strong> card asks you, and deleting stops the scout if it is still running and removes the thread with its messages and files. Channels that cannot delete threads keep the history.</p>
+<p>A scout's thread stays after the run, as history. A bot can ask to delete it: a <strong>Delete thread / Keep</strong> card asks you, and deleting stops the scout if it is still running and removes the thread with its messages and files. Channels that cannot delete threads keep the history.</p>
 <h2 id="run-one-yourself">Run one yourself</h2>
-<p><code>house scout run &lt;house&gt; &lt;scout&gt; --task &quot;…&quot;</code> starts a scout without a Run card; its thread opens in a pet's channel, and the pet hears nothing of it. <code>house --help</code> lists the rest: runs, status, logs, cancel.</p>
+<p><code>house scout run &lt;workspace&gt; &lt;scout&gt; --task &quot;…&quot;</code> starts a scout without a Run card; its thread opens in a bot's channel, and the bot hears nothing of it. <code>house --help</code> lists the rest: runs, status, logs, cancel.</p>
 </article>
 
     <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#turn-them-on">Turn them on</a></li><li><a href="#set-up-a-scout">Set up a scout</a></li><li><a href="#a-run">A run</a></li><li><a href="#secrets">Secrets</a></li><li><a href="#threads">Threads</a></li><li><a href="#run-one-yourself">Run one yourself</a></li></ul></nav>

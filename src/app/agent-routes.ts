@@ -153,7 +153,7 @@ export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Ch
   const tools = [replyTool(chat), reactTool(chat), historyTool(history), ...extraTools];
   if (chat.editReply) tools.push({
     name: "edit_reply",
-    description: "Replace the text of your own previously sent reply without posting a new message. Use the id and channel returned by reply. Preserves its original format and any unanswered buttons; use channel_format for syntax. Only single-message text replies are editable, not split replies, attachments, old legacy posts, other pets' messages or Household notices. Returns the same id and channel.",
+    description: "Replace the text of your own previously sent reply without posting a new message. Use the id and channel returned by reply. Preserves its original format and any unanswered buttons; use channel_format for syntax. Only single-message text replies are editable, not split replies, attachments, old legacy posts, other bots' messages or Household notices. Returns the same id and channel.",
     inputSchema: { type: "object", additionalProperties: false, required: ["id", "channel", "text"], properties: {
       id: { type: "string", description: "Household message id returned by reply" },
       channel: { type: "string", description: "Household channel id returned by reply" },
@@ -178,16 +178,16 @@ export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Ch
   if (network) tools.push(...networkTools(network));
   if (environment) tools.push({
     name: ENVIRONMENT_SETUP_TOOL,
-    description: "Explicitly run your saved setup script inside your current pet VM (normally attempted only once per newly created VM, never automatically retried on restart), as your normal user, with a five-minute limit. Use after repairing a failed setup. Your agent keeps running. Returns complete, failed or skipped and guest paths to the private log and status; inspect the log for failures.",
+    description: "Explicitly run your saved setup script inside your current bot VM (normally attempted only once per newly created VM, never automatically retried on restart), as your normal user, with a five-minute limit. Use after repairing a failed setup. Your harness keeps running. Returns complete, failed or skipped and guest paths to the private log and status; inspect the log for failures.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     async call({ house, pet }) {
       try { return JSON.stringify(await environment.runEnvironmentSetup(house, pet)); }
-      catch { throw new Error("Environment setup could not run. Inspect ~/environment/setup.status and ~/environment/setup.log; retry when your pet VM is running."); }
+      catch { throw new Error("Environment setup could not run. Inspect ~/environment/setup.status and ~/environment/setup.log; retry when your bot VM is running."); }
     },
   });
   if (environment) tools.push({
     name: "environment_on_start",
-    description: "Run your saved onStart Bash script now in your running VM, without restarting the agent. This script also runs at every VM start. Five-minute limit; return status and private guest log paths. Use for starting services, not installing packages. Background long-lived processes and redirect their output.",
+    description: "Run your saved onStart Bash script now in your running VM, without restarting the harness. This script also runs at every VM start. Five-minute limit; return status and private guest log paths. Use for starting services, not installing packages. Background long-lived processes and redirect their output.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     async call({ house, pet }) {
       try { return JSON.stringify(await environment.runEnvironmentSetup(house, pet, "onStart")); }
@@ -196,7 +196,7 @@ export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Ch
   });
   if (environment?.getEnvironment) tools.push({
     name: ENVIRONMENT_GET_TOOL,
-    description: "Get your saved setup (once per VM) and onStart (every boot) scripts and last run statuses. Only your own pet is accessible. The script is saved in Household configuration; guest setup files are generated copies.",
+    description: "Get your saved setup (once per VM) and onStart (every boot) scripts and last run statuses. Only your own bot is accessible. The script is saved in Household configuration; guest setup files are generated copies.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     async call({ house, pet }) {
       try { return JSON.stringify(await environment.getEnvironment!(house, pet)); }
@@ -242,13 +242,13 @@ function networkTools(network: Pick<NetworkRequests, "list" | "request">): McpTo
   return [
     {
       name: NETWORK_LIST_TOOL,
-      description: "List the network domains and TCP ports you may currently reach (your house's, and your own temporary grants with their addresses and expiry times).",
+      description: "List the network domains and TCP ports you may currently reach (your workspace's, and your own temporary grants with their addresses and expiry times).",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       async call({ house, pet }) { return JSON.stringify(network.list(house, pet)); },
     },
     {
       name: NETWORK_REQUEST_TOOL,
-      description: "Ask your human to allow one exact DNS domain and TCP port (default 443). Explain what the domain is and why you need it. Only public addresses can be approved. For a scout, Household asks BEFORE DNS resolution: a temporary grant belongs only to this run, and a permanent grant updates only this scout definition. For pets, DNS is checked before asking and permanent grants update the house. The owner chooses 15 minutes (only you, pinned to approved public addresses), permanently, or denied. Unresolvable or non-public addresses are refused. A permanent-pending result means the decision was saved but network application failed; retry only after a successful reload.",
+      description: "Ask your human to allow one exact DNS domain and TCP port (default 443). Explain what the domain is and why you need it. Only public addresses can be approved. For a scout, Household asks BEFORE DNS resolution: a temporary grant belongs only to this run, and a permanent grant updates only this scout definition. For bots, DNS is checked before asking and permanent grants update the workspace. The owner chooses 15 minutes (only you, pinned to approved public addresses), permanently, or denied. Unresolvable or non-public addresses are refused. A permanent-pending result means the decision was saved but network application failed; retry only after a successful reload.",
       inputSchema: {
         type: "object", additionalProperties: false, required: ["domain", "reason"],
         properties: {

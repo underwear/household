@@ -32,7 +32,7 @@ export const telegramPrivate: ChannelKindSpec = {
   platform: "telegram",
   audience: "private",
   label: "Telegram Bot DM (threaded)",
-  description: "Your private chat with the house's bot: a thread per pet, General for the house.",
+  description: "Your private chat with the workspace's bot: a thread per bot, General for the workspace.",
   chat: { key: "chat", label: "Chat id", placeholder: "your Telegram user id", mono: true },
   fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather; the bot needs Threaded Mode on." }],
 };

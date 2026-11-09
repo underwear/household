@@ -4,7 +4,7 @@ import type { MemoryStore } from "../infra/memory-store";
 
 export class PetMemory {
   constructor(private readonly store: MemoryStore, private readonly exists: (house: string, pet: string) => boolean, private readonly owner: (house: string, pet: string) => string = (_house, pet) => pet) {}
-  private check(house: string, pet: string) { if (!this.exists(house,pet)) throw new MemoryError("Pet is not configured",404); }
+  private check(house: string, pet: string) { if (!this.exists(house,pet)) throw new MemoryError("Bot is not configured",404); }
   get(house: string, pet: string, key: string) { this.check(house,pet); return this.store.get(house,this.owner(house,pet),key); }
   list(house: string, pet: string, input: unknown = {}) { this.check(house,pet); return this.store.list(house,this.owner(house,pet),input); }
   write(house: string, pet: string, input: unknown, actor: "pet" | "owner") { this.check(house,pet); return this.store.write(house,this.owner(house,pet),input,actor); }

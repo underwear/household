@@ -516,7 +516,7 @@ test("the subagent model is claude's own setting: one of its model aliases, into
   const subagent = claudeCodeTmux.settings!.find(setting => setting.key === "subagentModel");
   expect(subagent!.key).toBe("subagentModel");
   expect(subagent!.options.map(({ id }) => id)).toEqual(["opus", "sonnet", "haiku", "fable"]);
-  expect(subagent!.defaultLabel).toBe("the pet's own model");
+  expect(subagent!.defaultLabel).toBe("the bot's own model");
   expect(claudeCodeTmux.env({ ...context, settings: { subagentModel: "haiku" } }).CLAUDE_CODE_SUBAGENT_MODEL).toBe("haiku");
   expect(claudeCodeTmux.env(context)).not.toHaveProperty("CLAUDE_CODE_SUBAGENT_MODEL");
 });

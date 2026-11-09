@@ -1,6 +1,6 @@
 # Back up and move Household
 
-One command saves everything — every house, every pet — into one file; another puts it back, on this machine or a new one. There is no export of a single house or pet yet, and no backup button in the admin (**Backup** in its menu is still *soon*).
+One command saves everything — every workspace, every bot — into one file; another puts it back, on this machine or a new one. There is no export of a single workspace or bot yet, and no backup button in the admin (**Backup** in its menu is still *soon*).
 
 ## Back up
 
@@ -10,16 +10,16 @@ house export
 house export ~/backups/house.tar.gz
 ```
 
-The daemon can keep running: each pet pauses for a moment while its files are copied, and messages to it wait. Close all sideworkers first.
+The daemon can keep running: each bot pauses for a moment while its files are copied, and messages to it wait. Close all sideworkers first.
 
 The archive holds:
 
-- the config, `household.yaml`: houses, pets, channels, owners, network rules, inboxes, keys, secrets and bot tokens;
+- the config, `household.yaml`: workspaces, bots, channels, owners, network rules, inboxes, keys, secrets and bot tokens;
 - the database: chat history, memory, scheduled tasks, inbox events;
-- every pet's home folder: its projects, sessions, skills, instructions and anything it installed there;
-- the house's shared skills, ChatGPT subscription logins, and the certificate pets trust.
+- every bot's home folder: its projects, sessions, skills, instructions and anything it installed there;
+- the workspace's shared skills, ChatGPT subscription logins, and the certificate bots trust.
 
-Not included: logs, and what a pet installed outside its home — its Setup script brings that back on the first start.
+Not included: logs, and what a bot installed outside its home — its Setup script brings that back on the first start.
 
 ⚠️ **The archive contains your keys and tokens in plain form.** It is saved readable only by you (mode 600); keep it like a password file.
 
@@ -33,7 +33,7 @@ house doctor
 house start
 ```
 
-On a machine that already has a Household, import refuses to overwrite anything. `--force` replaces it: the current config, database and certificate are moved aside as `*.bak-…` files, and the pets' home folders are replaced.
+On a machine that already has a Household, import refuses to overwrite anything. `--force` replaces it: the current config, database and certificate are moved aside as `*.bak-…` files, and the bots' home folders are replaced.
 
 A backup from an older Household restores with a warning. One from a newer Household is refused: `house update` first.
 
@@ -47,6 +47,6 @@ Stop the daemon on the old machine before starting the new one: both would answe
 
 ## Just the config
 
-`household.yaml` is a plain file in `~/.config/household/`. You can keep a copy, edit it by hand and run `house reload` to apply it. It alone does not carry chat history, memory or the pets' files: for those, use `house export`.
+`household.yaml` is a plain file in `~/.config/household/`. You can keep a copy, edit it by hand and run `house reload` to apply it. It alone does not carry chat history, memory or the bots' files: for those, use `house export`.
 
 When a new version has to migrate the config or the database, Household copies both aside first, as it starts. `house migrate backups` lists those copies; `house migrate restore <name>` puts one back.

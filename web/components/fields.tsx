@@ -4,7 +4,7 @@ import { ChevronDown, Minus, Plus } from "lucide-react";
 /*
  * Form fields: one system for every control — a label, the control, an optional hint and error; one height,
  * padding, radius, border, font and focus ring (styles/primitives.css `.control`). `mono` is for values typed
- * character for character as the config and the system know them: names (house, pet, key), tokens and keys, chat
+ * character for character as the config and the system know them: names (workspace, bot, key), tokens and keys, chat
  * and owner ids, hosts. Everything else — titles, aliases, display names, notes, and every select — is in the UI font.
  */
 
@@ -171,7 +171,7 @@ export function CheckList({ label, options, checked, onToggle, empty }: { label:
   );
 }
 
-/** A titled part of a long form (a dialog's «Agent», «Resources»): a line above each one after the first. */
+/** A titled part of a long form (a dialog's «Harness», «Resources»): a line above each one after the first. */
 export function FormGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <fieldset className="form-group">

@@ -1,4 +1,4 @@
-import { accessWords, servicesWords } from "./components/house-connectors";
+import { accessWords, servicesWords } from "./components/workspace-connectors";
 import { claudeCodeTmux } from "../src/agent-adapters/claude-code-tmux";
 import { NETWORK_PRESETS } from "../src/core/network-presets";
 import { expect, test } from "bun:test";
@@ -6,27 +6,27 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildWebBundle } from "../src/infra/web-bundle";
-import { api, type AgentView, type HouseView, type KeyView, type PetView } from "./api";
+import { api, type HarnessView, type WorkspaceView, type KeyView, type BotView } from "./api";
 import { written } from "./components/section";
 import { telegram, telegramPrivate } from "../src/channel-adapters/telegram";
 import { ChannelDialog, ChannelsPage } from "./components/channels";
 import { Dialog, firstFocus } from "./components/dialog";
 import { SelectField, TextField } from "./components/fields";
 import { Cell, Cluster, FormGrid, List, ListRow, Page, Section } from "./components/layout";
-import { HousesTable } from "./components/houses";
+import { WorkspacesTable } from "./components/workspaces";
 import { KeyDialog, KeysSection } from "./components/keys";
-import { AllowlistSection, TemporaryNetworkSection, allowDialog, presetDialog, revokeTemporaryDialog } from "./components/house";
+import { AllowlistSection, TemporaryNetworkSection, allowDialog, presetDialog, revokeTemporaryDialog } from "./components/workspace";
 import { OwnerDialog, OwnersSection } from "./components/owners";
-import { PetDialog, PetsPage, keyLabel, effortForModel, useAgentForm } from "./components/pets";
-import { PetResources } from "./components/pet-resources";
-import { HouseOverviewPage } from "./components/house-overview";
-import { PetEnvironment, TEMPLATES } from "./components/pet-environment";
-import { PetDetailPage } from "./components/pet-detail";
+import { BotDialog, BotsPage, keyLabel, effortForModel, useHarnessForm } from "./components/bots";
+import { BotResources } from "./components/bot-resources";
+import { WorkspaceOverviewPage } from "./components/workspace-overview";
+import { BotEnvironment, TEMPLATES } from "./components/bot-environment";
+import { BotDetailPage } from "./components/bot-detail";
 import { SignIn } from "./components/sign-in";
 import { isCurrent, routeOf } from "./router";
 
 const TOKEN = `4242:${"A".repeat(35)}`;
-const work: HouseView = {
+const work: WorkspaceView = {
   name: "work",
   allow: [
     { host: "github.com", byAgent: false },
@@ -43,15 +43,15 @@ const work: HouseView = {
   ],
   pets: [
     { name: "sibling", title: "Sibling", ownTitle: "Sibling", display: "🦉 Sibling", emoji: "🦉", ownEmoji: "🦉", aliases: ["Sib"], agent: "claude-code-tmux", model: "opus", settings: {}, mode: "manual", key: "claude", problem: null, state: "running" },
-    { name: "chair", title: "Chair", ownTitle: null, display: "🐾 Chair", emoji: "🐾", ownEmoji: null, aliases: [], agent: "claude-code-tmux", model: "gpt-9", settings: {}, mode: "bypassPermissions", key: null, problem: "unknown model 'gpt-9'", state: "missing" },
+    { name: "chair", title: "Chair", ownTitle: null, display: "🤖 Chair", emoji: "🤖", ownEmoji: null, aliases: [], agent: "claude-code-tmux", model: "gpt-9", settings: {}, mode: "bypassPermissions", key: null, problem: "unknown model 'gpt-9'", state: "missing" },
   ],
 };
-const agents: AgentView[] = [
+const agents: HarnessView[] = [
   { name: "claude-code-tmux", models: ["opus", "haiku"], defaultModel: "opus", modes: [{ id: "bypassPermissions", label: "Bypass permissions" }, { id: "manual", label: "Manual" }], defaultMode: "bypassPermissions", settings: [], providers: ["anthropic"] },
   { name: "plain", models: ["m"], defaultModel: "m", modes: [], defaultMode: null, settings: [], providers: ["anthropic"] },
-  // An agent with a setting of its own (claude's subagent model): a field drawn from the description.
+  // A harness with a setting of its own (claude's subagent model): a field drawn from the description.
   { name: "tuned", models: ["opus", "haiku"], defaultModel: "opus", modes: [], defaultMode: null, providers: ["anthropic"],
-    settings: [{ key: "subagentModel", label: "Subagent model", description: "What its subagents run on.", options: [{ id: "opus", label: "opus" }, { id: "haiku", label: "haiku" }], defaultLabel: "the pet's own model" }] },
+    settings: [{ key: "subagentModel", label: "Subagent model", description: "What its subagents run on.", options: [{ id: "opus", label: "opus" }, { id: "haiku", label: "haiku" }], defaultLabel: "the bot's own model" }] },
 ];
 const kinds = [telegramPrivate];
 const platforms = [{ platform: telegram.platform, label: telegram.label, icon: telegram.icon, ownerId: telegram.ownerId }];
@@ -59,22 +59,22 @@ const keys: KeyView[] = [
   { name: "claude", provider: "anthropic", kind: "subscription", value: "sk-ant-oat01-ui-test", note: "Max", pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null },
   { name: "gpt", provider: "openai", kind: null, value: "sk-openai-ui-test", note: null, pets: [], houses: null, allowOverage: false, allowance: null },
 ];
-const lab: HouseView = { name: "lab", allow: [], owners: [], channels: [], pets: [] };
-// A 10-core, 32 GiB host; work's two pets take the defaults (2 vCPU, 1 GiB each).
+const lab: WorkspaceView = { name: "lab", allow: [], owners: [], channels: [], pets: [] };
+// A 10-core, 32 GiB host; work's two bots take the defaults (2 vCPU, 1 GiB each).
 const capacity = { host: { cpus: 10, memoryMiB: 32768 }, houses: [work, lab] };
 
-/** What runs a pet, as its Agent tab and the Add pet wizard show it. */
-function AgentFields({ agents, keys = [], pet }: { agents: AgentView[]; keys?: KeyView[]; pet?: PetView; onClose?: () => void; save?: unknown }) {
-  return useAgentForm(agents, keys, pet).fields;
+/** What runs a bot, as its Harness tab and the Add bot wizard show it. */
+function HarnessFields({ agents, keys = [], pet }: { agents: HarnessView[]; keys?: KeyView[]; pet?: BotView; onClose?: () => void; save?: unknown }) {
+  return useHarnessForm(agents, keys, pet).fields;
 }
 
 test("dynamic model picker preserves configured IDs and explains the selected native permission mode", () => {
-  const codex: AgentView = {
+  const codex: HarnessView = {
     name: "codex-app-server", models: ["gpt-6.1-terra"], defaultModel: "gpt-6.1-terra", dynamicModels: true,
     providers: ["openai"], defaultMode: "auto", settings: [],
     modes: [{ id: "auto", label: "Auto" }, { id: "autoReview", label: "Approve for me", description: "A separate reviewer checks boundary requests." }],
   };
-  const html = renderToStaticMarkup(<AgentFields agents={[codex]} keys={keys}
+  const html = renderToStaticMarkup(<HarnessFields agents={[codex]} keys={keys}
     pet={{ ...work.pets[0]!, agent: codex.name, model: "gpt-6-astra", mode: "autoReview", key: "gpt" }} />);
   expect(html).toContain('value="gpt-6-astra" selected=""');
   expect(html).toContain("Enter model ID…");
@@ -102,10 +102,10 @@ test("key screens render", () => {
   expect(signIn).toContain("house dashboard");
   expect(signIn).toContain("That link expired or was used");
 
-  const table = renderToStaticMarkup(<HousesTable houses={[work, lab]} platforms={platforms} />);
-  expect(table).toMatch(/<span class="chip" title="🦉 Sibling · Running"><span class="dot idle" aria-label="Running"><\/span><span class="ellipsis">🦉 Sibling<\/span><\/span>/); // a pet per chip, its state as the dot
-  expect(table).toContain("🐾 Chair");
-  expect(table).toContain("3 hosts (1 by agent)");
+  const table = renderToStaticMarkup(<WorkspacesTable houses={[work, lab]} platforms={platforms} />);
+  expect(table).toMatch(/<span class="chip" title="🦉 Sibling · Running"><span class="dot idle" aria-label="Running"><\/span><span class="ellipsis">🦉 Sibling<\/span><\/span>/); // a bot per chip, its state as the dot
+  expect(table).toContain("🤖 Chair");
+  expect(table).toContain("3 hosts (1 by harness)");
   expect(table).toContain("DM · Telegram Bot DM (threaded)"); // the kind's label, not its id
   expect(table).toContain('<span class="ellipsis">Telegram Bot DM (threaded)</span>'); // one with no name of its own: the label alone
   expect(table).toContain("no channels");
@@ -113,8 +113,8 @@ test("key screens render", () => {
   const props = { house: work, ask: () => {}, save: async () => {} };
   const allowlist = renderToStaticMarkup(<AllowlistSection {...props} />);
   expect(allowlist).toContain("db.internal:5432");
-  expect(allowlist.match(/Remove/g)).toHaveLength(2); // not the agent's host
-  expect(allowlist).toContain("by agent");
+  expect(allowlist.match(/Remove/g)).toHaveLength(2); // not the harness's host
+  expect(allowlist).toContain("by harness");
   const channels = renderToStaticMarkup(<ChannelsPage {...props} kinds={kinds} platforms={platforms} />);
   expect(channels).toContain("DM · Telegram Bot DM (threaded)");
   expect(channels).not.toContain("telegram-private");
@@ -125,7 +125,7 @@ test("key screens render", () => {
   expect(channels.match(/<span class="avatar icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M11\.944/g)).toHaveLength(2 + work.owners.length); // and on every owner
   expect(channels).toContain('fill="currentColor"'); // monochrome, like the UI's own icons
   expect(channels).toContain("<h2 class=\"h2\">Owners</h2>"); // and the owners, on the same page
-  expect(channels).toContain('aria-label="Pets: 🦉 Sibling, 🐾 Chair"'); // pets as people see them named
+  expect(channels).toContain('aria-label="Bots: 🦉 Sibling, 🤖 Chair"'); // bots as people see them named
   expect(channels).toContain('<span class="chip default" title="Gets unaddressed messages"><span aria-hidden="true">🦉</span><span class="ellipsis">Sibling</span><span class="chip-note">default</span></span>');
   expect(channels).toContain('<button class="btn primary">+ Add channel</button>'); // the page's one primary button, in its head
   expect(channels).toContain("its token is not a bot token"); // a channel not open says why
@@ -144,24 +144,24 @@ test("key screens render", () => {
   expect(editing).toContain("Vera");
   expect(adding).toMatch(/<label[^>]*>Telegram user id<\/label><input[^>]*placeholder="100200300"/); // its id as the platform describes it
   expect(renderToStaticMarkup(<OwnersSection {...props} house={lab} platforms={platforms} />)).toContain("No owners.");
-  const pets = renderToStaticMarkup(<PetsPage {...props} agents={agents} keys={keys} capacity={capacity} />);
-  // A card per pet, opening its page; what is done to a pet is done there (no Edit or Remove here).
-  expect(pets).toContain('<a href="/houses/work/pets/sibling" class="pet-card">');
+  const pets = renderToStaticMarkup(<BotsPage {...props} agents={agents} keys={keys} capacity={capacity} />);
+  // A card per bot, opening its page; what is done to a bot is done there (no Edit or Remove here).
+  expect(pets).toContain('<a href="/workspaces/work/bots/sibling" class="bot-card">');
   expect(pets).not.toMatch(/>Edit<|>Remove<|>Environment</);
   expect(pets).toContain("Running");
   expect(pets).toContain('<span class="avatar large" aria-hidden="true">🦉</span>'); // the emoji, not the first letter
-  expect(pets).toContain('<span class="avatar large" aria-hidden="true">🐾</span>');
+  expect(pets).toContain('<span class="avatar large" aria-hidden="true">🤖</span>');
   expect(pets).toContain("Not started");
-  expect(pets).toContain('<span class="ellipsis">claude-code-tmux</span><span class="pet-card-model"><span class="ellipsis" title="opus">opus</span>');
+  expect(pets).toContain('<span class="ellipsis">claude-code-tmux</span><span class="bot-card-model"><span class="ellipsis" title="opus">opus</span>');
   expect(pets).toContain("unknown model &#x27;gpt-9&#x27;"); // what is wrong, on its card
-  expect(pets).toContain('<span class="tag pet-card-mode" title="Permission mode">Manual</span>'); // its mode as people call it
+  expect(pets).toContain('<span class="tag bot-card-mode" title="Permission mode">Manual</span>'); // its mode as people call it
   expect(pets).toMatch(/<span class="tag" title="Reasoning effort"><svg[^>]*>.*?<\/svg>default<\/span>/);
   expect(pets).toContain('<span class="ellipsis">DM · Telegram Bot DM (threaded)</span><span class="faint">default</span>'); // the channels it is in, default where it is
-  expect(renderToStaticMarkup(<PetsPage {...props} house={{ ...work, channels: [] }} agents={agents} keys={keys} capacity={capacity} />)).toContain("In no channel");
+  expect(renderToStaticMarkup(<BotsPage {...props} house={{ ...work, channels: [] }} agents={agents} keys={keys} capacity={capacity} />)).toContain("In no channel");
   expect(pets).toContain("unknown model &#x27;gpt-9&#x27;"); // typed wrong in household.yaml: shown, marked
 });
 
-test("the forms render with what they edit: a channel's pets to tick and its default, a pet's agent and models", () => {
+test("the forms render with what they edit: a channel's bots to tick and its default, a bot's harness and models", () => {
   const form = (element: React.ReactElement) => renderToStaticMarkup(element);
   // Editing starts at the kind's fields, its kind in the title, no way back to the kinds; its chat read only.
   const channel = form(<ChannelDialog house={work} kinds={kinds} channel={work.channels[0]} onClose={() => {}} save={async () => {}} />);
@@ -176,13 +176,13 @@ test("the forms render with what they edit: a channel's pets to tick and its def
   expect(channel).not.toContain("form-grid"); // the token and the chat each on its own row
   expect(channel).toMatch(/>Chat id<\/label><input[^>]*readOnly=""[^>]*value="100200300"/); // its chat names it: another chat is another channel
   expect(channel.match(/type="checkbox" checked=""/g)).toHaveLength(2);
-  expect(channel).toContain("Default"); // two pets: a default to choose
+  expect(channel).toContain("Default"); // two bots: a default to choose
   expect(channel).not.toContain(">Back<");
   // A new one: first its kind (label and a line on it, even with one kind), Next; then that kind's fields, with Back.
   const fresh = form(<ChannelDialog house={work} kinds={kinds} onClose={() => {}} save={async () => {}} />);
   expect(fresh).toContain("Add channel");
   expect(fresh).toMatch(/type="radio"[^>]*checked=""[^>]*value="telegram-private"/);
-  expect(fresh).toContain("a thread per pet, General for the house"); // its line, from the kind
+  expect(fresh).toContain("a thread per bot, General for the workspace"); // its line, from the kind
   expect(fresh).toContain(">Next<");
   expect(fresh).not.toContain("Bot token");
   expect(renderToStaticMarkup(<ChannelDialog house={work} kinds={kinds} platforms={platforms} onClose={() => {}} save={async () => {}} />)).toContain('<span class="avatar icon small" aria-hidden="true"><svg'); // the kind's platform icon
@@ -192,52 +192,52 @@ test("the forms render with what they edit: a channel's pets to tick and its def
   expect(second).toContain("From @BotFather; the bot needs Threaded Mode on."); // the field's hint, from the kind
   expect(second).not.toContain("readOnly");
   expect(second).not.toContain("Default");
-  const pet = form(<PetDialog agents={agents} pet={{ ...work.pets[1]!, model: "haiku", problem: null }} onClose={() => {}} save={async () => {}} />);
-  expect(pet).toContain("Edit 🐾 Chair");
-  expect(pet).not.toContain(">Name<"); // a pet's name stays
+  const pet = form(<BotDialog agents={agents} pet={{ ...work.pets[1]!, model: "haiku", problem: null }} onClose={() => {}} save={async () => {}} />);
+  expect(pet).toContain("Edit 🤖 Chair");
+  expect(pet).not.toContain(">Name<"); // a bot's name stays
   expect(pet).not.toContain("<select"); // what runs it and its size have their own tabs
-  expect(form(<AgentFields agents={agents} pet={{ ...work.pets[1]!, model: "haiku", problem: null }} />)).toContain('<option value="haiku" selected="">haiku</option>');
-  const owl = form(<PetDialog agents={agents} pet={work.pets[0]!} onClose={() => {}} save={async () => {}} />);
-  expect(owl).toMatch(/<label[^>]*>Emoji<\/label><input[^>]*placeholder="🐾"[^>]*value="🦉"/); // its own, the default as the hint
-  expect(form(<PetDialog agents={agents} pet={work.pets[1]!} onClose={() => {}} save={async () => {}} />)).toMatch(/placeholder="🐾"[^>]*value=""/);
-  const wizard = form(<PetDialog agents={agents} keys={keys} house={work} capacity={capacity} onClose={() => {}} save={async () => {}} />);
-  expect(wizard).toContain('<li class="current" aria-current="step">Pet</li><li>Agent</li><li>Resources</li>'); // three steps, the first one now
+  expect(form(<HarnessFields agents={agents} pet={{ ...work.pets[1]!, model: "haiku", problem: null }} />)).toContain('<option value="haiku" selected="">haiku</option>');
+  const owl = form(<BotDialog agents={agents} pet={work.pets[0]!} onClose={() => {}} save={async () => {}} />);
+  expect(owl).toMatch(/<label[^>]*>Emoji<\/label><input[^>]*placeholder="🤖"[^>]*value="🦉"/); // its own, the default as the hint
+  expect(form(<BotDialog agents={agents} pet={work.pets[1]!} onClose={() => {}} save={async () => {}} />)).toMatch(/placeholder="🤖"[^>]*value=""/);
+  const wizard = form(<BotDialog agents={agents} keys={keys} house={work} capacity={capacity} onClose={() => {}} save={async () => {}} />);
+  expect(wizard).toContain('<li class="current" aria-current="step">Bot</li><li>Harness</li><li>Resources</li>'); // three steps, the first one now
   expect(wizard).toContain(">Display name<");
   expect(wizard).toContain(">Next<");
-  // The channels it joins, on the first step: the house's, none ticked when there are several to choose from.
+  // The channels it joins, on the first step: the workspace's, none ticked when there are several to choose from.
   expect(wizard).toContain('<legend class="field-label">Channels</legend>');
   expect(wizard).toContain("<span>DM · Telegram Bot DM (threaded)</span>");
   expect(wizard).not.toMatch(/type="checkbox" checked=""/);
-  const only = form(<PetDialog agents={agents} keys={keys} house={{ ...work, channels: [work.channels[0]!] }} capacity={capacity} onClose={() => {}} save={async () => {}} />);
+  const only = form(<BotDialog agents={agents} keys={keys} house={{ ...work, channels: [work.channels[0]!] }} capacity={capacity} onClose={() => {}} save={async () => {}} />);
   expect(only).toMatch(/<input type="checkbox" checked=""\/><span>DM · Telegram Bot DM \(threaded\)<\/span>/); // the only one: ticked already
-  expect(form(<PetDialog agents={agents} keys={keys} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />)).toContain("No channels in lab yet. Add one on the house&#x27;s Channels page");
-  const newPet = form(<AgentFields agents={agents} keys={keys} />);
-  expect(newPet).toContain('<option value="opus" selected="">opus</option>'); // the agent's default
-  // Its permission mode, the agent's default selected, named as people call it; an agent without modes has no field.
-  expect(newPet).toMatch(/<label[^>]*>Permission mode<\/label>/);
-  expect(newPet).not.toContain("How much it may do without asking");
-  expect(newPet).toContain('<option value="bypassPermissions" selected="">Bypass permissions</option><option value="manual">Manual</option>');
-  expect(form(<AgentFields agents={agents} pet={work.pets[0]} />)).toContain('<option value="manual" selected="">Manual</option>');
-  const odd = form(<AgentFields agents={agents} pet={{ ...work.pets[0]!, mode: "yolo" }} />);
-  expect(odd).toContain('<option value="yolo" disabled="" selected="">yolo (unknown)</option>'); // the config's, not the agent's
-  expect(form(<AgentFields agents={agents} pet={{ ...work.pets[1]!, agent: "plain", model: "m", mode: null, problem: null }} />)).not.toContain(">Permission mode<");
-  // Its key: the keys of a provider its agent takes (not openai's); the only one there is, chosen already (and saved so).
-  expect(newPet).toMatch(/<select[^>]*><option value="claude" selected="">claude \(subscription\) — Max<\/option><\/select>/);
+  expect(form(<BotDialog agents={agents} keys={keys} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />)).toContain("No channels in lab yet. Add one on the workspace&#x27;s Channels page");
+  const newBot = form(<HarnessFields agents={agents} keys={keys} />);
+  expect(newBot).toContain('<option value="opus" selected="">opus</option>'); // the harness's default
+  // Its permission mode, the harness's default selected, named as people call it; a harness without modes has no field.
+  expect(newBot).toMatch(/<label[^>]*>Permission mode<\/label>/);
+  expect(newBot).not.toContain("How much it may do without asking");
+  expect(newBot).toContain('<option value="bypassPermissions" selected="">Bypass permissions</option><option value="manual">Manual</option>');
+  expect(form(<HarnessFields agents={agents} pet={work.pets[0]} />)).toContain('<option value="manual" selected="">Manual</option>');
+  const odd = form(<HarnessFields agents={agents} pet={{ ...work.pets[0]!, mode: "yolo" }} />);
+  expect(odd).toContain('<option value="yolo" disabled="" selected="">yolo (unknown)</option>'); // the config's, not the harness's
+  expect(form(<HarnessFields agents={agents} pet={{ ...work.pets[1]!, agent: "plain", model: "m", mode: null, problem: null }} />)).not.toContain(">Permission mode<");
+  // Its key: the keys of a provider its harness takes (not openai's); the only one there is, chosen already (and saved so).
+  expect(newBot).toMatch(/<select[^>]*><option value="claude" selected="">claude \(subscription\) — Max<\/option><\/select>/);
   const several = [...keys, { ...keys[0]!, name: "api", kind: "API key", note: null, pets: [] }];
-  expect(form(<AgentFields agents={agents} keys={several} />)).toContain('<option value="" disabled="" selected="">Choose a key…</option><option value="claude">claude (subscription) — Max</option>');
-  const pinned = form(<AgentFields agents={agents} keys={several} pet={{ ...work.pets[0]!, key: "api" }} />);
+  expect(form(<HarnessFields agents={agents} keys={several} />)).toContain('<option value="" disabled="" selected="">Choose a key…</option><option value="claude">claude (subscription) — Max</option>');
+  const pinned = form(<HarnessFields agents={agents} keys={several} pet={{ ...work.pets[0]!, key: "api" }} />);
   expect(pinned).toMatch(/<select[^>]*><option value="claude">claude \(subscription\) — Max<\/option><option value="api" selected="">api \(API key\)<\/option><\/select>/);
-  expect(form(<AgentFields agents={agents} keys={[]} />)).toContain("No anthropic key yet (add one under Keys)");
+  expect(form(<HarnessFields agents={agents} keys={[]} />)).toContain("No anthropic key yet (add one under Keys)");
 });
 
-test("the Keys section: each key's name, provider, kind, value masked (first five characters), note and pets; its form", () => {
+test("the Keys section: each key's name, provider, kind, value masked (first five characters), note and bots; its form", () => {
   const page = renderToStaticMarkup(<KeysSection keys={keys} houses={["work"]} providers={["anthropic", "openai"]} refresh={async () => {}} notify={() => {}} />);
   expect(page).toContain("anthropic · subscription");
   expect(page).toContain("openai · unknown kind");
   expect(page).toContain('<span class="id">sk-an••</span>');
   expect(page).not.toContain("sk-ant-oat01-ui-test"); // whole only on Reveal
   expect(page).toContain('<span class="label">Used in</span><span><span class="strong">work</span> · sibling</span>');
-  expect(page).toContain("Not used by any pet.");
+  expect(page).toContain("Not used by any bot.");
   expect(page).toContain('<span class="hint">Max</span>');
   const form = renderToStaticMarkup(<KeyDialog providers={["anthropic", "openai"]} noteMax={200} keyView={keys[0]} onClose={() => {}} save={async () => {}} />);
   expect(form).toContain("Edit key claude");
@@ -263,27 +263,27 @@ test("a dialog's first focus: its first field you can change, else its submit bu
   expect(firstFocus([cancel, submit], form, false, true)).toBe(cancel); // a safe one: Cancel
   expect(firstFocus([cancel, submit], form, true, true)).toBe(cancel);
   // The fields come in that order in the forms, and nothing else claims the focus.
-  const pet = renderToStaticMarkup(<PetDialog agents={agents} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />);
-  expect(pet).toContain('placeholder="my_pet"'); // the wizard starts with its name
+  const pet = renderToStaticMarkup(<BotDialog agents={agents} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />);
+  expect(pet).toContain('placeholder="my_bot"'); // the wizard starts with its name
   expect(pet).not.toContain("<select");
   expect(pet).not.toContain("autofocus");
 });
 
 test("the primitives render: page, section, cluster, form grid, list rows that reflow, one field system", () => {
   const page = renderToStaticMarkup(
-    <Page title="Houses" actions={<button>New</button>}>
-      <Section title="Pets" hint="One line." actions={<button>Add</button>}>
+    <Page title="Workspaces" actions={<button>New</button>}>
+      <Section title="Bots" hint="One line." actions={<button>Add</button>}>
         <Cluster justify="between">
           <span>a</span>
         </Cluster>
         <FormGrid>
           <TextField label="Name" mono hint="Lower-case." value="lab" onChange={() => {}} />
-          <SelectField label="Agent" value="b" onChange={() => {}} options={[{ value: "a", label: "A" }, { value: "b", label: "B" }]} />
+          <SelectField label="Harness" value="b" onChange={() => {}} options={[{ value: "a", label: "A" }, { value: "b", label: "B" }]} />
         </FormGrid>
         <List columns="1fr auto" head={["Name", ""]} empty="Nothing.">
           <ListRow actions={<button>Edit</button>}>
             <Cell>one</Cell>
-            <Cell label="Pets">two</Cell>
+            <Cell label="Bots">two</Cell>
           </ListRow>
           <ListRow>
             <Cell mono>alone</Cell>
@@ -293,15 +293,15 @@ test("the primitives render: page, section, cluster, form grid, list rows that r
       </Section>
     </Page>,
   );
-  expect(page).toContain('<h1 class="h1" tabindex="-1">Houses</h1>'); // focusable: the focus goes there after moving
-  expect(page).toContain('<h2 class="h2">Pets</h2>');
+  expect(page).toContain('<h1 class="h1" tabindex="-1">Workspaces</h1>'); // focusable: the focus goes there after moving
+  expect(page).toContain('<h2 class="h2">Bots</h2>');
   expect(page).toContain('class="cluster gap-3 between"');
   expect(page).toContain('class="form-grid"');
   expect(page).toContain('role="table" style="--cols:1fr auto"');
   expect(page).toContain('<span role="columnheader">Name</span>'); // read out on a phone too
   expect(page).toContain('<div class="list-row list-head" role="row">'); // not hidden from screen readers
   expect(page.match(/class="list-row reflow"/g)).toHaveLength(1); // several cells: stacks on a phone; one cell stays a line
-  expect(page).toContain('data-label="Pets"');
+  expect(page).toContain('data-label="Bots"');
   expect(page).toContain('<div class="list-empty" role="row"><span role="cell">Nothing.</span></div>');
   // One control class for inputs and selects; mono only where asked; the label and hint tied to the control.
   const id = /<label for="([^"]+)" class="field-label">Name<\/label>/.exec(page)![1]!;
@@ -321,23 +321,23 @@ test("media queries use only the breakpoints of tokens.css", () => {
   }
 });
 
-test("routes: a house's pages by its name, its own path its first page; anything else is a missing page", () => {
-  expect(routeOf("/houses/work")).toEqual({ page: "house", name: "work", tab: "overview" });
-  expect(routeOf("/houses/work/pets/sibling")).toEqual({page: "pet", house: "work", pet: "sibling", tab: "overview"});
-  expect(routeOf("/houses/work/pets/sibling/tasks")).toEqual({page: "pet", house: "work", pet: "sibling", tab: "tasks"});
-  expect(routeOf("/houses/work/pets/sibling/environment")).toEqual({page: "pet", house: "work", pet: "sibling", tab: "environment"});
-  expect(routeOf("/houses/work/pets/sibling/overview")).toEqual({page: "missing"}); // the overview is the pet's own path
-  expect(routeOf("/houses/l%C3%A4b/pets/a%20b")).toEqual({page: "pet", house: "läb", pet: "a b", tab: "overview"});
-  for (const tab of ["pets", "channels", "network", "settings"] as const) expect(routeOf(`/houses/work/${tab}`)).toEqual({ page: "house", name: "work", tab });
-  expect(routeOf("/houses/work/gateway")).toEqual({ page: "missing" }); // said so, not the houses
-  expect(routeOf("/")).toEqual({ page: "houses" });
+test("routes: a workspace's pages by its name, its own path its first page; anything else is a missing page", () => {
+  expect(routeOf("/workspaces/work")).toEqual({ page: "workspace", name: "work", tab: "overview" });
+  expect(routeOf("/workspaces/work/bots/sibling")).toEqual({page: "bot", workspace: "work", bot: "sibling", tab: "overview"});
+  expect(routeOf("/workspaces/work/bots/sibling/tasks")).toEqual({page: "bot", workspace: "work", bot: "sibling", tab: "tasks"});
+  expect(routeOf("/workspaces/work/bots/sibling/environment")).toEqual({page: "bot", workspace: "work", bot: "sibling", tab: "environment"});
+  expect(routeOf("/workspaces/work/bots/sibling/overview")).toEqual({page: "missing"}); // the overview is the bot's own path
+  expect(routeOf("/workspaces/l%C3%A4b/bots/a%20b")).toEqual({page: "bot", workspace: "läb", bot: "a b", tab: "overview"});
+  for (const tab of ["bots", "channels", "network", "settings"] as const) expect(routeOf(`/workspaces/work/${tab}`)).toEqual({ page: "workspace", name: "work", tab });
+  expect(routeOf("/workspaces/work/gateway")).toEqual({ page: "missing" }); // said so, not the workspaces
+  expect(routeOf("/")).toEqual({ page: "workspaces" });
   expect(routeOf("/nope")).toEqual({ page: "missing" });
-  expect(routeOf("/houses/l%C3%A4b/channels/")).toEqual({ page: "house", name: "läb", tab: "channels" });
-  expect(routeOf("/houses/%E0%A4%A")).toEqual({ page: "missing" }); // not decodable
+  expect(routeOf("/workspaces/l%C3%A4b/channels/")).toEqual({ page: "workspace", name: "läb", tab: "channels" });
+  expect(routeOf("/workspaces/%E0%A4%A")).toEqual({ page: "missing" }); // not decodable
   expect(isCurrent("/", "/")).toBe(true);
-  expect(isCurrent("/", "/houses/work")).toBe(false); // the root only on itself
-  expect(isCurrent("/houses/work", "/houses/work/pets/sibling")).toBe(true);
-  expect(isCurrent("/houses/work", "/houses/workshop")).toBe(false);
+  expect(isCurrent("/", "/workspaces/work")).toBe(false); // the root only on itself
+  expect(isCurrent("/workspaces/work", "/workspaces/work/bots/sibling")).toBe(true);
+  expect(isCurrent("/workspaces/work", "/workspaces/workshop")).toBe(false);
 });
 
 test("a write the daemon saved but could not apply is done, with a warning; any other failure is an error", async () => {
@@ -356,14 +356,14 @@ test("a write the daemon saved but could not apply is done, with a warning; any 
   }
 });
 
-test("a key in the pet form's select: name, kind, then the start of its note", () => {
+test("a key in the bot form's select: name, kind, then the start of its note", () => {
   expect(keyLabel({ name: "claude", kind: "subscription", provider: "anthropic" })).toBe("claude (subscription)");
   expect(keyLabel({ name: "claude", kind: "subscription", provider: "anthropic", note: "Max" })).toBe("claude (subscription) — Max");
   expect(keyLabel({ name: "api", kind: null, provider: "anthropic", note: "the team's API key, billed to the company card" })).toBe("api (anthropic) — the team's API key, billed to t…");
 });
 
 test("the allowlist: format help, a whole-internet row marked, its confirmation safe by default", () => {
-  const open: HouseView = { ...lab, allow: [{ host: "*", byAgent: false }, { host: "*:*", byAgent: false }, { host: "*.github.com", byAgent: false }] };
+  const open: WorkspaceView = { ...lab, allow: [{ host: "*", byAgent: false }, { host: "*:*", byAgent: false }, { host: "*.github.com", byAgent: false }] };
   const section = renderToStaticMarkup(<AllowlistSection house={open} ask={() => {}} save={async () => {}} />);
   expect(section.match(/<span class="tag danger">whole internet<\/span>/g)).toHaveLength(2); // not *.github.com
   expect(section.match(/>Remove</g)).toHaveLength(3); // marked, still removable
@@ -376,9 +376,9 @@ test("the allowlist: format help, a whole-internet row marked, its confirmation 
 
   const dialog = (host: string) => renderToStaticMarkup(<Dialog spec={allowDialog("work", host, async () => {})} onClose={() => {}} />);
   const whole = dialog("*");
-  expect(whole).toContain("Open the whole internet to pets in work?");
+  expect(whole).toContain("Open the whole internet to bots in work?");
   expect(whole).toContain("any public host on port 443");
-  expect(whole).toContain("Your local network and the machine House runs on stay closed.");
+  expect(whole).toContain("Your local network and the machine Workspace runs on stay closed.");
   expect(whole).not.toContain("Mac");
   // Cancel is the primary button (and the first focus), first in the DOM; the risk is the second, danger-styled one.
   expect(whole).toMatch(/<div class="dialog-foot safe"><button type="button" class="btn primary" name="cancel">Cancel<\/button><button type="submit" class="btn danger">I understand the risk<\/button>/);
@@ -391,7 +391,7 @@ test("the allowlist: format help, a whole-internet row marked, its confirmation 
   }
 });
 
-test("temporary network access shows its pet, reason and remaining lifetime separately from the permanent list", () => {
+test("temporary network access shows its bot, reason and remaining lifetime separately from the permanent list", () => {
   const html = renderToStaticMarkup(<TemporaryNetworkSection
     house={{ ...work, temporary: [443, 22].map((port) => ({ house: "work", pet: "sibling", domain: "api.github.com", port, addresses: ["140.82.112.6"], reason: "GitHub issue lookup", expiresAt: Date.now() + 14 * 60_000 })) }}
     ask={() => {}} save={async () => {}}
@@ -400,7 +400,7 @@ test("temporary network access shows its pet, reason and remaining lifetime sepa
   expect(html).toContain("api.github.com:443");
   expect(html).toContain("api.github.com:22");
   expect(html.match(/>Revoke</g)).toHaveLength(2);
-  expect(html).toContain("one host and port, for one pet, at the addresses shown, for 15 minutes");
+  expect(html).toContain("one host and port, for one bot, at the addresses shown, for 15 minutes");
   expect(html).toContain("140.82.112.6");
   expect(html).toContain("GitHub issue lookup");
   expect(html).toContain("min left");
@@ -408,7 +408,7 @@ test("temporary network access shows its pet, reason and remaining lifetime sepa
   expect(html).not.toContain("db.internal");
 });
 
-test("temporary grant revocation confirms and sends only the selected pet's endpoint", async () => {
+test("temporary grant revocation confirms and sends only the selected bot's endpoint", async () => {
   const realFetch = globalThis.fetch;
   const requests: { url: string; method: string | undefined }[] = [];
   try {
@@ -439,12 +439,12 @@ test("reasoning effort belongs to the selected model and saved efforts survive m
   ], defaultReasoningEffort: "high" };
   const agent = { ...agents[0]!, modelOptions: [options] };
   const pet = { ...work.pets[0]!, reasoningEffort: "max" };
-  const html = form(<AgentFields agents={[agent]} pet={pet} />);
+  const html = form(<HarnessFields agents={[agent]} pet={pet} />);
   expect(html).toContain("Reasoning effort");
   expect(html).toContain('value="max" selected=""');
   expect(html).toContain("Maximum reasoning");
   expect(html).toContain("Default (native)");
-  const unknown = form(<AgentFields agents={agents} pet={pet} />);
+  const unknown = form(<HarnessFields agents={agents} pet={pet} />);
   expect(unknown).toContain('value="max" selected=""');
   expect(unknown).toContain("support unconfirmed");
   expect(unknown).not.toContain('value="xhigh"');
@@ -453,7 +453,7 @@ test("reasoning effort belongs to the selected model and saved efforts survive m
   expect(effortForModel("high", undefined)).toBeNull();
   expect(effortForModel("high", { id: "haiku", label: "Haiku", supportedReasoningEfforts: [] })).toBeNull();
   expect(effortForModel(null, options)).toBeNull();
-  const page = renderToStaticMarkup(<PetDetailPage house={{ ...work, pets: [pet] }} pet={pet} agents={[agent]} keys={[]} capacity={capacity} refresh={async () => {}} notify={() => {}} />);
+  const page = renderToStaticMarkup(<BotDetailPage house={{ ...work, pets: [pet] }} pet={pet} agents={[agent]} keys={[]} capacity={capacity} refresh={async () => {}} notify={() => {}} />);
   expect(page).toMatch(/Reasoning effort<\/span><\/div><div class="cell mono" role="cell"><span class="ellipsis">max</);
 });
 
@@ -483,17 +483,17 @@ test("registry quick add previews exact entries and broad access before an atomi
 });
 
 
-test("pet environment editor separates installation from startup and offers explicit runs", () => {
-  const html = renderToStaticMarkup(<PetEnvironment house="work" pet={work.pets[0]!} />);
+test("bot environment editor separates installation from startup and offers explicit runs", () => {
+  const html = renderToStaticMarkup(<BotEnvironment house="work" pet={work.pets[0]!} />);
   // Both scripts on the left, each with when it runs; Setup open in the editor first.
   expect(html).toContain("Once, when the VM is created");
-  expect(html).toContain("At every boot, before the agent");
+  expect(html).toContain("At every boot, before the harness");
   expect(html).toContain('<span class="ellipsis">setup.sh</span>');
   expect(html).toContain("Runs once per VM, not on restarts");
   expect(html).toMatch(/<button type="button" class="btn small env-run" disabled="">.*Run now<\/button>/); // until there is a saved script
   expect(html).toContain("saving runs nothing");
   expect(html).toContain("no secrets");
-  expect(html).toContain("can edit and run them too"); // the pet has tools for its own scripts
+  expect(html).toContain("can edit and run them too"); // the bot has tools for its own scripts
   // An empty script opens on a commented example: plainly Bash, nothing that changes the VM until edited and saved.
   for (const example of Object.values(TEMPLATES)) {
     expect(example.startsWith("#!/usr/bin/env bash\n")).toBe(true);
@@ -503,37 +503,37 @@ test("pet environment editor separates installation from startup and offers expl
   expect(TEMPLATES.setup).toContain("# sudo apt-get update");
 });
 
-test("a house's overview: a tile per page with what is there, its pets each a link to its page", () => {
-  const html = renderToStaticMarkup(<HouseOverviewPage house={work} />);
+test("a workspace's overview: a tile per page with what is there, its bots each a link to its page", () => {
+  const html = renderToStaticMarkup(<WorkspaceOverviewPage house={work} />);
   expect(html).toContain('<h1 class="h1" tabindex="-1">work</h1>');
-  expect(html).toContain('href="/houses/work/pets" class="stat"');
+  expect(html).toContain('href="/workspaces/work/bots" class="stat"');
   expect(html).toContain("1 running");
   expect(html).toContain('<span class="stat-sub error">1 not open</span>'); // a channel whose token is not a bot's
-  expect(html).toContain('href="/houses/work/pets/sibling" class="strong ellipsis row-link"');
+  expect(html).toContain('href="/workspaces/work/bots/sibling" class="strong ellipsis row-link"');
 });
 
-test("a pet's page: its words in the text's face, its ids in mono, the mode named as in its form", () => {
-  const html = renderToStaticMarkup(<PetDetailPage house={work} pet={work.pets[0]!} agents={agents} keys={[]} capacity={capacity} refresh={async () => {}} notify={() => {}} />);
+test("a bot's page: its words in the text's face, its ids in mono, the mode named as in its form", () => {
+  const html = renderToStaticMarkup(<BotDetailPage house={work} pet={work.pets[0]!} agents={agents} keys={[]} capacity={capacity} refresh={async () => {}} notify={() => {}} />);
   expect(html).toContain(">Permission mode<");
   expect(html).toMatch(/<div class="cell" role="cell"><span>Manual<\/span><\/div>/);
   expect(html).toMatch(/<div class="cell mono" role="cell"><span class="ellipsis">opus<\/span><\/div>/);
-  expect(html).not.toContain("All pets in");
+  expect(html).not.toContain("All bots in");
   expect(html).toContain('<button type="button" class="btn danger small">Remove</button>'); // removed from its own page
 });
 
-test("a pet's Resources tab: its usage, then a stepper each up to the host's, red past 80% of it, and what all pets take", () => {
-  const sized = (pet: Partial<PetView>, host = capacity.host) => renderToStaticMarkup(<PetResources house="work" pet={{ ...work.pets[0]!, ...pet }} capacity={{ ...capacity, host }} refresh={async () => {}} notify={() => {}} />);
+test("a bot's Resources tab: its usage, then a stepper each up to the host's, red past 80% of it, and what all bots take", () => {
+  const sized = (pet: Partial<BotView>, host = capacity.host) => renderToStaticMarkup(<BotResources house="work" pet={{ ...work.pets[0]!, ...pet }} capacity={{ ...capacity, host }} refresh={async () => {}} notify={() => {}} />);
   const standard = sized({ cpus: undefined, memoryMiB: undefined });
   expect(standard).toContain(">Usage<"); // what it uses, over what it is given
   expect(standard).toContain(">Allocation<");
   expect(standard).not.toContain('type="radio"'); // no sizes to pick: two steppers
   expect(standard).toMatch(/class="stepper"[\s\S]*value="2"[\s\S]*of 10 vCPU/); // the default, and the most there is
   expect(standard).toMatch(/value="1"[\s\S]*of 32 GiB/);
-  expect(standard).toContain("Allocated: 4 of 10 vCPU · 2 of 32 GiB"); // both pets, this one at its values here
+  expect(standard).toContain("Allocated: 4 of 10 vCPU · 2 of 32 GiB"); // both bots, this one at its values here
   expect(standard).not.toContain("danger");
   expect(standard).not.toContain("hint busy"); // nothing changed yet: the note stays quiet
   expect(standard).toMatch(/<button type="submit" class="btn primary" disabled="">Save</); // nothing to save yet
-  // 9 of 10 vCPU for this pet alone: its stepper red with a line on why; the total, 11 of 10, red too. Still no error.
+  // 9 of 10 vCPU for this bot alone: its stepper red with a line on why; the total, 11 of 10, red too. Still no error.
   const big = sized({ cpus: 9, memoryMiB: 3072 });
   expect(big).toMatch(/<span class="stepper danger">[\s\S]*value="9"/);
   expect(big).toMatch(/<p id="[^"]+-warning" class="hint danger">More than 80% of this host.<\/p>/);
@@ -546,16 +546,16 @@ test("a pet's Resources tab: its usage, then a stepper each up to the host's, re
   expect(small).not.toContain("Allocated:"); // nothing to add up until it fits
 });
 
-test("an agent's own settings are fields from its description: Default named, the configured value selected, an unknown one shown; agents without have none", () => {
+test("a harness's own settings are fields from its description: Default named, the configured value selected, an unknown one shown; harnesses without have none", () => {
   const form = (element: React.ReactElement) => renderToStaticMarkup(element);
   const tuned = { ...work.pets[0]!, agent: "tuned", model: "opus", mode: null, settings: { subagentModel: "haiku" } };
-  const html = form(<AgentFields agents={agents} pet={tuned} />);
+  const html = form(<HarnessFields agents={agents} pet={tuned} />);
   expect(html).toContain(">Subagent model<");
-  expect(html).toContain('<option value="">Default (the pet&#x27;s own model)</option>');
+  expect(html).toContain('<option value="">Default (the bot&#x27;s own model)</option>');
   expect(html).toContain('<option value="haiku" selected="">haiku</option>');
-  expect(form(<AgentFields agents={agents} pet={{ ...tuned, settings: {} }} />)).toContain("What its subagents run on. Default: the pet&#x27;s own model.");
-  expect(form(<AgentFields agents={agents} pet={{ ...tuned, settings: { subagentModel: "gpt" } }} />)).toContain('<option value="gpt" disabled="" selected="">gpt (unknown)</option>');
-  expect(form(<AgentFields agents={agents} pet={work.pets[0]} />)).not.toContain(">Subagent model<");
+  expect(form(<HarnessFields agents={agents} pet={{ ...tuned, settings: {} }} />)).toContain("What its subagents run on. Default: the bot&#x27;s own model.");
+  expect(form(<HarnessFields agents={agents} pet={{ ...tuned, settings: { subagentModel: "gpt" } }} />)).toContain('<option value="gpt" disabled="" selected="">gpt (unknown)</option>');
+  expect(form(<HarnessFields agents={agents} pet={work.pets[0]} />)).not.toContain(">Subagent model<");
 });
 
 test("a key's allowance line: what is left per window and when it resets; used up refuses, or goes on when overage is allowed", () => {
@@ -581,16 +581,16 @@ test("a key's allowance line: what is left per window and when it resets; used u
 });
 
 
-test("Claude connectors render as a pet switch and are absent from scout settings and values", () => {
+test("Claude connectors render as a bot switch and are absent from scout settings and values", () => {
   const claude = { ...agents[0]!, settings: [...claudeCodeTmux.settings!] };
-  function Form({ scope, enabled }: { scope: "pet" | "scout"; enabled: boolean }) {
-    const form = useAgentForm([claude], [], { ...work.pets[0]!, agent: claude.name, settings: enabled ? { claudeAiConnectors: "true" } : {} }, scope);
+  function Form({ scope, enabled }: { scope: "bot" | "scout"; enabled: boolean }) {
+    const form = useHarnessForm([claude], [], { ...work.pets[0]!, agent: claude.name, settings: enabled ? { claudeAiConnectors: "true" } : {} }, scope);
     return <>{form.fields}<output>{JSON.stringify(form.value.settings)}</output></>;
   }
-  const on = renderToStaticMarkup(<Form scope="pet" enabled />);
+  const on = renderToStaticMarkup(<Form scope="bot" enabled />);
   expect(on).toContain("Claude.ai connectors");
   expect(on).toMatch(/role="switch"[^>]* checked=""/);
-  expect(renderToStaticMarkup(<Form scope="pet" enabled={false} />)).not.toMatch(/role="switch"[^>]* checked=""/);
+  expect(renderToStaticMarkup(<Form scope="bot" enabled={false} />)).not.toMatch(/role="switch"[^>]* checked=""/);
   const scout = renderToStaticMarkup(<Form scope="scout" enabled />);
   expect(scout).not.toContain("Claude.ai connectors");
   expect(scout).not.toContain("claudeAiConnectors");

@@ -33,7 +33,7 @@ export function googleConnectorRoutes(connectors: GoogleConnectors) {
     }
     if (action && action !== "connect" && request.method === "PATCH") {
       const parsed = z.strictObject({ pets: z.array(z.string().min(1).max(64)).max(100) }).safeParse(await request.json());
-      if (!parsed.success) throw new HouseholdError("pets must be a list of this house's pet names");
+      if (!parsed.success) throw new HouseholdError("bots must be a list of this workspace's bot names");
       return Response.json(connectors.setPets(house, decodeURIComponent(action), parsed.data.pets));
     }
     if (action && action !== "connect" && request.method === "DELETE") { connectors.disconnect(house, decodeURIComponent(action)); return Response.json({ ok: true }); }

@@ -56,14 +56,14 @@ function setup(overrides: Partial<OnboardDeps> = {}) {
     expect(io.left()).toBe(0);
     return io;
   };
-  const house = async (name = "my-house") => (await config.load()).houses.find((each) => each.name === name)!;
+  const house = async (name = "my-workspace") => (await config.load()).houses.find((each) => each.name === name)!;
   return { config, calls, run, house };
 }
 
 /** The first run with Enter everywhere, not starting the daemon. */
 const FIRST = ["", "sk-ant-oat01-onboard-test", "", TOKEN, "", "", "", "", "", "", "", "n"];
 
-test("Enter all the way: a Claude key, my-house, the bot and its first writer as owner, assistant, scouts and sideworkers on, then the daemon", async () => {
+test("Enter all the way: a Claude key, my-workspace, the bot and its first writer as owner, assistant, scouts and sideworkers on, then the daemon", async () => {
   const { config, calls, run, house } = setup();
   const io = await run([...FIRST.slice(0, -1), ""]);
   expect((await config.load()).keys).toMatchObject([{ name: "claude", provider: "anthropic", value: "sk-ant-oat01-onboard-test" }]);
@@ -74,7 +74,7 @@ test("Enter all the way: a Claude key, my-house, the bot and its first writer as
   expect(houseFeatures(home)).toMatchObject({ scouts: true, sideworkers: true });
   expect(home.scouts?.length).toBeGreaterThan(0); // the General scout, seeded when scouts first go on
   expect(calls).toEqual(["start"]);
-  expect(io.said()).toContain("Added: key claude, house my-house, @house_bot with owner Igor, pet assistant");
+  expect(io.said()).toContain("Added: key claude, workspace my-workspace, @house_bot with owner Igor, bot assistant");
   expect(io.said()).toContain("house dashboard");
   expect(io.said()).toContain("claude plugin install household@household");
 });
@@ -103,11 +103,11 @@ test("run again with Enter: what there is is shown, picked and kept; nothing is 
   const { config, run, house } = setup();
   await run(FIRST);
   const before = await config.load();
-  // agent, use claude, house my-house, keep the bot, keep the pets, keep scouts on, keep sideworkers on, no start
+  // agent, use claude, workspace my-workspace, keep the bot, keep the pets, keep scouts on, keep sideworkers on, no start
   const io = await run(["", "", "", "", "", "", "", "n"]);
   expect(io.said()).toContain("You have Household set up already");
-  expect(io.said()).toContain("house my-house: @house_bot, assistant");
-  expect(io.said()).toContain("Kept as it was: key claude, house my-house, @house_bot, pets assistant");
+  expect(io.said()).toContain("workspace my-workspace: @house_bot, assistant");
+  expect(io.said()).toContain("Kept as it was: key claude, workspace my-workspace, @house_bot, bots assistant");
   expect(io.said()).not.toContain("Added:");
   expect(await config.load()).toEqual(before);
   expect(houseFeatures(await house())).toMatchObject({ scouts: true, sideworkers: true });
@@ -118,7 +118,7 @@ test("run again to extend: a new key, a second pet in the same chat, scouts turn
   await run(FIRST);
   const io = await run([
     "", "2", "sk-ant-api03-second", // Claude, a new key
-    "", "",                         // my-house, keep the bot
+    "", "",                         // my-workspace, keep the bot
     "2", "", "", "", "",            // add a pet: assistant-2, its title, cpus, memory
     "n", "",                        // scouts: not kept on; sideworkers kept on
     "n",
@@ -128,7 +128,7 @@ test("run again to extend: a new key, a second pet in the same chat, scouts turn
   expect(home.pets.map((pet) => [pet.name, pet.key])).toEqual([["assistant", "claude"], ["assistant-2", "claude-2"]]);
   expect(home.channels[0]!.pets).toEqual(["assistant", "assistant-2"]);
   expect(houseFeatures(home)).toMatchObject({ scouts: false, sideworkers: true });
-  expect(io.said()).toContain("Added: key claude-2, pet assistant-2");
+  expect(io.said()).toContain("Added: key claude-2, bot assistant-2");
 });
 
 test("another bot in the same chat: the token changes, owners and pets stay", async () => {
@@ -145,9 +145,9 @@ test("another bot in the same chat: the token changes, owners and pets stay", as
 test("a new house next to one there is: its own name, bot and pet", async () => {
   const { config, run } = setup();
   await run(FIRST);
-  await run(["", "", "2", "my-house", "", OTHER, "", "", "", "", "", "", "", "n"]); // my-house is taken: the offered name
+  await run(["", "", "2", "my-workspace", "", OTHER, "", "", "", "", "", "", "", "n"]); // my-workspace is taken: the offered name
   const houses = (await config.load()).houses;
-  expect(houses.map((house) => house.name)).toEqual(["my-house", "my-house-2"]);
+  expect(houses.map((house) => house.name)).toEqual(["my-workspace", "my-workspace-2"]);
   expect(houses[1]).toMatchObject({ channels: [{ token: OTHER }], pets: [{ name: "assistant", key: "claude" }] });
 });
 

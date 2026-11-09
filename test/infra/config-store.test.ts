@@ -42,7 +42,7 @@ test("setup validates encoded size and NUL before writing, and accepts exactly t
   expect(await text()).toBe(before);
   await expect(config.updatePetEnvironment("work", "sibling", { setup: "echo before\0after" })).rejects.toThrow("NUL");
   expect(await text()).toBe(before);
-  await expect(config.updatePetEnvironment("work", "missing", { setup: "echo hi" })).rejects.toThrow("no pet 'missing'");
+  await expect(config.updatePetEnvironment("work", "missing", { setup: "echo hi" })).rejects.toThrow("no bot 'missing'");
 });
 
 test("hand-written setup rejects unknown environment fields and invalid source types", async () => {
@@ -80,7 +80,7 @@ test("domain errors surface and leave the file untouched", async () => {
   const { config, text } = store();
   await config.createHouse("work");
   const before = await text();
-  await expect(config.addPet("home", "sibling")).rejects.toThrow("unknown house 'home'");
+  await expect(config.addPet("home", "sibling")).rejects.toThrow("unknown workspace 'home'");
   expect(await text()).toBe(before);
 });
 
@@ -171,10 +171,10 @@ test("a pet's title and aliases, the house's channels and owners are set from th
   expect((await config.load()).houses[0]!.channels.map((channel) => channel.chat)).toEqual(["100200300", "42"]);
   expect((await config.removeChannel("work", "100200300")).removed).toMatchObject({ name: "DM" }); // by its chat
   expect((await config.removeChannel("work", " 42 ")).removed).toMatchObject({ chat: "42" });
-  await expect(config.removeChannel("work", "42")).rejects.toThrow("house 'work' has no channel of chat '42' (its chats: none)");
+  await expect(config.removeChannel("work", "42")).rejects.toThrow("workspace 'work' has no channel of chat '42' (its chats: none)");
   await config.removeOwner("work", "telegram", "100200300");
   expect((await config.load()).houses[0]).toMatchObject({ people: { owners: [] }, channels: [] });
-  await expect(config.addChannel("home", { kind: "telegram-private", token: "x", chat: "1" })).rejects.toThrow("unknown house 'home'");
+  await expect(config.addChannel("home", { kind: "telegram-private", token: "x", chat: "1" })).rejects.toThrow("unknown workspace 'home'");
 });
 
 test("channels are checked at load: pets of the house, a default with two pets or more, no alias two pets answer to", async () => {
@@ -183,10 +183,10 @@ test("channels are checked at load: pets of the house, a default with two pets o
   const [house] = (await store(yaml("pets: [sibling, diet], default: diet")).config.load()).houses;
   expect(house!.channels[0]).toEqual({ kind: "telegram-private", token: "b", chat: "1", pets: ["sibling", "diet"], default: "diet" });
   expect(house!.pets[1]).toEqual({ name: "diet", title: "Chef", aliases: ["Šéf"] });
-  await expect(store(yaml("pets: [sibling, diet]")).config.load()).rejects.toThrow("default is required when a channel has two pets or more");
-  await expect(store(yaml("pets: [ghost]")).config.load()).rejects.toThrow("'ghost' is not a pet of house work");
+  await expect(store(yaml("pets: [sibling, diet]")).config.load()).rejects.toThrow("default is required when a channel has two bots or more");
+  await expect(store(yaml("pets: [ghost]")).config.load()).rejects.toThrow("'ghost' is not a bot of workspace work");
   await expect(store(yaml("pets: [sibling, diet], default: diet", "sibling: {aliases: [šéf]}\n      diet: {aliases: [Šéf]}")).config.load()).rejects.toThrow(
-    "pets sibling and diet both answer to 'Šéf'",
+    "bots sibling and diet both answer to 'Šéf'",
   );
   await expect(store(yaml("pets: [sibling]", "sibling: {aliases: ['a, b']}")).config.load()).rejects.toThrow("an alias has no , : or line break");
   await expect(store(yaml("pets: []").replace("chat: 1", "chat: -100")).config.load()).rejects.toThrow("must be a Telegram chat id");
@@ -267,7 +267,7 @@ test("an owner's note is added, changed and removed in place (comments kept); re
   expect((await config.load()).houses[0]!.people.owners[1]).toEqual({ platform: "telegram", id: "100200300" });
   await config.removeOwner("work", "telegram", "777"); // an {id, note} item
   expect((await config.load()).houses[0]!.people.owners).toEqual([{ platform: "telegram", id: "100200300" }]);
-  await expect(config.updateOwner("work", "telegram", "1", "x")).rejects.toThrow("house 'work' has no owner telegram 1");
+  await expect(config.updateOwner("work", "telegram", "1", "x")).rejects.toThrow("workspace 'work' has no owner telegram 1");
 });
 
 test("owners are added to and removed from their platform's list, the ids read as the schema reads them", async () => {
@@ -289,7 +289,7 @@ test("an edit that would break the config is refused and not written", async () 
   await expect(config.addChannel("home", { kind: "telegram-private", token: "a b", chat: "1" })).rejects.toThrow("houses.home.channels[0].token");
   await expect(config.addChannel("home", { kind: "whatsapp", token: "b", chat: "1" })).rejects.toThrow("houses.home.channels[0].kind");
   await expect(config.addChannel("work", { kind: "telegram-private", token: "b", chat: "x1" })).rejects.toThrow("invalid config");
-  await expect(config.addChannel("work", { kind: "telegram-private", token: "b", chat: "1", pets: ["ghost"] })).rejects.toThrow("'ghost' is not a pet of house work");
+  await expect(config.addChannel("work", { kind: "telegram-private", token: "b", chat: "1", pets: ["ghost"] })).rejects.toThrow("'ghost' is not a bot of workspace work");
   await expect(config.addOwner("work", "telegram", " ")).rejects.toThrow("is not a person's id");
   await expect(config.addPet("work", "chair", { title: "x".repeat(65) })).rejects.toThrow("invalid config");
   expect(await text()).toBe(before);
@@ -372,7 +372,7 @@ test("the web UI's edits are checked before anything is written", async () => {
   await expect(config.allowHost("work", "a b")).rejects.toThrow("'a b' is not host or host:port");
   await expect(config.disallowHost("work", "a b")).rejects.toThrow("'a b' is not host or host:port");
   await expect(config.allowHost("home", "example.com")).rejects.toThrow(NotFoundError);
-  await expect(config.deleteHouse("home")).rejects.toThrow("unknown house 'home'");
+  await expect(config.deleteHouse("home")).rejects.toThrow("unknown workspace 'home'");
   expect(await text()).toBe(before);
 });
 
@@ -415,18 +415,18 @@ test("pets and channels are changed and removed in place: comments kept; a remov
   expect(yaml).toContain("# the first");
   expect(yaml).toContain("# my DM");
   await expect(config.updatePet("work", "ghost", {})).rejects.toThrow(NotFoundError);
-  await expect(config.updateChannel("work", "9", {})).rejects.toThrow("house 'work' has no channel of chat '9'");
+  await expect(config.updateChannel("work", "9", {})).rejects.toThrow("workspace 'work' has no channel of chat '9'");
 });
 
 test("a check beyond the schema (the app's agents) refuses an edit that adds a problem; one typed in by hand still loads and can be fixed", async () => {
   const path = join(tempDir(), "household.yaml");
   writeFileSync(path, "houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {model: big}\n");
   const config = new ConfigStore(path, (household) =>
-    household.houses.flatMap((house) => house.pets.filter((pet) => pet.model === "big").map((pet) => `pet ${pet.name}: no model 'big'`)),
+    household.houses.flatMap((house) => house.pets.filter((pet) => pet.model === "big").map((pet) => `bot ${pet.name}: no model 'big'`)),
   );
   expect((await config.load()).houses[0]!.pets[0]!.model).toBe("big"); // loads: the web UI shows it, marked
   await config.allowHost("work", "example.com"); // other edits go on
-  await expect(config.addPet("work", "chair", { model: "big" })).rejects.toThrow("pet chair: no model 'big'");
+  await expect(config.addPet("work", "chair", { model: "big" })).rejects.toThrow("bot chair: no model 'big'");
   expect(await Bun.file(path).text()).not.toContain("chair");
   await config.updatePet("work", "sibling", { model: "small" }); // an edit may fix it
   expect((await config.load()).houses[0]!.pets[0]!.model).toBe("small");
@@ -601,7 +601,7 @@ test("pet identifiers allow underscores through config edits, channel references
   expect(house.pets).toEqual([{ name: "my_pet-2", title }]);
   expect(house.channels[0]).toMatchObject({ pets: ["my_pet-2"], default: "my_pet-2" });
   const before = await text();
-  await expect(config.createHouse("my_house")).rejects.toThrow("invalid house name");
+  await expect(config.createHouse("my_house")).rejects.toThrow("invalid workspace name");
   await expect(config.addKey("my_key", { provider: "anthropic", value: "key" })).rejects.toThrow("invalid key name");
   await expect(config.updatePet("work", "my_pet-2", { agent: "my_agent" })).rejects.toThrow("invalid config");
   for (const title of ["first\nsecond", "hello\0world", "hello\u202Eworld", "x".repeat(65)]) {

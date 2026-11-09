@@ -1,15 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Activity, BellOff, Braces, Check, Dog, HeartPulse, Mail, Rss, Send, Webhook, X, type LucideIcon } from "lucide-react";
-import { api, type HouseInbox, type InboxView, type HouseView, type PetView } from "../api";
+import { api, type WorkspaceInbox, type InboxView, type WorkspaceView, type BotView } from "../api";
 import { Dialog, useDialog } from "./dialog";
 import { ChoiceList, Field, SelectField, Switch, TextField } from "./fields";
 import { Cell, FormGrid, List, ListRow, Page, Section } from "./layout";
 import { Link } from "./link";
-import { relative } from "./pet-crons";
+import { relative } from "./bot-crons";
 import { written } from "./section";
-import { housePath, petPath } from "../router";
+import { workspacePath, botPath } from "../router";
 
-type Kind = HouseInbox["source"]["kind"];
+type Kind = WorkspaceInbox["source"]["kind"];
 
 /** What an inbox can watch: the first step of its form, and its mark and name in the lists. */
 export const SOURCES: { value: Kind; label: string; description: string; icon: LucideIcon }[] = [
@@ -44,7 +44,7 @@ export function inboxState({ inbox, status }: InboxView): { tone: string; label:
   return { tone: "idle", label: "Watching" };
 }
 
-/** A source's mark, in the square the lists use for things that are not pets. */
+/** A source's mark, in the square the lists use for things that are not bots. */
 function SourceMark({ kind }: { kind: Kind }) {
   const Icon = sourceOf(kind).icon;
   return (
@@ -54,8 +54,8 @@ function SourceMark({ kind }: { kind: Kind }) {
   );
 }
 
-/** A house's inboxes, polled every 5 s while a page shows them (the house's Inboxes page, a pet's Inboxes tab). */
-export function useHouseInboxes(house: string, enabled = true) {
+/** A workspace's inboxes, polled every 5 s while a page shows them (the workspace's Inboxes page, a bot's Inboxes tab). */
+export function useWorkspaceInboxes(house: string, enabled = true) {
   const [items, setItems] = useState<InboxView[]>();
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -89,19 +89,19 @@ export function useHouseInboxes(house: string, enabled = true) {
   return { items, error, now, refresh };
 }
 
-/** Where an inbox's events go, in a line: its channel post, or pets only (replying in that channel). */
-function deliveryWords(inbox: HouseInbox, house: HouseView): string {
+/** Where an inbox's events go, in a line: its channel post, or bots only (replying in that channel). */
+function deliveryWords(inbox: WorkspaceInbox, house: WorkspaceView): string {
   const channel = house.channels.find((c) => c.chat === inbox.channel)?.name ?? "a removed channel";
-  return inbox.delivery === "silent" ? `pets only, replies in ${channel}` : `posts to ${channel}`;
+  return inbox.delivery === "silent" ? `bots only, replies in ${channel}` : `posts to ${channel}`;
 }
 
 /**
- * A house's inboxes: each source with its state, where its events go and who gets them; then the events they
+ * A workspace's inboxes: each source with its state, where its events go and who gets them; then the events they
  * received lately. Adding and editing is a dialog of three steps (source, connection, delivery).
  */
-export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: (message: string, warning?: boolean) => void }) {
-  const { items, error, now, refresh } = useHouseInboxes(house.name);
-  const [editing, setEditing] = useState<HouseInbox | "new">();
+export function WorkspaceInboxesPage({ house, notify }: { house: WorkspaceView; notify: (message: string, warning?: boolean) => void }) {
+  const { items, error, now, refresh } = useWorkspaceInboxes(house.name);
+  const [editing, setEditing] = useState<WorkspaceInbox | "new">();
   const [busy, setBusy] = useState<string>();
   const [allEvents, setAllEvents] = useState(false);
   const dialog = useDialog();
@@ -133,7 +133,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
       <Section
         hint={
           <>
-            Mail, feeds, health checks and alerts, checked from this host. Subscribed pets get each event; credentials never enter a VM.{" "}
+            Mail, feeds, health checks and alerts, checked from this host. Subscribed bots get each event; credentials never enter a VM.{" "}
             <a href={DOCS} target="_blank" rel="noreferrer" className="text-link">
               How inboxes work ↗
             </a>
@@ -203,14 +203,14 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
                     </span>
                     <span className="channel-company">
                       {inbox.pets.length === 0 ? (
-                        <span className="faint">No pets: a channel feed</span>
+                        <span className="faint">No bots: a channel feed</span>
                       ) : (
                         inbox.pets.map((name) => {
                           const pet = pets.get(name);
                           const quiet = inbox.quiet.includes(name);
                           return (
                             <span key={name} className="chip small" title={quiet ? "Silent: in its inbox history, not woken" : undefined}>
-                              <span aria-hidden>{pet?.emoji ?? "🐾"}</span>
+                              <span aria-hidden>{pet?.emoji ?? "🤖"}</span>
                               <span className="ellipsis">{pet?.title ?? name}</span>
                               {quiet && <BellOff size={11} strokeWidth={2} className="faint" aria-label="silent" />}
                             </span>
@@ -231,7 +231,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
                   </span>
                 </Cell>
                 <Cell lines>
-                  <span className="pet-state">
+                  <span className="bot-state">
                     <span className={`dot ${state.tone}`} />
                     {state.label}
                     {status.pendingCount > 0 && <span className="tag busy">{status.pendingCount} waiting</span>}
@@ -247,7 +247,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
         </List>
       </Section>
       {events.length > 0 && (
-        <Section title="Recent events" hint="The latest each inbox received. Subscribed pets search all of it with inbox_history.">
+        <Section title="Recent events" hint="The latest each inbox received. Subscribed bots search all of it with inbox_history.">
           <List columns="minmax(0, 1fr) auto">
             {shown.map((event) => (
               <ListRow key={`${event.inbox.name}/${event.id}`}>
@@ -292,7 +292,7 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
   );
 }
 
-/** A pet's switches for one inbox: whether it gets the events, and whether they wake it (off: history only). */
+/** A bot's switches for one inbox: whether it gets the events, and whether they wake it (off: history only). */
 function SubscriberSwitches({ name, subscribed, quiet, disabled, onChange }: { name: string; subscribed: boolean; quiet: boolean; disabled?: boolean; onChange: (subscribed: boolean, quiet: boolean) => void }) {
   return (
     <>
@@ -303,12 +303,12 @@ function SubscriberSwitches({ name, subscribed, quiet, disabled, onChange }: { n
 }
 
 /**
- * A pet's inboxes: every inbox of its house, whether the pet gets its events and whether they wake it. The inbox's
- * own settings (source, channel, how often) stay on the house's Inboxes page.
+ * A bot's inboxes: every inbox of its workspace, whether the bot gets its events and whether they wake it. The inbox's
+ * own settings (source, channel, how often) stay on the workspace's Inboxes page.
  */
-export function PetInboxes({ house, pet, inboxes: { items, error, refresh }, notify }: { house: HouseView; pet: PetView; inboxes: ReturnType<typeof useHouseInboxes>; notify: (text: string, warning?: boolean) => void }) {
+export function BotInboxes({ house, pet, inboxes: { items, error, refresh }, notify }: { house: WorkspaceView; pet: BotView; inboxes: ReturnType<typeof useWorkspaceInboxes>; notify: (text: string, warning?: boolean) => void }) {
   const [busy, setBusy] = useState<string>();
-  const set = async (inbox: HouseInbox, subscribed: boolean, quiet: boolean) => {
+  const set = async (inbox: WorkspaceInbox, subscribed: boolean, quiet: boolean) => {
     setBusy(inbox.name);
     try {
       const warning = await written(api.subscribeInbox(house.name, inbox.name, pet.name, { subscribed, quiet }));
@@ -322,7 +322,7 @@ export function PetInboxes({ house, pet, inboxes: { items, error, refresh }, not
     }
   };
   const inboxesPage = (
-    <Link href={housePath(house.name, "inboxes")} className="text-link">
+    <Link href={workspacePath(house.name, "inboxes")} className="text-link">
       Inboxes
     </Link>
   );
@@ -330,7 +330,7 @@ export function PetInboxes({ house, pet, inboxes: { items, error, refresh }, not
     <Section
       hint={
         <>
-          What {pet.title} gets from the house's inboxes. Silent ones go to its inbox history only and never wake it. Sources and schedules: the house's {inboxesPage} page.
+          What {pet.title} gets from the workspace's inboxes. Silent ones go to its inbox history only and never wake it. Sources and schedules: the workspace's {inboxesPage} page.
         </>
       }
     >
@@ -340,33 +340,33 @@ export function PetInboxes({ house, pet, inboxes: { items, error, refresh }, not
         </p>
       )}
       <div className="inbox-subscriptions">
-        <List columns="minmax(0, 1fr) auto" empty={items ? <>No inboxes in {house.name} yet: add one on the house's {inboxesPage} page.</> : "Loading…"}>
+        <List columns="minmax(0, 1fr) auto" empty={items ? <>No inboxes in {house.name} yet: add one on the workspace's {inboxesPage} page.</> : "Loading…"}>
           {(items ?? []).map((view) => {
             const { inbox } = view;
             const state = inboxState(view);
             const subscribed = inbox.pets.includes(pet.name);
             const channel = house.channels.find((c) => c.chat === inbox.channel);
             const placed = channel?.pets.includes(pet.name) ?? false;
-            // Silent delivery needs a subscriber: the last one cannot leave (the house page can switch it to a post).
+            // Silent delivery needs a subscriber: the last one cannot leave (the workspace page can switch it to a post).
             const last = subscribed && inbox.delivery === "silent" && inbox.pets.length === 1;
             let note: ReactNode = null;
             if (!placed && !subscribed)
               note = (
                 <>
                   Not in {channel?.name ?? "its channel"}:{" "}
-                  <Link href={petPath(house.name, pet.name, "channels")} className="text-link">
+                  <Link href={botPath(house.name, pet.name, "channels")} className="text-link">
                     join it
                   </Link>{" "}
                   to subscribe.
                 </>
               );
-            else if (last) note = "The only subscriber of a pets-only inbox.";
+            else if (last) note = "The only subscriber of a bots-only inbox.";
             return (
-              <ListRow key={inbox.name} actions={<SubscriberSwitches name={pet.title} subscribed={subscribed} quiet={inbox.quiet.includes(pet.name)} disabled={busy !== undefined || (!placed && !subscribed)} onChange={(on, quiet) => (on || !last ? void set(inbox, on, quiet) : notify("Switch the inbox to post in its channel, or subscribe another pet first.", true))} />}>
+              <ListRow key={inbox.name} actions={<SubscriberSwitches name={pet.title} subscribed={subscribed} quiet={inbox.quiet.includes(pet.name)} disabled={busy !== undefined || (!placed && !subscribed)} onChange={(on, quiet) => (on || !last ? void set(inbox, on, quiet) : notify("Switch the inbox to post in its channel, or subscribe another bot first.", true))} />}>
                 <Cell>
                   <SourceMark kind={inbox.source.kind} />
                   <span className="cell-lines">
-                    <span className="pet-state strong">
+                    <span className="bot-state strong">
                       <span className="ellipsis">{inbox.title}</span>
                       <span className={`dot ${state.tone}`} title={state.label} />
                     </span>
@@ -385,7 +385,7 @@ export function PetInboxes({ house, pet, inboxes: { items, error, refresh }, not
   );
 }
 
-/** How many inboxes a pet gets events from (its tab's count). */
+/** How many inboxes a bot gets events from (its tab's count). */
 export const subscribedCount = (items: InboxView[] | undefined, pet: string) => items?.filter(({ inbox }) => inbox.pets.includes(pet)).length ?? 0;
 
 const STEPS = ["Source", "Connection", "Delivery"] as const;
@@ -394,7 +394,7 @@ const STEPS = ["Source", "Connection", "Delivery"] as const;
  * An inbox's form, in three steps: what it watches, how to reach it (tested before going on), and where its events
  * go and who gets them. Editing starts at the last step; Back reaches the connection.
  */
-function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?: HouseInbox; onClose: () => void; save: (inbox: HouseInbox) => Promise<void> }) {
+function InboxEditor({ house, inbox, onClose, save }: { house: WorkspaceView; inbox?: WorkspaceInbox; onClose: () => void; save: (inbox: WorkspaceInbox) => Promise<void> }) {
   const [step, setStep] = useState(inbox ? 2 : 0);
   const [kind, setKind] = useState<Kind>(inbox?.source.kind ?? "imap");
   const source = inbox?.source;
@@ -407,7 +407,7 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
   const [password, setPassword] = useState(source && "password" in source ? source.password : "");
   const [mailbox, setMailbox] = useState(source?.kind === "imap" ? source.mailbox : "INBOX");
   const [monitor, setMonitor] = useState(source?.kind === "datadog" ? source.monitor : "");
-  const [delivery, setDelivery] = useState<HouseInbox["delivery"]>(inbox?.delivery ?? "announce");
+  const [delivery, setDelivery] = useState<WorkspaceInbox["delivery"]>(inbox?.delivery ?? "announce");
   const [watchMode, setWatchMode] = useState(source?.kind === "json-watch" && source.pointers.length ? "fields" : "whole");
   const [pointers, setPointers] = useState(source?.kind === "json-watch" ? source.pointers.join("\n") : "");
   const [timeout, setTimeout] = useState(String(source?.kind === "health" ? source.timeoutMs / 1000 : 10));
@@ -415,18 +415,18 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
   const [expectedStatus, setExpectedStatus] = useState(String(source?.kind === "health" ? source.expectedStatus : 200));
   const [headers, setHeaders] = useState<[string, string][]>(source && "headers" in source ? Object.entries(source.headers) : []);
   const [channel, setChannel] = useState(inbox?.channel ?? house.channels[0]?.chat ?? "");
-  const [pets, setPets] = useState(inbox?.pets ?? []);
+  const [pets, setBots] = useState(inbox?.pets ?? []);
   const [quiet, setQuiet] = useState(inbox?.quiet ?? []);
   const minutes = (inbox?.intervalSeconds ?? 300) / 60;
   const [frequency, setFrequency] = useState([1, 5, 15].includes(minutes) ? String(minutes) : "custom");
   const [custom, setCustom] = useState(String(minutes));
-  const [initial, setInitial] = useState<HouseInbox["initial"]>(inbox?.initial ?? "new");
+  const [initial, setInitial] = useState<WorkspaceInbox["initial"]>(inbox?.initial ?? "new");
   const [tested, setTested] = useState("");
   const [suffix] = useState(() => crypto.randomUUID().slice(0, 6));
   const selected = house.channels.find((c) => c.chat === channel);
   const mail = kind === "imap" || kind === "pop3";
   const requestHeaders = () => Object.fromEntries(headers.filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), value]));
-  const fields = (): HouseInbox => ({
+  const fields = (): WorkspaceInbox => ({
     name: inbox?.name ?? (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35).replace(/^[^a-z]+/, "") || "inbox") + "-" + suffix,
     title: title.trim() || sourceOf(kind).label,
     enabled: inbox?.enabled ?? true,
@@ -475,8 +475,8 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
             setStep(2);
             return "stay";
           }
-          if (delivery === "silent" && !pets.length) throw new Error("Subscribe at least one pet, or post events in the channel.");
-          if (!channel) throw new Error("Add a channel to this house first.");
+          if (delivery === "silent" && !pets.length) throw new Error("Subscribe at least one bot, or post events in the channel.");
+          if (!channel) throw new Error("Add a channel to this workspace first.");
           const interval = fields().intervalSeconds;
           if (!Number.isInteger(interval) || interval < 60 || interval > 86400) throw new Error("Choose an interval from 1 to 1,440 minutes (whole seconds).");
           await save(fields());
@@ -582,7 +582,7 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
                     </fieldset>
                   </>
                 )}
-                <p className="hint">Testing posts nothing, tells no pet and leaves the polling position as it is.</p>
+                <p className="hint">Testing posts nothing, tells no bot and leaves the polling position as it is.</p>
               </>
             )}
             {step === 2 && (
@@ -610,11 +610,11 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
                 {frequency === "custom" && <TextField label="Interval in minutes" inputMode="numeric" value={custom} onChange={setCustom} hint="From 1 minute to 24 hours." />}
                 <SelectField
                   label="Channel"
-                  hint={delivery === "silent" ? "Where pets reply about its events." : "Where events are posted and pets reply."}
+                  hint={delivery === "silent" ? "Where bots reply about its events." : "Where events are posted and bots reply."}
                   value={channel}
                   onChange={(v) => {
                     setChannel(v);
-                    setPets([]);
+                    setBots([]);
                     setQuiet([]);
                   }}
                   options={[{ value: "", label: "Choose a channel…", disabled: true }, ...house.channels.map((c) => ({ value: c.chat, label: c.name }))]}
@@ -623,15 +623,15 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
                   <div className="switch-row">
                     <span className="stack gap-1">
                       <span className="strong">Post events in the channel</span>
-                      <span className="hint">{delivery === "silent" ? "Off: only subscribed pets get them, privately." : "One House message per event, for everyone in the channel."}</span>
+                      <span className="hint">{delivery === "silent" ? "Off: only subscribed bots get them, privately." : "One Workspace message per event, for everyone in the channel."}</span>
                     </span>
                     <Switch label="Post events in the channel" hideLabel on={delivery === "announce"} onChange={(on) => setDelivery(on ? "announce" : "silent")} />
                   </div>
                 </div>
                 <div className="field">
-                  <span className="field-label">Pets</span>
+                  <span className="field-label">Bots</span>
                   {subscribers.length === 0 ? (
-                    <p className="hint">No pets in {selected?.name ?? "this channel"} yet. Place pets there first, or keep this a channel feed.</p>
+                    <p className="hint">No bots in {selected?.name ?? "this channel"} yet. Place bots there first, or keep this a channel feed.</p>
                   ) : (
                     <List columns="minmax(0, 1fr) auto">
                       {subscribers.map((pet) => (
@@ -643,7 +643,7 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
                               subscribed={pets.includes(pet.name)}
                               quiet={quiet.includes(pet.name)}
                               onChange={(on, silent) => {
-                                setPets(on ? (pets.includes(pet.name) ? pets : [...pets, pet.name]) : pets.filter((p) => p !== pet.name));
+                                setBots(on ? (pets.includes(pet.name) ? pets : [...pets, pet.name]) : pets.filter((p) => p !== pet.name));
                                 setQuiet(on && silent ? (quiet.includes(pet.name) ? quiet : [...quiet, pet.name]) : quiet.filter((p) => p !== pet.name));
                               }}
                             />
@@ -658,14 +658,14 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
                     </List>
                   )}
                   <p className="hint">
-                    {delivery === "silent" ? "At least one pet must receive. " : ""}Each gets its own copy when idle; silent ones only find it in their inbox history. Event contents are never treated as your instructions.
+                    {delivery === "silent" ? "At least one bot must receive. " : ""}Each gets its own copy when idle; silent ones only find it in their inbox history. Event contents are never treated as your instructions.
                   </p>
                 </div>
                 {!inbox && (
                   <SelectField
                     label="On the first check"
                     value={initial}
-                    onChange={(v) => setInitial(v as HouseInbox["initial"])}
+                    onChange={(v) => setInitial(v as WorkspaceInbox["initial"])}
                     options={[
                       { value: "new", label: "Start from now, skip what is there" },
                       { value: "latest", label: "Deliver what is there now (up to 50)" },

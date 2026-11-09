@@ -49,7 +49,7 @@ function setup(saved = new Map<string, string>(), clock = fakeClock(), deferred 
     store: { get: (key) => saved.get(key), set: (key, value) => { saved.set(key, value); }, delete: (key) => { saved.delete(key); } },
     deferScreen: () => deferred,
     policy: () => available ? base : undefined,
-    petTitle: () => "🐾 Sibling",
+    petTitle: () => "🤖 Sibling",
     screen: async (domain) => { screened.push(domain); return SCREENED[domain] ?? { address: GITHUB, addresses: [GITHUB] }; },
     choose: (_, __, card, signal) => new Promise((done) => cards.push(show(card, signal, done))),
     notice: async (_, __, text) => { notices.push(text); },
@@ -68,7 +68,7 @@ test("network requests: temporary owner choice applies HTTPS only, persists, res
   await first.service.start();
   const answer = first.service.request("work", "sibling", " API.GitHub.com ", reason);
   await settle(); // its domain screened, its card up
-  expect(first.cards[0]!.text).toBe(`<b>🐾 Sibling wants to reach <code>api.github.com</code></b>\n\nWhy:\n<blockquote>${reason}</blockquote>\n\nResolves to: <code>${GITHUB}</code>`);
+  expect(first.cards[0]!.text).toBe(`<b>🤖 Sibling wants to reach <code>api.github.com</code></b>\n\nWhy:\n<blockquote>${reason}</blockquote>\n\nResolves to: <code>${GITHUB}</code>`);
   expect(first.cards[0]!.choices).toEqual([["Allow 15 min"], ["Allow forever"], ["Deny"]]);
   first.cards[0]!.answer(0);
   expect(await answer).toEqual({ domain: "api.github.com", port: 443, status: "temporary", expiresAt: NETWORK_TTL_MS });
@@ -382,7 +382,7 @@ test("a domain that resolves off the public internet is refused without a card, 
   expect(result.message).toContain("not on the public internet");
   expect(result.message).not.toContain("127.0.0.1");
   expect(env.cards).toEqual([]);
-  expect(env.notices).toEqual([expect.stringContaining("Denied 🐾 Sibling access to localtest.me:8080: it points to a private address (127.0.0.1)")]);
+  expect(env.notices).toEqual([expect.stringContaining("Denied 🤖 Sibling access to localtest.me:8080: it points to a private address (127.0.0.1)")]);
   expect(env.service.active()).toEqual([]);
   expect(env.permanent).toEqual([]);
   expect(await env.service.request("work", "sibling", "nowhere.example.org", reason)).toMatchObject({ status: "unresolvable" });

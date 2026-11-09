@@ -351,10 +351,10 @@ test("Oleg's v12 database migrates (K2): places by key (the thread stays his), t
 test("a v12 database with a record whose place names no channel (K1 never ran) is refused loudly at v13, and left at v12", () => {
   const path = join(tempDir(), "household.db");
   ownersV12(path, (raw) => raw.run("INSERT INTO chat_ids (house, kind, seq, value) VALUES ('work', 'place', 3, 'pet:chair')"));
-  expect(() => new SqliteStore(path)).toThrow("house work: place c3 (pet:chair) names no channel: run K1 (channels) on this database first");
+  expect(() => new SqliteStore(path)).toThrow("workspace work: place c3 (pet:chair) names no channel: run K1 (channels) on this database first");
   const noKey = join(tempDir(), "household.db");
   ownersV12(noKey, (raw) => raw.run("UPDATE chat_messages SET place = 'c9' WHERE seq = 3"));
-  expect(() => new SqliteStore(noKey)).toThrow("house work: message m3 is in place c9 (no key), which names no channel");
+  expect(() => new SqliteStore(noKey)).toThrow("workspace work: message m3 is in place c9 (no key), which names no channel");
   const raw = new Database(noKey);
   expect(raw.query("PRAGMA user_version").get()).toEqual({ user_version: 12 });
   expect(raw.query("SELECT value FROM state WHERE key = ?").get(`${OLEG_CHAT}.thread.c1`)).toEqual({ value: "21837" });

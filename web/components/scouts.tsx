@@ -3,11 +3,11 @@ import { Compass } from "lucide-react";
 import { gib, type HostCapacity } from "../../src/core/resources";
 import { houseFeatures } from "../../src/core/house-features";
 import { NAME_PATTERN } from "../../src/core/names";
-import type { AgentView, HouseView, KeyView } from "../api";
+import type { HarnessView, WorkspaceView, KeyView } from "../api";
 import {
   scoutApi,
   type CapabilityView,
-  type ScoutAgent,
+  type ScoutHarness,
   type ScoutDefinition,
   type ScoutDetailView,
   type ScoutLimits,
@@ -15,13 +15,13 @@ import {
   type ScoutRunView,
   type ScoutView,
 } from "../scout-api";
-import { capabilityPath, housePath, navigate, petPath, scoutPath, type ScoutTab } from "../router";
+import { capabilityPath, workspacePath, navigate, botPath, scoutPath, type ScoutTab } from "../router";
 import { Dialog, useDialog } from "./dialog";
 import { CheckList, ChoiceList, FormGroup, StepperField, TextField } from "./fields";
-import { FeatureOff } from "./house";
+import { FeatureOff } from "./workspace";
 import { Cell, Cluster, FormGrid, List, ListRow, Page, Panel, Section, Stack, Tabs } from "./layout";
 import { Link } from "./link";
-import { keysFor, useAgentForm } from "./pets";
+import { keysFor, useHarnessForm } from "./bots";
 import { SkillPreview } from "./skills";
 import { ScoutDocumentEditor } from "./scout-editor";
 import { ScoutsTabs, kindTag } from "./capabilities";
@@ -59,21 +59,21 @@ const took = (run: ScoutRunView) => {
 
 type Resources = { cpus: number; memoryMiB: number };
 /** What a scout runs on, in words: "opus · 2 vCPU · 2 GiB". */
-const runtimeWords = (agent: ScoutAgent | null | undefined, r: Resources) =>
-  `${agent ? agent.model ?? agent.agent : "no agent"} · ${r.cpus} vCPU · ${gib(r.memoryMiB)}`;
+const runtimeWords = (agent: ScoutHarness | null | undefined, r: Resources) =>
+  `${agent ? agent.model ?? agent.agent : "no harness"} · ${r.cpus} vCPU · ${gib(r.memoryMiB)}`;
 
 interface ScoutPageProps {
-  house: HouseView;
-  agents: AgentView[];
+  house: WorkspaceView;
+  agents: HarnessView[];
   keys: KeyView[];
   refresh: () => Promise<void>;
   notify: Notify;
 }
 
-const OFF_TEXT = "Pets cannot call scouts. Scouts and capabilities stay here.";
+const OFF_TEXT = "Bots cannot call scouts. Scouts and capabilities stay here.";
 
-/** The house's scouts, capabilities, runs, agent and limit, polled while the page is open. */
-function useScouts(house: HouseView, initial?: ScoutListView) {
+/** The workspace's scouts, capabilities, runs, harness and limit, polled while the page is open. */
+function useScouts(house: WorkspaceView, initial?: ScoutListView) {
   const [view, setView] = useState(initial);
   const [error, setError] = useState<string>();
   const enabled = houseFeatures(house).scouts;
@@ -93,8 +93,8 @@ function useScouts(house: HouseView, initial?: ScoutListView) {
 }
 
 /**
- * Scouts: the specialists pets call by name, each set up here like a skill; what runs now, and what ran. The house's
- * limit and the agent of scouts that set none are one dialog (Settings).
+ * Scouts: the specialists bots call by name, each set up here like a skill; what runs now, and what ran. The workspace's
+ * limit and the harness of scouts that set none are one dialog (Settings).
  */
 export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial }: ScoutPageProps & { host?: HostCapacity; initial?: ScoutListView }) {
   const { view, error, load, enabled } = useScouts(house, initial);
@@ -112,7 +112,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
       {error && <p className="error" role="alert">{error}</p>}
       {agentless.length > 0 && (
         <div className="banner danger" role="alert">
-          {agentless.map(scout => scout.title ?? scout.name).join(", ")} {agentless.length === 1 ? "has" : "have"} no agent: pets cannot call {agentless.length === 1 ? "it" : "them"}. <button type="button" className="text-btn" onClick={() => setSettings(true)}>Choose one in Settings</button>
+          {agentless.map(scout => scout.title ?? scout.name).join(", ")} {agentless.length === 1 ? "has" : "have"} no harness: bots cannot call {agentless.length === 1 ? "it" : "them"}. <button type="button" className="text-btn" onClick={() => setSettings(true)}>Choose one in Settings</button>
         </div>
       )}
       {!view ? !error && <p className="hint">Loading…</p> : (
@@ -129,11 +129,11 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
               <div className="skills-blank">
                 <Compass size={28} aria-hidden />
                 <strong>No scouts</strong>
-                <p className="hint">A scout is a specialist your pets call by name: instructions, capabilities and keys of its own. Pets pick one by its description.</p>
+                <p className="hint">A scout is a specialist your bots call by name: instructions, capabilities and keys of its own. Bots pick one by its description.</p>
                 <button type="button" className="btn" onClick={() => setAdding(true)}>+ New scout</button>
               </div>
             ) : (
-              <ul className="pet-cards">
+              <ul className="bot-cards">
                 {view.scouts.map(scout => <li key={scout.name}><ScoutCard house={house.name} scout={scout} runs={view.runs.filter(run => run.blueprint === scout.name)} /></li>)}
               </ul>
             )}
@@ -157,7 +157,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
         <ScoutSettingsDialog view={view} agents={agents} keys={keysFor(keys, house.name)} host={host} onClose={() => setSettings(false)}
           save={async (limits, agent) => {
             await scoutApi.setLimits(house.name, limits);
-            if (agent) await scoutApi.setAgent(house.name, agent);
+            if (agent) await scoutApi.setHarness(house.name, agent);
             await load(); await refresh(); notify("Scout settings saved");
           }} />
       )}
@@ -170,10 +170,10 @@ export function ScoutCard({ house, scout, runs = [] }: { house: string; scout: S
   const last = runs.find(run => run.startedAt) ?? runs[0];
   const state = last && runState(last);
   return (
-    <Link href={scoutPath(house, scout.name)} className="pet-card">
-      <span className="pet-card-head">
+    <Link href={scoutPath(house, scout.name)} className="bot-card">
+      <span className="bot-card-head">
         <span className="avatar large" aria-hidden>{scout.emoji ?? "🧭"}</span>
-        {state && <span className="pet-card-state"><span className={`dot ${state.tone}`} />{done(last!) ? ago(last!.startedAt) : state.label}</span>}
+        {state && <span className="bot-card-state"><span className={`dot ${state.tone}`} />{done(last!) ? ago(last!.startedAt) : state.label}</span>}
       </span>
       <Stack gap={1}>
         <span className="strong ellipsis">{scout.title ?? scout.name}</span>
@@ -194,7 +194,7 @@ export function ScoutCard({ house, scout, runs = [] }: { house: string; scout: S
   );
 }
 
-/** Who a run was: its scout (linked), or the capabilities an earlier pet assembled it from. */
+/** Who a run was: its scout (linked), or the capabilities an earlier bot assembled it from. */
 function RunScout({ house, run, scouts }: { house: string; run: ScoutRunView; scouts: Pick<ScoutDefinition, "name" | "title" | "emoji">[] }) {
   const scout = run.blueprint ? scouts.find(s => s.name === run.blueprint) : undefined;
   if (run.blueprint) return <Link className="strong ellipsis row-link" href={scoutPath(house, run.blueprint)}>{scout?.title ?? run.blueprint}</Link>;
@@ -211,8 +211,8 @@ export function ScoutRuns({
   refresh,
 }: {
   house: string;
-  /** The house's pets, to name the one that called each run. */
-  pets?: HouseView["pets"];
+  /** The workspace's bots, to name the one that called each run. */
+  pets?: WorkspaceView["pets"];
   runs: ScoutRunView[];
   scouts: Pick<ScoutDefinition, "name" | "title" | "emoji">[];
   running?: boolean;
@@ -270,7 +270,7 @@ export function ScoutRuns({
               )}
               {scoutColumn && <Cell label="Scout"><RunScout house={house} run={run} scouts={scouts} /></Cell>}
               <Cell label="Called by">
-                <Link className="row-link ellipsis" href={petPath(house, run.parent)}>{parent?.title ?? run.parent}</Link>
+                <Link className="row-link ellipsis" href={botPath(house, run.parent)}>{parent?.title ?? run.parent}</Link>
               </Cell>
               <Cell label="Task"><span className="ellipsis" title={run.task}>{run.task}</span></Cell>
               <Cell label={running ? "Started" : "Outcome"}>
@@ -288,16 +288,16 @@ export function ScoutRuns({
   );
 }
 
-const agentValue = ({ agent, key, model, mode, reasoningEffort }: ReturnType<typeof useAgentForm>["value"]): ScoutAgent =>
+const agentValue = ({ agent, key, model, mode, reasoningEffort }: ReturnType<typeof useHarnessForm>["value"]): ScoutHarness =>
   ({ agent, key: key ?? "", ...(model ? { model } : {}), ...(mode ? { mode } : {}), ...(reasoningEffort ? { reasoningEffort } : {}) });
-/** The agent form's starting values: a stored agent with its adapter's defaults filled in. */
-const agentStart = (agents: AgentView[], agent: ScoutAgent | null | undefined) => {
+/** The harness form's starting values: a stored harness with its adapter's defaults filled in. */
+const agentStart = (agents: HarnessView[], agent: ScoutHarness | null | undefined) => {
   if (!agent) return undefined;
   const adapter = agents.find(a => a.name === agent.agent);
   return { agent: agent.agent, key: agent.key, model: agent.model ?? adapter?.defaultModel ?? "", mode: agent.mode ?? adapter?.defaultMode ?? null, reasoningEffort: agent.reasoningEffort ?? null };
 };
 
-/** CPU and memory of one scout. It has no time limit: its pet is reminded when it idles, and stops it. */
+/** CPU and memory of one scout. It has no time limit: its bot is reminded when it idles, and stops it. */
 function ResourceFields({ value, onChange }: { value: { cpus: string; memory: string }; onChange: (next: { cpus: string; memory: string }) => void }) {
   return (
     <FormGrid>
@@ -311,16 +311,16 @@ const resourceValue = (t: { cpus: string; memory: string }): Resources => ({ cpu
 const resourcesValid = (r: Resources) => Object.values(r).every(n => Number.isInteger(n) && n >= 1);
 
 /**
- * The house's scout settings: how many run at once (and what that may take of this machine at worst), and the agent
+ * The workspace's scout settings: how many run at once (and what that may take of this machine at worst), and the harness
  * and resources of every scout that sets none of its own.
  */
 function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
-  view: ScoutListView; agents: AgentView[]; keys: KeyView[]; host?: HostCapacity; onClose: () => void;
-  save: (limits: ScoutLimits, agent?: ScoutAgent) => Promise<void>;
+  view: ScoutListView; agents: HarnessView[]; keys: KeyView[]; host?: HostCapacity; onClose: () => void;
+  save: (limits: ScoutLimits, agent?: ScoutHarness) => Promise<void>;
 }) {
   const [max, setMax] = useState(String(view.limits.maxScouts));
   const [text, setText] = useState(resourceText(view.limits));
-  const form = useAgentForm(agents, keys, agentStart(agents, view.agent), "scout");
+  const form = useHarnessForm(agents, keys, agentStart(agents, view.agent), "scout");
   const [opened] = useState(() => JSON.stringify(agentValue(form.value)));
   const count = Number(max), resources = resourceValue(text);
   // At worst every run is as large as the largest scout.
@@ -345,15 +345,15 @@ function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
           <FormGroup title="At once">
             <StepperField label="Scouts at once" hideLabel value={max} onChange={setMax} min={0} step={1} unit="scouts" />
             <p className={over ? "error" : "hint"}>
-              At worst {Number.isInteger(count) ? count : 0} × the largest scout: up to {cpus} vCPU and {gib(memory)}{host ? ` of this machine's ${host.cpus} vCPU and ${gib(host.memoryMiB)}` : ""}, beside the pets. A pet's call beyond it is refused.
+              At worst {Number.isInteger(count) ? count : 0} × the largest scout: up to {cpus} vCPU and {gib(memory)}{host ? ` of this machine's ${host.cpus} vCPU and ${gib(host.memoryMiB)}` : ""}, beside the bots. A bot's call beyond it is refused.
             </p>
           </FormGroup>
-          <FormGroup title="Agent">
+          <FormGroup title="Harness">
             <p className="hint">Every scout runs on it unless it sets its own. A change applies from the next run.</p>
             {form.fields}
           </FormGroup>
           <FormGroup title="Each run">
-            <p className="hint">No time limit: a scout runs until it finishes or is stopped. After 30 minutes idle, the pet that called it is reminded and decides.</p>
+            <p className="hint">No time limit: a scout runs until it finishes or is stopped. After 30 minutes idle, the bot that called it is reminded and decides.</p>
             <ResourceFields value={text} onChange={setText} />
           </FormGroup>
         </>
@@ -362,17 +362,17 @@ function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
   );
 }
 
-/** A scout's agent and resources: the house's, or its own. */
-function ScoutRuntimeDialog({ scout, defaults, agents, keys, onClose, save }: { scout: ScoutView; defaults: ScoutDetailView["defaults"]; agents: AgentView[]; keys: KeyView[]; onClose: () => void; save: (patch: Partial<ScoutDefinition>) => Promise<void> }) {
-  const [mode, setMode] = useState(scout.agent || scout.resources ? "own" : "house");
+/** A scout's harness and resources: the workspace's, or its own. */
+function ScoutRuntimeDialog({ scout, defaults, agents, keys, onClose, save }: { scout: ScoutView; defaults: ScoutDetailView["defaults"]; agents: HarnessView[]; keys: KeyView[]; onClose: () => void; save: (patch: Partial<ScoutDefinition>) => Promise<void> }) {
+  const [mode, setMode] = useState(scout.agent || scout.resources ? "own" : "workspace");
   const [text, setText] = useState(resourceText({ ...defaults.limits, ...scout.resources }));
-  const form = useAgentForm(agents, keys, agentStart(agents, scout.agent ?? defaults.agent), "scout");
+  const form = useHarnessForm(agents, keys, agentStart(agents, scout.agent ?? defaults.agent), "scout");
   return (
     <Dialog onClose={onClose} spec={{
       title: `What ${scout.title ?? scout.name} runs on`,
       confirmLabel: "Save",
       onConfirm: async () => {
-        if (mode === "house") return save({ agent: undefined, resources: undefined });
+        if (mode === "workspace") return save({ agent: undefined, resources: undefined });
         if (form.error) throw new Error(form.error);
         const value = resourceValue(text);
         if (!resourcesValid(value)) throw new Error("CPU and memory must be whole numbers.");
@@ -381,8 +381,8 @@ function ScoutRuntimeDialog({ scout, defaults, agents, keys, onClose, save }: { 
       children: (
         <>
           <ChoiceList label="Runs on" value={mode} onChange={setMode} options={[
-            { value: "house", label: "The house's", description: runtimeWords(defaults.agent, defaults.limits) },
-            { value: "own", label: "Its own", description: "An agent, model and resources for this scout only. They show on its launch card." },
+            { value: "workspace", label: "The workspace's", description: runtimeWords(defaults.agent, defaults.limits) },
+            { value: "own", label: "Its own", description: "A harness, model and resources for this scout only. They show on its launch card." },
           ]} />
           {mode === "own" && <>{form.fields}<ResourceFields value={text} onChange={setText} /></>}
         </>
@@ -391,7 +391,7 @@ function ScoutRuntimeDialog({ scout, defaults, agents, keys, onClose, save }: { 
   );
 }
 
-/** A new scout, or its basics edited: who it is and when pets call it; new: shared capabilities and its own setup. */
+/** A new scout, or its basics edited: who it is and when bots call it; new: shared capabilities and its own setup. */
 export function ScoutDialog({
   scout,
   capabilities = [],
@@ -419,7 +419,7 @@ export function ScoutDialog({
       confirmLabel: scout ? "Save" : "Create scout",
       onConfirm: async () => {
         if (!name.trim() || nameError) throw new Error(nameError || "Name the scout.");
-        if (!description.trim()) throw new Error("Describe when pets should call it.");
+        if (!description.trim()) throw new Error("Describe when bots should call it.");
         await save({
           ...(scout ?? { instructions: "" }),
           name: name.trim(), title: title.trim() || undefined, emoji: emoji.trim() || undefined, description: description.trim(),
@@ -429,12 +429,12 @@ export function ScoutDialog({
       children: (
         <>
           <FormGroup title="Scout">
-            {!scout && <TextField label="Name" mono value={name} onChange={setName} error={nameError || undefined} maxLength={31} placeholder="prod-ops" hint="Pets call it by this name." />}
+            {!scout && <TextField label="Name" mono value={name} onChange={setName} error={nameError || undefined} maxLength={31} placeholder="prod-ops" hint="Bots call it by this name." />}
             <FormGrid>
               <TextField label="Title" value={title} onChange={setTitle} placeholder="Prod Ops" />
               <TextField label="Emoji" value={emoji} onChange={setEmoji} />
             </FormGrid>
-            <TextField label="Description" value={description} onChange={setDescription} placeholder="Prod incidents through Heroku: logs, config, database" hint="Pets choose a scout by it: it is in their prompt (its first 300 characters). Say when to call it." />
+            <TextField label="Description" value={description} onChange={setDescription} placeholder="Prod incidents through Heroku: logs, config, database" hint="Bots choose a scout by it: it is in their prompt (its first 300 characters). Say when to call it." />
           </FormGroup>
           {!scout && (
             <FormGroup title="Capabilities">
@@ -473,18 +473,18 @@ export function ScoutDetailPage({ house, name, tab = "overview", agents, keys, r
   if (!enabled) return <Page title="Scouts"><FeatureOff house={house.name} text={OFF_TEXT} /></Page>;
   const scout = view?.scout;
   const save = async (patch: Partial<ScoutDefinition>) => { await scoutApi.update(house.name, name, patch); await load(); await refresh(); notify("Scout saved"); };
-  const back = { href: housePath(house.name, "scouts"), label: "Scouts" };
+  const back = { href: workspacePath(house.name, "scouts"), label: "Scouts" };
   if (!scout || !view) return <Page title={name} back={back}>{error ? <p className="error" role="alert">{error}</p> : <p className="hint">Loading…</p>}</Page>;
   const own = !!(scout.agent || scout.resources);
   const effective = { ...view.defaults.limits, ...scout.resources };
   const last = view.runs.find(run => run.startedAt);
   const details: [string, React.ReactNode][] = [
-    ["Pets call it", <span className="mono">{scout.name}</span>],
+    ["Bots call it", <span className="mono">{scout.name}</span>],
     ["Capabilities", scout.own || scout.capabilities.length ? [...(scout.own ? ["own setup"] : []), ...scout.capabilities].join(", ") : <span className="faint">None</span>],
     ["Network", scout.network.open ? <>Open internet <span className="faint">· no capability limits it</span></> : <>Only {scout.network.allow.join(", ")} <span className="faint">· {scout.network.limitedBy.join(" and ")}</span></>],
     ["Keys in its VM", scout.keysInVm.length ? <span className="busy">{scout.keysInVm.map(key => `$${key.env}`).join(", ")}</span> : <span className="faint">None</span>],
     ["Workspace", scout.workspace ? <span className="mono">{scout.workspace.repo}{scout.workspace.branch ? ` · ${scout.workspace.branch}` : ""}</span> : <span className="faint">An empty folder</span>],
-    ["Runs on", <>{runtimeWords(scout.agent ?? view.defaults.agent, effective)} <span className="faint">· {own ? "its own" : "the house's"}</span> <button type="button" className="text-btn" onClick={() => setRuntime(true)}>Change…</button></>],
+    ["Runs on", <>{runtimeWords(scout.agent ?? view.defaults.agent, effective)} <span className="faint">· {own ? "its own" : "the workspace's"}</span> <button type="button" className="text-btn" onClick={() => setRuntime(true)}>Change…</button></>],
     ["Last run", last ? <>{ago(last.startedAt)} · {runState(last).label}</> : <span className="faint">Never</span>],
   ];
   return (
@@ -514,7 +514,7 @@ export function ScoutDetailPage({ house, name, tab = "overview", agents, keys, r
             <Panel>
               <Cluster justify="between">
                 <Stack gap={1}><strong>Delete scout</strong><span className="hint">{scout.own ? "Its own setup goes with it; shared capabilities stay." : "Shared capabilities stay."} Stop its runs first.</span></Stack>
-                <button className="btn danger small" onClick={() => dialog.open({ title: `Delete ${scout.title ?? name}?`, body: scout.own ? "Its instructions and its own setup (history, skills) are removed. Its keys stay, kept for no one." : "Its instructions are removed.", danger: true, confirmLabel: "Delete scout", onConfirm: async () => { await scoutApi.remove(house.name, name); await refresh(); navigate(housePath(house.name, "scouts")); } })}>Delete…</button>
+                <button className="btn danger small" onClick={() => dialog.open({ title: `Delete ${scout.title ?? name}?`, body: scout.own ? "Its instructions and its own setup (history, skills) are removed. Its keys stay, kept for no one." : "Its instructions are removed.", danger: true, confirmLabel: "Delete scout", onConfirm: async () => { await scoutApi.remove(house.name, name); await refresh(); navigate(workspacePath(house.name, "scouts")); } })}>Delete…</button>
               </Cluster>
             </Panel>
           </Section>
@@ -544,7 +544,7 @@ export function ScoutAccess({ house, scout, capabilities, save, created }: { hou
   const [error, setError] = useState<string>();
   const workspace = repo.trim() ? { repo: repo.trim(), ...(branch.trim() ? { branch: branch.trim() } : {}) } : undefined;
   const repoError = repo.trim() && !/^https:\/\//.test(repo.trim()) ? "Use an https:// URL" : undefined;
-  // In the order the house lists them: their install scripts run in this order, its own setup last.
+  // In the order the workspace lists them: their install scripts run in this order, its own setup last.
   const ordered = capabilities.map(capability => capability.name).filter(name => chosen.includes(name));
   const dirty = JSON.stringify(ordered) !== JSON.stringify(capabilities.map(c => c.name).filter(name => scout.capabilities.includes(name))) || JSON.stringify(workspace ?? null) !== JSON.stringify(scout.workspace ?? null);
   const used = [...(scout.own ? [scout.own] : []), ...ordered.flatMap(name => capabilities.filter(capability => capability.name === name))];
@@ -561,8 +561,8 @@ export function ScoutAccess({ house, scout, capabilities, save, created }: { hou
   };
   return (
     <form onSubmit={event => { event.preventDefault(); submit(); }}>
-      <Section width="narrow" title="Shared capabilities" hint="Their install scripts run at the start of every run, in this order." actions={<Link href={housePath(house, "capabilities")} className="btn small">Manage</Link>}>
-        <List empty="This house has no shared capabilities yet.">
+      <Section width="narrow" title="Shared capabilities" hint="Their install scripts run at the start of every run, in this order." actions={<Link href={workspacePath(house, "capabilities")} className="btn small">Manage</Link>}>
+        <List empty="This workspace has no shared capabilities yet.">
           {capabilities.map(capability => (
             <ListRow key={capability.name}>
               <Cell>
@@ -578,7 +578,7 @@ export function ScoutAccess({ house, scout, capabilities, save, created }: { hou
           ))}
         </List>
       </Section>
-      <Section width="narrow" title="Its own setup" hint="Software, hosts and keys only this scout gets: no other scout and no pet can use them.">
+      <Section width="narrow" title="Its own setup" hint="Software, hosts and keys only this scout gets: no other scout and no bot can use them.">
         {own ? (
           <List columns="minmax(100px, 140px) minmax(0, 1fr)">
             <ListRow actions={<Link href={capabilityPath(house, own.name)} className="text-btn">Edit</Link>}>

@@ -5,7 +5,7 @@ import { Dialog, useDialog } from "./dialog";
 import { TextField } from "./fields";
 import { Section } from "./layout";
 import { MarkdownEditor } from "./markdown-editor";
-import { relative } from "./pet-crons";
+import { relative } from "./bot-crons";
 import { SkillPreview } from "./skills";
 
 const KEY = /^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*$/;
@@ -67,10 +67,10 @@ export function MemoryTree({ nodes, selected, collapsed, toggle, select, depth =
 }
 
 /**
- * A pet's memory: its notes by key (dot segments make the tree; `core`, pinned, is what the pet loads at the start
+ * A bot's memory: its notes by key (dot segments make the tree; `core`, pinned, is what the bot loads at the start
  * of each session), searched as you type; the open note on the right, to edit, read, or go back through its versions.
  */
-export function PetMemory({ house, pet }: { house: string; pet: string }) {
+export function BotMemory({ house, pet }: { house: string; pet: string }) {
   const [entries, setEntries] = useState<MemorySummary[]>([]);
   const [next, setNext] = useState<string>();
   const [loaded, setLoaded] = useState(false);
@@ -135,7 +135,7 @@ export function PetMemory({ house, pet }: { house: string; pet: string }) {
     });
   const group = entry && entry.key !== "core" ? entry.key.split(".").slice(0, -1).join(".") : "";
   return (
-    <Section width="wide" hint="Private to this pet. core loads every session; other notes on demand.">
+    <Section width="wide" hint="Private to this bot. core loads every session; other notes on demand.">
       <div className="memory">
         <nav className="memory-side" aria-label="Memory notes" inert={locked}>
           <label className="memory-search">
@@ -362,7 +362,7 @@ function MemoryNote({ house, pet, initial, changed, lock }: { house: string; pet
           onClick={() =>
             dialog.open({
               title: `Delete ${entry.key}?`,
-              body: "It leaves the pet's memory; History keeps its versions.",
+              body: "It leaves the bot's memory; History keeps its versions.",
               confirmLabel: "Delete note",
               danger: true,
               onConfirm: async () => saved(await api.deleteMemory(house, pet, entry.key, revision)),

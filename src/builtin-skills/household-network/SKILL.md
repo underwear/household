@@ -1,12 +1,12 @@
 ---
 name: household-network
-description: Reach a host your house does not allow yet, use another TCP port, or connect a non-HTTP client (SSH, a database) through the Household proxy. Use when a connection is refused, times out, or a domain is blocked.
+description: Reach a host your workspace does not allow yet, use another TCP port, or connect a non-HTTP client (SSH, a database) through the Household proxy. Use when a connection is refused, times out, or a domain is blocked.
 ---
 
 # Network
 
 Your VM has no direct route out. Every connection goes through the Household proxy, which lets through only the
-house allowlist. `network_list` shows what your house can reach now.
+workspace allowlist. `network_list` shows what your workspace can reach now.
 
 ## A host is blocked
 

@@ -9,12 +9,12 @@ export const PET_NAME_HINT = "a–z, 0–9, _ and -; starts with a letter, up to
 
 export function assertPetName(name: string): void {
   if (!PET_NAME_PATTERN.test(name)) {
-    throw new HouseholdError(`invalid pet name '${name}': ${PET_NAME_HINT}`);
+    throw new HouseholdError(`invalid bot name '${name}': ${PET_NAME_HINT}`);
   }
 }
 
 export function assertName(what: string, name: string): void {
   if (!NAME_PATTERN.test(name)) {
-    throw new HouseholdError(`invalid ${what} name '${name}': must match ${NAME_PATTERN.source}`);
+    throw new HouseholdError(`invalid ${what === "pet" ? "bot" : what === "house" ? "workspace" : what === "agent" ? "harness" : what} name '${name}': must match ${NAME_PATTERN.source}`);
   }
 }

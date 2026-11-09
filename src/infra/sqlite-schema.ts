@@ -218,7 +218,7 @@ function journalsAndChannels(db: Database): void {
   for (const { house, seq, value } of places) {
     keyOfPlace.set(`${house}/c${seq}`, value);
     const at = parsePlaceKey(value);
-    if (!at) throw new Error(`house ${house}: place c${seq} (${value}) names no channel: run K1 (channels) on this database first`);
+    if (!at) throw new Error(`workspace ${house}: place c${seq} (${value}) names no channel: run K1 (channels) on this database first`);
     mint(db, house, "channel", at.channel);
   }
   const channelIdOf = (house: string, key: string | undefined) => {
@@ -230,7 +230,7 @@ function journalsAndChannels(db: Database): void {
     const key = record.place === null ? undefined : keyOfPlace.get(`${record.house}/${record.place}`);
     const channel = channelIdOf(record.house, key);
     if (channel === undefined) {
-      throw new Error(`house ${record.house}: message m${record.seq} is in place ${record.place ?? "none"} (${key ?? "no key"}), which names no channel: run K1 (channels) on this database first`);
+      throw new Error(`workspace ${record.house}: message m${record.seq} is in place ${record.place ?? "none"} (${key ?? "no key"}), which names no channel: run K1 (channels) on this database first`);
     }
     const old = record.channel === null ? undefined : (JSON.parse(record.channel) as OldChannel);
     const facts = old?.meta && Object.keys(old.meta).length > 0 ? { ...(shownOf(old.meta) ? { shown: shownOf(old.meta) } : {}), kept: old.meta } : undefined;

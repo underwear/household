@@ -60,7 +60,7 @@ test("a capability cannot take a house secret or another capability's", () => {
   for (const fields of [{ onlyForCapabilities: undefined }, { onlyForCapabilities: ["other"] }, { houses: ["elsewhere"] }]) {
     expect(() => parseHousehold(config([], { token: secret(fields) }, [heroku]), "test")).toThrow("restricted");
   }
-  expect(() => parseHousehold(config([], { token: secret({ houses: undefined }) }), "test")).toThrow("must name its houses");
+  expect(() => parseHousehold(config([], { token: secret({ houses: undefined }) }), "test")).toThrow("must name its workspaces");
 });
 
 test("earlier scouts load as blueprints (their own keys, setup, agent and call dropped); a v1 scout-only secret stays restricted", () => {

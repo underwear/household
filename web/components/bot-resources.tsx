@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { api, type PetView } from "../api";
+import { api, type BotView } from "../api";
 import { Cluster, Section } from "./layout";
-import { PetUsage } from "./pet-monitoring";
-import { useResourceForm, type Capacity } from "./pets";
+import { BotUsage } from "./bot-monitoring";
+import { useResourceForm, type Capacity } from "./bots";
 import { written } from "./section";
 
 /**
- * A pet's Resources tab: what its VM uses (Usage) over what it is given (Allocation, up to what the host has). A new
- * allocation is saved without stopping the pet and applies on its next Restart or Enable.
+ * A bot's Resources tab: what its VM uses (Usage) over what it is given (Allocation, up to what the host has). A new
+ * allocation is saved without stopping the bot and applies on its next Restart or Enable.
  */
-export function PetResources({ house, pet, capacity, refresh, notify }: { house: string; pet: PetView; capacity: Capacity; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
+export function BotResources({ house, pet, capacity, refresh, notify }: { house: string; pet: BotView; capacity: Capacity; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
   const form = useResourceForm(capacity, house, pet);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -18,7 +18,7 @@ export function PetResources({ house, pet, capacity, refresh, notify }: { house:
     setBusy(true);
     setError(undefined);
     try {
-      const warning = await written(api.updatePet(house, pet.name, form.value));
+      const warning = await written(api.updateBot(house, pet.name, form.value));
       notify(warning ?? `Allocation saved; applies on the next restart`, warning !== undefined);
       await refresh();
     } catch (failure) {
@@ -29,8 +29,8 @@ export function PetResources({ house, pet, capacity, refresh, notify }: { house:
   };
   return (
     <>
-      <PetUsage house={house} pet={pet.name} />
-      <Section width="narrow" title="Allocation" hint="Reserved on the host for this pet's VM.">
+      <BotUsage house={house} pet={pet.name} />
+      <Section width="narrow" title="Allocation" hint="Reserved on the host for this bot's VM.">
         <form
           className="stack gap-4"
           onSubmit={(event) => {

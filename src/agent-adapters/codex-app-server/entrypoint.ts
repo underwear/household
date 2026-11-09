@@ -273,7 +273,7 @@ export async function runBridge(options: BridgeOptions = {}) {
 
 if (import.meta.main) {
   const bridge = await runBridge();
-  if (!bridge.ready) { console.error("Codex startup failed; the pet stopped"); process.exit(1); }
+  if (!bridge.ready) { console.error("Codex startup failed; the bot stopped"); process.exit(1); }
   let shuttingDown = false;
   void bridge.closed.then(async () => { if (!shuttingDown) { await bridge.stop(); process.exit(1); } });
   const shutdown = () => { shuttingDown = true; void bridge.stop().then(() => process.exit(0)); };

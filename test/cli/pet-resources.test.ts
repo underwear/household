@@ -23,7 +23,7 @@ test("pet set --cpus and --memory: up to this host's, not past it", async () => 
   const memoryGiB = Math.floor(totalmem() / 1024 ** 3);
   const tooMany = await petSet("--cpus", String(cpus + 1));
   expect(tooMany.code).toBe(1);
-  expect(tooMany.out).toContain(`pet work/owl: ${cpus + 1} vCPU, more than this host's ${cpus}`);
+  expect(tooMany.out).toContain(`bot work/owl: ${cpus + 1} vCPU, more than this host's ${cpus}`);
   expect(tooMany.config).not.toContain("cpus");
   const tooMuch = await petSet("--memory", String(memoryGiB + 1));
   expect(tooMuch.code).toBe(1);

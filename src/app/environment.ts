@@ -30,7 +30,7 @@ export function petEnvironment(config: ConfigStore, runtime: {
   const restarting = new Set<string>();
   const saved = async (house: string, pet: string) => {
     const found = findHouse(await config.load(), house)?.pets.find((item) => item.name === scriptOwner(house, pet));
-    if (!found) throw new NotFoundError("pet is no longer configured");
+    if (!found) throw new NotFoundError("bot is no longer configured");
     return found.environment;
   };
   const view = (house: string, pet: string, scripts?: { setup?: string; onStart?: string }): EnvironmentView => ({ setup: scripts?.setup ?? null, onStart: scripts?.onStart ?? null, lastRun: runtime.environmentSetupResult(house, pet) ?? null, onStartLastRun: runtime.environmentSetupResult(house, pet, "onStart") ?? null });
@@ -46,12 +46,12 @@ export function petEnvironment(config: ConfigStore, runtime: {
     },
     async restartEnvironment(house, pet, mode = "now", notice) {
       const key = `${house}/${pet}`;
-      if (restarting.has(key)) throw new Error("pet is already restarting");
+      if (restarting.has(key)) throw new Error("bot is already restarting");
       restarting.add(key);
       let release: (() => void) | undefined;
       try {
         await saved(house, pet);
-        if (!applied(house, pet)) throw new Error("pet is no longer applied");
+        if (!applied(house, pet)) throw new Error("bot is no longer applied");
         if (!restart) throw new Error("VM restart is unavailable");
         if (mode === "notify") {
           if (!prepareRestart) throw new Error("restart notification is unavailable");
@@ -60,7 +60,7 @@ export function petEnvironment(config: ConfigStore, runtime: {
         }
         return await enqueue(async () => {
           const setup = await saved(house, pet);
-          if (!applied(house, pet)) throw new Error("pet is no longer applied");
+          if (!applied(house, pet)) throw new Error("bot is no longer applied");
           await restart(house, pet, setup?.setup, setup?.onStart);
           return view(house, pet, setup);
         });
@@ -71,7 +71,7 @@ export function petEnvironment(config: ConfigStore, runtime: {
     },
     async disableEnvironment(house, pet, mode = "now") {
       const key = `${house}/${pet}`;
-      if (restarting.has(key)) throw new Error("pet is already stopping or restarting");
+      if (restarting.has(key)) throw new Error("bot is already stopping or restarting");
       restarting.add(key);
       let release: (() => void) | undefined;
       try {
@@ -88,7 +88,7 @@ export function petEnvironment(config: ConfigStore, runtime: {
     runEnvironmentSetup(house, pet, phase = "setup") {
       return enqueue(async () => {
         const setup = await saved(house, pet);
-        if (!applied(house, pet)) throw new Error("pet is no longer applied");
+        if (!applied(house, pet)) throw new Error("bot is no longer applied");
         return runtime.runEnvironmentSetup(house, pet, setup?.[phase], phase);
       });
     },

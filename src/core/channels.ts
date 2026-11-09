@@ -177,7 +177,7 @@ export function botProblems(houses: House[]): string[] {
   for (const house of houses) {
     for (const [index, channel] of house.channels.entries()) {
       const first = owner.get(channel.token);
-      if (first !== undefined && first !== house.name) problems.push(`houses.${house.name}.channels[${index}].token: the same bot as house ${first}'s, and a bot serves one house`);
+      if (first !== undefined && first !== house.name) problems.push(`houses.${house.name}.channels[${index}].token: the same bot as workspace ${first}'s, and a bot serves one workspace`);
       else owner.set(channel.token, house.name);
     }
   }
@@ -202,18 +202,18 @@ export function channelProblems(house: House): string[] {
     seen.add(key);
     const listed = new Set<string>();
     for (const name of channel.pets) {
-      if (!house.pets.some((pet) => pet.name === name)) problems.push(`${at}.pets: '${name}' is not a pet of house ${house.name}`);
+      if (!house.pets.some((pet) => pet.name === name)) problems.push(`${at}.pets: '${name}' is not a bot of workspace ${house.name}`);
       if (listed.has(name)) problems.push(`${at}.pets: '${name}' is listed twice`);
       listed.add(name);
     }
-    if (channel.default === undefined && channel.pets.length > 1) problems.push(`${at}: default is required when a channel has two pets or more (one of ${channel.pets.join(", ")})`);
-    if (channel.default !== undefined && !channel.pets.includes(channel.default)) problems.push(`${at}.default: '${channel.default}' is not one of the channel's pets`);
+    if (channel.default === undefined && channel.pets.length > 1) problems.push(`${at}: default is required when a channel has two bots or more (one of ${channel.pets.join(", ")})`);
+    if (channel.default !== undefined && !channel.pets.includes(channel.default)) problems.push(`${at}.default: '${channel.default}' is not one of the channel's bots`);
     const owner = new Map<string, string>();
     for (const pet of house.pets.filter(({ name }) => listed.has(name))) {
       for (const name of petNames(pet)) {
         const folded = name.toLocaleLowerCase();
         const other = owner.get(folded);
-        if (other !== undefined && other !== pet.name) problems.push(`${at}: pets ${other} and ${pet.name} both answer to '${name}'`);
+        if (other !== undefined && other !== pet.name) problems.push(`${at}: bots ${other} and ${pet.name} both answer to '${name}'`);
         owner.set(folded, pet.name);
       }
     }

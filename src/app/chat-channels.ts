@@ -212,7 +212,7 @@ export class ChatChannels {
       const destination = this.spotsOf(house, other.name).spots.find(spot => spot.key === key);
       if (destination) return destination;
     }
-    throw new HouseholdError("That place belongs to another pet; use places to list your destinations");
+    throw new HouseholdError("That place belongs to another bot; use places to list your destinations");
   }
 
   placeOf(pet: Pet, key: string): Place {
@@ -233,7 +233,7 @@ export class ChatChannels {
     const spot = key === undefined ? undefined : spots.find((candidate) => candidate.key === key);
     if (spot) return spot;
     const yours = spots.map((candidate) => this.records.channelId(house, candidate.key)).join(", ") || "none";
-    const what = key === undefined ? `there is no channel ${channel} in your house` : `${channel} is not one of your channels`;
+    const what = key === undefined ? `there is no channel ${channel} in your workspace` : `${channel} is not one of your channels`;
     throw new HouseholdError(`${what} (yours: ${yours}): use one of them, or leave channel out`);
   }
 

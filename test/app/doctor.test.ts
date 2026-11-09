@@ -69,7 +69,7 @@ test("each problem is said in plain words: no docker or openssl, a config others
 
   // Its only key gone, by hand: the config check says so.
   writeFileSync(paths.configFile, (await Bun.file(paths.configFile).text()).replace(/keys:\n(  .*\n)+/, ""));
-  expect((await check()).some((finding) => !finding.ok && finding.text.includes("pet work/sibling: unknown key 'claude' (the Household has none: add one under keys:)"))).toBe(true);
+  expect((await check()).some((finding) => !finding.ok && finding.text.includes("bot work/sibling: unknown key 'claude' (the Household has none: add one under keys:)"))).toBe(true);
 });
 
 test("a private chat whose person is not among the house's owners is a warning, not a failure", async () => {
@@ -87,7 +87,7 @@ test("an invalid config fails its check and skips the bots it would name", async
   writeFileSync(paths.configFile, "houses:\n  work:\n    pets:\n      sibling: { agent: codex }\n    network: { allow: [] }\n", { mode: 0o600 });
   const findings = await check();
   expect(findings.map((finding) => finding.ok)).toEqual([true, true, true, true, false, true]);
-  expect(findings[4]!.text).toContain("pet work/sibling: unknown agent 'codex'");
+  expect(findings[4]!.text).toContain("bot work/sibling: unknown harness 'codex'");
 });
 
 test("a Telegram that does not answer is unreachable, not a refusal", async () => {

@@ -52,7 +52,7 @@ export class History {
 
   async find(house: string, pet: string, args: HistoryArgs): Promise<HistoryResult> {
     const conversation = this.conversation(house, pet);
-    if (!conversation) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!conversation) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     const filter = this.filter(house, pet, conversation, args);
     if (!this.budget(house, pet).take()) throw new HouseholdError(`too many history searches (over ${this.limits.perMinute} a minute): wait a little`);
     if (!filter) return { messages: [], more: false };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type HouseView, type PreviewView } from "../api";
-import { petPath } from "../router";
+import { api, type WorkspaceView, type PreviewView } from "../api";
+import { botPath } from "../router";
 import { Cell, List, ListRow, Section } from "./layout";
 import { Link } from "./link";
 
@@ -13,8 +13,8 @@ function previewState(item: PreviewView, now: number): { tone: string; label: st
 }
 
 /**
- * The previews of some pets, polled every 5 s, and Close for each: what a pet's Overview and a house's Previews
- * page both show. `load` lists them (one pet's, or every pet's in the house).
+ * The previews of some bots, polled every 5 s, and Close for each: what a bot's Overview and a workspace's Previews
+ * page both show. `load` lists them (one bot's, or every bot's in the workspace).
  */
 function usePreviews(load: () => Promise<PreviewView[]>, deps: unknown[], initial: PreviewView[]) {
   const [items, setItems] = useState<PreviewView[]>(initial);
@@ -40,15 +40,15 @@ function usePreviews(load: () => Promise<PreviewView[]>, deps: unknown[], initia
   return { items, error, busy, now, close };
 }
 
-/** Previews as rows: title and link, (the pet whose VM it is,) port, state, Close or Cancel. */
+/** Previews as rows: title and link, (the bot whose VM it is,) port, state, Close or Cancel. */
 function PreviewList({ items, busy, now, close, empty, pets }: {
   items: PreviewView[]; busy?: string; now: number; close: (item: PreviewView) => void; empty: string;
-  /** The house's pets, to show whose each preview is (a house's page); none: one pet's own. */
-  pets?: HouseView["pets"];
+  /** The workspace's bots, to show whose each preview is (a workspace's page); none: one bot's own. */
+  pets?: WorkspaceView["pets"];
 }) {
   return (
     <List columns={pets ? "minmax(0, 1fr) minmax(0, 0.6fr) auto minmax(0, 12rem) auto" : "minmax(0, 1fr) auto minmax(0, 12rem) auto"} empty={empty}
-      head={pets && items.length > 0 ? ["Preview", "Pet", "Port", "State"] : undefined}>
+      head={pets && items.length > 0 ? ["Preview", "Bot", "Port", "State"] : undefined}>
       {items.map(item => {
         const state = previewState(item, now);
         const pet = pets?.find(each => each.name === item.pet);
@@ -64,7 +64,7 @@ function PreviewList({ items, busy, now, close, empty, pets }: {
                 {item.url ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-link mono ellipsis">{item.url}</a> : <span className="hint">No link yet</span>}
               </span>
             </Cell>
-            {pets && <Cell label="Pet"><Link href={petPath(item.house, item.pet)} className="row-link ellipsis">{pet?.title ?? item.pet}</Link></Cell>}
+            {pets && <Cell label="Bot"><Link href={botPath(item.house, item.pet)} className="row-link ellipsis">{pet?.title ?? item.pet}</Link></Cell>}
             <Cell mono label="Port">{item.port}</Cell>
             <Cell label="State"><span className="hint"><span className={`dot ${state.tone}`} /> {state.label}</span></Cell>
           </ListRow>
@@ -75,12 +75,12 @@ function PreviewList({ items, busy, now, close, empty, pets }: {
 }
 
 /**
- * A pet's HTTP previews (its own VM's, a sideworker's too): each link it asked for, its port and state, Close.
- * With previews off in the house and none left open, nothing at all.
+ * A bot's HTTP previews (its own VM's, a sideworker's too): each link it asked for, its port and state, Close.
+ * With previews off in the workspace and none left open, nothing at all.
  */
-export function PetPreviews({ house, pet, enabled, initial = [] }: {
+export function BotPreviews({ house, pet, enabled, initial = [] }: {
   house: string; pet: string;
-  /** Previews are on in the house. */
+  /** Previews are on in the workspace. */
   enabled: boolean;
   /** For a render without the API (tests). */
   initial?: PreviewView[];
@@ -95,8 +95,8 @@ export function PetPreviews({ house, pet, enabled, initial = [] }: {
   );
 }
 
-/** Every pet's previews in a house, in one list, with whose each is. */
-export function HousePreviews({ house, initial = [] }: { house: HouseView; /** For a render without the API (tests). */ initial?: PreviewView[] }) {
+/** Every bot's previews in a workspace, in one list, with whose each is. */
+export function WorkspacePreviews({ house, initial = [] }: { house: WorkspaceView; /** For a render without the API (tests). */ initial?: PreviewView[] }) {
   const names = house.pets.filter(pet => pet.enabled !== false).map(pet => pet.name);
   const { items, error, busy, now, close } = usePreviews(
     async () => (await Promise.all(names.map(name => api.previews(house.name, name)))).flat(),
@@ -104,7 +104,7 @@ export function HousePreviews({ house, initial = [] }: { house: HouseView; /** F
     initial,
   );
   return (
-    <Section title="Open" hint="A pet asks you in chat for each one; its link closes after 15 minutes.">
+    <Section title="Open" hint="A bot asks you in chat for each one; its link closes after 15 minutes.">
       {error && <p className="error" role="alert">{error}</p>}
       <PreviewList items={items} busy={busy} now={now} close={close} pets={house.pets} empty="None open." />
     </Section>

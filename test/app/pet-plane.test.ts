@@ -373,7 +373,7 @@ test("terminal capture uses only the adapter's fixed pane and bounds output", as
   expect(snapshot?.text.endsWith("<script>plain text</script>\n")).toBe(true);
   expect(Buffer.byteLength(snapshot!.text)).toBe(64 * 1024);
   expect(runtime.execs).toEqual(["household.work.sibling: tmux capture-pane -p -t =main:0.0 -S -200"]);
-  runtime.output = () => "🐾".repeat(20_000) + "❯";
+  runtime.output = () => "🤖".repeat(20_000) + "❯";
   const unicode = (await plane.terminalSnapshot(placed))!.text;
   expect(unicode).not.toContain("�");
   expect(Buffer.byteLength(unicode)).toBeLessThanOrEqual(64 * 1024);

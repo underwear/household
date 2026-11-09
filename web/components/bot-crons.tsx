@@ -67,8 +67,8 @@ export const RUN_STATES: Record<Run["status"], { label: string; tone: string }> 
   failed: { label: "Failed", tone: "danger" },
 };
 
-/** A pet's scheduler state, polled every 5 s while its page is open (its Tasks tab and the tab's count share it). */
-export function usePetCrons(house: string, pet: string, enabled = true) {
+/** A bot's scheduler state, polled every 5 s while its page is open (its Tasks tab and the tab's count share it). */
+export function useBotCrons(house: string, pet: string, enabled = true) {
   const [view, setView] = useState<CronView>();
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -110,10 +110,10 @@ export function usePetCrons(house: string, pet: string, enabled = true) {
 export const scheduledCount = (view: CronView | undefined) => view?.jobs.filter((job) => job.state === "scheduled").length ?? 0;
 
 /**
- * A pet's scheduled tasks: what is due and when (times in the Household time zone), each to edit or cancel; then
+ * A bot's scheduled tasks: what is due and when (times in the Household time zone), each to edit or cancel; then
  * its recent runs, each opening to its timings, instructions and result; and the audit log, folded.
  */
-export function PetCrons({ house, pet, crons: { view, error, now, refresh } }: { house: string; pet: string; crons: ReturnType<typeof usePetCrons> }) {
+export function BotCrons({ house, pet, crons: { view, error, now, refresh } }: { house: string; pet: string; crons: ReturnType<typeof useBotCrons> }) {
   const [editing, setEditing] = useState<CronJob | "new">();
   const dialog = useDialog();
   const timezone = view?.timezone ?? "UTC";
@@ -137,7 +137,7 @@ export function PetCrons({ house, pet, crons: { view, error, now, refresh } }: {
         title="Scheduled tasks"
         hint={
           <>
-            Instructions the pet gets on schedule, in its own session (not posted to any channel). Times in <span className="mono">{timezone}</span>.{" "}
+            Instructions the bot gets on schedule, in its own session (not posted to any channel). Times in <span className="mono">{timezone}</span>.{" "}
             <Link href="/settings" className="text-link">Change time zone</Link>
           </>
         }
@@ -227,7 +227,7 @@ export function PetCrons({ house, pet, crons: { view, error, now, refresh } }: {
                     <pre className="run-text">{run.body}</pre>
                     {run.result && (
                       <>
-                        <span className="run-label">What the pet said</span>
+                        <span className="run-label">What the bot said</span>
                         <pre className="run-text">{run.result}</pre>
                       </>
                     )}
@@ -278,7 +278,7 @@ function TaskDialog({ house, pet, job, timezone, onClose, saved }: { house: stri
         onConfirm: async () => {
           const fields = { name: name.trim(), body: body.trim(), ...(repeating ? { cron: cron.trim() } : { at }) };
           if (!fields.name) throw new Error("Name the task.");
-          if (!fields.body) throw new Error("Say what the pet should do.");
+          if (!fields.body) throw new Error("Say what the bot should do.");
           if (job) await api.updateCron(house, pet, job.id, job.revision, fields);
           else await api.createCron(house, pet, fields);
           await saved();
@@ -315,7 +315,7 @@ function TaskDialog({ house, pet, job, timezone, onClose, saved }: { house: stri
                 <input id={atId} type="datetime-local" className="control" value={at} onChange={(event) => setAt(event.target.value)} required />
               </Field>
             )}
-            <Field id={bodyId} label="Instructions" hint="Sent to the pet as your message.">
+            <Field id={bodyId} label="Instructions" hint="Sent to the bot as your message.">
               <textarea id={bodyId} className="control task-instructions" rows={6} maxLength={32000} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Summarise yesterday’s merged PRs and post the digest to the team thread." />
             </Field>
           </>

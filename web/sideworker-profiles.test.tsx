@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SideworkerProfiles, SideworkerProfileDialog } from "./components/sideworker-profiles";
-import type { AgentView, HouseView, KeyView } from "./api";
+import type { HarnessView, WorkspaceView, KeyView } from "./api";
 
-const agents: AgentView[] = [
+const agents: HarnessView[] = [
   { name: "alpha", models: ["alpha-fast"], defaultModel: "alpha-fast", providers: ["anthropic"], modes: [{ id: "ask", label: "Ask first" }], defaultMode: "ask", settings: [], modelOptions: [{ id: "alpha-fast", label: "Fast", supportedReasoningEfforts: [{ reasoningEffort: "low", description: "Quick" }], defaultReasoningEffort: "low" }] },
   { name: "beta", models: ["beta-deep"], defaultModel: "beta-deep", providers: ["openai"], modes: [{ id: "auto", label: "Automatic" }], defaultMode: "auto", settings: [] },
 ];
@@ -11,12 +11,12 @@ const keys: KeyView[] = [
   { name: "alpha-key", provider: "anthropic", kind: "API key", value: "", note: null, pets: [], houses: null, allowOverage: false, allowance: null },
   { name: "beta-key", provider: "openai", kind: "subscription", value: "", note: null, pets: [], houses: ["work"], allowOverage: false, allowance: null },
 ];
-const house: HouseView = { name: "work", allow: [], owners: [], channels: [], pets: [], sideworkerProfiles: [] };
+const house: WorkspaceView = { name: "work", allow: [], owners: [], channels: [], pets: [], sideworkerProfiles: [] };
 
-test("house profiles: the pet's own settings by default (said once), then owner-approved alternatives", () => {
+test("workspace profiles: the bot's own settings by default (said once), then owner-approved alternatives", () => {
   const empty = renderToStaticMarkup(<SideworkerProfiles house={house} agents={agents} keys={keys} refresh={async () => {}} notify={() => {}} />);
-  expect(empty).toContain("runs on its pet&#x27;s own agent and model"); // the default, in the hint
-  expect(empty).toContain("None yet: every sideworker runs on its pet&#x27;s settings.");
+  expect(empty).toContain("runs on its bot&#x27;s own harness and model"); // the default, in the hint
+  expect(empty).toContain("None yet: every sideworker runs on its bot&#x27;s settings.");
   expect(empty).toContain("+ Add profile");
   const configured = { ...house, sideworkerProfiles: [{ name: "review", agent: "beta", key: "beta-key", model: "beta-deep", mode: "auto" }] };
   const html = renderToStaticMarkup(<SideworkerProfiles house={configured} agents={agents} keys={keys} refresh={async () => {}} notify={() => {}} />);

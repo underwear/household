@@ -44,7 +44,7 @@ test("a question is a card; a button answers it, and the card shows the choice; 
   expect(await answer).toEqual({ kind: "answers", answers: [{ chosen: ["Green"] }] });
   await press("card-1", 0);
   expect(calls.slice(1)).toEqual(["resolve card-1: Green"]);
-  expect(lines).toEqual(["pet work/sibling: dialog shown in the chat", "pet work/sibling: dialog answered"]);
+  expect(lines).toEqual(["bot work/sibling: dialog shown in the chat", "bot work/sibling: dialog answered"]);
 });
 
 test("text written while a dialog waits answers it; another pet's text, or text once nothing waits, does not", async () => {
@@ -124,7 +124,7 @@ test("a dialog answered in the agent's session ends without an answer; when Hous
   expect(await terminal).toBeUndefined();
   expect(timer.cancelled).toBe(true);
   expect(calls.at(-1)).toBe("resolve card-1: Answered in the terminal");
-  expect(lines).toContain("pet work/sibling: dialog answered in the terminal");
+  expect(lines).toContain("bot work/sibling: dialog answered in the terminal");
   expect(await ask(color, AbortSignal.abort())).toBeUndefined(); // gone before any card
   expect(calls).toHaveLength(2);
 
@@ -142,7 +142,7 @@ test("a dialog that cannot be shown stays in the terminal; a card that did show 
   failAt(1); // the second card
   const two: DialogQuestion = { kind: "questions", questions: [{ text: "1?", options: [{ label: "a" }], multiSelect: false }, { text: "2?", options: [{ label: "b" }], multiSelect: false }] };
   expect(await ask(two)).toBeUndefined();
-  expect(lines).toContain("ERROR pet work/sibling: the dialog could not be shown (sendMessage: 400 Bad Request: chat not found)");
+  expect(lines).toContain("ERROR bot work/sibling: the dialog could not be shown (sendMessage: 400 Bad Request: chat not found)");
   expect(calls.at(-1)).toBe("resolve card-1: Could not be shown in full: answer in the terminal");
 });
 

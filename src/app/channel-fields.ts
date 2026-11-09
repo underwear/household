@@ -55,7 +55,7 @@ export async function checkFields(
         if (channel.kind !== kind || typeof theirs !== "string") continue;
         const identity = check.identityOf(theirs) ?? await check.identify?.(theirs);
         if (identity !== accepted.identity) continue;
-        if (other.name !== house) throw new HouseholdError(`${accepted.shown} is house ${other.name}'s bot, and a bot serves one house`);
+        if (other.name !== house) throw new HouseholdError(`${accepted.shown} is workspace ${other.name}'s bot, and a bot serves one workspace`);
         if (channel.chat !== chat && theirs !== accepted.value) also.push({ chat: channel.chat, fields: { [key]: accepted.value } });
       }
     }

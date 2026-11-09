@@ -90,12 +90,12 @@ export class Lifecycles {
     const name = `${house}/${pet}`;
     this.busy.add(name);
     try {
-      this.options.log(`pet ${name}: scheduled restart, sending the shutdown notice`);
+      this.options.log(`bot ${name}: scheduled restart, sending the shutdown notice`);
       await this.options.restart(house, pet, { text: shutdownMessage(lifecycle), timeoutMs });
       this.options.wakeUp(house, pet, wakeUpMessage(lifecycle));
-      this.options.log(`pet ${name}: scheduled restart done, wake-up message sent`);
+      this.options.log(`bot ${name}: scheduled restart done, wake-up message sent`);
     } catch (error) {
-      this.options.error(`pet ${name}: scheduled restart failed: ${(error as Error).message}`);
+      this.options.error(`bot ${name}: scheduled restart failed: ${(error as Error).message}`);
     } finally {
       this.busy.delete(name);
     }

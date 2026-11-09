@@ -407,7 +407,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
           await channel.setChoices(posted, next.choices, next.note, next.text === undefined ? undefined : { text: next.text, format: card.format }).catch((error) => {
             // The buttons shown stay the ones that answer.
             ({ state, shown } = before);
-            this.events.error(`pet ${house}/${pet}: a card was not updated: ${(error as Error).message}`);
+            this.events.error(`bot ${house}/${pet}: a card was not updated: ${(error as Error).message}`);
           });
         },
       });
@@ -425,7 +425,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    */
   replyFormat(house: string, pet: string, channel?: string, place?: string) {
     const { found, spots } = this.channels.spotsOf(house, pet);
-    if (!found) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!found) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     const target = this.destination(house, pet, channel, place);
     if (target.problem) throw new HouseholdError(target.problem);
     if (!target.spot) throw new HouseholdError("no chat channel is available");
@@ -445,7 +445,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (text.length > this.limits.replyChars) throw new HouseholdError(`the text is over ${this.limits.replyChars} characters: shorten it`);
     if (carriesHouseholdTag(text)) throw new HouseholdError("the text carries a Household tag (household-…): not edited");
     const { found, spots } = this.channels.spotsOf(house, pet);
-    if (!found) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!found) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     const spot = this.channels.chosen(house, spots, channel);
     expectId("message", id);
     const record = this.records.inJournal(house, pet, channel, id) ? this.records.recordById(house, channel, id) : undefined;
@@ -474,19 +474,19 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const choices = buttons && checkButtons(buttons);
     if (carriesHouseholdTag([text, choices])) throw new HouseholdError("the text or a button carries a Household tag (household-…): not sent, write it some other way");
     const { found, spots } = this.channels.spotsOf(house, pet);
-    if (!found) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!found) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     const target = this.destination(house, pet, channel, place);
     if (target.problem) throw new HouseholdError(`${target.problem}; the reply was not sent`);
     const { spot } = target;
     if (!spot) {
-      const none = this.channels.house(house)?.channels.length ? `${pet} is placed in no channel of house ${house}` : `house ${house} has no chat set up`;
+      const none = this.channels.house(house)?.channels.length ? `${pet} is placed in no channel of workspace ${house}` : `workspace ${house} has no chat set up`;
       throw new HouseholdError(`${none}; the reply was not sent`);
     }
     const open = spot.channel;
     const where = { ...spot.place, title: petPlace(found, "").title };
     if (!open) {
       const config = this.channels.house(house)?.channels.find((candidate) => channelKey(candidate) === spot.key);
-      throw new HouseholdError(`channel ${config ? channelName(knownChannelKinds(), config) : spot.key} of house ${house} is not open (see the daemon's log); the reply was not sent`);
+      throw new HouseholdError(`channel ${config ? channelName(knownChannelKinds(), config) : spot.key} of workspace ${house} is not open (see the daemon's log); the reply was not sent`);
     }
     if (!this.budget("replies", house, pet).take()) throw new HouseholdError(`too many replies (over ${repliesPerMinute} a minute): not sent, wait a little`);
     const live = this.live.turnOf(house, pet);
@@ -507,7 +507,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    */
   async react(house: string, pet: string, channel: string, id: string, emoji: string): Promise<{ id: string; reaction: string | null }> {
     const { found, spots } = this.channels.spotsOf(house, pet);
-    if (!found) throw new HouseholdError(`unknown pet ${house}/${pet}`);
+    if (!found) throw new HouseholdError(`unknown bot ${house}/${pet}`);
     const spot = this.channels.chosen(house, spots, channel);
     expectId("message", id);
     const record = this.records.inJournal(house, pet, channel, id) ? this.records.recordById(house, channel, id) : undefined;
@@ -531,16 +531,16 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const name = `${house}/${pet}`;
     const target = this.currentTarget(house, pet);
     if (found && target.problem) {
-      this.events.error(`pet ${name}: a dialog was refused: ${target.problem}`);
+      this.events.error(`bot ${name}: a dialog was refused: ${target.problem}`);
       return { kind: "refused", message: `Household could not put this to your human: ${target.problem}. Ask with the reply tool instead, naming one of your channels.` };
     }
     if (!found || !target.spot?.channel) {
-      this.events.info(`pet ${name}: a dialog stays in the terminal (no chat)`);
+      this.events.info(`bot ${name}: a dialog stays in the terminal (no chat)`);
       return undefined;
     }
     const permission = dialog.kind === "permission";
     if (!permission && !this.budget("dialogs", house, pet).take()) {
-      this.events.error(`pet ${name}: a dialog stays in the terminal (too many dialogs)`);
+      this.events.error(`bot ${name}: a dialog stays in the terminal (too many dialogs)`);
       if (this.budget("terminal notices", house, pet).take()) {
         void this.notice(house, pet, "Too many questions in a row. Answer in the terminal: `house pet attach`");
       }
@@ -593,7 +593,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       this.posted(house, pet, spot.place, refs, { kind: "household" }, shown);
     }));
     if (results.some(result => result.status === "rejected")) {
-      this.events.error(`pet ${house}/${from}: peer message chat copy to ${to} failed`);
+      this.events.error(`bot ${house}/${from}: peer message chat copy to ${to} failed`);
       throw new Error("A chat copy could not be posted");
     }
   }
@@ -614,7 +614,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       this.posted(house, pet, spot.place, refs, { kind: "household" }, text);
       return { channel: spot.channel, ref: refs.at(-1)! };
     } catch (error) {
-      this.events.error(`pet ${house}/${pet}: notice not sent (${(error as Error).message})`);
+      this.events.error(`bot ${house}/${pet}: notice not sent (${(error as Error).message})`);
       return undefined;
     }
   }
@@ -639,7 +639,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
         for (const spot of spots) {
           if (!spot.channel?.removePlace) continue;
           try { removed = (await spot.channel.removePlace(spot.place)) || removed; }
-          catch (error) { this.events.error(`pet ${house}/${pet}: its place was not removed (${(error as Error).message})`); }
+          catch (error) { this.events.error(`bot ${house}/${pet}: its place was not removed (${(error as Error).message})`); }
         }
         if (removed) return;
       }
@@ -655,7 +655,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const { spot } = this.currentTarget(house, pet);
     if (!spot?.channel?.placeLink) return undefined;
     return spot.channel.placeLink(spot.place).catch((error) => {
-      this.events.error(`pet ${house}/${pet}: no link to its place (${(error as Error).message})`);
+      this.events.error(`bot ${house}/${pet}: no link to its place (${(error as Error).message})`);
       return undefined;
     });
   }
@@ -675,7 +675,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       if (linkTo !== undefined) await this.rewrite(house, notice, text, linkTo);
       return notice;
     } catch (error) {
-      this.events.error(`pet ${house}/${pet}: notice not sent (${(error as Error).message})`);
+      this.events.error(`bot ${house}/${pet}: notice not sent (${(error as Error).message})`);
       return undefined;
     }
   }
@@ -690,7 +690,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (!channel) return;
     const url = linkTo === undefined ? undefined : await this.placeLink(house, linkTo);
     await channel.setChoices(notice.ref, [], undefined, { text, format: "html", ...(url ? { link: { label: OPEN_PLACE, url } } : {}) })
-      .catch((error) => this.events.error(`house ${house}: a notice was not rewritten (${(error as Error).message})`));
+      .catch((error) => this.events.error(`workspace ${house}: a notice was not rewritten (${(error as Error).message})`));
   }
 
   /**
@@ -825,7 +825,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const configured = this.channels.house(house);
     const config = configured?.channels.find((candidate) => channelKey(candidate) === key);
     // A channel that is closing (a reload took it away or replaced it) hears no more.
-    if (!configured || !config || !this.channels.accepts(house, key, channel)) return this.events.info(`house ${house}: a ${message.kind} through channel ${key}, which is closing, was dropped`);
+    if (!configured || !config || !this.channels.accepts(house, key, channel)) return this.events.info(`workspace ${house}: a ${message.kind} through channel ${key}, which is closing, was dropped`);
     // A reaction is where the message it is on was, and for whom (the channel may not know); an edit is for whom the message it changes was.
     const on = message.kind === "reaction" ? this.records.recordByRef(house, message.on) : undefined;
     const original = message.kind === "text" && message.edits !== undefined ? this.records.recordByRef(house, message.edits) : undefined;
@@ -880,7 +880,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (writer !== undefined && !thread && message.kind !== "choice") return this.gone(house, channel, writer, placeId!);
     if (carriesHouseholdTag(message)) {
       if (pet) return this.rejected(house, pet.name, spot, message);
-      return this.events.error(`house ${house}: a ${message.kind} from ${message.from.ref} was rejected by the security system: it carries a Household tag`);
+      return this.events.error(`workspace ${house}: a ${message.kind} from ${message.from.ref} was rejected by the security system: it carries a Household tag`);
     }
     // A reaction on a message Household has no record of: where it was is not known.
     const unplaced = message.kind === "reaction" && !on;
@@ -893,11 +893,11 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const where = { ...(unplaced ? {} : { place: place.id }), ...(message.kept && Object.keys(message.kept).length > 0 ? { facts: message.kept } : {}) };
     // A press goes by the post pressed, so a channel without pets resolves them too.
     if (message.kind === "choice") return this.choose(house, channel, config, message, envelope, where);
-    if (!pet) return this.events.error(`house ${house}: a message through channel ${channelName(knownChannelKinds(), config)}, which has no pets, was ignored`);
+    if (!pet) return this.events.error(`workspace ${house}: a message through channel ${channelName(knownChannelKinds(), config)}, which has no bots, was ignored`);
     if (message.kind === "reaction") return this.reacted(house, pet.name, message, on, envelope, where);
     // An edit is for the pet that got the message it changes; one that has left the channel gets nothing more of it.
     if (original && original.pet !== pet.name) {
-      return this.events.info(`house ${house}: an edit of ${original.id} was dropped: ${original.pet || "no pet"} got it, and is not in channel ${channelName(knownChannelKinds(), config)} now`);
+      return this.events.info(`workspace ${house}: an edit of ${original.id} was dropped: ${original.pet || "no bot"} got it, and is not in channel ${channelName(knownChannelKinds(), config)} now`);
     }
     // `/stop` in the pet's own place (not relayed, not an edit): Household stops the pet; the pet never gets it.
     // Kept by its ref in no journal, so a channel replaying it stops nothing twice.
@@ -929,7 +929,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    * (it is not General: the person wrote to that pet), the log every time.
    */
   private async gone(house: string, channel: Channel, pet: string, placeId: string): Promise<void> {
-    this.events.info(`house ${house}: a message in the place of ${pet} (${placeId}), which is no longer in that channel, was not delivered`);
+    this.events.info(`workspace ${house}: a message in the place of ${pet} (${placeId}), which is no longer in that channel, was not delivered`);
     const name = `${house}/${placeId}`;
     if (this.told.has(name)) return;
     keep(this.told, name, () => this.told.add(name));
@@ -966,7 +966,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    */
   private async rejected(house: string, pet: string, spot: { channel: Channel; place: Place }, message: InboundMessage): Promise<void> {
     if (!this.delivery.reject(house, pet, { text: textOf(message), origin: "chat", ref: message.ref })) return;
-    this.events.error(`house ${house}: a ${message.kind} from ${message.from.ref} was rejected by the security system: it carries a Household tag`);
+    this.events.error(`workspace ${house}: a ${message.kind} from ${message.from.ref} was rejected by the security system: it carries a Household tag`);
     await this.noticeIn(house, pet, spot, REJECTED);
   }
 
@@ -1009,7 +1009,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    */
   private noticeTo(house: string, pet: string, target: Target, text: string): Promise<void> {
     if (target.problem) {
-      this.events.error(`pet ${house}/${pet}: notice dropped (${target.problem}): ${text}`);
+      this.events.error(`bot ${house}/${pet}: notice dropped (${target.problem}): ${text}`);
       return Promise.resolve();
     }
     return this.noticeIn(house, pet, target.spot, text);
@@ -1017,14 +1017,14 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
 
   /** A notice from Household in a place, in pet's conversation; the log gets it when the chat cannot. Never throws. */
   private async noticeIn(house: string, pet: string, spot: { channel?: Channel; place: Place } | undefined, text: string): Promise<void> {
-    if (!spot?.channel) return this.events.info(`pet ${house}/${pet}: notice (no chat): ${text}`);
+    if (!spot?.channel) return this.events.info(`bot ${house}/${pet}: notice (no chat): ${text}`);
     try {
       const live = this.live.turnOf(house, pet);
       const refs = await spot.channel.notice(spot.place, text);
       this.live.replied(live, { channel: spot.channel, place: spot.place });
       this.posted(house, pet, spot.place, refs, { kind: "household" }, text);
     } catch (error) {
-      this.events.error(`pet ${house}/${pet}: notice not sent (${(error as Error).message}): ${text}`);
+      this.events.error(`bot ${house}/${pet}: notice not sent (${(error as Error).message}): ${text}`);
     }
   }
 
@@ -1033,7 +1033,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const { added, removed } = reaction;
     // On a message the pet cannot reach (another's, Household's own notice): nothing to tell it.
     if (on && !this.records.inJournal(house, pet, envelope.channel.id, on.id)) {
-      return this.events.info(`house ${house}: a reaction on ${on.id} of ${envelope.channel.id} was dropped: not in ${pet}'s journal`);
+      return this.events.info(`workspace ${house}: a reaction on ${on.id} of ${envelope.channel.id} was dropped: not in ${pet}'s journal`);
     }
     const author = on && this.author(house, pet, on);
     const target = on && { id: on.id, excerpt: on.excerpt, ...(author ? { author } : {}) };
@@ -1096,7 +1096,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const board: Board = {
       post: async (text, choices, onPress) => {
         const { spot, problem } = this.currentTarget(house, pet);
-        if (!spot?.channel) throw new HouseholdError(problem ?? `house ${house} has no chat any more`);
+        if (!spot?.channel) throw new HouseholdError(problem ?? `workspace ${house} has no chat any more`);
         const live = this.live.turnOf(house, pet);
         const refs = await spot.channel.notice(spot.place, text, choices);
         this.live.replied(live, { channel: spot.channel, place: spot.place });
@@ -1112,7 +1112,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
         await posted
           .get(ref)
           ?.setChoices(ref, choices)
-          .catch((error) => this.events.error(`pet ${house}/${pet}: a card was not updated: ${(error as Error).message}`));
+          .catch((error) => this.events.error(`bot ${house}/${pet}: a card was not updated: ${(error as Error).message}`));
       },
       resolve: (ref, outcome) => this.resolve(house, posted.get(ref), ref, outcome),
     };
@@ -1127,7 +1127,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
   private async resolve(house: string, channel: Channel | undefined, ref: PostRef, outcome: string): Promise<void> {
     this.cards.delete(ref);
     keep(this.resolved, ref, () => this.resolved.add(ref));
-    await channel?.resolve(ref, outcome).catch((error) => this.events.error(`house ${house}: buttons not replaced: ${(error as Error).message}`));
+    await channel?.resolve(ref, outcome).catch((error) => this.events.error(`workspace ${house}: buttons not replaced: ${(error as Error).message}`));
   }
 
   /** A pet's budget of replies, of dialogs, and of notices that a dialog stays in the terminal (one per 10 minutes). */
@@ -1146,6 +1146,6 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
 
   /** Marks the person's message as taken (cosmetic: a failure is only logged). */
   private seen(house: string, channel: Channel, ref: InboundMessage["ref"]): void {
-    channel.delivered(ref).catch((error) => this.events.error(`house ${house}: "seen" mark failed: ${(error as Error).message}`));
+    channel.delivered(ref).catch((error) => this.events.error(`workspace ${house}: "seen" mark failed: ${(error as Error).message}`));
   }
 }

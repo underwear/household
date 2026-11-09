@@ -25,7 +25,7 @@ function logFile(...records: unknown[]): string {
 }
 
 test("each kind of event reads as a line: where from, how bad, whose, what; controls escaped", () => {
-  expect(logLine(daemon("pet work/sibling: disabled") as never)).toEqual({ at: daemon("").ts, kind: "daemon", level: "info", house: "work", pet: "sibling", text: "pet work/sibling: disabled" });
+  expect(logLine(daemon("bot work/sibling: disabled") as never)).toEqual({ at: daemon("").ts, kind: "daemon", level: "info", house: "work", pet: "sibling", text: "bot work/sibling: disabled" });
   expect(logLine(daemon("telegram house work: polling failed", "error") as never)).toMatchObject({ level: "error", house: "work" });
   expect(logLine(daemon("ready, control socket /x") as never)!.house).toBeUndefined();
   expect(logLine(agent as never)).toMatchObject({ kind: "agent", level: "warn", house: "work", pet: "sibling", text: "turn failed: no newline" });
@@ -43,9 +43,9 @@ test("the log reads its last lines that fit, then only what was appended since i
   expect(readLog(path, { limit: 10, filter: { problems: true } }).lines.map((line) => line.kind)).toEqual(["agent", "network"]);
   expect(readLog(path, { limit: 10, filter: { query: "EVIL" } }).lines).toHaveLength(1);
   expect(readLog(path, { after: first.cursor, limit: 10 }).lines).toEqual([]);
-  appendFileSync(path, `${JSON.stringify(daemon("pet work/owl: enabled"))}\n{"half`);
+  appendFileSync(path, `${JSON.stringify(daemon("bot work/owl: enabled"))}\n{"half`);
   const next = readLog(path, { after: first.cursor, limit: 10 });
-  expect(next.lines.map((line) => line.text)).toEqual(["pet work/owl: enabled"]); // a half-written line waits
+  expect(next.lines.map((line) => line.text)).toEqual(["bot work/owl: enabled"]); // a half-written line waits
   appendFileSync(path, `":1}\n`);
   expect(readLog(path, { after: next.cursor, limit: 10 }).lines).toEqual([]); // not an event: skipped, never fatal
   expect(readLog(join(tempDir(), "none.jsonl"), { limit: 5 })).toEqual({ lines: [], cursor: "none:0" });
@@ -55,12 +55,12 @@ test("the log reads its last lines that fit, then only what was appended since i
 test("a pet's activity excludes house-wide events, other pets and the same pet name in another house", () => {
   const path = logFile(
     daemon("house work created"), daemon("daemon ready"),
-    daemon("pet work/sibling: enabled"), agent, deny,
+    daemon("bot work/sibling: enabled"), agent, deny,
     { ...agent, house: "home" },
   );
   const filter = { house: "work", pet: "sibling" };
   const first = readLog(path, { limit: 100, filter });
-  expect(first.lines.map(({ text }) => text)).toEqual(["pet work/sibling: enabled", "turn failed: no newline"]);
+  expect(first.lines.map(({ text }) => text)).toEqual(["bot work/sibling: enabled", "turn failed: no newline"]);
   appendFileSync(path, [daemon("house work reloaded"), { ...agent, pet: "owl" }, agent].map((record) => `${JSON.stringify(record)}\n`).join(""));
   expect(readLog(path, { limit: 100, filter, after: first.cursor }).lines.map(({ text }) => text)).toEqual(["turn failed: no newline"]);
 });

@@ -42,13 +42,13 @@ export class Previews {
     return !!house && houseFeatures(house).preview && house.pets.some(p => p.name === caller.pet && p.enabled !== false);
   }
   request(caller: PetIdentity, args: Record<string, unknown>) {
-    if (this.stopped || !this.allowed(caller)) throw new Error("HTTP previews are disabled for this house or pet. Ask your owner to enable them in house settings.");
+    if (this.stopped || !this.allowed(caller)) throw new Error("HTTP previews are disabled for this workspace or bot. Ask your owner to enable them in workspace settings.");
     if (typeof args.port !== "number" || !Number.isInteger(args.port) || args.port < 1 || args.port > 65535) throw new Error("port must be an integer from 1 to 65535 in your own VM");
     const title = text(args.title, "title", 100), reason = text(args.reason, "reason", 600);
     const existing = [...this.entries.values()].find(e => same(e.view, caller) && e.view.port === args.port);
     if (existing?.done) throw new Error("This preview is closing; retry once it has closed.");
     if (existing) return { ...existing.view };
-    if (this.list(caller).length >= 8) throw new Error("Close a preview before requesting another (8 per pet maximum).");
+    if (this.list(caller).length >= 8) throw new Error("Close a preview before requesting another (8 per bot maximum).");
     const entry: Entry = { view: { ...caller, id: crypto.randomUUID(), port: args.port, title, status: "pending", requested_at: new Date(this.clock.now()).toISOString() }, reason, controller: new AbortController(), cancelTimer: () => {}, done: false };
     this.entries.set(entry.view.id, entry);
     entry.cancelTimer = this.clock.after(PREVIEW_WAIT_MS, () => { this.track(this.finish(entry, "approval timed out")); });
@@ -135,7 +135,7 @@ export class Previews {
   }
   async close(caller: PetIdentity, id: string) {
     const entry = this.entries.get(id);
-    if (!entry || !same(entry.view, caller)) throw new Error("Unknown preview for this pet");
+    if (!entry || !same(entry.view, caller)) throw new Error("Unknown preview for this bot");
     await this.finish(entry, "closed manually");
   }
   async closePet(caller: PetIdentity, reason = "VM stopped") {

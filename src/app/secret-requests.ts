@@ -71,14 +71,14 @@ export class SecretRequests {
     const env = args.env;
     const { name } = args;
     const configured = this.options.house(house);
-    if (this.stopped || !configured?.pets.some(p => p.name === pet) || configured.network.allow.some(isWholeInternet)) return { status: "refused", message: "Secret requests require an existing member of a restricted-network house." };
+    if (this.stopped || !configured?.pets.some(p => p.name === pet) || configured.network.allow.some(isWholeInternet)) return { status: "refused", message: "Secret requests require an existing member of a restricted-network workspace." };
     const existing = this.options.secrets().find(s => s.name === name);
     if (existing) return { status: "refused", message: "That secret name already exists; choose a unique name. Nothing will be overwritten." };
-    if (this.options.secrets().some(s => availableTo(s, house) && s.env === env)) return { status: "refused", message: "That env is already used in this house; choose a unique environment variable." };
+    if (this.options.secrets().some(s => availableTo(s, house) && s.env === env)) return { status: "refused", message: "That env is already used in this workspace; choose a unique environment variable." };
     const key = keyOf(house, pet);
-    if (this.confirmations.has(house) || [...this.pending.values()].some(r => r.house === house)) return { status: "busy", message: "This house already has an active secret request or confirmation. Wait for its outcome." };
+    if (this.confirmations.has(house) || [...this.pending.values()].some(r => r.house === house)) return { status: "busy", message: "This workspace already has an active secret request or confirmation. Wait for its outcome." };
     const recent = (this.rate.get(house) ?? []).filter(t => t > this.clock.now() - HOUR);
-    if (recent.length >= MAX_REQUESTS) return { status: "busy", message: "This house has reached its hourly secret request limit." };
+    if (recent.length >= MAX_REQUESTS) return { status: "busy", message: "This workspace has reached its hourly secret request limit." };
     recent.push(this.clock.now()); this.rate.set(house, recent);
     const request: Request = { house, pet, name, reason: args.reason.trim(), id: `r${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`, env, hosts, expiresAt: this.clock.now() + (this.options.waitMs ?? WAIT_MS), controller: new AbortController(), cancelTimer: () => {} };
     this.pending.set(key, request);
@@ -308,7 +308,7 @@ export class SecretRequests {
 export function secretRequestTool(requests: SecretRequests): McpTool<PetIdentity> {
   return {
     name: "secret_request",
-    description: "Ask your human to add a house secret. You never receive the value, only a placeholder. Choose unique name and env; domains are exact service hosts approved by the owner. Multiple secrets can share the same domains. One active request per house. reason explains why you need it. Returns promptly; Household sends an internal notification when ready or expired. Secret substitution does not grant network access: use network_request separately. Never ask for values through reply or ordinary chat.",
+    description: "Ask your human to add a workspace secret. You never receive the value, only a placeholder. Choose unique name and env; domains are exact service hosts approved by the owner. Multiple secrets can share the same domains. One active request per workspace. reason explains why you need it. Returns promptly; Household sends an internal notification when ready or expired. Secret substitution does not grant network access: use network_request separately. Never ask for values through reply or ordinary chat.",
     inputSchema: { type: "object", additionalProperties: false, required: ["name", "env", "domains", "reason"], properties: {
       name: { type: "string" }, env: { type: "string" }, domains: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 16 }, reason: { type: "string", minLength: 1, maxLength: 600 },
     } },

@@ -92,7 +92,7 @@ test("a failed restart sends no wake-up message; a changed schedule is planned a
   at("2026-11-08T12:00:00Z");
   at("2026-11-09T03:56:00Z");
   await Bun.sleep(0);
-  expect(calls).toEqual(["restart work/sibling", "error pet work/sibling: scheduled restart failed: pet is already restarting"]);
+  expect(calls).toEqual(["restart work/sibling", "error bot work/sibling: scheduled restart failed: pet is already restarting"]);
   setPets([{ house: "work", pet: "sibling", lifecycle: { ...DEFAULT_LIFECYCLE, every: "weekly", weekday: "friday" } }]);
   at("2026-11-09T05:00:00Z");
   expect(new Date(scheduler.next("work", "sibling")!).toISOString()).toBe("2026-11-13T04:00:00.000Z");

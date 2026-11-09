@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MCP servers — Household docs</title>
-  <meta name="description" content="Give a pet any MCP server: ask it, and it adds the server to its own Claude Code or Codex, with the hosts and keys you approve.">
+  <meta name="description" content="Give a bot any MCP server: ask it, and it adds the server to its own Claude Code or Codex, with the hosts and keys you approve.">
   <meta property="og:title" content="Adding MCP servers">
-  <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/mcp/">
   <meta property="og:type" content="article">
   <meta property="og:image" content="https://agents-household.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Household: a home for your agents. A pet answering in a Telegram thread.">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
   <meta property="og:site_name" content="Household">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1f1d1a">
@@ -170,11 +170,11 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../connectors/">Google connectors</a></li><li><a href="../start/">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="./" aria-current="page">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="./" aria-current="page">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
-    <article><p class="crumb">Pets</p><h1>Adding MCP servers</h1>
-<p>Household does not connect MCP servers for a whole house yet. But every pet runs a real Claude Code or Codex in its own VM, so you can simply ask it: it will add any MCP server to its own harness, from the inside. 🐾</p>
-<h2 id="ask-your-pet">Ask your pet</h2>
+    <article><p class="crumb">Bots</p><h1>Adding MCP servers</h1>
+<p>Household does not connect MCP servers for a whole workspace yet. But every bot runs a real Claude Code or Codex in its own VM, so you can simply ask it: it will add any MCP server to its own harness, from the inside. 🤖</p>
+<h2 id="ask-your-bot">Ask your bot</h2>
 <p>Write to it as you would to a colleague:</p>
 <blockquote>
 <p>Add the Linear MCP server for yourself: https://mcp.linear.app/mcp</p>
@@ -186,34 +186,34 @@
 <p>Install the Playwright MCP server and use it for the tickets site.</p>
 </blockquote>
 <details>
-<summary><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> We believe giving your pet a browser is a bad idea. Why?</summary>
-<p>It works. We still wouldn't. The internet is not a friendly place, and a browser takes your pet right into it.</p>
+<summary><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> We believe giving your bot a browser is a bad idea. Why?</summary>
+<p>It works. We still wouldn't. The internet is not a friendly place, and a browser takes your bot right into it.</p>
 <ul>
 <li><strong>Pages talk back.</strong> Any page can carry text written for an AI rather than for you: &quot;ignore your instructions and…&quot;. This is prompt injection, and no model is fully immune to it.</li>
-<li><strong>Your pet has a lot to lose.</strong> Your projects, its memory, the hosts your house allows, the keys it can use. A page that talks it into something talks it into it with all of that at hand.</li>
+<li><strong>Your bot has a lot to lose.</strong> Your projects, its memory, the hosts your workspace allows, the keys it can use. A page that talks it into something talks it into it with all of that at hand.</li>
 <li><strong>A browser is a huge program.</strong> Millions of lines of code that read whatever a page sends. Browser makers ship security fixes all the time, which is good news, and also a hint at how often holes are found.</li>
 </ul>
-<p>A scout is made for exactly this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your pet only if you pass them. So when your pet needs a website, let it <a href="../scouts/">call a scout</a>.</p>
+<p>A scout is made for exactly this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your bot only if you pass them. So when your bot needs a website, let it <a href="../scouts/">call a scout</a>.</p>
 </details>
-<p>The pet adds the server the way its agent does (<code>claude mcp add …</code> in Claude Code, <code>codex mcp add …</code> in Codex) and tells you if it needs something from you. Usually that is one of two things:</p>
+<p>The bot adds the server the way its harness does (<code>claude mcp add …</code> in Claude Code, <code>codex mcp add …</code> in Codex) and tells you if it needs something from you. Usually that is one of two things:</p>
 <ul>
-<li><strong>A host.</strong> A pet's VM reaches only what the house allows. For a remote server it asks for the server's domain, and you answer in the chat: for 15 minutes, for good, or no. You can also add the host yourself on the house's <strong>Network</strong> page.</li>
-<li><strong>A key.</strong> For a server that needs a token, the pet asks you for a House secret. You paste the value; the pet only ever sees a placeholder, and Household puts the real token into requests to that server's host on their way out.</li>
+<li><strong>A host.</strong> A bot's VM reaches only what the workspace allows. For a remote server it asks for the server's domain, and you answer in the chat: for 15 minutes, for good, or no. You can also add the host yourself on the workspace's <strong>Network</strong> page.</li>
+<li><strong>A key.</strong> For a server that needs a token, the bot asks you for a Workspace secret. You paste the value; the bot only ever sees a placeholder, and Household puts the real token into requests to that server's host on their way out.</li>
 </ul>
 <h2 id="it-stays">It stays</h2>
-<p>A pet's MCP settings live in its home folder, which survives restarts and new VMs. If a server needs a system package (Node, Python, a browser), the pet adds it to its environment setup, so a new VM gets it back.</p>
-<p>A new server usually shows up in the pet's next session. If the pet does not see it, press <strong>Restart</strong> on its page.</p>
+<p>A bot's MCP settings live in its home folder, which survives restarts and new VMs. If a server needs a system package (Node, Python, a browser), the bot adds it to its environment setup, so a new VM gets it back.</p>
+<p>A new server usually shows up in the bot's next session. If the bot does not see it, press <strong>Restart</strong> on its page.</p>
 <h2 id="good-to-know">Good to know</h2>
 <ul>
-<li><strong>Each pet for itself.</strong> A server one pet added is not shared with the others: ask each pet that needs it.</li>
-<li><strong>No more access than the pet.</strong> A server runs inside the pet's VM, or is reached through the house's network rules, so it can do only what the pet can.</li>
+<li><strong>Each bot for itself.</strong> A server one bot added is not shared with the others: ask each bot that needs it.</li>
+<li><strong>No more access than the bot.</strong> A server runs inside the bot's VM, or is reached through the workspace's network rules, so it can do only what the bot can.</li>
 <li><strong>Tokens in headers.</strong> A secret works when the server sends its token in an HTTP header, as most do. A server that needs the raw value itself, to sign requests for example, cannot use the placeholder.</li>
-<li><strong>Browser logins.</strong> Servers that sign in through a browser (OAuth) may not manage it from a VM: when there is a choice, give the pet a token instead.</li>
+<li><strong>Browser logins.</strong> Servers that sign in through a browser (OAuth) may not manage it from a VM: when there is a choice, give the bot a token instead.</li>
 </ul>
-<p>Household-wide MCP servers, set up once for every pet in a house, may come later. Until then, your pets are happy to help. 🙂</p>
+<p>Household-wide MCP servers, set up once for every bot in a workspace, may come later. Until then, your bots are happy to help. 🙂</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#ask-your-pet">Ask your pet</a></li><li><a href="#it-stays">It stays</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#ask-your-bot">Ask your bot</a></li><li><a href="#it-stays">It stays</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

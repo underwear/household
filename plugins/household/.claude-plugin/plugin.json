@@ -1,9 +1,9 @@
 {
   "name": "household",
-  "description": "Install, set up, run, update and debug Household: Claude Code and Codex agents as personal assistants in microVMs, reached through Telegram.",
+  "description": "Install, set up, run, update and debug Household: personal bots powered by Claude Code and Codex harnesses in microVMs, reached through Telegram.",
   "author": { "name": "underwear", "url": "https://github.com/underwear" },
   "homepage": "https://agents-household.dev",
   "repository": "https://github.com/underwear/household",
   "license": "AGPL-3.0-only",
-  "keywords": ["household", "agents", "claude-code", "codex", "microvm", "telegram"]
+  "keywords": ["household", "bots", "harnesses", "claude-code", "codex", "microvm", "telegram"]
 }
