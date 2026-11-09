@@ -1,14 +1,12 @@
 # Quick start
 
-You need a Mac on Apple silicon or Linux with `/dev/kvm`, and a key for Claude Code or Codex.
+From a bare machine to a pet answering you in your messenger.
 
-```sh
-curl -fsSL https://agents-household.dev/install.sh | sh
-house onboard      # a key, a house, a bot to talk through, your first pet
-house start
-```
+## What you need
 
-Then write to your pet. `house dashboard` opens the admin, where you can also connect [Slack](https://github.com/underwear/household/blob/main/docs/slack.md).
+- **A Mac on Apple silicon**, or **Linux with `/dev/kvm`**: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac only through such a Linux VM.
+- `python3` and `openssl` on it.
+- **A key for the agent:** a Claude subscription or Anthropic API key for Claude Code, or a ChatGPT subscription or OpenAI API key for Codex.
 
 Don't like typing? Give this to your coding agent:
 
@@ -16,4 +14,61 @@ Don't like typing? Give this to your coding agent:
 Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
 ```
 
-Next: [Pets](../pets/) · [Scouts](../scouts/) · [Inboxes](../inboxes/)
+## 1. Install
+
+```sh
+curl -fsSL https://agents-household.dev/install.sh | sh
+```
+
+It installs the newest release into `~/.household`, with everything it needs inside: no Docker, no Bun, no sudo. It tells you if something is missing, such as `~/.household/bin` on your `PATH`. Then check that microVMs can run here:
+
+```sh
+house doctor
+```
+
+## 2. Onboard
+
+```sh
+house onboard
+```
+
+It asks, one step at a time:
+
+1. **Agent and its key** — Claude Code or Codex; paste a Claude token (`claude setup-token` makes one) or an API key, or use the ChatGPT login of the Codex on this machine.
+2. **House** — a name for your pets' home.
+3. **Telegram** — create a bot with [@BotFather](https://t.me/BotFather), turn on **Threaded Mode** in its Mini App (Bot Settings → Threads Settings), press **Start** in a chat with your bot, and paste its token. You become the house's owner.
+4. **Pet** — its name and display name.
+5. **Scouts** — on or off.
+6. **Sideworkers** — on or off. You can change both later in the admin.
+
+You can run `house onboard` again any time.
+
+## 3. Start
+
+```sh
+house start
+```
+
+The first start downloads the pet's VM image, so give it a minute. `house status` shows your pet as `running` when it is ready.
+
+To keep Household running after you close the terminal, run `house start` as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.
+
+## 4. Say hi
+
+Open your bot in Telegram and write to your pet. It answers in its own thread. 🐾
+
+Then open the admin:
+
+```sh
+house dashboard
+```
+
+It prints a one-time link (valid 60 seconds) and opens it. The admin lives at `http://127.0.0.1:8780`, on this machine only. On a remote server, forward the port first: `ssh -L 8780:127.0.0.1:8780 <server>`, then run `house dashboard --no-open` there and open the link on your computer.
+
+## Next
+
+- [Pets](../pets/) — everything on a pet's page.
+- [Scouts](../scouts/) — let pets use the internet and your keys safely.
+- [Inboxes](../inboxes/) — mail, alerts and feeds for your pets.
+- [Back up and move](../backup/) — keep a copy of everything.
+- `house update` moves to the newest release; `house --help` lists everything else.
