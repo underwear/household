@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quick start — Household docs</title>
-  <meta name="description" content="Install Household, run house onboard, start it and say hi to your first pet in Telegram.">
+  <meta name="description" content="Install Household, run house onboard and house start, then write to your first pet.">
   <meta property="og:title" content="Quick start">
   <meta property="og:description" content="Houses, pets, scouts: how Household runs your terminal agents.">
   <meta property="og:url" content="https://agents-household.dev/docs/start/">
@@ -173,58 +173,17 @@
     <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Quick start</a></li><li><a href="../pets/">Pets</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Getting started</p><h1>Quick start</h1>
-<p>From a bare machine to a pet answering you in Telegram.</p>
-<h2 id="what-you-need">What you need</h2>
-<ul>
-<li><strong>A Mac on Apple silicon</strong>, or <strong>Linux with <code>/dev/kvm</code></strong>: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac only through such a Linux VM.</li>
-<li><code>python3</code> and <code>openssl</code> on it.</li>
-<li><strong>A key for the agent:</strong> a Claude subscription or Anthropic API key for Claude Code, or a ChatGPT subscription or OpenAI API key for Codex.</li>
-<li><strong>Telegram</strong> on your phone.</li>
-</ul>
-<p>Don't feel like typing? Give your own Claude Code or Codex this prompt and let it walk you through:</p>
-<pre><code class="language-text">Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
-</code></pre>
-<h2 id="1-install">1. Install</h2>
+<p>You need a Mac on Apple silicon or Linux with <code>/dev/kvm</code>, and a key for Claude Code or Codex.</p>
 <pre><code class="language-sh">curl -fsSL https://agents-household.dev/install.sh | sh
+house onboard      # a key, a house, a bot to talk through, your first pet
+house start
 </code></pre>
-<p>It installs the newest release into <code>~/.household</code>, with everything it needs inside: no Docker, no Bun, no sudo. It tells you if something is missing, such as <code>~/.household/bin</code> on your <code>PATH</code>. Then check that microVMs can run here:</p>
-<pre><code class="language-sh">house doctor
-</code></pre>
-<h2 id="2-onboard">2. Onboard</h2>
-<pre><code class="language-sh">house onboard
-</code></pre>
-<p>It asks, one step at a time:</p>
-<ol>
-<li><strong>Agent and its key</strong> — Claude Code or Codex; paste a Claude token (<code>claude setup-token</code> makes one) or an API key, or use the ChatGPT login of the Codex on this machine.</li>
-<li><strong>House</strong> — a name for your pets' home.</li>
-<li><strong>Telegram</strong> — create a bot with <a href="https://t.me/BotFather">@BotFather</a>, turn on <strong>Threaded Mode</strong> in its Mini App (Bot Settings → Threads Settings), press <strong>Start</strong> in a chat with your bot, and paste its token. You become the house's owner.</li>
-<li><strong>Pet</strong> — its name and display name.</li>
-<li><strong>Scouts</strong> — on or off.</li>
-<li><strong>Sideworkers</strong> — on or off. You can change both later in the admin.</li>
-</ol>
-<p>You can run <code>house onboard</code> again any time.</p>
-<h2 id="3-start">3. Start</h2>
-<pre><code class="language-sh">house start
-</code></pre>
-<p>The first start downloads the pet's VM image, so give it a minute. <code>house status</code> shows your pet as <code>running</code> when it is ready.</p>
-<p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.</p>
-<h2 id="4-say-hi">4. Say hi</h2>
-<p>Open your bot in Telegram and write to your pet. It answers in its own thread. 🐾</p>
-<p>Then open the admin:</p>
-<pre><code class="language-sh">house dashboard
-</code></pre>
-<p>It prints a one-time link (valid 60 seconds) and opens it. The admin lives at <code>http://127.0.0.1:8780</code>, on this machine only. On a remote server, forward the port first: <code>ssh -L 8780:127.0.0.1:8780 &lt;server&gt;</code>, then run <code>house dashboard --no-open</code> there and open the link on your computer.</p>
-<h2 id="next">Next</h2>
-<ul>
-<li><a href="../pets/">Pets</a> — everything on a pet's page.</li>
-<li><a href="../scouts/">Scouts</a> — let pets use the internet and your keys safely.</li>
-<li><a href="../inboxes/">Inboxes</a> — mail, alerts and feeds for your pets.</li>
-<li><a href="../backup/">Back up and move</a> — keep a copy of everything.</li>
-<li><code>house update</code> moves to the newest release; <code>house --help</code> lists everything else.</li>
-</ul>
+<p>Then write to your pet. <code>house dashboard</code> opens the admin, where you can also connect <a href="https://github.com/underwear/household/blob/main/docs/slack.md">Slack</a>.</p>
+<p>Rather not type? Ask your own Claude Code or Codex: <em>&quot;Read https://agents-household.dev/llms.txt and help me set up Household on my machine.&quot;</em></p>
+<p>Next: <a href="../pets/">Pets</a> · <a href="../scouts/">Scouts</a> · <a href="../inboxes/">Inboxes</a></p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-need">What you need</a></li><li><a href="#1-install">1. Install</a></li><li><a href="#2-onboard">2. Onboard</a></li><li><a href="#3-start">3. Start</a></li><li><a href="#4-say-hi">4. Say hi</a></li><li><a href="#next">Next</a></li></ul></nav>
+    <nav class="toc" aria-hidden="true"></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen
