@@ -66,6 +66,14 @@ Use `~1` for a slash in a property name and `~0` for a tilde. Missing fields are
 
 The poller stores only SHA-256 hashes and a transition counter in its cursor, not copies of the previous JSON body. Repeated identical responses are quiet. Returning to an earlier value is a new transition, including after a restart. Events contain current changed field values, or a whole-response preview limited to 16,000 characters, with a truncation marker. “Start from now” establishes a silent baseline; “Deliver current items / snapshot” emits the first snapshot. Errors or invalid JSON preserve the last successful baseline.
 
+## Poller problems and recovery
+
+After **3 consecutive failed checks**, subscribed pets receive one operational notice. It includes a safe diagnostic and warns that incoming data may be delayed. The first fully successful check sends one recovery notice. Repeated failures do not spam pets; the incident, pending notices and recipient progress survive daemon restarts. A later outage starts a new incident. Pausing, editing or stopping the daemon does not count as a failed check.
+
+The Inboxes UI shows the failure count, when the problem began, the last successful poll and the next retry. Existing retry backoff still applies. Source and event-delivery errors both count: a successful fetch alone does not clear an incident if delivery remains blocked.
+
+Operational notices are **pet-only**, independent of the inbox's normal announcement mode. They have a separate durable queue so a failed channel announcement cannot block them. They are also archived with `metadata.kind = "poller_status"`, `status = "failed" | "recovered"`, `consecutiveFailures` and `problemSince`; offline pets receive them through normal inbox catch-up. A missing channel or pet placement can still prevent notification delivery until its configuration is repaired; the UI remains the place to inspect the problem. Inboxes with no subscribers show the problem in the UI only.
+
 ## Catch-up after VM downtime
 
 When a pet is paused, its VM is unavailable, or queued events are restored after a daemon restart, pending inbox notifications are delivered as a **catch-up digest** once its agent is idle and ready. Backlogs accumulated while busy also use this format.

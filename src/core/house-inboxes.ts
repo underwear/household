@@ -69,10 +69,13 @@ export interface InboxState {
   nextCheck: number;
   error?: string;
   failures: number;
+  problemSince?: string;
+  incident?: string;
+  notifications?: InboxState["pending"];
 }
 export interface InboxView {
   inbox: HouseInbox;
-  status: Omit<InboxState, "cursor" | "seen" | "pending" | "fingerprint"> & { pendingCount: number; running: boolean };
+  status: Omit<InboxState, "cursor" | "seen" | "pending" | "fingerprint" | "notifications"> & { pendingCount: number; running: boolean };
 }
 
 /** A fixed, credential-free poller diagnostic safe to show in the owner UI. */

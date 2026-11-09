@@ -53,7 +53,11 @@ export function HouseInboxesPage({ house, notify }: { house: HouseView; notify: 
       <p className="hint">Subscribers: {inbox.pets.map(name => house.pets.find(p => p.name === name)?.display ?? name).join(", ") || "None — post to channel only"}</p>
       <p className="hint">Last checked: {stamp(status.lastCheck)} · {status.pendingCount} pending</p>
       {inbox.enabled && <p className="hint">Next check: {status.nextCheck ? stamp(new Date(status.nextCheck).toISOString()) : "Soon"}</p>}
-      {status.error && <p className="error">{status.error}</p>}
+      {status.error && <div className="error" role="status">
+        <strong>{status.failures >= 3 ? "Poller needs attention" : "Check failed"} · {status.failures} consecutive {status.failures === 1 ? "failure" : "failures"}</strong>
+        <p>{status.error}</p>
+        <p className="hint">Since {stamp(status.problemSince)} · Last successful poll: {stamp(status.lastSuccess)}. Automatic retries continue.{status.failures >= 3 ? " Subscribed pets are notified once per outage and again on recovery." : " Pets are notified after 3 consecutive failures."}</p>
+      </div>}
       <div className="inbox-actions">
         <button className="btn small" disabled={busy === inbox.name || status.running || !inbox.enabled} onClick={() => void action(inbox.name, async () => { const result = await api.pollInbox(house.name, inbox.name); notify(result.status.error ?? "Inbox checked", !!result.status.error); })}>Check now</button>
         <button className="btn small" disabled={busy === inbox.name} onClick={() => setEditing(inbox)}>Edit</button>

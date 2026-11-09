@@ -181,3 +181,66 @@ test("Telegram token rotation preserves cursor and the probe uses its non-consum
  s.source.source={kind:'telegram-bot',token:'12345:ABCDEFGHIJKLMNOPQRSTUVWXYZ_rotated'};
  await s.service.run('work','mail');expect(cursors).toEqual([undefined,'saved']);
 });
+
+test("three consecutive failures notify once across restart, recovery and a new incident notify again", async () => {
+  let broken = true;
+  const poll: Poller = async () => { if (broken) throw Error("secret transport diagnostic"); return { items: [] }; };
+  const s = setup(poll);
+  await s.service.run("work", "mail"); await s.service.run("work", "mail");
+  expect(s.posted).toHaveLength(0);
+  await s.service.run("work", "mail");
+  expect(s.posted.map(i => i.metadata?.status)).toEqual(["failed"]);
+  expect(s.delivered).toEqual(["alice", "bob"]);
+  expect(JSON.stringify(s.service.list("work"))).not.toContain("secret transport diagnostic");
+  const restarted = setup(poll, "new", s.store);
+  await restarted.service.run("work", "mail");
+  expect(restarted.posted).toHaveLength(0);
+  broken = false; await restarted.service.run("work", "mail");
+  expect(restarted.posted.map(i => i.metadata?.status)).toEqual(["recovered"]);
+  expect(restarted.service.list("work")[0]!.status.failures).toBe(0);
+  expect(restarted.service.list("work")[0]!.status.problemSince).toBeUndefined();
+  broken = true;
+  for (let n = 0; n < 3; n++) await restarted.service.run("work", "mail");
+  expect(restarted.posted.map(i => i.metadata?.status)).toEqual(["recovered", "failed"]);
+  expect(restarted.posted[1]!.id).not.toBe(s.posted[0]!.id);
+});
+
+test("operational notices bypass blocked channel announcements and archive for offline pets", async () => {
+  const s = setup(async () => ({ items: [event("one")] }), "latest");
+  const notifications: string[] = [];
+  const service = new HouseInboxes(s.store, {
+    post: async (_h, i) => { if (i.delivery !== "silent") throw Error("channel unavailable"); },
+    pet: (_h, _i, pet, item) => notifications.push(`${pet}:${item.metadata?.status}`),
+  }, async () => ({ items: [event("one")] }), Date.now, s.store.inboxEvents);
+  service.setHouses([s.house]);
+  for (let n = 0; n < 4; n++) await service.run("work", "mail");
+  expect(notifications).toEqual(["alice:failed", "bob:failed"]);
+  expect(service.list("work")[0]!.status.pendingCount).toBe(1);
+  const history = s.store.inboxEvents.find("work", "alice", {}).events;
+  expect(history.some(e => e.metadata.kind === "poller_status" && e.metadata.status === "failed")).toBe(true);
+});
+
+test("failed notification fanout retries only unfinished pets and keeps recovery order", async () => {
+  let broken = true;
+  const s = setup(async () => { if (broken) throw Error("offline"); return {items: []}; });
+  s.fail("bob");
+  for (let n = 0; n < 3; n++) await s.service.run("work", "mail");
+  expect(s.delivered).toEqual(["alice"]);
+  broken = false; s.fail();
+  await s.service.run("work", "mail");
+  expect(s.delivered).toEqual(["alice", "bob", "alice", "bob"]);
+  expect(s.posted.map(i => i.metadata?.status)).toEqual(["failed", "recovered"]);
+});
+
+test("operator cancellation does not increment failures or raise outage", async () => {
+  let started!: () => void;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  const s = setup(async (_s, _c, _i, signal) => {
+    started(); await new Promise((_, reject) => signal.addEventListener("abort", () => reject(Error("cancelled"))));
+    return {items: []};
+  });
+  const running = s.service.run("work", "mail"); await ready;
+  await s.service.stop(); await running;
+  expect(s.service.list("work")[0]!.status.failures).toBe(0);
+  expect(s.posted).toHaveLength(0);
+});

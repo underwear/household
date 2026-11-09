@@ -1,6 +1,6 @@
 import type { InboxEventStore } from "../infra/inbox-event-store";
 import { HouseholdError } from "../core/errors";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { InboxPollError, inboxMetadataSchema, houseInboxSchema, pollResultSchema, type HouseInbox, type InboxItem, type InboxState, type InboxView } from "../core/house-inboxes";
 import type { House } from "../core/household";
 import type { KeyValueStore } from "../infra/sqlite-store";
@@ -52,7 +52,7 @@ export class HouseInboxes {
   }
   list(house: string): InboxView[] {
     return (this.houses.find(h => h.name === house)?.inboxes ?? []).map(inbox => {
-      const { cursor, seen, pending, fingerprint, ...status } = this.state(house, inbox);
+      const { cursor, seen, pending, fingerprint, notifications, ...status } = this.state(house, inbox);
       return { inbox, status: { ...status, pendingCount: pending.length, running: this.active.has(stateKey(house, inbox.name)) } };
     });
   }
@@ -70,7 +70,7 @@ export class HouseInboxes {
   }
   assertChange(house: string, input: HouseInbox) {
     const old = this.config(house, input.name);
-    if (this.state(house, old).pending.length && (input.channel !== old.channel || sourceIdentity(input.source) !== sourceIdentity(old.source)))
+    if ((this.state(house, old).pending.length || this.state(house, old).notifications?.length) && (input.channel !== old.channel || sourceIdentity(input.source) !== sourceIdentity(old.source)))
       throw new HouseholdError("Deliver pending events before changing the source or channel, or remove this inbox to discard its pending events.");
   }
   async test(input: HouseInbox): Promise<{ count: number; message: string }> {
@@ -144,23 +144,54 @@ export class HouseInboxes {
       state.lastSuccess = new Date(this.now()).toISOString();
       save();
       await this.drain(house, inbox, state, save, current);
+      if (state.incident) this.notifyProblem(inbox, state, "recovered");
       state.error = undefined;
       state.failures = 0;
+      state.problemSince = undefined;
+      state.incident = undefined;
     } catch (error) {
       // Do not persist provider/transport exceptions (they can include credentials).
-      state.error = controller.signal.aborted ? "Check cancelled; pending events retained." : error instanceof InboxPollError ? error.message : "Check or delivery failed. Verify credentials, source format, channel and pet placement; pending events will retry.";
-      state.failures += 1;
+      if (!controller.signal.aborted) {
+        state.error = redact(inbox, { id: "error", title: "", text: error instanceof InboxPollError ? error.message : "Check or delivery failed. Verify credentials, source format, channel and pet placement; pending events will retry." }).text;
+        state.problemSince ??= new Date(this.now()).toISOString();
+        state.failures += 1;
+        if (state.failures >= 3 && !state.incident) {
+          state.incident = randomUUID();
+          this.notifyProblem(inbox, state, "failed");
+        }
+      }
     } finally {
       state.nextCheck = this.now() + Math.max(inbox.intervalSeconds, Math.min(3600, inbox.intervalSeconds * Math.max(1, Math.min(8, 2 ** state.failures)))) * 1000;
       // Respect intervals longer than the retry cap on successful polls.
       if (!state.failures) state.nextCheck = this.now() + inbox.intervalSeconds * 1000;
-      try { save(); } finally {
+      try {
+        save();
+        // Operational notices bypass the source-event queue and messenger network delivery.
+        // A broken channel post must not prevent subscribed pets learning about the outage.
+        if (!controller.signal.aborted && state.notifications?.length) {
+          const notices = { ...state, pending: state.notifications, recent: [] };
+          try { await this.drain(house, inbox, notices, save, current); } catch { /* durable retry on next check */ }
+        }
+      } finally {
         this.active.delete(key);
         this.finished.delete(key);
         finish();
       }
     }
     return this.list(house).find(v => v.inbox.name === name)!;
+  }
+  private notifyProblem(inbox: HouseInbox, state: InboxState, status: "failed" | "recovered") {
+    const at = new Date(this.now()).toISOString();
+    const item: InboxItem = {
+      id: `poller-status:${state.incident}:${status}`,
+      title: status === "failed" ? "Poller needs attention" : "Poller recovered",
+      text: status === "failed"
+        ? `${state.failures} consecutive checks failed. New data may be delayed. ${state.error} Automatic retries continue; review this inbox in House → Inboxes.`
+        : "Checks and event delivery are working again. Polling has resumed normally.",
+      occurredAt: at,
+      metadata: { kind: "poller_status", status, consecutiveFailures: state.failures, problemSince: state.problemSince ?? at },
+    };
+    (state.notifications ??= []).push({ item, channel: inbox.channel, pets: [...inbox.pets], delivery: "silent", receivedAt: at, delivered: [] });
   }
   private async drain(house: string, inbox: HouseInbox, state: InboxState, save: () => void, current: () => void) {
     while (state.pending.length) {
