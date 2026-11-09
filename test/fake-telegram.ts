@@ -19,6 +19,9 @@ export function fakeTelegram(token: string, ...others: string[]) {
   /** Each bot's own updates, by token (Telegram keeps one queue per bot). */
   const queues = new Map([token, ...others].map((known) => [known, [] as Update[]]));
   const failures = new Map<string, { code: number; description: string; retry_after?: number }[]>();
+  const chatInfo = { type: "supergroup", is_forum: true };
+  const botMember = { status: "administrator", can_manage_topics: true, can_delete_messages: true };
+  const botInfo = { has_topics_enabled: true };
   let nextUpdate = 1;
   let nextThread = 100;
   /** Thread names, by chat and thread id (`chat/thread`). */
@@ -62,7 +65,9 @@ export function fakeTelegram(token: string, ...others: string[]) {
         if (!file) return Response.json({ ok: false, error_code: 400, description: "Bad Request: invalid file_id" }, { status: 400 });
         return Response.json({ ok: true, result: { file_id: params.file_id, file_path: file.path, file_size: file.bytes.byteLength } });
       }
-      if (method === "getMe") return Response.json({ ok: true, result: { id: Number(bot.slice(3).split(":")[0]), is_bot: true, username: "fake_bot", has_topics_enabled: true } });
+      if (method === "getMe") return Response.json({ ok: true, result: { id: Number(bot.slice(3).split(":")[0]), is_bot: true, username: "fake_bot", ...botInfo } });
+      if (method === "getChat") return Response.json({ ok: true, result: chatInfo });
+      if (method === "getChatMember") return Response.json({ ok: true, result: botMember });
       if (method === "createForumTopic") {
         topics.set(`${params.chat_id}/${nextThread}`, params.name);
         return Response.json({ ok: true, result: { message_thread_id: nextThread++, name: params.name } });
@@ -89,7 +94,7 @@ export function fakeTelegram(token: string, ...others: string[]) {
   });
   return {
     url: `http://127.0.0.1:${server.port}`,
-    calls,
+    calls, chatInfo, botMember, botInfo,
     /** Messages sent, with the ids they got. */
     messages,
     /** Thread names as Telegram has them, by `chat/thread`. */

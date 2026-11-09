@@ -88,7 +88,7 @@ export class InboxPollError extends Error {}
 
 /** Bot API has one update queue per bot, including across houses and rotated tokens. */
 export function telegramInboxProblems(houses: House[]): string[] {
-  const used = new Set(houses.flatMap(h => h.channels.filter(c => c.kind === "telegram-private").map(c => c.token.split(":")[0])));
+  const used = new Set(houses.flatMap(h => h.channels.filter(c => (c.kind === "telegram-private" || c.kind === "telegram-group")).map(c => c.token.split(":")[0])));
   const problems: string[] = [];
   for (const house of houses) for (const inbox of house.inboxes ?? []) {
     if (inbox.source.kind !== "telegram-bot") continue;

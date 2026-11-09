@@ -192,6 +192,7 @@ export async function startDaemon(deps: DaemonDeps) {
     announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.placement === "same" ? undefined : worker.name, worker.originPlace),
     finished: (worker, notice) => chat.rewrite(worker.house, notice, sideworkerFinished(worker)),
     configured: () => config.load(), reload: () => applyConfig(),
+    ensurePlace: (house, pet) => chat.ensurePlace(house, pet),
     resolveDirectory: async (house, pet, cwd) => {
       const current = placed.find(item => item.house === house && item.pet === pet);
       if (!current) return;

@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { buildWebBundle } from "../src/infra/web-bundle";
 import { api, type HarnessView, type WorkspaceView, type KeyView, type BotView } from "./api";
 import { written } from "./components/section";
-import { telegram, telegramPrivate } from "../src/channel-adapters/telegram";
+import { telegram, telegramGroup, telegramPrivate } from "../src/channel-adapters/telegram";
 import { ChannelDialog, ChannelsPage } from "./components/channels";
 import { Dialog, firstFocus } from "./components/dialog";
 import { SelectField, TextField } from "./components/fields";
@@ -182,7 +182,7 @@ test("the forms render with what they edit: a channel's bots to tick and its def
   const fresh = form(<ChannelDialog house={work} kinds={kinds} onClose={() => {}} save={async () => {}} />);
   expect(fresh).toContain("Add channel");
   expect(fresh).toMatch(/type="radio"[^>]*checked=""[^>]*value="telegram-private"/);
-  expect(fresh).toContain("a thread per bot, General for the workspace"); // its line, from the kind
+  expect(fresh).toContain("a thread per bot. Messages in General are ignored."); // its line, from the kind
   expect(fresh).toContain(">Next<");
   expect(fresh).not.toContain("Bot token");
   expect(renderToStaticMarkup(<ChannelDialog house={work} kinds={kinds} platforms={platforms} onClose={() => {}} save={async () => {}} />)).toContain('<span class="avatar icon small" aria-hidden="true"><svg'); // the kind's platform icon
@@ -192,6 +192,13 @@ test("the forms render with what they edit: a channel's bots to tick and its def
   expect(second).toContain("From @BotFather; the bot needs Threaded Mode on."); // the field's hint, from the kind
   expect(second).not.toContain("readOnly");
   expect(second).not.toContain("Default");
+  // A group: its chat id with steps to find it, folded under the hint; the address in a step is a link.
+  const group = form(<ChannelDialog house={work} kinds={[telegramGroup]} kind="telegram-group" onClose={() => {}} save={async () => {}} />);
+  expect(group).toMatch(/>Group chat id<\/label><input[^>]*placeholder="-1001234567890"/);
+  expect(group).toContain('<details class="field-help"><summary>');
+  expect(group).toContain("Where do I find it?</summary><ol><li>Open ");
+  expect(group).toContain('<a class="text-link" href="https://web.telegram.org/a" target="_blank" rel="noreferrer">web.telegram.org/a</a> in a browser');
+  expect(second).not.toContain("field-help"); // a field without steps has no fold
   const pet = form(<BotDialog agents={agents} pet={{ ...work.pets[1]!, model: "haiku", problem: null }} onClose={() => {}} save={async () => {}} />);
   expect(pet).toContain("Edit 🤖 Chair");
   expect(pet).not.toContain(">Name<"); // a bot's name stays

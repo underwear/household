@@ -31,6 +31,7 @@ export interface HistoryArgs {
 export interface Conversation {
   channels: HeaderChannel[];
   trust(ref: SenderRef): Trust;
+  canReadTopics?(channel: string): boolean;
 }
 
 /**
@@ -84,6 +85,7 @@ export class History {
       ...(sender ? { sender } : {}),
       ...historyRange(args.since, args.until),
       ...(args.before === undefined ? {} : { before: expectId("message", args.before) }),
+      ...(conversation.canReadTopics && !conversation.canReadTopics(args.channel) ? { excludeTopics: true } : {}),
       limit,
     };
     return sender === null ? undefined : filter;

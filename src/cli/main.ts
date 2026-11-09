@@ -67,7 +67,7 @@ const USAGE = `usage:
                                  add or remove an allowlist entry: host, host:port (443 when left out),
                                  '*.example.com' (its subdomains at any depth, not example.com itself), or
                                  '*' / '*:*' (any public host on 443 / any port; never private addresses)
-  house channel add <workspace> --kind telegram-private|slack-private [--app-token <xapp-token>] [--token <bot token>] --chat <id> [--bots a,b] [--default a] [--name <name>] [--note <text>]
+  house channel add <workspace> --kind telegram-private|telegram-group|slack-private [--app-token <xapp-token>] [--token <bot token>] --chat <id> [--bots a,b] [--default a] [--name <name>] [--note <text>]
                                  a chat of the workspace: a private chat with a bot (its token from @BotFather, from
                                  stdin when --token is left out, checked with Telegram as the web UI does; chat:
                                  your Telegram user id), its bots (default: who gets General; needed with two or more)

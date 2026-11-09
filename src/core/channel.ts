@@ -89,7 +89,7 @@ export class StatusGone extends Error {}
 export class DownloadRefused extends Error {}
 
 /** A pet's own thread, or the house's inbox (where the person writes to the house as a whole). */
-export type PlaceKind = "pet-thread" | "house-inbox";
+export type PlaceKind = "pet-thread" | "house-inbox" | "topic";
 
 /**
  * A place in a channel: where one pet (later: a scout) talks to people. An address inside Household and the
@@ -112,6 +112,12 @@ export interface Place {
 export interface Channel {
   /** What the channel calls its inbox (Telegram: General). */
   readonly inbox: string;
+  /** User messages in the inbox are discarded before routing, journaling or commands. */
+  readonly ignoreInboxMessages?: boolean;
+  /** Adapter-discovered shared topics, persisted by the adapter; routed to the channel's default bot. */
+  listPlaces?(): Place[];
+  /** Optional capability: create a shared topic without assigning it to a particular bot. */
+  createPlace?(title: string): Promise<Place>;
   /** This pet's place is shown directly in the inbox, so forwarding notices would duplicate the conversation. */
   inInbox?(place: Place): boolean;
   /** Whether sender `ref` is the person the config names by `id` (in `people.owners`: a Telegram user id, …). */

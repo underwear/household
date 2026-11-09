@@ -3,6 +3,7 @@ import type { OwnerCard } from "../../src/app/chat";
 import { CONFIRM_CHOICES, NETWORK_CHOICES, NETWORK_TTL_MS, NetworkRequests, networkCard, requestDomain, requestPort, type NetworkStep } from "../../src/app/network-requests";
 import type { NetworkPolicy } from "../../src/core/network-policy";
 import type { Screened } from "../../src/infra/public-resolve";
+import { telegramHtml } from "../../src/channel-adapters/telegram/html";
 import { fakeClock } from "../helpers";
 
 /** What the stub DNS screen answers for a domain; any other resolves to GitHub's public address. */
@@ -29,6 +30,8 @@ function show(card: OwnerCard<NetworkStep>, signal: AbortSignal, done: (state?: 
     shown.choices = next.choices;
     shown.note = next.note;
     if (next.text !== undefined) shown.text = next.text;
+    // Exercise the real Telegram parser before accepting either approval step.
+    telegramHtml(shown.text);
   };
   view();
   return shown;
@@ -68,7 +71,7 @@ test("network requests: temporary owner choice applies HTTPS only, persists, res
   await first.service.start();
   const answer = first.service.request("work", "sibling", " API.GitHub.com ", reason);
   await settle(); // its domain screened, its card up
-  expect(first.cards[0]!.text).toBe(`<b>🤖 Sibling wants to reach <code>api.github.com</code></b>\n\nWhy:\n<blockquote>${reason}</blockquote>\n\nResolves to: <code>${GITHUB}</code>`);
+  expect(first.cards[0]!.text).toBe(`<b>🤖 Sibling wants to reach api.github.com</b>\n\nWhy:\n<blockquote>${reason}</blockquote>\n\nResolves to: <code>${GITHUB}</code>`);
   expect(first.cards[0]!.choices).toEqual([["Allow 15 min"], ["Allow forever"], ["Deny"]]);
   first.cards[0]!.answer(0);
   expect(await answer).toEqual({ domain: "api.github.com", port: 443, status: "temporary", expiresAt: NETWORK_TTL_MS });
@@ -110,7 +113,7 @@ test('the card: "Allow forever" asks again on the same card, "Cancel" goes back,
   expect(card.text).toBe("text");
   expect(card.view(card.start)).toEqual({ choices: NETWORK_CHOICES, text: "text" });
   const confirming = card.press(card.start, 1);
-  expect(card.view(confirming)).toEqual({ choices: CONFIRM_CHOICES, text: "<b>Allow <code>api.github.com:443</code> for good?</b>\n\nEvery pet in the house can reach it until you remove it from the allowlist." });
+  expect(card.view(confirming)).toEqual({ choices: CONFIRM_CHOICES, text: "<b>Allow api.github.com:443 for good?</b>\n\nEvery pet in the house can reach it until you remove it from the allowlist." });
   expect(CONFIRM_CHOICES).toEqual([["Yes, forever"], ["Cancel"]]);
   expect(card.press(confirming, 1)).toEqual(card.start);
   expect(card.press(confirming, 0)).toEqual({ step: "resolved", decision: "permanent" });
@@ -307,8 +310,8 @@ test("endpoint approvals keep pending cards, grants and revocation isolated by p
   const ssh = env.service.request("work", "sibling", "github.com", reason, 22);
   await settle(); // its domain screened, its card up
   expect(env.cards).toHaveLength(2);
-  expect(env.cards[0]!.text).toContain("wants to reach <code>github.com</code></b>");
-  expect(env.cards[1]!.text).toContain("wants to reach <code>github.com:22</code></b>");
+  expect(env.cards[0]!.text).toContain("wants to reach github.com</b>");
+  expect(env.cards[1]!.text).toContain("wants to reach github.com:22</b>");
   expect(env.cards[1]!.choices).toEqual(NETWORK_CHOICES);
   env.cards[0]!.answer(0);
   env.cards[1]!.answer(0);

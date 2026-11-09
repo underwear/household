@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { topicPlaceKey } from "../../core/channels";
 import type { Attachment, OutgoingAttachment } from "../../core/attachment";
 import { DownloadRefused, RateLimited, StatusGone, type Channel, type Choices, type LinkButton, type InboundMessage, type MessageRef, type Place, type PostRef, type SenderRef, type StatusView } from "../../core/channel";
 import { TelegramError } from "./bot-api";
@@ -7,10 +9,10 @@ import { keyboard, linkKeyboard, type InlineKeyboard } from "./keyboard";
 import { telegramHtml, splitFormatted } from "./html";
 import { MAX_TEXT, splitText } from "./split";
 import { renderStatus } from "./status";
-import { inboundMessage, messageIdOf, postRef, senderRef, type Parsed, type Update } from "./updates";
+import { inboundMessage, messageIdOf, postRef, senderRef, type Parsed, type Update, type TelegramMessage } from "./updates";
 
 export { TelegramBot, type TelegramBotOptions, type TelegramState } from "./bot";
-export { isTelegramId, telegram, telegramPrivate } from "./kind";
+export { isTelegramId, telegram, telegramPrivate, telegramGroup } from "./kind";
 export { getMe, isBotToken, isRefusedToken, telegramBotToken, type BotInfo } from "./token";
 export { firstPrivateContact, type Contact } from "./first-contact";
 
@@ -45,7 +47,7 @@ const NO_PREVIEW = { link_preview_options: { is_disabled: true } };
 const looksLikeNotice = (text: string) => /^[^\p{L}\p{N}]*(⚠|household)/iu.test(text);
 
 /**
- * A channel of a house as a private chat with its bot in Threaded Mode (`telegram-private`): each pet's place
+ * A private bot chat in Threaded Mode or a forum supergroup: each pet's place
  * has a thread named with its title, made by the bot the first time it is needed (it cannot be before the person
  * pressed Start), kept by the place's id, renamed when its title changes (the state keeps the last title Telegram
  * accepted); General is the inbox. The bot's poller (`TelegramBot`, shared by the
@@ -53,6 +55,8 @@ const looksLikeNotice = (text: string) => /^[^\p{L}\p{N}]*(⚠|household)/iu.tes
  */
 export class TelegramChannel implements Channel, BotChat {
   readonly inbox = "General";
+  readonly ignoreInboxMessages = true;
+  readonly createPlace?: (title: string) => Promise<Place>;
   private onMessage?: (message: InboundMessage) => Promise<string | void>;
   /** Threads being created, so that posts at the same moment make one. */
   private readonly creating = new Map<string, Promise<number>>();
@@ -69,21 +73,60 @@ export class TelegramChannel implements Channel, BotChat {
   private readonly shown = new Map<number, Shown>();
   /** Names this bot's chat: in state keys and message refs (message ids are per chat). */
   private readonly prefix: string;
-  private readonly keys: { thread: (place: string) => string; title: (place: string) => string; place: (thread: number) => string };
+  private readonly keys: { creation: (place: string) => string; thread: (place: string) => string; title: (place: string) => string; place: (thread: number) => string };
 
   constructor(
     private readonly bot: TelegramBot,
-    /** The chat's id: a private chat's is its person's user id. */
+    /** Positive user id for private chats; negative -100… id for forum supergroups. */
     readonly chat: number,
     /** For log lines, e.g. `house work DM`. */
     private readonly name: string,
+    private readonly mode: "private" | "group" = "private",
   ) {
     this.prefix = `telegram.${bot.id}.${chat}`;
+    if (mode === "group") this.createPlace = async title => {
+      if (!title.trim() || title.trim().length > 128) throw new Error("Topic title must contain 1–128 characters");
+      const place: Place = { id: topicPlaceKey(randomUUID(), `telegram-group:${chat}`), kind: "topic", title: title.trim() };
+      await this.thread(place);
+      this.saveTopic(place);
+      return { ...place };
+    };
     this.keys = {
+      creation: (place) => `${this.prefix}.creation.${place}`,
       thread: (place) => `${this.prefix}.thread.${place}`,
       title: (place) => `${this.prefix}.title.${place}`,
       place: (thread) => `${this.prefix}.place.${thread}`,
     };
+  }
+
+  listPlaces(): Place[] {
+    if (this.mode !== "group") return [];
+    return JSON.parse(this.bot.options.state.get(`${this.prefix}.topics`) || "[]");
+  }
+
+  private saveTopic(place: Place): void {
+    const places = this.listPlaces();
+    const index = places.findIndex(p => p.id === place.id);
+    if (index < 0) places.push(place); else places[index] = place;
+    this.bot.options.state.set(`${this.prefix}.topics`, JSON.stringify(places));
+  }
+
+  /** Discover a human's topic before routing its first message, including topics created while offline. */
+  private discoverTopic(message: TelegramMessage | undefined): void {
+    if (this.mode !== "group" || !message || message.chat.id !== this.chat) return;
+    const thread = message.is_topic_message ? message.message_thread_id : undefined;
+    if (!thread || !Number.isSafeInteger(thread) || thread <= 1) return; // General has id 1.
+    const state = this.bot.options.state;
+    const known = state.get(this.keys.place(thread));
+    const existing = this.listPlaces().find(p => p.id === known);
+    if (known && !known.startsWith("topic:")) return; // A pet's dedicated topic is never adopted or renamed.
+    if (!known && (!message.from || message.from.is_bot)) return;
+    const title = message.forum_topic_edited?.name ?? message.forum_topic_created?.name ?? (!existing ? message.reply_to_message?.forum_topic_created?.name : undefined);
+    if (existing && (!title?.trim() || title.trim() === existing.title)) return;
+    const place: Place = { id: existing?.id ?? known ?? topicPlaceKey(randomUUID(), `telegram-group:${this.chat}`), kind: "topic", title: title?.trim() || existing?.title || "Topic" };
+    state.set(this.keys.thread(place.id), String(thread));
+    state.set(this.keys.place(thread), place.id);
+    this.saveTopic(place);
   }
 
   /** A Telegram user id names a person on every chat and bot alike. */
@@ -117,6 +160,7 @@ export class TelegramChannel implements Channel, BotChat {
   }
 
   private async postRich(place: Place, text: string, choices?: Choices): Promise<PostRef[]> {
+    if (this.mode === "group") throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
     const markdown = richMarkdown(place, text);
     const where = await this.where(place);
     const sent = await this.sendPiece({ chat_id: this.chat, ...where, rich_message: { markdown }, ...(choices ? { reply_markup: keyboard(choices) } : {}) }, "sendRichMessage");
@@ -131,6 +175,7 @@ export class TelegramChannel implements Channel, BotChat {
     let content: object;
     let shown: Shown;
     if (format === "rich") {
+      if (this.mode === "group") throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
       const markdown = richMarkdown(place, text);
       content = { rich_message: { markdown } };
       shown = { text: markdown, rich: true };
@@ -334,7 +379,7 @@ export class TelegramChannel implements Channel, BotChat {
   }
 
   async ensurePlace(place: Place): Promise<void> {
-    if (place.kind !== "pet-thread") return;
+    if (place.kind === "house-inbox") return;
     this.wanted.set(place.id, place.title);
     await this.thread(place);
   }
@@ -346,7 +391,8 @@ export class TelegramChannel implements Channel, BotChat {
    * `t.me/<bot>/<message>` goes to General, and `t.me/c/…` is refused for a private chat.
    */
   async placeLink(place: Place): Promise<string | undefined> {
-    if (place.kind !== "pet-thread") return undefined;
+    if (place.kind === "house-inbox") return undefined;
+    if (this.mode === "group") return `https://t.me/c/${String(this.chat).slice(4)}/${await this.thread(place)}`;
     const [thread, username] = await Promise.all([this.thread(place), this.bot.username()]);
     return username ? `https://t.me/${username}/${thread}` : undefined;
   }
@@ -366,7 +412,7 @@ export class TelegramChannel implements Channel, BotChat {
     } catch (error) {
       if (!/thread not found|TOPIC_ID_INVALID/i.test((error as Error).message)) throw error;
     }
-    for (const key of [this.keys.thread(place.id), this.keys.title(place.id), this.keys.place(Number(thread))]) state.set(key, "");
+    for (const key of [this.keys.creation(place.id), this.keys.thread(place.id), this.keys.title(place.id), this.keys.place(Number(thread))]) state.set(key, "");
     this.wanted.delete(place.id);
     this.failed.delete(place.id);
     log.info(`telegram ${this.name}: thread for ${place.id} deleted`);
@@ -435,7 +481,7 @@ export class TelegramChannel implements Channel, BotChat {
     for (const [i, piece] of pieces.entries()) {
       const first = pieceEntities?.[i]?.length ? { entities: pieceEntities[i] } : quoteOffset === undefined
         ? i === 0 && entities ? { entities } : {}
-        : { entities: [{ type: "blockquote", offset: quoteOffset, length: piece.length - quoteOffset }] };
+        : { entities: [{ type: "expandable_blockquote", offset: quoteOffset, length: piece.length - quoteOffset }] };
       const under = i === pieces.length - 1 && reply_markup ? { reply_markup } : {};
       const sent = await this.sendPiece({ chat_id: this.chat, ...where, text: piece, ...first, ...under, ...(quiet ? NO_PREVIEW : {}) });
       if (reply_markup && i === pieces.length - 1) this.remember(sent.message_id, { text: piece, ...first, ...(quiet ? { quiet: true as const } : {}) });
@@ -503,12 +549,49 @@ export class TelegramChannel implements Channel, BotChat {
     });
   }
 
+  private async checkForum(): Promise<void> {
+    const chat = await this.bot.api.call<{ type: string; is_forum?: boolean }>("getChat", { chat_id: this.chat });
+    if (chat.type !== "supergroup" || !chat.is_forum) throw new Error("Enable Topics in this Telegram supergroup before connecting it");
+    const member = await this.bot.api.call<{ status: string; can_manage_topics?: boolean; can_delete_messages?: boolean }>("getChatMember", { chat_id: this.chat, user_id: Number(this.bot.id) });
+    if (member.status !== "administrator" || !member.can_manage_topics || !member.can_delete_messages) throw new Error("Make the Telegram bot an administrator with Manage topics and Delete messages rights");
+  }
+
   private async createThread(place: Place): Promise<number> {
-    const params = { chat_id: this.chat, name: place.title };
-    const { message_thread_id: thread } = await this.bot.api.call<{ message_thread_id: number }>("createForumTopic", params);
-    this.bot.options.state.set(this.keys.thread(place.id), String(thread));
-    this.bot.options.state.set(this.keys.title(place.id), place.title);
-    this.bot.options.state.set(this.keys.place(thread), place.id);
+    const { state } = this.bot.options;
+    const key = this.keys.creation(place.id);
+    const previous = state.get(key);
+    if (previous) {
+      let retryAt: number | undefined;
+      let failure: string | undefined;
+      try { const attempt = JSON.parse(previous); retryAt = attempt.retryAt; failure = typeof attempt.failure === "string" ? attempt.failure : undefined; } catch { /* An unreadable attempt is uncertain too. */ }
+      if (typeof retryAt !== "number" || !Number.isFinite(retryAt) || retryAt > Date.now()) {
+        throw new Error(`Topic creation for ${place.id} is blocked after an earlier attempt${failure ? ` (${failure})` : ""}; inspect existing Telegram topics before repairing its mapping. No new topic was requested.`);
+      }
+    }
+    if (this.mode === "group") await this.checkForum();
+    // createForumTopic is not idempotent. Persist BEFORE sending: a timeout, API refusal or process crash
+    // can leave a topic on Telegram without its id here. Typing/status/reloads must never create another.
+    state.set(key, JSON.stringify({ attemptedAt: Date.now() }));
+    let thread: number;
+    try {
+      const result = await this.bot.api.call<{ message_thread_id: number }>("createForumTopic", { chat_id: this.chat, name: place.title });
+      thread = result?.message_thread_id;
+      if (!Number.isSafeInteger(thread) || thread <= 0) throw new Error("createForumTopic returned no valid thread id; inspect Telegram before retrying");
+    } catch (error) {
+      // An explicit rate limit is the only safe automatic retry, after Telegram's deadline.
+      if (error instanceof TelegramError && error.code === 429) {
+        const seconds = Number.isFinite(error.retryAfter) && error.retryAfter! > 0 ? error.retryAfter! : 60;
+        state.set(key, JSON.stringify({ retryAt: Date.now() + seconds * 1000 }));
+      } else if (error instanceof TelegramError) {
+        state.set(key, JSON.stringify({ attemptedAt: Date.now(), failure: error.message }));
+      }
+      throw error;
+    }
+    // Save the id first: even if later writes fail, subsequent uses reuse it.
+    state.set(this.keys.thread(place.id), String(thread));
+    state.set(this.keys.title(place.id), place.title);
+    state.set(this.keys.place(thread), place.id);
+    state.set(key, "");
     this.bot.options.log.info(`telegram ${this.name}: thread for ${place.id} created`);
     return thread;
   }
@@ -536,6 +619,7 @@ export class TelegramChannel implements Channel, BotChat {
     let parsed: Parsed | undefined;
     let answer: string | void = undefined;
     try {
+      this.discoverTopic(update.message ?? update.edited_message ?? update.callback_query?.message);
       parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => state.get(this.keys.place(thread)) || undefined });
       if (parsed && "skipped" in parsed) {
         answer = parsed.answer;

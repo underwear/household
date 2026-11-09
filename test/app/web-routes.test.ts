@@ -14,7 +14,7 @@ import { knownAgents } from "../../src/app/agents";
 import { channelChecks } from "../../src/app/channel-fields";
 import { configCheck, knownChannelKinds, knownPlatforms } from "../../src/app/kinds";
 import { slack, slackPrivate } from "../../src/channel-adapters/slack";
-import { telegram, telegramPrivate } from "../../src/channel-adapters/telegram";
+import { telegram, telegramPrivate, telegramGroup } from "../../src/channel-adapters/telegram";
 import { WebAuth } from "../../src/app/web-auth";
 import { webRoutes, withoutPaths, type WebRoutesDeps } from "../../src/app/web-routes";
 import type { HouseView, KeysView, KeyView, WriteView } from "../../src/app/web-views";
@@ -223,7 +223,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
     state: "running",
     // Its permission modes as claude calls them, bypass by default.
     agents: expect.arrayContaining([{ name: "claude-code-tmux", terminal: true, dynamicModels: false, modelOptions: expect.any(Array), models: ["opus", "sonnet", "haiku", "fable"], defaultModel: "opus", modes: [{ id: "auto", label: "Auto" }, { id: "manual", label: "Manual" }, { id: "acceptEdits", label: "Accept edits" }, { id: "plan", label: "Plan" }, { id: "bypassPermissions", label: "Bypass permissions" }, { id: "dontAsk", label: "Don't ask" }], defaultMode: "bypassPermissions", settings: [expect.objectContaining({ key: "claudeAiConnectors", checkbox: true, petOnly: true, defaultLabel: "disabled" }), { key: "subagentModel", label: "Subagent model", description: expect.any(String), options: [{ id: "opus", label: "opus" }, { id: "sonnet", label: "sonnet" }, { id: "haiku", label: "haiku" }, { id: "fable", label: "fable" }], defaultLabel: "the bot's own model" }], providers: ["anthropic"] }]),
-    channelKinds: [telegramPrivate, slackPrivate], // the kinds, with their own fields, as their adapters describe them
+    channelKinds: [telegramPrivate, telegramGroup, slackPrivate], // the kinds, with their own fields, as their adapters describe them
     platforms: [telegram, slack].map(({ valid: _valid, ...spec }) => spec), // its check stays on the server
     providers: ["anthropic", "openai"],
     noteMax: 200,
@@ -296,7 +296,7 @@ test("invalid input is a 400 with the reason, an unknown house or a bad URI a 40
     ["POST", "/api/houses/home/allow", { host: "example.com" }, 404, "unknown workspace 'home'"],
     ["PATCH", "/api/houses/work", { telegram: null }, 405, "method not allowed"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "12", pets: ["nobody"] }, 400, "'nobody' is not a bot of workspace work"],
-    ["POST", "/api/houses/work/channels", { kind: "telegram-group", token: BOT, chat: "12" }, 400, "unknown channel kind 'telegram-group' (known: telegram-private, slack-private)"],
+    ["POST", "/api/houses/work/channels", { kind: "telegram-group", token: BOT, chat: "12" }, 400, "must be a Telegram supergroup id"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "12", phone: "+34600000000" }, 400, "a Telegram Bot DM (threaded) channel has no field 'phone' (its fields: token)"], // another kind's
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", chat: "12" }, 400, "Bot token is required"],
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: "telegram-work", chat: "12" }, 400, "that is not a bot token: one looks like 123456789:AAH4x… (from @BotFather)"],

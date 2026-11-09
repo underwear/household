@@ -59,3 +59,13 @@ test("reply rich mode and edit_reply use authenticated identity and opaque ids",
   expect((await call("reply", { text: "bad", format: "unknown" })).isError).toBe(true);
   expect(calls).toHaveLength(2);
 });
+
+test("place_create uses the caller's identity and validates title and destination", async () => {
+  const calls:unknown[][]=[];
+  const routes=agentRoutes({onPayload:async()=>({})},{reply:async()=>({id:"m1",channel:"c1"}),react:async()=>({id:"m1",reaction:null}),createPlace:async(...args)=>{calls.push(args);return {id:"topic:new@c1",kind:"topic",title:args[2],channel:"c1"};}},{find:async()=>({messages:[],more:false})});
+  const call=async(args:object)=>(await (await routes({house:"work",pet:"sibling"},new Request("http://house/mcp",{method:"POST",body:JSON.stringify({id:1,method:"tools/call",params:{name:"place_create",arguments:args}})}))).json() as any).result;
+  expect(JSON.parse((await call({title:"Project",place:"inbox@c1"})).content[0].text)).toMatchObject({id:"topic:new@c1"});
+  expect(calls).toEqual([["work","sibling","Project","inbox@c1"]]);
+  for(const args of [{title:5},{title:""},{title:"x",pet:"other"},{title:"x",place:5}]) expect((await call(args)).isError).toBe(true);
+  expect(calls).toHaveLength(1);
+});

@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
-import { ChevronDown, Minus, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Minus, Plus } from "lucide-react";
+import type { FieldHelp } from "../../src/core/channels";
 
 /*
  * Form fields: one system for every control — a label, the control, an optional hint and error; one height,
@@ -15,6 +16,8 @@ export interface FieldProps {
   /** Read out but not shown (the field's purpose is plain from what is next to it). */
   hideLabel?: boolean;
   hint?: ReactNode;
+  /** Where the value comes from, in steps, folded under the hint. */
+  help?: FieldHelp;
   error?: ReactNode;
   /** A caution that does not stop a save (in the danger tone, under the hint). */
   warning?: ReactNode;
@@ -22,7 +25,7 @@ export interface FieldProps {
 }
 
 /** A label, a control, a hint, a warning, an error. For a control of its own; TextField and SelectField use it. */
-export function Field({ id, label, hideLabel, hint, error, warning, children }: FieldProps) {
+export function Field({ id, label, hideLabel, hint, help, error, warning, children }: FieldProps) {
   return (
     <div className="field">
       <label htmlFor={id} className={hideLabel ? "visually-hidden" : "field-label"}>
@@ -34,6 +37,7 @@ export function Field({ id, label, hideLabel, hint, error, warning, children }: 
           {hint}
         </p>
       )}
+      {help && <FieldHelpFold help={help} />}
       {warning && (
         <p id={`${id}-warning`} className="hint danger">
           {warning}
@@ -48,6 +52,33 @@ export function Field({ id, label, hideLabel, hint, error, warning, children }: 
   );
 }
 
+/** A field's steps behind a fold; an https:// address in a step is a link, opened in a new tab. */
+function FieldHelpFold({ help }: { help: FieldHelp }) {
+  return (
+    <details className="field-help">
+      <summary>
+        <ChevronRight size={14} aria-hidden className="field-help-chevron" />
+        {help.title}
+      </summary>
+      <ol>
+        {help.steps.map((step) => (
+          <li key={step}>
+            {step.split(/(https:\/\/\S+?)(?=[.,;:]?(?:\s|$))/).map((part, index) =>
+              index % 2 ? (
+                <a key={index} className="text-link" href={part} target="_blank" rel="noreferrer">
+                  {part.replace("https://", "")}
+                </a>
+              ) : (
+                part
+              ),
+            )}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
 /** What a control needs from its field: its id, what describes it, whether it is wrong. */
 function useControl(hint: ReactNode, error: ReactNode, warning?: ReactNode) {
   const id = useId();
@@ -59,6 +90,7 @@ interface CommonProps {
   label: ReactNode;
   hideLabel?: boolean;
   hint?: ReactNode;
+  help?: FieldHelp;
   error?: ReactNode;
   value: string;
   onChange: (value: string) => void;
@@ -74,10 +106,10 @@ export interface TextFieldProps extends CommonProps {
   inputMode?: "text" | "numeric" | "url";
 }
 
-export function TextField({ label, hideLabel, hint, error, value, onChange, mono, ...input }: TextFieldProps) {
+export function TextField({ label, hideLabel, hint, help, error, value, onChange, mono, ...input }: TextFieldProps) {
   const control = useControl(hint, error);
   return (
-    <Field id={control.id} label={label} hideLabel={hideLabel} hint={hint} error={error}>
+    <Field id={control.id} label={label} hideLabel={hideLabel} hint={hint} help={help} error={error}>
       <input
         {...control}
         {...input}

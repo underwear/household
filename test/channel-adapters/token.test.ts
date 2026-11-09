@@ -38,3 +38,10 @@ test("what a token is: from memory at once (its bot's id at first), asked in the
   await Bun.sleep(20);
   expect(api.sent("getMe")).toHaveLength(3);
 });
+
+test("group bots do not need private-chat Threaded Mode", async () => {
+  const api = fakeTelegram(BOT); stops.push(api.stop);
+  api.botInfo.has_topics_enabled = false;
+  await expect(telegramBotToken(api.url).accept(BOT)).rejects.toThrow("threads off");
+  await expect(telegramBotToken(api.url, Date.now, false).accept(BOT)).resolves.toMatchObject({identity:"4242"});
+});

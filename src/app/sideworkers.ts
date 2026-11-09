@@ -74,6 +74,8 @@ export interface SideworkerDeps {
   /** A git worktree for the worker, made in the parent's VM; undefined when `cwd` is in no repository. */
   makeWorktree?(house: string, parent: string, cwd: string, name: string): Promise<SideworkerWorktree | undefined>;
   ready(house: string, pet: string): Promise<boolean>;
+  /** Confirm the worker's destination exists before handing it any task. */
+  ensurePlace?(house: string, pet: string): Promise<void>;
   dispatch(caller: PetIdentity, to: string, task: string): Promise<unknown>;
   isIdle(house: string, pet: string): Promise<boolean>;
   send(house: string, pet: string, text: string): void;
@@ -195,6 +197,7 @@ export class Sideworkers {
       this.records.push(record); this.save();
       try {
         await this.deps.reload();
+        await this.deps.ensurePlace?.(caller.house, name);
         if (!await this.deps.ready(caller.house, name)) throw new Error("Sideworker VM started, but its harness did not become ready");
         await this.deps.dispatch(caller, name, input.task);
       } catch (error) {

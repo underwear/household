@@ -320,3 +320,14 @@ test("WAL: a long read on the history connection does not block the daemon's wri
   db.run("COMMIT");
   expect(ids()).toEqual(["m2", "m1"]);
 });
+
+
+test("topic history can be revoked without hiding the bot's own thread", () => {
+  const {add,ids,db,store} = setup();
+  const own = add("own");
+  const topic = add("private to default", {place:"topic:project@telegram-private:8"});
+  expect(ids()).toContain(topic);
+  expect(ids({excludeTopics:true})).toEqual([own]);
+  expect(ids({pet:"chair"})).toEqual([]);
+  db.close(); store.close();
+});

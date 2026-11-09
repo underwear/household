@@ -61,7 +61,7 @@ export function networkCard(text: string, endpoint: string, scout = false): Owne
     view: (state) => {
       // A scout's grant lasts for its run: no "forever" (its network is its capabilities').
       if (state.step === "initial") return { choices: scout ? [NETWORK_CHOICES[0]!, NETWORK_CHOICES[2]!] : NETWORK_CHOICES, text };
-      if (state.step === "confirming") return { choices: CONFIRM_CHOICES, text: cardText({ title: `Allow <code>${html(endpoint)}</code> for good?`, note: "Every pet in the house can reach it until you remove it from the allowlist." }) };
+      if (state.step === "confirming") return { choices: CONFIRM_CHOICES, text: cardText({ title: `Allow ${html(endpoint)} for good?`, note: "Every pet in the house can reach it until you remove it from the allowlist." }) };
       return { outcome: DECIDED[state.decision] };
     },
     press: (state, index) => {
@@ -276,7 +276,7 @@ export class NetworkRequests {
       let { addresses } = screened;
       // Who asks for what, why (its own words, quoted), and the addresses a grant would reach: what the owner approves.
       const text = cardText({
-        title: `${html(title)} wants to reach <code>${shown(domain, port)}</code>`,
+        title: `${html(title)} wants to reach ${html(shown(domain, port))}`,
         quote: { label: "Why", text: reason },
         facts: deferred
           ? ["Resolves: checked only after you allow it", "For: this run of the scout only"]

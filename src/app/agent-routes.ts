@@ -149,7 +149,7 @@ function historyTool(history: Pick<History, "find">): McpTool<PetIdentity> {
 }
 
 /** What the agent API answers, per path: hook events at /events, Household's MCP server (tools `reply`, `react`, `history`) at /mcp. */
-export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Chat, "reply" | "react"> & Partial<Pick<Chat, "replyFormat" | "editReply" | "places">>, history: Pick<History, "find">, network?: Pick<NetworkRequests, "list" | "request">, environment?: Pick<PetEnvironment, "runEnvironmentSetup"> & Partial<Pick<PetEnvironment, "getEnvironment" | "updateEnvironment">>, crons?: Crons, memory?: PetMemory, extraTools: McpTool<PetIdentity>[] = [], isSideworker: (identity: PetIdentity) => boolean = () => false, guard?: { allow(caller: PetIdentity, tool: string): boolean; redact(caller: PetIdentity, payload: unknown): unknown; replied?(caller:PetIdentity,text:string):void }) {
+export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Chat, "reply" | "react"> & Partial<Pick<Chat, "replyFormat" | "editReply" | "places" | "createPlace">>, history: Pick<History, "find">, network?: Pick<NetworkRequests, "list" | "request">, environment?: Pick<PetEnvironment, "runEnvironmentSetup"> & Partial<Pick<PetEnvironment, "getEnvironment" | "updateEnvironment">>, crons?: Crons, memory?: PetMemory, extraTools: McpTool<PetIdentity>[] = [], isSideworker: (identity: PetIdentity) => boolean = () => false, guard?: { allow(caller: PetIdentity, tool: string): boolean; redact(caller: PetIdentity, payload: unknown): unknown; replied?(caller:PetIdentity,text:string):void }) {
   const tools = [replyTool(chat), reactTool(chat), historyTool(history), ...extraTools];
   if (chat.editReply) tools.push({
     name: "edit_reply",
@@ -165,6 +165,18 @@ export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Ch
     },
   });
   if (chat.places) tools.push({ name: "places", description: "List your available chat places and supported helper placement modes. Use their id in reply, send_file, scout_spawn and sideworker_spawn. No vendor ids or credentials.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, call: async ({ house, pet }) => JSON.stringify(chat.places!(house, pet)) });
+  if (chat.createPlace) tools.push({
+    name: "place_create",
+    description: "Create a shared topic in a channel supporting this capability (see places.canCreatePlace). Messages there go to the channel's default bot. Only the channel default bot can create or access these topics; helpers cannot use them. Returns its place.id for reply. Without place, uses the current request channel.",
+    inputSchema: { type: "object", properties: { title: { type: "string", minLength: 1, maxLength: 128 }, place: { type: "string", description: "An existing place.id selecting the channel" } }, required: ["title"], additionalProperties: false },
+    call: async ({house,pet},args) => {
+      if (Object.keys(args).some(key => !["title","place"].includes(key))) throw new Error("Unknown argument");
+      const {title,place} = args;
+      if (place !== undefined && typeof place !== "string") throw new Error("place must be a string");
+      if (typeof title !== "string" || !title.trim() || title.trim().length > 128) throw new Error("title must contain 1–128 characters");
+      return JSON.stringify(await chat.createPlace!(house,pet,title,place === undefined ? undefined : idArg("place",place)));
+    },
+  });
   if (chat.replyFormat) tools.push({
     name: "channel_format",
     description: "Get the text format and formatting instructions for reply in your destination channel. Use when no chat header is present or when sending to another channel. With no destination, inherits the same request place as reply.",

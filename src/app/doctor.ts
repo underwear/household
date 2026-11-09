@@ -91,9 +91,9 @@ export async function doctor({ paths, config, agents, run, telegramApi, released
     for (const { key, kind, pets: users } of keyUsers(pets)) findings.push({ ok: true, text: `key ${key} (${kind}): pets ${users.join(", ")}` });
     const bots = new Map<string, string>();
     for (const house of household.houses) {
-      for (const channel of house.channels) if (channel.kind === "telegram-private" && !bots.has(channel.token)) bots.set(channel.token, `house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}`);
+      for (const channel of house.channels) if ((channel.kind === "telegram-private" || channel.kind === "telegram-group") && !bots.has(channel.token)) bots.set(channel.token, `house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}`);
     }
-    for (const [token, where] of bots) findings.push(await checkBot(where, token, telegramApi));
+    for (const [token, where] of bots) findings.push(await checkBot(where, token, telegramApi, household.houses.some(house => house.channels.some(channel => channel.kind === "telegram-private" && channel.token === token))));
     for (const house of household.houses) for (const channel of house.channels.filter(channel => channel.kind === "slack-private")) {
       const where = `house ${house.name}, Slack channel ${channel.name ?? channel.chat}`;
       if (!isSlackBotToken(channel.token) || !channel.appToken || !isSlackAppToken(channel.appToken)) {
@@ -135,15 +135,15 @@ function keyUsers(pets: PlacedPet[]): { key: string; kind: string; pets: string[
 }
 
 /** Telegram's `getMe` with the token: it must be valid, and the bot needs threads (Threaded Mode). Says where it is, never the token. */
-async function checkBot(where: string, token: string, apiBase?: string): Promise<Finding> {
+async function checkBot(where: string, token: string, apiBase?: string, requireTopics = true): Promise<Finding> {
   const which = `of ${where}`;
   if (!isBotToken(token)) return { ok: false, text: `bot ${which}: its token is not a bot token (one looks like 123456789:AAH4x…, from @BotFather); not sent to Telegram` };
   try {
     const me = await getMe(token, apiBase);
-    if (!me.has_topics_enabled) {
+    if (requireTopics && !me.has_topics_enabled) {
       return { ok: false, text: `bot ${which}: @${me.username} has threads off; turn on Threaded Mode in BotFather (Bot Settings → Threads Settings)` };
     }
-    return { ok: true, text: `bot ${which}: @${me.username}, threads on` };
+    return { ok: true, text: `bot ${which}: @${me.username}${requireTopics ? ", threads on" : ", group bot"}` };
   } catch (error) {
     // A TelegramError never holds the token.
     const what = isRefusedToken(error) ? "Telegram did not accept the token" : "Telegram unreachable";

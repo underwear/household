@@ -510,7 +510,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
     expect(runtime.execs).toContain(`household.work.sibling: tmux load-buffer -b household - < <household-message id="m2">\n<household-header>\n${header}\n</household-header>\n<household-content>\nhow's it going?\n</household-content>\n</household-message>`);
 
     const tools = await callMcp(paths, "sibling", { method: "tools/list" });
-    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "household_connectors_google_accounts", "household_connectors_google_operations", "household_connectors_google_request", "preview_open", "preview_list", "preview_close", "secret_request", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "places", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
+    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "household_connectors_google_accounts", "household_connectors_google_operations", "household_connectors_google_request", "preview_open", "preview_list", "preview_close", "secret_request", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "places", "place_create", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
     const replyTo = (args: object) => callMcp(paths, "sibling", { method: "tools/call", params: { name: "reply", arguments: args } });
     expect((await replyTo({ text: "fine" })).result).toEqual({ content: [{ type: "text", text: '{"id":"m5","channel":"c1","place":"pet:sibling@c1"}' }] });
     expect(channel.calls).toContain("post 🤖 Sibling: fine");
@@ -744,7 +744,7 @@ test("network approvals apply only network policy: temporary grants are the pet'
     const pending = callMcp(paths, "sibling", { method: "tools/call", params: {
       name: "network_request", arguments: { domain, reason: "GitHub API for the requested issue lookup" },
     } });
-    await waitFor(() => channel.calls.slice(before).some((line) => line.includes(`wants to reach <code>${domain}</code></b>`)));
+    await waitFor(() => channel.calls.slice(before).some((line) => line.includes(`wants to reach ${domain}</b>`)));
     const card = `post-${channel.calls.length}`;
     await channel.press(card, index, ["Allow 15 min", "Allow forever", "Deny"][index]!);
     // For good is asked again, on the same card.
@@ -811,7 +811,7 @@ test("a pet removed from the config takes its temporary grants with it, out of t
       const pending = callMcp(paths, pet, { method: "tools/call", params: {
         name: "network_request", arguments: { domain: "api.github.com", reason: "GitHub API for the requested issue lookup" },
       } });
-      await waitFor(() => channel.calls.slice(before).some((line) => line.includes("wants to reach <code>api.github.com</code></b>")));
+      await waitFor(() => channel.calls.slice(before).some((line) => line.includes("wants to reach api.github.com</b>")));
       await channel.press(`post-${channel.calls.length}`, 0, "Allow 15 min");
       expect(JSON.parse((await pending).result.content[0].text).status).toBe("temporary");
     }

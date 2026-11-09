@@ -207,6 +207,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
                   key={field.key}
                   label={field.label}
                   hint={field.hint}
+                  help={field.help}
                   mono={field.mono}
                   placeholder={field.placeholder}
                   value={own[field.key] ?? ""}
@@ -214,7 +215,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
                 />
               ))}
             {(() => {
-              const chatField = <TextField label={spec.chat.label} hint={spec.chat.hint} mono={spec.chat.mono} placeholder={spec.chat.placeholder} readOnly={channel !== undefined} value={chat} onChange={setChat} />;
+              const chatField = <TextField label={spec.chat.label} hint={spec.chat.hint} help={spec.chat.help} mono={spec.chat.mono} placeholder={spec.chat.placeholder} readOnly={channel !== undefined} value={chat} onChange={setChat} />;
               const narrow = spec.fields.filter((field) => !field.wide);
               // Two to a row with the kind's other fields; alone, its own row.
               if (narrow.length === 0) return chatField;
@@ -225,6 +226,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
                       key={field.key}
                       label={field.label}
                       hint={field.hint}
+                      help={field.help}
                       mono={field.mono}
                       placeholder={field.placeholder}
                       value={own[field.key] ?? ""}

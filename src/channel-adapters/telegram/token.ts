@@ -32,7 +32,7 @@ const DESCRIBE_TIMEOUT_MS = 2_000;
  * (`bot <id>` until Telegram has told) and asked of Telegram in the background (shortly; after a failure not again
  * for a while), never holding up a page.
  */
-export function telegramBotToken(apiBase?: string, now = () => Date.now()): FieldCheck {
+export function telegramBotToken(apiBase?: string, now = () => Date.now(), requireTopics = true): FieldCheck {
   const known = new Map<string, { shown: string | null; at: number; failures: number; asking?: boolean }>();
   const ask = (value: string) => {
     const entry = known.get(value) ?? { shown: null, at: 0, failures: 0 };
@@ -54,7 +54,7 @@ export function telegramBotToken(apiBase?: string, now = () => Date.now()): Fiel
       } catch (error) {
         throw new HouseholdError(isRefusedToken(error) ? "Telegram does not know this bot token (revoked, or mistyped?)" : `Telegram could not be asked about the token (${(error as Error).message}); try again`);
       }
-      if (!me.has_topics_enabled) throw new HouseholdError(`@${me.username} has threads off: turn on Threaded Mode in @BotFather (Bot Settings → Threads Settings), then try again`);
+      if (requireTopics && !me.has_topics_enabled) throw new HouseholdError(`@${me.username} has threads off: turn on Threaded Mode in @BotFather (Bot Settings → Threads Settings), then try again`);
       const shown = `@${me.username}`;
       known.set(value, { shown, at: now(), failures: 0 });
       return { value, identity: shape[1]!, shown };

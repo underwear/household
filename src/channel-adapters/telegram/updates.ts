@@ -43,7 +43,8 @@ export interface TelegramMessage {
   forward_origin?: ForwardOrigin;
   /** The message this one answers; in a thread, without a reply of its own, the thread's first (service) message. */
   reply_to_message?: TelegramMessage;
-  forum_topic_created?: object;
+  forum_topic_created?: { name?: string };
+  forum_topic_edited?: { name?: string };
   caption?: string;
   /** The same for every message of an album (each of its files comes as a message of its own). */
   media_group_id?: string;

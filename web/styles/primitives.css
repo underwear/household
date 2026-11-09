@@ -131,6 +131,15 @@ fieldset.field > legend { margin-bottom: var(--space-2); }
 .form-group + .form-group { padding-top: var(--space-5); border-top: 1px solid var(--line); }
 .form-group-title { float: left; width: 100%; padding: 0; margin-bottom: 2px; font: 600 var(--text-xs)/1 var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .form-group-title + * { clear: both; }
+/* Where a field's value comes from: a quiet fold under its hint, numbered steps inside. */
+.field-help { font: 400 var(--text-sm)/1.5 var(--font-sans); color: var(--muted); }
+.field-help summary { display: inline-flex; align-items: center; gap: var(--space-1); width: fit-content; list-style: none; color: var(--faint); cursor: pointer; }
+.field-help summary::-webkit-details-marker { display: none; }
+.field-help summary:hover { color: var(--ink); }
+.field-help-chevron { transition: transform 0.15s; }
+.field-help[open] .field-help-chevron { transform: rotate(90deg); }
+.field-help ol { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + 1.2em); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.field-help li + li { margin-top: var(--space-1); }
 .hint.busy { color: var(--busy); }
 /* A caution that does not stop a save («More than 80% of this host»). */
 .hint.danger { color: var(--danger); }

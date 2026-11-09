@@ -12,7 +12,8 @@ and lets you talk to it from the messenger you already use.
 [![Website](https://img.shields.io/badge/agents--household.dev-1f1d1a?style=flat-square&logo=homeassistantcommunitystore&logoColor=72c191)](https://agents-household.dev)
 [![Docs](https://img.shields.io/badge/docs-read-f2f0eb?style=flat-square)](https://agents-household.dev/docs/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-72c191?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/macOS%20%C2%B7%20Linux%2BKVM-1f1d1a?style=flat-square&logo=linux&logoColor=white)](#requirements)
+[![macOS](https://img.shields.io/badge/macOS-1f1d1a?style=flat-square&logo=apple&logoColor=white)](#requirements)
+[![Linux + KVM](https://img.shields.io/badge/Linux%20%2B%20KVM-1f1d1a?style=flat-square&logo=linux&logoColor=white)](#requirements)
 
 [Quick start](#quick-start) · [Supported harnesses and messengers](#supported-harnesses-and-messengers) · [Docs](https://agents-household.dev/docs/) · [Website](https://agents-household.dev)
 

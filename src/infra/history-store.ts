@@ -13,6 +13,7 @@ export interface HistoryFilter {
   pet: string;
   channel: string;
   words?: string[];
+  excludeTopics?: boolean;
   sender?: { kind: "pet"; name: string } | { kind: "person"; ref: string };
   since?: string;
   until?: string;
@@ -45,13 +46,14 @@ export function openReadOnly(path: string): Database {
 }
 
 /** One search, on `db` (the history process's read-only connection). Texts are cut here, before they travel. */
-export function searchHistory(db: Database, { house, pet, channel, words, sender, since, until, before, limit }: HistoryFilter): HistoryPage {
+export function searchHistory(db: Database, { house, pet, channel, words, sender, since, until, before, limit, excludeTopics }: HistoryFilter): HistoryPage {
   const where = ["house = ?", "channel_id = ?", "id IN (SELECT record FROM chat_journal WHERE house = ? AND pet = ?)"];
   const values: (string | number)[] = [house, channel, house, pet];
   const and = (condition: string, ...more: (string | number)[]) => {
     where.push(condition);
     values.push(...more);
   };
+  if (excludeTopics) and("place NOT LIKE 'topic:%'");
   if (words && words.length > 0) and("id IN (SELECT rowid FROM chat_search WHERE chat_search MATCH ?)", ftsQuery(words));
   if (sender?.kind === "pet") and("json_extract(sender, '$.kind') = 'pet' AND json_extract(sender, '$.name') = ?", sender.name);
   if (sender?.kind === "person") and("json_extract(sender, '$.kind') = 'person' AND json_extract(sender, '$.ref') = ?", sender.ref);

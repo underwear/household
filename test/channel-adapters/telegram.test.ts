@@ -1,5 +1,6 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test, spyOn } from "bun:test";
 import { TelegramBot, TelegramChannel, type TelegramBotOptions } from "../../src/channel-adapters/telegram";
+import { TelegramError } from "../../src/channel-adapters/telegram/bot-api";
 import { splitText } from "../../src/channel-adapters/telegram/split";
 import { renderStatus } from "../../src/channel-adapters/telegram/status";
 import type { Update } from "../../src/channel-adapters/telegram/updates";
@@ -770,7 +771,7 @@ test("native peer quotes preserve multiline prose and use UTF-16 offsets after e
   const sent = api.sent("sendMessage")[0]!;
   const offset = heading.length + 2;
   expect(sent.text).toBe(`${heading}\n\n${body}`);
-  expect(sent.entities).toEqual([{ type: "blockquote", offset, length: body.length }]);
+  expect(sent.entities).toEqual([{ type: "expandable_blockquote", offset, length: body.length }]);
   expect(offset).toBeGreaterThan([...heading].length + 2);
   expect((sent.text as string).slice(offset)).toBe(body);
   expect(sent.parse_mode).toBeUndefined();
@@ -790,7 +791,7 @@ test("long peer quotes repeat their heading and quote every split part without s
     const text = item.text as string, offset = heading.length + 2;
     expect(text.length).toBeLessThanOrEqual(4096);
     expect(text.startsWith(`${heading}\n\n`)).toBe(true);
-    expect(item.entities).toEqual([{ type: "blockquote", offset, length: text.length - offset }]);
+    expect(item.entities).toEqual([{ type: "expandable_blockquote", offset, length: text.length - offset }]);
     const quoted = text.slice(offset);
     expect(quoted.isWellFormed()).toBe(true);
     bodies.push(quoted);
@@ -1026,4 +1027,157 @@ test("a removed place's thread is deleted and forgotten: messages there are no o
   api.fail("deleteForumTopic", 403, "Forbidden: not enough rights");
   await expect(channel.removePlace(sibling)).rejects.toThrow("not enough rights");
   expect(state.get(`telegram.123456.${OWNER}.thread.c1`)).toBe("102");
+});
+
+
+test("topic creation refusal cannot loop through typing, status, replies or daemon reload", async () => {
+  const { api, open } = setup();
+  api.fail("createForumTopic", 400, "Bad Request: BOT_TOPIC_WRONG_HOME");
+  const channel = open();
+  const attempts = await Promise.allSettled([channel.ensurePlace(sibling), channel.ensurePlace(sibling)]);
+  expect(attempts.every(result => result.status === "rejected")).toBe(true);
+  for (let i = 0; i < 3; i++) {
+    await expect(channel.typing(sibling, new AbortController().signal)).rejects.toThrow("blocked");
+    await expect(channel.postStatus(sibling, { state: "working", line: "Working" })).rejects.toThrow("blocked");
+    await expect(channel.post(sibling, "hello")).rejects.toThrow("blocked");
+    await expect(channel.placeLink(sibling)).rejects.toThrow("blocked");
+  }
+  await expect(open().ensurePlace(sibling)).rejects.toThrow("blocked");
+  await expect(open().ensurePlace(sibling)).rejects.toThrow("BOT_TOPIC_WRONG_HOME");
+  expect(api.sent("createForumTopic")).toHaveLength(1);
+  await channel.ensurePlace({ ...sibling, id: "pet:other", title: "Other" }); // another place is independent
+  expect(api.sent("createForumTopic")).toHaveLength(2);
+});
+
+test("a lost create response leaves one topic and a durable stop instead of creating duplicates", async () => {
+  const { api, open, bot } = setup();
+  const owner = bot();
+  const call = owner.api.call.bind(owner.api);
+  const stub = spyOn(owner.api, "call").mockImplementation(async (method, params, options) => {
+    const result = await call(method, params, options);
+    if (method === "createForumTopic") throw new TelegramError(method, 0, "no answer in time");
+    return result as any;
+  });
+  try {
+    await expect(open(OWNER, owner).ensurePlace(sibling)).rejects.toThrow("no answer in time");
+    await expect(open().ensurePlace(sibling)).rejects.toThrow("blocked");
+    expect(api.topics.size).toBe(1);
+    expect(api.sent("createForumTopic")).toHaveLength(1);
+  } finally { stub.mockRestore(); }
+});
+
+test("topic rate limits persist their deadline and allow creation only after it", async () => {
+  const { api, open } = setup();
+  api.fail("createForumTopic", 429, "Too Many Requests", 1, 60);
+  const now = Date.now();
+  await expect(open().ensurePlace(sibling)).rejects.toThrow("429");
+  await expect(open().ensurePlace(sibling)).rejects.toThrow("blocked");
+  expect(api.sent("createForumTopic")).toHaveLength(1);
+  const clock = spyOn(Date, "now").mockReturnValue(now + 61_000);
+  try {
+    await open().ensurePlace(sibling);
+    expect(api.sent("createForumTopic")).toHaveLength(2);
+  } finally { clock.mockRestore(); }
+  await open().ensurePlace(sibling);
+  expect(api.sent("createForumTopic")).toHaveLength(2);
+});
+
+
+test("an interrupted or malformed creation response is never retried after reopening the channel", async () => {
+  for (const result of [undefined, {}, { message_thread_id: 0 }]) {
+    const { api, open, bot } = setup();
+    const owner = bot();
+    const stub = spyOn(owner.api, "call").mockResolvedValue(result);
+    try {
+      await expect(open(OWNER, owner).ensurePlace(sibling)).rejects.toThrow("no valid thread id");
+      await expect(open().ensurePlace(sibling)).rejects.toThrow("blocked");
+      expect(api.sent("createForumTopic")).toHaveLength(0);
+    } finally { stub.mockRestore(); }
+  }
+  const { api, state, open } = setup();
+  state.set(`telegram.123456.${OWNER}.creation.${sibling.id}`, JSON.stringify({ attemptedAt: Date.now() }));
+  await expect(open().ensurePlace(sibling)).rejects.toThrow("blocked");
+  expect(api.sent("createForumTopic")).toHaveLength(0);
+});
+
+test("forum group topics coexist with private topics on one bot, route replies, link and delete independently", async () => {
+  const { api, bot, open, listen, received } = setup();
+  const shared = bot(), groupId = -1001234567890;
+  const group = new TelegramChannel(shared, groupId, "forum", "group");
+  stops.push(() => group.stop());
+  const dm = open(OWNER, shared);
+  listen(dm); listen(group);
+  await Promise.all([dm.ensurePlace(sibling), group.ensurePlace(sibling)]);
+  const groupThread = Number([...api.topics.keys()].find(key => key.startsWith(`${groupId}/`))!.split("/")[1]);
+  await group.post(sibling, "<b>Group</b>");
+  await group.post(inbox, "General");
+  expect(api.sent("sendMessage").slice(-2)).toMatchObject([{chat_id: groupId, message_thread_id: groupThread, text:"Group"}, {chat_id: groupId, text:"General"}]);
+  expect(api.sent("sendMessage").at(-1)).not.toHaveProperty("message_thread_id");
+  expect(await group.placeLink(sibling)).toBe(`https://t.me/c/1234567890/${groupThread}`);
+  api.push({message: {message_id:10, chat:{id:groupId}, from:OLEG, text:"group reply", is_topic_message:true, message_thread_id:groupThread}});
+  await waitFor(() => received.length === 1);
+  expect(received[0]).toMatchObject({place:sibling.id, from:owner.from, text:"group reply"});
+  await expect(group.post(sibling, "# title", undefined, "rich")).rejects.toThrow("not supported");
+  await group.removePlace(sibling);
+  expect(api.topics.size).toBe(1);
+  expect([...api.topics.keys()][0]).toStartWith(`${OWNER}/`);
+});
+
+test("forum and administrator checks fail before creation and recover after permissions are fixed", async () => {
+  const {api,bot,state} = setup();
+  const group = new TelegramChannel(bot(), -1001234567890, "forum", "group");
+  api.chatInfo.is_forum = false;
+  await expect(group.ensurePlace(sibling)).rejects.toThrow("Enable Topics");
+  api.chatInfo.is_forum = true;
+  api.botMember.can_manage_topics = false;
+  await expect(group.ensurePlace(sibling)).rejects.toThrow("administrator");
+  api.botMember.can_manage_topics = true;
+  api.botMember.can_delete_messages = false;
+  await expect(group.ensurePlace(sibling)).rejects.toThrow("Delete messages");
+  expect(api.sent("createForumTopic")).toHaveLength(0);
+  expect([...state.keys()].some(key => key.includes(".creation."))).toBe(false);
+  api.botMember.can_delete_messages = true;
+  await group.ensurePlace(sibling);
+  expect(api.sent("createForumTopic")).toHaveLength(1);
+});
+
+test("human forum topics are discovered, renamed and restored without creating or deleting them", async () => {
+  const {api,bot,received,listen} = setup();
+  const groupId = -1001234567890;
+  const group = new TelegramChannel(bot(),groupId,"forum","group");
+  stops.push(()=>group.stop()); listen(group);
+  const msg = (fields:object) => ({message_id:51,chat:{id:groupId},from:OLEG,is_topic_message:true,message_thread_id:50,...fields});
+  await group.take({update_id:1,message:msg({forum_topic_created:{name:"Planning"}})});
+  const place = group.listPlaces()[0]!;
+  expect(place).toMatchObject({kind:"topic",title:"Planning"});
+  await group.take({update_id:2,message:msg({text:"hello"})});
+  expect(received[0]).toMatchObject({place:place.id,text:"hello"});
+  await group.post(place,"reply");
+  expect(api.sent("sendMessage").at(-1)).toMatchObject({chat_id:groupId,message_thread_id:50});
+  await group.take({update_id:3,message:msg({forum_topic_edited:{name:"Renamed"}})});
+  await group.take({update_id:4,message:msg({text:"again",reply_to_message:{message_id:50,chat:{id:groupId},forum_topic_created:{name:"Planning"}}})});
+  const reopened = new TelegramChannel(bot(),groupId,"forum","group");
+  expect(reopened.listPlaces()).toEqual([{...place,title:"Renamed"}]);
+  await reopened.ensurePlace(place);
+  expect(await reopened.removePlace(place)).toBe(false); // shared topic survives helper cleanup
+  expect(api.sent("createForumTopic")).toHaveLength(0);
+  expect(api.sent("deleteForumTopic")).toHaveLength(0);
+  await group.take({update_id:5,message:msg({message_thread_id:1,text:"General"})});
+  expect(group.listPlaces()).toHaveLength(1);
+});
+
+test("topic creation capability is optional; created and offline-discovered topics have stable places", async () => {
+  const {api,bot,open} = setup();
+  expect(open().createPlace).toBeUndefined();
+  const groupId = -1001234567890;
+  const group = new TelegramChannel(bot(),groupId,"forum","group");
+  const created = await group.createPlace!("Project");
+  expect(created.kind).toBe("topic");
+  expect(group.listPlaces()).toEqual([created]);
+  const reopened = new TelegramChannel(bot(),groupId,"forum","group");
+  await reopened.post(created,"hello");
+  await reopened.take({update_id:1,message:{message_id:71,chat:{id:groupId},from:OLEG,is_topic_message:true,message_thread_id:70,text:"old topic"}});
+  expect(reopened.listPlaces()).toHaveLength(2);
+  expect(api.sent("createForumTopic")).toHaveLength(1);
+  expect(await reopened.placeLink(created)).toBe("https://t.me/c/1234567890/100");
 });

@@ -3,10 +3,10 @@ import { petTitle } from "./household";
 
 /**
  * The chats a house is in. A channel is one chat: a private chat with the house's bot now
- * (`telegram-private`, threads on), a group later. Its pets are placed in it explicitly; each has its own place
+ * (`telegram-private`, threads on) or a forum supergroup (`telegram-group`). Its pets are placed in it explicitly; each has its own place
  * there (a thread), and what is addressed to none of them (General) goes to the channel's default pet.
  */
-export const CHANNEL_KINDS = ["telegram-private", "slack-private"] as const;
+export const CHANNEL_KINDS = ["telegram-private", "telegram-group", "slack-private"] as const;
 export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 
 /**
@@ -17,12 +17,20 @@ export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 export const PLATFORMS = ["telegram", "slack"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+/** Steps that tell where a field's value comes from; a step's https:// address is a link. */
+export interface FieldHelp {
+  title: string;
+  steps: string[];
+}
+
 /** A field a channel kind asks for (a bot token, a chat id, …), as a form shows it: text, for now. */
 export interface ChannelKindField {
   key: string;
   label: string;
   placeholder?: string;
   hint?: string;
+  /** How to get the value, in steps, behind a fold under the hint (a group's chat id). */
+  help?: FieldHelp;
   /** A code-like value (an id, a token): typed character for character. */
   mono?: boolean;
   /** Long (a bot token): on a row of its own in a form. */
@@ -59,7 +67,7 @@ export type Audience = "private" | "group";
 
 /**
  * A kind of channel as its adapter describes it (as an agent adapter lists its models), the one source of what a
- * kind is: its platform (several kinds may share one: Telegram's private chats now, its groups later), who reads
+ * kind is: its platform (several kinds may share one: Telegram's private chats and groups), who reads
  * it, its label (also the name of a channel the config names not), a line on it, the field that names the
  * channel (the config's `chat`: given when it is added, never changed; another one is another channel), and its
  * other fields. The fields every channel has (name, pets, default) are not among them.
@@ -155,14 +163,16 @@ export const channelsOf = (house: House, pet: string) => house.channels.filter((
  * Its key is stable, so a pet that leaves a channel and comes back has the same place. Public addresses replace the channel key with its Household channel id.
  */
 export const petPlaceKey = (pet: string, channel: string) => `pet:${pet}@${channel}`;
+export const topicPlaceKey = (topic: string, channel: string) => `topic:${topic}@${channel}`;
 export const inboxKey = (channel: string) => `inbox@${channel}`;
 
 /** The channel (key) and, for a pet's place, the pet a place key names; undefined for anything else. */
-export function parsePlaceKey(key: string | undefined): { channel: string; pet?: string } | undefined {
+export function parsePlaceKey(key: string | undefined): { channel: string; pet?: string; topic?: string } | undefined {
   const at = key?.indexOf("@") ?? -1;
   if (key === undefined || at < 0) return undefined;
   const [what, channel] = [key.slice(0, at), key.slice(at + 1)];
   if (what === "inbox") return { channel };
+  if (what.startsWith("topic:") && what.length > 6) return { channel, topic: what.slice(6) };
   return what.startsWith("pet:") ? { channel, pet: what.slice(4) } : undefined;
 }
 

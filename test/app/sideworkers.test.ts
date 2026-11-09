@@ -120,6 +120,18 @@ test("failed close remains retryable and a closed name cannot resume retained ha
   f.store.close();
 });
 
+test("a failed destination rolls back the worker without dispatching or announcing success", async () => {
+  let announced = false;
+  const f = fixture({ ensurePlace: async () => { throw new Error("BOT_TOPIC_WRONG_HOME"); }, announce: async () => { announced = true; return undefined; } });
+  await expect(f.workers.spawn(parent, task)).rejects.toThrow("BOT_TOPIC_WRONG_HOME");
+  expect(f.workers.list("home")).toHaveLength(0);
+  expect(new Sideworkers(f.deps).list("home")).toHaveLength(0);
+  expect(f.sent).toHaveLength(0);
+  expect(announced).toBe(false);
+  expect(f.reloads()).toBe(2);
+  f.store.close();
+});
+
 test("a VM that starts without a ready harness is removed and its task is not dispatched", async () => {
   const f = fixture({ ready: async () => false });
   await expect(f.workers.spawn(parent, task)).rejects.toThrow("did not become ready");

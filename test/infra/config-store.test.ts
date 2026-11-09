@@ -680,3 +680,12 @@ test("connecting a channel and its owner is atomic and preserves an existing own
   await config.addChannel("work", { kind: "telegram-private", token: "bot", chat: "456" }, [], { platform: "telegram", id: "123" });
   expect((await config.load()).houses[0]!.people.owners).toEqual([{ platform: "telegram", id: "123", note: "keep me" }]);
 });
+
+test("Telegram forum groups persist negative supergroup ids and reject private/basic group ids", async () => {
+  const {config} = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {}\n");
+  await config.addChannel("work", {kind:"telegram-group", token:"123456:fake-token", chat:"-1001234567890", pets:["sibling"]});
+  expect((await config.load()).houses[0]!.channels[0]).toMatchObject({kind:"telegram-group",chat:"-1001234567890",pets:["sibling"]});
+  for (const chat of ["1234567890", "-12345", "-1009007199254740992"]) {
+    await expect(config.addChannel("work", {kind:"telegram-group", token:"123456:fake-token",chat,pets:[]})).rejects.toThrow();
+  }
+});

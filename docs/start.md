@@ -55,6 +55,8 @@ To keep Household running after you close the terminal, run `house start` as a s
 
 ## 4. Say hi
 
+For a shared group with a topic per bot, see [Telegram groups with topics](../telegram-groups/).
+
 Open your Telegram channel and write to your assistant bot. It answers in its own thread. 🤖
 
 Then open the admin:

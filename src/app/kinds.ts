@@ -1,5 +1,5 @@
 import { slack, slackPrivate } from "../channel-adapters/slack";
-import { telegram, telegramPrivate } from "../channel-adapters/telegram";
+import { telegram, telegramPrivate, telegramGroup } from "../channel-adapters/telegram";
 import { platformOf, type ChannelKinds, type ChannelKindSpec, type Platform, type PlatformSpec } from "../core/channels";
 import { HouseholdError } from "../core/errors";
 import type { House, Household, Owner } from "../core/household";
@@ -11,7 +11,7 @@ export type { ChannelKinds };
 export type Platforms = ReadonlyMap<Platform, PlatformSpec>;
 
 /** The kinds of channel this build knows, as their adapters describe them. A new kind is one more entry here (and a branch in `openChannels`). */
-const KINDS: ChannelKindSpec[] = [telegramPrivate, slackPrivate];
+const KINDS: ChannelKindSpec[] = [telegramPrivate, telegramGroup, slackPrivate];
 /** Their platforms' descriptions (what an owner's id is), one per platform, from the platform's adapter package. */
 const PLATFORM_SPECS: PlatformSpec[] = [telegram, slack];
 

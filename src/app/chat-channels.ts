@@ -1,5 +1,5 @@
 import type { Channel, InboundMessage, Place, SenderRef } from "../core/channel";
-import { PLAIN_REPLY_FORMAT, audienceOf, channelKey, channelName, channelsOf, inboxKey, parsePlaceKey, petPlaceKey, platformOf, type ChannelConfig } from "../core/channels";
+import { PLAIN_REPLY_FORMAT, audienceOf, defaultPet, channelKey, channelName, channelsOf, inboxKey, topicPlaceKey, parsePlaceKey, petPlaceKey, platformOf, type ChannelConfig } from "../core/channels";
 import { HouseholdError } from "../core/errors";
 import type { HeaderChannel, Trust } from "../core/header";
 import { petPlace, trustOf, type House, type Pet } from "../core/household";
@@ -68,7 +68,7 @@ export class ChatChannels {
     const line = this.lines.get(house);
     const at = parsePlaceKey(place);
     const config = at && line?.house.channels.find((candidate) => channelKey(candidate) === at.channel);
-    const placed = config !== undefined && config.pets.includes(pet) && line!.house.pets.some(({ name }) => name === pet);
+    const placed = (!at?.topic || this.canUseTopics(house, pet, at.channel)) && config !== undefined && config.pets.includes(pet) && line!.house.pets.some(({ name }) => name === pet);
     return { channel: at && line?.channels.get(at.channel), placed };
   }
 
@@ -195,7 +195,14 @@ export class ChatChannels {
   /** Public place addresses retain the existing key shape, replacing vendor channel keys with Household ids. */
   publicPlace(house: string, place: Place): Place {
     const at = parsePlaceKey(place.id)!;
-    return { ...place, id: at.pet ? petPlaceKey(at.pet, this.records.channelId(house, at.channel)) : inboxKey(this.records.channelId(house, at.channel)) };
+    return { ...place, id: at.topic ? topicPlaceKey(at.topic, this.records.channelId(house, at.channel)) : at.pet ? petPlaceKey(at.pet, this.records.channelId(house, at.channel)) : inboxKey(this.records.channelId(house, at.channel)) };
+  }
+
+  canUseTopics(house: string, pet: string, key: string): boolean {
+    const configured = this.house(house);
+    const bot = configured?.pets.find(p => p.name === pet);
+    const channel = configured?.channels.find(c => channelKey(c) === key);
+    return !!bot && !bot.scout && !bot.sideworker && !!channel && channel.pets.includes(pet) && defaultPet(channel) === pet;
   }
 
   chosenPlace(house: string, pet: string, id: string): Spot {
@@ -204,6 +211,12 @@ export class ChatChannels {
     const { found, spots } = this.spotsOf(house, pet);
     const own = spots.find(spot => spot.key === key);
     if (!found || !at || !key || !own) throw new HouseholdError("Unknown or inaccessible place; use places to list your destinations");
+    if (at.topic) {
+      if (!this.canUseTopics(house, pet, key)) throw new HouseholdError("Only the channel default bot can access topics");
+      const place = own.channel?.listPlaces?.().find(place => place.id === topicPlaceKey(at.topic!, key));
+      if (!place) throw new HouseholdError("Unknown or unavailable topic; use places to list your destinations");
+      return { ...own, place };
+    }
     const actual = at.pet ? petPlaceKey(at.pet, key) : inboxKey(key);
     if (actual === own.place.id) return own;
     if (!at.pet) return { ...own, place: this.inbox(key, own.channel) };
@@ -218,7 +231,7 @@ export class ChatChannels {
   placeOf(pet: Pet, key: string): Place {
     const shared = parsePlaceKey(pet.chatPlace);
     return shared?.channel === key
-      ? { id: pet.chatPlace!, kind: shared.pet ? "pet-thread" : "house-inbox", title: petPlace(pet, "").title }
+      ? { id: pet.chatPlace!, kind: shared.topic ? "topic" : shared.pet ? "pet-thread" : "house-inbox", title: petPlace(pet, "").title }
       : petPlace(pet, petPlaceKey(pet.name, key));
   }
 
@@ -246,6 +259,11 @@ export class ChatChannels {
     const spot = at && this.spotsOf(house, pet).spots.find((candidate) => candidate.key === at.key);
     if (!at) return {};
     if (!spot) return { problem: `${pet} is no longer in channel ${this.records.channelId(house, at.key)}, which the message came through` };
+    if (parsePlaceKey(place)?.topic && !this.canUseTopics(house, pet, at.key)) return { problem: "Only the channel default bot can access topics" };
+    if (parsePlaceKey(place)?.topic && spot.channel) {
+      const topic = spot.channel.listPlaces?.().find(p => p.id === place);
+      return topic ? { spot: { ...spot, place: topic } } : { problem: "The message's topic is no longer available" };
+    }
     return spot.channel ? { spot } : { problem: `channel ${this.records.channelId(house, at.key)}, which the message came through, is not open now` };
   }
 
@@ -258,7 +276,7 @@ export class ChatChannels {
       const key = channelKey(config);
       return { key, channel: line.channels.get(key), place: this.placeOf(found, key) };
     });
-    return { found, spots };
+    return { found, spots: spots.filter(spot => spot.place.kind !== "topic" || this.canUseTopics(house, pet, spot.key)) };
   }
 
   /**
@@ -267,6 +285,11 @@ export class ChatChannels {
    * never another channel instead. Only a pet never written to yet gets its place in the first channel of the
    * house it is in that is open (any, if none is). Neither for a pet in no channel.
    */
+  topicTarget(house: string, pet: string): Target | undefined {
+    const last = this.records.get(lastPlaceKey(house, pet));
+    return parsePlaceKey(last)?.topic ? this.spotOfMessage(house, pet, last!) : undefined;
+  }
+
   target(house: string, pet: string): Target {
     const { spots } = this.spotsOf(house, pet);
     const last = this.records.get(lastPlaceKey(house, pet));
@@ -274,8 +297,9 @@ export class ChatChannels {
       const first = spots.find((spot) => spot.channel) ?? spots[0];
       return first ? { spot: first } : {};
     }
-    const spot = spots.find((candidate) => candidate.place.id === last);
     const at = parsePlaceKey(last);
+    if (at?.topic) return this.spotOfMessage(house, pet, last);
+    const spot = spots.find((candidate) => candidate.place.id === last);
     const id = at ? this.records.channelId(house, at.channel) : last;
     const yours = spots.map((candidate) => this.records.channelId(house, candidate.key)).join(", ") || "none";
     if (!spot) return { problem: `you were last written to in channel ${id}, which you are no longer in: pass channel (yours: ${yours})` };

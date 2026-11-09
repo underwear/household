@@ -101,6 +101,7 @@ export function openChannels({ state, events, telegramApi }: ChannelDeps): OpenC
           results.set(key, { channel });
           break;
         }
+        case "telegram-group":
         case "telegram-private": {
           if (!token) {
             refuse("its token is not a bot token (one looks like 123456789:AAH4x…, from @BotFather)");
@@ -120,7 +121,7 @@ export function openChannels({ state, events, telegramApi }: ChannelDeps): OpenC
           nextBots.set(token, bot);
           const before = channels.get(name);
           // One channel per kind and chat in a house (the config's rule), so a chat is one bot's once.
-          const channel = before?.token === token ? before.channel : new TelegramChannel(bot, Number(config.chat), `house ${house.name} ${channelName(knownChannelKinds(), config)}`);
+          const channel = before?.token === token ? before.channel : new TelegramChannel(bot, Number(config.chat), `house ${house.name} ${channelName(knownChannelKinds(), config)}`, config.kind === "telegram-group" ? "group" : "private");
           nextChannels.set(name, { token, channel });
           results.set(key, { channel });
         }
