@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { GoogleConnectors } from "../../src/app/google-connectors";
 import { googleConnectorTools } from "../../src/app/google-connector-tools";
 import { googleConnectorRoutes } from "../../src/app/google-connector-routes";
-import { GOOGLE_SCOPES } from "../../src/core/google-connectors";
+import { GOOGLE_SCOPES, GOOGLE_WRITE_SCOPES } from "../../src/core/google-connectors";
 import { googleRequest } from "../../src/infra/google/operations";
 import { boundedText, type GoogleFetch } from "../../src/infra/google/client";
 import { SqliteStore } from "../../src/infra/sqlite-store";
@@ -10,7 +10,7 @@ import type { House } from "../../src/core/household";
 
 const origin = "http://127.0.0.1:7777";
 const caller = { house: "home", pet: "alice" };
-const allScopes = Object.values(GOOGLE_SCOPES).flat().join(" ");
+const allScopes = [...Object.values(GOOGLE_SCOPES), ...Object.values(GOOGLE_WRITE_SCOPES)].flat().join(" ");
 function setup() {
   let now = 1000000, refreshCount = 0;
   let subject = "123", email = "me@example.com";
@@ -31,9 +31,9 @@ function setup() {
   const store = new SqliteStore(":memory:");
   const service = new GoogleConnectors(store, { id: "client-id", secret: "client-secret" }, fetcher, () => now);
   service.setHouses([house, { ...house, name: "other" }]);
-  const begin = () => new URL(service.begin("home", { services: ["gmail", "drive", "calendar"], pets: ["alice"] }, origin, "session").url);
+  const begin = (write = false) => new URL(service.begin("home", { services: ["gmail", "drive", "calendar"], pets: ["alice"], write }, origin, "session").url);
   const callback = (start: URL) => new URL(`${start.searchParams.get("redirect_uri")}?code=code&state=${start.searchParams.get("state")}`);
-  const connect = async () => { await service.finish(callback(begin()), "session"); return service.list("home").connections[0]!.id; };
+  const connect = async (write = false) => { await service.finish(callback(begin(write)), "session"); return service.list("home").connections.at(-1)!.id; };
   return { service, house, calls, begin, callback, connect, store, identity: (id: string, address: string) => { subject = id; email = address; }, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
 }
 
@@ -64,8 +64,8 @@ test("isolates houses and pets; sideworker inherits current grants, scout never 
   expect(() => s.service.setPets("home", id, ["scout"])).toThrow("configured pets");
 });
 
-test("closed API registry rejects SSRF, traversal, arbitrary parameters, write operations and excessive pages", () => {
-  for (const name of ["https://evil.test", "__proto__", "gmail.messages.send", "drive.permissions.create"]) expect(() => googleRequest(name, {})).toThrow();
+test("closed API registry rejects SSRF, traversal, arbitrary parameters, sharing, permanent deletes and excessive pages", () => {
+  for (const name of ["https://evil.test", "__proto__", "drive.permissions.create", "drive.files.delete", "gmail.messages.delete"]) expect(() => googleRequest(name, {})).toThrow();
   for (const params of [{ id: ".." }, { id: "a/b" }, { id: "\\x" }, { id: "a", url: "https://evil.test" }]) expect(() => googleRequest("drive.files.get", params)).toThrow();
   expect(() => googleRequest("gmail.messages.list", { maxResults: 1000 })).toThrow();
   const { url } = googleRequest("calendar.events.list", { calendarId: "a@example.com", q: "a&access_token=evil" });
@@ -170,4 +170,61 @@ test("multiple Google accounts coexist; reconnecting and disconnecting one leave
   expect(accounts.find(c => c.email === "me@example.com")!.id).not.toBe(first);
   s.service.disconnect("home", accounts.find(c => c.email === "me@example.com")!.id);
   expect(s.service.list("home").connections).toEqual([{ ...second, pets: ["bob"] }]);
+});
+
+test("write asks for the write scopes beside the read ones; a read-only connection refuses changes", async () => {
+  const s = setup();
+  expect(s.begin(true).searchParams.get("scope")).toContain("gmail.modify");
+  expect(s.begin(true).searchParams.get("scope")).toContain("gmail.readonly");
+  const id = await s.connect();
+  expect(s.service.list("home").connections[0]!.writable).toEqual([]);
+  await expect(s.service.request(caller, id, "gmail.messages.send", { to: ["a@example.com"], subject: "hi", text: "x" })).rejects.toThrow("read only");
+  expect(JSON.stringify(s.service.catalog(caller))).not.toContain("gmail.messages.send");
+});
+
+test("a write scope left unticked keeps its service readable, not writable", async () => {
+  const s = setup();
+  s.token(async () => Response.json({ access_token: "private-access", refresh_token: "private-refresh", scope: [...Object.values(GOOGLE_SCOPES).flat(), ...GOOGLE_WRITE_SCOPES.calendar].join(" ") }));
+  await s.connect(true);
+  const c = s.service.list("home").connections[0]!;
+  expect(c.services).toEqual(["gmail", "drive", "calendar"]);
+  expect(c.writable).toEqual(["calendar"]);
+  const names = s.service.catalog(caller).map(o => o.name);
+  expect(names).toContain("calendar.events.insert");
+  expect(names).not.toContain("drive.files.create");
+});
+
+test("sending mail builds the message itself: encoded subject, reply headers, no header injection", async () => {
+  const s = setup(), id = await s.connect(true);
+  s.api(async () => Response.json({ id: "m1", threadId: "t1" }));
+  const result = await s.service.request(caller, id, "gmail.messages.send", { to: ["Игорь <igor@example.com>"], subject: "Привет", text: "body", threadId: "t1", inReplyTo: "<x@mail>" });
+  expect(result.data).toEqual({ id: "m1", threadId: "t1" });
+  const call = s.calls.at(-1)!;
+  expect(call.url).toBe("https://www.googleapis.com/gmail/v1/users/me/messages/send");
+  expect(call.init!.method).toBe("POST");
+  const sent = JSON.parse(String(call.init!.body));
+  expect(sent.threadId).toBe("t1");
+  const raw = Buffer.from(sent.raw, "base64url").toString();
+  expect(raw).toContain(`To: =?UTF-8?B?${Buffer.from("Игорь").toString("base64")}?= <igor@example.com>`);
+  expect(raw).toContain(`Subject: =?UTF-8?B?${Buffer.from("Привет").toString("base64")}?=`);
+  expect(raw).toContain("In-Reply-To: <x@mail>");
+  expect(() => googleRequest("gmail.messages.send", { to: ["a@example.com"], subject: "x\r\nBcc: evil@example.com", text: "" })).toThrow();
+  expect(() => googleRequest("gmail.messages.send", { to: [], text: "" })).toThrow();
+});
+
+test("Drive uploads go multipart to the fixed upload path; trash and event deletes report done", async () => {
+  const s = setup(), id = await s.connect(true);
+  s.api(async () => Response.json({ id: "f1" }));
+  await s.service.request(caller, id, "drive.files.create", { name: "Notes", mimeType: "application/vnd.google-apps.document", content: "# Hi", contentType: "text/markdown" });
+  const upload = s.calls.at(-1)!;
+  expect(new URL(upload.url).pathname).toBe("/upload/drive/v3/files");
+  expect(new URL(upload.url).searchParams.get("uploadType")).toBe("multipart");
+  expect((upload.init!.headers as Record<string, string>)["content-type"]).toStartWith("multipart/related; boundary=");
+  expect(String(upload.init!.body)).toContain("# Hi");
+  await s.service.request(caller, id, "drive.files.trash", { id: "f1" });
+  expect(JSON.parse(String(s.calls.at(-1)!.init!.body))).toEqual({ trashed: true });
+  s.api(async () => new Response(null, { status: 204 }));
+  expect((await s.service.request(caller, id, "calendar.events.delete", { id: "e1" })).data).toEqual({ done: true });
+  expect(s.calls.at(-1)!.init!.method).toBe("DELETE");
+  expect(new URL(s.calls.at(-1)!.url).searchParams.get("sendUpdates")).toBe("none");
 });

@@ -1,3 +1,4 @@
+import { accessWords, servicesWords } from "./components/house-connectors";
 import { claudeCodeTmux } from "../src/agent-adapters/claude-code-tmux";
 import { NETWORK_PRESETS } from "../src/core/network-presets";
 import { expect, test } from "bun:test";
@@ -580,7 +581,7 @@ test("a key's allowance line: what is left per window and when it resets; used u
 });
 
 
-test("Claude connectors render as a pet checkbox and are absent from scout settings and values", () => {
+test("Claude connectors render as a pet switch and are absent from scout settings and values", () => {
   const claude = { ...agents[0]!, settings: [...claudeCodeTmux.settings!] };
   function Form({ scope, enabled }: { scope: "pet" | "scout"; enabled: boolean }) {
     const form = useAgentForm([claude], [], { ...work.pets[0]!, agent: claude.name, settings: enabled ? { claudeAiConnectors: "true" } : {} }, scope);
@@ -588,9 +589,21 @@ test("Claude connectors render as a pet checkbox and are absent from scout setti
   }
   const on = renderToStaticMarkup(<Form scope="pet" enabled />);
   expect(on).toContain("Claude.ai connectors");
-  expect(on).toMatch(/type="checkbox" checked=""/);
-  expect(renderToStaticMarkup(<Form scope="pet" enabled={false} />)).not.toMatch(/type="checkbox" checked=""/);
+  expect(on).toMatch(/role="switch"[^>]* checked=""/);
+  expect(renderToStaticMarkup(<Form scope="pet" enabled={false} />)).not.toMatch(/role="switch"[^>]* checked=""/);
   const scout = renderToStaticMarkup(<Form scope="scout" enabled />);
   expect(scout).not.toContain("Claude.ai connectors");
   expect(scout).not.toContain("claudeAiConnectors");
+});
+
+test("a Google account's services in words, in the catalog's order", () => {
+  expect(servicesWords(["calendar", "gmail", "drive"])).toBe("Gmail, Drive and Calendar");
+  expect(servicesWords(["drive", "calendar"])).toBe("Drive and Calendar");
+  expect(servicesWords(["gmail"])).toBe("Gmail");
+});
+
+test("a Google account's access in words: whole, none, or the services Google let change", () => {
+  expect(accessWords({ services: ["gmail", "drive"], writable: ["gmail", "drive"] })).toBe("read and write");
+  expect(accessWords({ services: ["gmail", "drive"], writable: [] })).toBe("read only");
+  expect(accessWords({ services: ["gmail", "drive", "calendar"], writable: ["calendar"] })).toBe("Calendar writable");
 });

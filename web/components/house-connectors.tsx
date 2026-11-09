@@ -1,75 +1,284 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Plus, Plug, Mail, Files, CalendarDays, Settings2 } from "lucide-react";
+import { CalendarDays, Files, Mail } from "lucide-react";
 import { api, type GoogleConnectionView, type GoogleConnectorsView, type GoogleService, type HouseView } from "../api";
-import { SwitchList } from "./fields";
-import { Dialog } from "./dialog";
-import { Page, Stack, Cluster } from "./layout";
+import { housePath, redirect } from "../router";
+import { Dialog, useDialog } from "./dialog";
+import { ChoiceList, FormGroup, SwitchList } from "./fields";
+import { Cell, List, ListRow, Page, Section } from "./layout";
+import { relative } from "./pet-crons";
 
-/** Provider catalog: the house page and type picker are independent of a provider's setup form. */
-export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar", detail: "Connect a Google account and choose what your pets can read.", mark: "G" }] as const;
-type ConnectorType = typeof CONNECTOR_TYPES[number]["id"];
-const SERVICES = [{ id: "gmail", label: "Gmail", description: "Search and read email", icon: Mail }, { id: "drive", label: "Drive", description: "Find files and read documents", icon: Files }, { id: "calendar", label: "Calendar", description: "Read calendars and events", icon: CalendarDays }] as const;
-const toggle = (values: string[], value: string) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
+/** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
+export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }] as const;
+type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
+/** A Google account's services: what the owner picks to share (and what pets may do with each), and their names. */
+const SERVICES = [
+  { id: "gmail", label: "Gmail", read: "Search and read email", write: "Search, read, send, draft, label and trash email", icon: Mail },
+  { id: "drive", label: "Drive", read: "Find files and read documents", write: "Find, read, create, edit and trash files", icon: Files },
+  { id: "calendar", label: "Calendar", read: "Read calendars and events", write: "Read, create, change and delete events", icon: CalendarDays },
+] as const;
+/** How far pets may go with an account: read it, or act as its owner too. */
+const ACCESS = [
+  { value: "write", label: "Read and write", description: "Pets can also send mail, edit files and change events, as you." },
+  { value: "read", label: "Read only", description: "Pets search and read; nothing in the account changes." },
+] as const;
+/** «read and write», «read only», or which services can change when Google granted only some. */
+export const accessWords = ({ services, writable }: Pick<GoogleConnectionView, "services" | "writable">) =>
+  !writable.length ? "read only" : services.every((s) => writable.includes(s)) ? "read and write" : `${servicesWords(writable)} writable`;
+const DOCS = "https://agents-household.dev/docs/connectors/";
+const PRIVACY = "https://agents-household.dev/privacy/";
+const toggle = <T extends string>(values: T[], value: T) => (values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
+/** «Gmail, Drive and Calendar». */
+export const servicesWords = (services: readonly GoogleService[]) => {
+  const labels = SERVICES.filter((s) => services.includes(s.id)).map((s) => s.label);
+  return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}` : (labels[0] ?? "No services");
+};
 
+/** A provider's mark, in the square the lists use for things that are not pets. */
+function ConnectorMark({ type }: { type: ConnectorType }) {
+  return (
+    <span className="avatar task connector-mark" aria-hidden>
+      {CONNECTOR_TYPES.find((t) => t.id === type)?.mark}
+    </span>
+  );
+}
+
+/**
+ * A house's Connectors page: the outside accounts its pets may read (Google for now), each with its own pet access.
+ * Adding one is a dialog of two steps (type, then the provider's form) that ends on the provider's sign-in page.
+ */
 export function HouseConnectors({ house, notify }: { house: HouseView; notify: (text: string, warning?: boolean) => void }) {
   const [view, setView] = useState<GoogleConnectorsView>();
   const [error, setError] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [type, setType] = useState<ConnectorType>();
-  const [editing, setEditing] = useState<GoogleConnectionView>();
-  const refresh = async () => setView(await api.googleConnections(house.name));
-  useEffect(() => { let live = true; api.googleConnections(house.name).then(v => { if (live) setView(v); }).catch(e => { if (live) setError(e.message); }); return () => { live = false; }; }, [house.name]);
-  const add = () => { setType(undefined); setAdding(true); };
+  const [setup, setSetup] = useState<{ existing?: GoogleConnectionView }>();
+  const [access, setAccess] = useState<GoogleConnectionView>();
+  const dialog = useDialog();
+  const refresh = async () => {
+    try {
+      setView(await api.googleConnections(house.name));
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  useEffect(() => {
+    void refresh();
+    // Back from Google's sign-in: say so once, and drop the marker from the address.
+    if (new URLSearchParams(location.search).get("google") === "connected") {
+      notify("Google account connected");
+      redirect(housePath(house.name, "connectors"));
+    }
+  }, [house.name]);
   const connections = view?.connections ?? [];
-  return <Page title="Connectors" actions={<button className="btn primary" onClick={add}><Plus size={16} /> Add connector</button>}>
-    <div className="connectors-page stack gap-5">
-      <p className="hint">Accounts and services shared with this house. Add as many accounts as you need, with separate access for each.</p>
-      {error && <p role="alert" className="error">{error} <button className="btn small" onClick={() => { setError(""); void refresh().catch(e => setError(e.message)); }}>Retry</button></p>}
-      {!view && !error && <p className="hint">Loading connectors…</p>}
-      {view && !connections.length && <div className="connectors-empty"><span className="connector-empty-icon"><Plug size={28} /></span><h2 className="h2">Bring your tools into the house</h2><p className="hint">Connect work and personal accounts separately.<br />Choose which pets can use each one.</p><button className="btn" onClick={add}><Plus size={16} /> Add your first connector</button><span className="hint">Available now: Google</span></div>}
-      {!!connections.length && <div className="connector-grid">{connections.map(c => <ConnectorCard key={c.id} connection={c} house={house} onManage={() => setEditing(c)} />)}</div>}
-      <details className="connector-help"><summary>How access works</summary><p className="hint">Each connector has its own pet access. Sideworkers inherit their parent's current access; scouts have none. Tokens stay on your host. Content a pet reads may go to its AI provider and chat history. Use providers and settings compatible with Google's Limited Use rules.</p><p className="hint"><a href="https://agents-household.dev/privacy/" target="_blank" rel="noreferrer">Privacy Policy</a> · <a href="https://agents-household.dev/terms/" target="_blank" rel="noreferrer">Terms of Service</a></p></details>
-    </div>
-    {adding && !type && <Dialog onClose={() => setAdding(false)} spec={{ title: "Add connector", body: "Choose a type. You can connect multiple accounts of the same type.", hideConfirm: true, confirmLabel: "Cancel", onConfirm: async () => setAdding(false), children: <div className="connector-types">{CONNECTOR_TYPES.map(provider => <button type="button" className="connector-type" key={provider.id} onClick={() => setType(provider.id)}><span className="connector-mark">{provider.mark}</span><span className="stack gap-1"><strong>{provider.label}</strong><span className="hint">{provider.description}</span></span><ArrowRight size={18} /></button>)}</div> }} />}
-    {adding && type === "google" && <GoogleSetup house={house} ready={!!view?.ready} close={() => setAdding(false)} back={() => setType(undefined)} />}
-    {editing && <GoogleManage key={editing.id} house={house} connection={connections.find(c => c.id === editing.id) ?? editing} close={() => setEditing(undefined)} refresh={refresh} notify={notify} />}
-  </Page>;
+  const pets = new Map(house.pets.map((pet) => [pet.name, pet]));
+  const disconnect = (c: GoogleConnectionView) =>
+    dialog.open({
+      title: `Disconnect ${c.email}?`,
+      body: "Its pets lose access on their next request. Other accounts stay connected; what pets already read stays in their history and backups.",
+      children: (
+        <p className="hint">
+          To revoke Household's access everywhere, use{" "}
+          <a className="text-link" href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">
+            Google Account connections ↗
+          </a>
+        </p>
+      ),
+      confirmLabel: "Disconnect",
+      danger: true,
+      onConfirm: async () => {
+        await api.disconnectGoogle(house.name, c.id);
+        await refresh();
+        notify(`${c.email} disconnected`);
+      },
+    });
+  return (
+    <Page
+      title="Connectors"
+      actions={
+        <button className="btn primary" onClick={() => setSetup({})}>
+          + Add connector
+        </button>
+      }
+    >
+      <Section
+        hint={
+          <>
+            Connect accounts for this house's pets. Each account has its own pet access and read-only or read-and-write permissions. Tokens stay on this host; what a pet reads goes to its AI provider and chat.{" "}
+            <a href={DOCS} target="_blank" rel="noreferrer" className="text-link">
+              How connectors work ↗
+            </a>
+          </>
+        }
+      >
+        {error && (
+          <p className="error" role="alert">
+            {error}{" "}
+            <button className="text-btn plain" onClick={() => void refresh()}>
+              Retry
+            </button>
+          </p>
+        )}
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={view ? "Nothing connected yet. Add a Google account and choose its services, permissions and pet access." : error ? undefined : "Loading…"}>
+          {connections.map((c) => (
+            <ListRow
+              key={c.id}
+              actions={
+                <>
+                  <button className="text-btn plain" onClick={() => setAccess(c)}>
+                    Pet access
+                  </button>
+                  <button className={c.needsReconnect ? "btn small" : "text-btn plain"} onClick={() => setSetup({ existing: c })}>
+                    Reconnect
+                  </button>
+                  <button className="text-btn" onClick={() => disconnect(c)}>
+                    Disconnect
+                  </button>
+                </>
+              }
+            >
+              <Cell>
+                <ConnectorMark type="google" />
+                <span className="cell-lines">
+                  <span className="strong connector-email">{c.email}</span>
+                  <span className="faint">Google · {servicesWords(c.services)} · {accessWords(c)}</span>
+                  <span className="channel-company">
+                    {c.pets.length === 0 ? (
+                      <span className="faint">No pets yet: private until you grant access</span>
+                    ) : (
+                      c.pets.map((name) => (
+                        <span key={name} className="chip small">
+                          <span aria-hidden>{pets.get(name)?.emoji ?? "🐾"}</span>
+                          <span className="ellipsis">{pets.get(name)?.title ?? name}</span>
+                        </span>
+                      ))
+                    )}
+                  </span>
+                </span>
+              </Cell>
+              <Cell lines>
+                <span className="pet-state">
+                  <span className={`dot ${c.needsReconnect ? "danger" : "idle"}`} />
+                  {c.needsReconnect ? "Reconnect required" : "Connected"}
+                </span>
+                <span className="faint" title={new Date(c.connectedAt).toLocaleString()}>
+                  connected {relative(c.connectedAt) === "now" ? "just now" : relative(c.connectedAt)}
+                </span>
+              </Cell>
+            </ListRow>
+          ))}
+        </List>
+      </Section>
+      {setup && <ConnectorSetup house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      {access && (
+        <PetAccess
+          key={access.id}
+          house={house}
+          connection={access}
+          onClose={() => setAccess(undefined)}
+          save={async (names) => {
+            await api.shareGoogle(house.name, access.id, names);
+            await refresh();
+            notify("Pet access saved");
+          }}
+        />
+      )}
+      {dialog.element}
+    </Page>
+  );
 }
 
-export function ConnectorCard({ connection: c, house, onManage }: { connection: GoogleConnectionView; house: HouseView; onManage: () => void }) {
-  const pets = house.pets.filter(p => c.pets.includes(p.name));
-  return <section className="connector-card" aria-label={`Google: ${c.email}`}>
-    <div className="connector-card-head"><span className="connector-mark">G</span><div className="connector-identity"><span className="hint">Google</span><h2 className="h3">{c.email}</h2></div><span className={`connector-status${c.needsReconnect ? " attention" : ""}`}>{c.needsReconnect ? "Reconnect" : "Connected"}</span></div>
-    <Cluster gap={2}>{SERVICES.filter(s => c.services.includes(s.id)).map(s => <span className="connector-service" key={s.id}><s.icon size={14} />{s.label}</span>)}<span className="hint">Read only</span></Cluster>
-    <div className="connector-card-foot"><div className="stack gap-1"><span className="hint">Pet access</span><span>{pets.length ? pets.map(p => p.title).join(", ") : "No pets have access"}</span></div><button className="btn small" onClick={onManage} aria-label={`Manage ${c.email}`}><Settings2 size={14} /> Manage</button></div>
-  </section>;
-}
+/** The pets an account can be shared with: sideworkers follow their parent, so they are not listed. */
+const sharable = (house: HouseView) => house.pets.filter((p) => !p.sideworker).map((p) => ({ value: p.name, label: `${p.emoji ?? "🐾"} ${p.title}` }));
 
-function GoogleSetup({ house, ready, close, back, existing }: { house: HouseView; ready: boolean; close: () => void; back: () => void; existing?: GoogleConnectionView }) {
+/**
+ * Add connector, in two steps: what to connect, then the provider's form (services and pets), which leaves for its
+ * sign-in page. Reconnecting an account starts at the form, with that account's choices.
+ */
+function ConnectorSetup({ house, ready, existing, onClose }: { house: HouseView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
+  const [step, setStep] = useState(existing ? 1 : 0);
+  const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
   const [pets, setPets] = useState<string[]>(existing?.pets ?? []);
-  return <Dialog onClose={close} spec={{ title: existing ? `Reconnect ${existing.email}` : "Set up Google", back, confirmLabel: "Continue to Google", busyLabel: "Opening Google…", body: existing ? "Sign in to this account to update its connection." : "Choose services and access, then select your Google account. Other accounts in this house stay connected.", onConfirm: async () => {
-    if (!ready) throw Error("Google is unavailable in this build. Configure the host's OAuth client or use an official release.");
-    if (!services.length) throw Error("Select at least one service.");
-    const result = await api.connectGoogle(house.name, services, pets);
-    window.location.assign(result.url); return "stay";
-  }, children: <Stack gap={4}>
-    <div className="stack gap-2"><h3 className="h3">Services</h3><SwitchList label="Google services" options={SERVICES.map(s => ({ value: s.id, label: s.label, description: s.description }))} on={services} onToggle={id => setServices(toggle(services, id) as GoogleService[])} /></div>
-    <div className="stack gap-2"><h3 className="h3">Pet access</h3><SwitchList label="Pet access" options={house.pets.filter(p => !p.sideworker).map(p => ({ value: p.name, label: p.title }))} on={pets} onToggle={id => setPets(toggle(pets, id))} /><p className="hint">Optional. You can grant access after connecting.</p></div>
-    <p className="hint">Read only. Tokens stay on this host; content read by pets may be sent to their AI provider and chat. <a href="https://agents-household.dev/privacy/" target="_blank" rel="noreferrer">Privacy Policy</a></p>
-    {!ready && <p className="error">Google is not configured on this host.</p>}
-  </Stack> }} />;
+  const [access, setAccess] = useState<"read" | "write">(existing && !existing.writable.length ? "read" : "write");
+  return (
+    <Dialog
+      onClose={onClose}
+      spec={{
+        title: existing ? `Reconnect ${existing.email}` : step === 0 ? "Add connector" : "Connect Google",
+        step: `connector-${step}`,
+        confirmLabel: step === 0 ? "Next" : "Continue to Google",
+        busyLabel: "Opening Google…",
+        back: step === 1 && !existing ? () => setStep(0) : undefined,
+        onConfirm: async () => {
+          if (step === 0) {
+            setStep(1);
+            return "stay";
+          }
+          if (!ready) throw new Error("Google isn't set up on this host: use an official release, or give a source build its own OAuth client.");
+          if (!services.length) throw new Error("Choose at least one service.");
+          const { url } = await api.connectGoogle(house.name, services, pets, access === "write");
+          window.location.assign(url);
+          return "stay";
+        },
+        children:
+          step === 0 ? (
+            <ChoiceList
+              label="What to connect"
+              value={type}
+              onChange={(value) => setType(value as ConnectorType)}
+              options={CONNECTOR_TYPES.map((t) => ({ value: t.id, label: t.label, description: t.description, icon: <ConnectorMark type={t.id} /> }))}
+            />
+          ) : (
+            <>
+              <p className="dialog-text">
+                {existing
+                  ? "Sign in to this account again. Your choices here replace its services and pet access."
+                  : "Choose what to share, then pick the account on Google's page. Add more accounts the same way; each keeps its own access."}
+              </p>
+              {!ready && (
+                <p className="error" role="alert">
+                  Google isn't set up on this host.
+                </p>
+              )}
+              <ChoiceList label="Access" value={access} onChange={(value) => setAccess(value as "read" | "write")} options={[...ACCESS]} />
+              <FormGroup title="Services">
+                <SwitchList label="Google services" options={SERVICES.map((s) => ({ value: s.id, label: s.label, description: s[access] }))} on={services} onToggle={(id) => setServices(toggle(services, id as GoogleService))} />
+              </FormGroup>
+              <FormGroup title="Pet access">
+                <SwitchList label="Pet access" options={sharable(house)} on={pets} onToggle={(id) => setPets(toggle(pets, id))} />
+                <p className="hint">Optional: with none, the account stays private until you grant access.</p>
+              </FormGroup>
+              <p className="hint">
+                Tokens stay on this host; what a pet reads goes to its AI provider and chat.{" "}
+                <a className="text-link" href={PRIVACY} target="_blank" rel="noreferrer">
+                  Privacy Policy ↗
+                </a>
+              </p>
+            </>
+          ),
+      }}
+    />
+  );
 }
 
-function GoogleManage({ connection: c, house, close, refresh, notify }: { connection: GoogleConnectionView; house: HouseView; close: () => void; refresh: () => Promise<void>; notify: (text: string, warning?: boolean) => void }) {
+/** Which pets may use one account; takes effect on their next request, no restart. */
+function PetAccess({ house, connection: c, onClose, save }: { house: HouseView; connection: GoogleConnectionView; onClose: () => void; save: (pets: string[]) => Promise<void> }) {
   const [pets, setPets] = useState(c.pets);
-  const [mode, setMode] = useState<"access" | "reconnect" | "disconnect">("access");
-  if (mode === "reconnect") return <GoogleSetup house={house} ready close={close} back={() => setMode("access")} existing={c} />;
-  if (mode === "disconnect") return <Dialog onClose={close} spec={{ title: `Disconnect ${c.email}?`, body: "Removes this account's connection from this house. Other accounts stay connected. Existing history and backups remain.", confirmLabel: "Disconnect", danger: true, back: () => setMode("access"), onConfirm: async () => { await api.disconnectGoogle(house.name, c.id); await refresh(); notify("Account disconnected"); }, children: <p className="hint">To revoke access for all Household installations, use <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google Account connections</a>.</p> }} />;
-  return <Dialog onClose={close} spec={{ title: c.email, body: `Google · ${c.services.map(s => SERVICES.find(v => v.id === s)?.label).join(", ")} · Read only`, confirmLabel: "Save access", onConfirm: async () => { await api.shareGoogle(house.name, c.id, pets); await refresh(); notify("Pet access saved"); }, children: <Stack gap={4}>
-    {c.needsReconnect && <p className="error">This account needs to be reconnected.</p>}
-    <SwitchList label="Pet access" options={house.pets.filter(p => !p.sideworker).map(p => ({ value: p.name, label: p.title }))} on={pets} onToggle={id => setPets(toggle(pets, id))} />
-    <p className="hint">Sideworkers inherit access from their parent. Scouts have no access.</p>
-    <Cluster><button type="button" className="btn small" onClick={() => setMode("reconnect")}>Change services / reconnect</button><button type="button" className="btn small danger" onClick={() => setMode("disconnect")}>Disconnect account</button></Cluster>
-  </Stack> }} />;
+  return (
+    <Dialog
+      onClose={onClose}
+      spec={{
+        title: `Pet access: ${c.email}`,
+        body: `${servicesWords(c.services)}, ${accessWords(c)}. Changes apply on a pet's next request, no restart.`,
+        confirmLabel: "Save access",
+        busyLabel: "Saving…",
+        onConfirm: () => save(pets),
+        children: (
+          <>
+            <SwitchList label="Pet access" options={sharable(house)} on={pets} onToggle={(id) => setPets(toggle(pets, id))} />
+            <p className="hint">Sideworkers get their parent's access. Scouts never have any.</p>
+          </>
+        ),
+      }}
+    />
+  );
 }

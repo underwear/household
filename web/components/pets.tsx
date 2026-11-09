@@ -7,7 +7,7 @@ import { Brain, MessagesSquare, Pickaxe } from "lucide-react";
 import { api, type AgentModelsView, type AgentView, type HouseView, type KeyView, type PetFields, type PetView } from "../api";
 import { petPath } from "../router";
 import { Dialog } from "./dialog";
-import { CheckList, ChoiceList, SelectField, StepperField, TextField, CheckboxField } from "./fields";
+import { CheckList, ChoiceList, SelectField, StepperField, SwitchList, TextField } from "./fields";
 import { FormGrid, Page } from "./layout";
 import { channelLabel } from "./houses";
 import { Link } from "./link";
@@ -230,10 +230,8 @@ export function useAgentForm(agents: AgentView[], keys: KeyView[], pet?: Pick<Pe
             ]}
           />
         )}
-        {availableSettings.map((setting) => {
+        {availableSettings.filter((setting) => !setting.checkbox).map((setting) => {
           const chosen = settings[setting.key] ?? "";
-          if (setting.checkbox) return <CheckboxField key={setting.key} label={setting.label} hint={setting.description}
-            checked={chosen === "true"} onChange={checked => setSettings(current => ({ ...current, [setting.key]: checked ? "true" : null }))} />;
           const option = setting.options.find(({ id }) => id === chosen);
           return (
             <SelectField key={setting.key} label={setting.label} value={chosen}
@@ -248,6 +246,13 @@ export function useAgentForm(agents: AgentView[], keys: KeyView[], pet?: Pick<Pe
           );
         })}
       </FormGrid>
+      {/* On/off settings under the selects, full width: a switch and the line on what it allows. */}
+      {availableSettings.some((setting) => setting.checkbox) && (
+        <SwitchList label="Agent options"
+          options={availableSettings.filter((setting) => setting.checkbox).map((setting) => ({ value: setting.key, label: setting.label, description: setting.description }))}
+          on={availableSettings.filter((setting) => settings[setting.key] === "true").map((setting) => setting.key)}
+          onToggle={(key) => setSettings((current) => ({ ...current, [key]: current[key] === "true" ? null : "true" }))} />
+      )}
     </>
   );
   return { fields, value, error, changed, restarts };

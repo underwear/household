@@ -182,7 +182,7 @@ export const api = {
   disallowHost: (name: string, host: string) => call<WriteView>("DELETE", `${housePath(name)}/allow/${encodeURIComponent(host)}`),
   revokeTemporary: (name: string, pet: string, domain: string, port = 443) => call<WriteView>("DELETE", `${housePath(name)}/temporary/${encodeURIComponent(domain)}?port=${port}&pet=${encodeURIComponent(pet)}`),
   googleConnections: (house: string) => call<GoogleConnectorsView>("GET", `${housePath(house)}/connectors/google`),
-  connectGoogle: (house: string, services: GoogleService[], pets: string[]) => call<{ url: string }>("POST", `${housePath(house)}/connectors/google/connect`, { services, pets }),
+  connectGoogle: (house: string, services: GoogleService[], pets: string[], write: boolean) => call<{ url: string }>("POST", `${housePath(house)}/connectors/google/connect`, { services, pets, write }),
   shareGoogle: (house: string, id: string, pets: string[]) => call<GoogleConnectionView>("PATCH", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`, { pets }),
   disconnectGoogle: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`),
   inboxes: (house: string) => call<InboxView[]>("GET", `${housePath(house)}/inboxes`),

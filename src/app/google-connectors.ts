@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { googleConnectSchema, GOOGLE_SCOPES, type GoogleConnectionView, type GoogleService } from "../core/google-connectors";
+import { googleConnectSchema, GOOGLE_SCOPES, GOOGLE_WRITE_SCOPES, type GoogleConnectionView, type GoogleService } from "../core/google-connectors";
 import type { House } from "../core/household";
 import { HouseholdError } from "../core/errors";
 import type { PetIdentity } from "../infra/agent-api";
@@ -10,11 +10,12 @@ import { TokenBucket } from "./token-bucket";
 
 const KEY = "house.connectors.google.v1";
 interface Connection extends GoogleConnectionView { house: string; subject: string; accessToken: string; refreshToken: string; expiresAt: number }
-interface Pending { consumed?: boolean; house: string; services: GoogleService[]; pets: string[]; verifier: string; redirect: string; binding: string; expires: number }
+interface Pending { consumed?: boolean; house: string; services: GoogleService[]; write: boolean; pets: string[]; verifier: string; redirect: string; binding: string; expires: number }
 const nonce = () => randomBytes(32).toString("base64url");
-const scopesFor = (services: GoogleService[]) => ["openid", "email", ...services.flatMap(s => GOOGLE_SCOPES[s])];
+const scopesFor = (services: GoogleService[], write: boolean) => ["openid", "email", ...services.flatMap(s => [...GOOGLE_SCOPES[s], ...(write ? GOOGLE_WRITE_SCOPES[s] : [])])];
 
-/** Owner-only OAuth enrollment; pets can only read through the closed operation registry. Tokens stay in
+/** Owner-only OAuth enrollment; pets act only through the closed operation registry, and change only what a
+ * connection the owner let write was granted. Tokens stay in
  * the host's private SQLite database (and its private backups), never in config views or pet environments. */
 export class GoogleConnectors {
   private houses: House[] = [];
@@ -26,7 +27,7 @@ export class GoogleConnectors {
   private read(): Connection[] { return JSON.parse(this.store.get(KEY) ?? "[]"); }
   private write(items: Connection[]) { this.store.set(KEY, JSON.stringify(items)); }
   private view(c: Connection): GoogleConnectionView {
-    return { id: c.id, email: c.email, services: [...c.services], pets: [...c.pets], connectedAt: c.connectedAt, needsReconnect: c.needsReconnect };
+    return { id: c.id, email: c.email, services: [...c.services], writable: [...(c.writable ?? [])], pets: [...c.pets], connectedAt: c.connectedAt, needsReconnect: c.needsReconnect };
   }
   setHouses(houses: House[]) {
     this.houses = houses;
@@ -63,9 +64,9 @@ export class GoogleConnectors {
     const state = nonce(), verifier = nonce();
     const services = [...new Set(parsed.data.services)];
     const redirect = `${base.origin}/api/connectors/google/callback`;
-    this.pending.set(state, { house, services, pets, verifier, redirect, binding, expires: this.now() + 600_000 });
+    this.pending.set(state, { house, services, write: parsed.data.write, pets, verifier, redirect, binding, expires: this.now() + 600_000 });
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    url.search = new URLSearchParams({ client_id: this.client.id, redirect_uri: redirect, response_type: "code", scope: scopesFor(services).join(" "), state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256", access_type: "offline", prompt: "consent select_account" }).toString();
+    url.search = new URLSearchParams({ client_id: this.client.id, redirect_uri: redirect, response_type: "code", scope: scopesFor(services, parsed.data.write).join(" "), state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256", access_type: "offline", prompt: "consent select_account" }).toString();
     return { url: url.toString() };
   }
   async finish(url: URL, binding: string) {
@@ -85,13 +86,15 @@ export class GoogleConnectors {
       const granted = new Set(typeof tokens.scope === "string" ? tokens.scope.split(" ") : []);
       const services = p.services.filter(s => GOOGLE_SCOPES[s].every(scope => granted.has(scope)));
       if (!services.length) throw new HouseholdError("No requested service was authorized; connect again and allow at least one service");
+      // A write scope left unticked on Google's screen leaves its service readable, not gone.
+      const writable = p.write ? services.filter(s => GOOGLE_WRITE_SCOPES[s].every(scope => granted.has(scope))) : [];
       if (this.pending.get(state) !== p) throw new HouseholdError("Connection was cancelled; start again");
       this.pets(p.house, p.pets); // house/pets can have been removed during OAuth
       const items = this.read();
       const old = items.find(c => c.house === p.house && c.subject === identity.sub);
       // Reconnecting replaces this account's grants and services; no accumulated hidden permissions.
       if (old) this.abort(old.id);
-      const c: Connection = { id: randomUUID(), house: p.house, subject: identity.sub, email: identity.email, services, pets: p.pets, connectedAt: new Date(this.now()).toISOString(), accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: this.expiry(tokens.expires_in), needsReconnect: false };
+      const c: Connection = { id: randomUUID(), house: p.house, subject: identity.sub, email: identity.email, services, writable, pets: p.pets, connectedAt: new Date(this.now()).toISOString(), accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: this.expiry(tokens.expires_in), needsReconnect: false };
       this.write([...items.filter(i => i !== old), c]);
       return p.house;
     } catch (error) {
@@ -131,11 +134,15 @@ export class GoogleConnectors {
     const parent = this.parent(caller);
     return parent ? this.read().filter(c => c.house === caller.house && c.pets.includes(parent)).map(c => this.view(c)) : [];
   }
-  catalog(caller: PetIdentity) { return operationCatalog([...new Set(this.accounts(caller).flatMap(c => c.services))]); }
-  private allowed(caller: PetIdentity, id: string, service: GoogleService) {
+  catalog(caller: PetIdentity) {
+    const accounts = this.accounts(caller);
+    return operationCatalog([...new Set(accounts.flatMap(c => c.services))], [...new Set(accounts.flatMap(c => c.writable))]);
+  }
+  private allowed(caller: PetIdentity, id: string, service: GoogleService, write = false) {
     const parent = this.parent(caller);
     const c = parent && this.read().find(c => c.id === id && c.house === caller.house && c.pets.includes(parent) && c.services.includes(service));
     if (!c) throw new HouseholdError("Google connection or service unavailable to this pet");
+    if (write && !c.writable?.includes(service)) throw new HouseholdError(`This account's ${service} is read only; the owner can reconnect it with Read and write on the house's Connectors page`);
     if (c.needsReconnect) throw new HouseholdError("Reconnect this Google account in the house's Connectors page");
     return c;
   }
@@ -164,8 +171,9 @@ export class GoogleConnectors {
     try { return await refresh; } finally { this.refreshes.delete(c.id); }
   }
   async request(caller: PetIdentity, id: string, operation: string, params: unknown, signal?: AbortSignal) {
-    const { url, spec } = googleRequest(operation, params);
-    const c = this.allowed(caller, id, spec.service);
+    const { url, spec, init } = googleRequest(operation, params);
+    const write = spec.write === true;
+    const c = this.allowed(caller, id, spec.service, write);
     const budgetKey = `${caller.house}/${caller.pet}`;
     if (!this.budgets.has(budgetKey)) this.budgets.set(budgetKey, new TokenBucket(1, 10));
     if (!this.budgets.get(budgetKey)!.take()) throw new HouseholdError("Too many Google requests; retry shortly");
@@ -173,13 +181,14 @@ export class GoogleConnectors {
     const controller = this.active.get(id)!;
     try {
       const access = await this.access(c);
-      this.allowed(caller, id, spec.service);
-      const response = await this.fetcher(url, { headers: { authorization: `Bearer ${access}` }, redirect: "error", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]) });
+      this.allowed(caller, id, spec.service, write);
+      const response = await this.fetcher(url, { method: init.method, body: init.body, headers: { ...init.headers, authorization: `Bearer ${access}` }, redirect: "error", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]) });
       if (!response.ok) { await response.body?.cancel(); throw new GoogleHttpError(response.status); }
       const raw = await boundedText(response);
-      this.allowed(caller, id, spec.service);
       if (controller.signal.aborted) throw new Error("cancelled");
-      const data = spec.text ? { text: raw } : spec.message ? decodeMail(JSON.parse(raw)) : JSON.parse(raw);
+      // A change went through even if access was revoked meanwhile: say what happened rather than hide it.
+      if (!write) this.allowed(caller, id, spec.service);
+      const data = spec.text ? { text: raw } : !raw.trim() ? { done: true } : spec.message ? decodeMail(JSON.parse(raw)) : JSON.parse(raw);
       return { trust: "external", data };
     } catch (error) {
       if (error instanceof HouseholdError) throw error;

@@ -101,9 +101,10 @@ input.control:read-only { color: var(--muted); background: transparent; }
 .select > .chevron { position: absolute; right: var(--control-px); top: 50%; translate: 0 -50%; pointer-events: none; color: var(--muted); }
 .control option { background: var(--pop); color: var(--ink); }
 fieldset.field > legend { margin-bottom: var(--space-2); }
-.choice { display: flex; align-items: flex-start; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
+.choice { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
 .choice:has(input:checked) { border-color: var(--muted); background: var(--hover); }
-.choice input { width: 16px; height: 16px; margin: 2px 0 0; flex: none; accent-color: var(--ink); }
+.choice:has(input:checked) .avatar.task { background: var(--sel); }
+.choice input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--ink); }
 .check { display: flex; align-items: center; gap: var(--space-3); min-height: var(--button-h-small); font: 400 var(--text-base) var(--font-sans); cursor: pointer; }
 .check input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--ink); }
 /* On/off settings (SwitchList): rows in one frame, a switch on the right of each. */
