@@ -15,7 +15,7 @@ import { BotMemory } from "./bot-memory";
 import { CalendarClock, Gauge, MessagesSquare, Pickaxe } from "lucide-react";
 import { BotCrons, relative, scheduledCount, useBotCrons, type Run } from "./bot-crons";
 import { BotChannels } from "./bot-channels";
-import { BotInboxes, subscribedCount, useWorkspaceInboxes } from "./workspace-inboxes";
+import { BotInboxes, useWorkspaceInboxes } from "./workspace-inboxes";
 import { Stat } from "./workspace-overview";
 import { useEffect, useState } from "react";
 import { api, type HarnessView, type WorkspaceView, type KeyView, type BotView, type PlatformView } from "../api";
@@ -154,7 +154,7 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
           { label: "AGENTS.md", href: botPath(house.name, pet.name, "instructions"), current: tab === "instructions" },
           { label: "Lifecycle", href: botPath(house.name, pet.name, "lifecycle"), current: tab === "lifecycle" },
           { label: "Channels", href: botPath(house.name, pet.name, "channels"), current: tab === "channels" },
-          { label: "Inboxes", href: botPath(house.name, pet.name, "inboxes"), current: tab === "inboxes", count: subscribedCount(inboxes.items, pet.name) },
+          { label: "Inboxes", href: botPath(house.name, pet.name, "inboxes"), current: tab === "inboxes" },
           { label: "Scheduled tasks", href: botPath(house.name, pet.name, "tasks"), current: tab === "tasks", count: scheduledCount(crons.view) },
           { label: "Skills", href: botPath(house.name, pet.name, "skills"), current: tab === "skills" },
           { label: "Environment", href: botPath(house.name, pet.name, "environment"), current: tab === "environment" },
