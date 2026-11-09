@@ -9,7 +9,7 @@ import type { Secret } from "../../src/core/secrets";
 const heroku: CapabilityDefinition = { name: "heroku", description: "Heroku CLI", install: "echo heroku", network: { any: false, allow: [{ host: "api.heroku.com", port: 443 }] }, keys: [{ secret: "heroku-key", via: "vm", env: "HEROKU_API_KEY" }, { secret: "dd-key", via: "gateway" }] };
 const browser: CapabilityDefinition = { name: "browser", description: "Browser", install: "echo browser", network: { any: true, allow: [] }, keys: [] };
 const definition: ScoutDefinition = { name: "helper", description: "Test", instructions: "", capabilities: ["browser", "heroku"] };
-const secret = (name: string, env: string, onlyFor: string[] | undefined, value = `${name}-value`): Secret => ({ name, value, env, hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", houses: ["work"], ...(onlyFor ? { onlyForCapabilities: onlyFor } : {}) });
+const secret = (name: string, env: string, onlyFor: string[] | undefined, value = `${name}-value`): Secret => ({ name, value, env, hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", ...(onlyFor ? { onlyForCapabilities: onlyFor } : {}) });
 
 async function withRoot(run: (root: string, storage: ScoutStorage) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), "scout-storage-"));

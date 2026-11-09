@@ -13,7 +13,7 @@ afterAll(() => telegram.stop());
 
 const channel = (chat: string, token: string): ChannelConfig => ({ kind: "telegram-private", token, chat, pets: [] });
 const house = (name: string, channels: ChannelConfig[]): House => ({ name, network: { kind: "allowlist", allow: [] }, pets: [], people: { owners: [] }, channels });
-const household = (...houses: House[]): Household => ({ daemon: {}, secrets: [], keys: [], houses });
+const household = (...houses: House[]): Household => ({ daemon: {}, keys: [], houses });
 
 test("a token given is checked with Telegram and kept trimmed; one the channel has is not asked about again; empty is refused", async () => {
   const checks = channelChecks(telegram.url);

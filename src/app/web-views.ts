@@ -90,8 +90,6 @@ export interface SecretView {
   env: string;
   /** What its pets hold in its place. */
   placeholder: string;
-  /** null: every house. */
-  houses: string[] | null;
   note: string | null;
 }
 

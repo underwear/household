@@ -84,7 +84,6 @@ export interface SecretFields {
   hosts: string[];
   header: string | null;
   env: string;
-  houses: string[] | null;
   note: string | null;
 }
 
@@ -209,9 +208,9 @@ export const api = {
   addKey: (name: string, key: KeyFields) => call<KeysView>("POST", "/api/keys", { name, ...key }),
   updateKey: (name: string, key: KeyFields) => call<KeysView>("PATCH", `/api/keys/${encodeURIComponent(name)}`, key),
   removeKey: (name: string) => call<KeysView>("DELETE", `/api/keys/${encodeURIComponent(name)}`),
-  secrets: () => call<SecretView[]>("GET", "/api/secrets"),
-  addSecret: (name: string, secret: SecretFields) => call<{ secrets: SecretView[] }>("POST", "/api/secrets", { name, ...secret }),
-  updateSecret: (name: string, secret: Partial<SecretFields>) => call<{ secrets: SecretView[] }>("PATCH", `/api/secrets/${encodeURIComponent(name)}`, secret),
-  removeSecret: (name: string) => call<{ secrets: SecretView[] }>("DELETE", `/api/secrets/${encodeURIComponent(name)}`),
+  secrets: (house: string) => call<SecretView[]>("GET", `/api/houses/${encodeURIComponent(house)}/secrets`),
+  addSecret: (house: string, name: string, secret: SecretFields) => call<{ secrets: SecretView[] }>("POST", `/api/houses/${encodeURIComponent(house)}/secrets`, { name, ...secret }),
+  updateSecret: (house: string, name: string, secret: Partial<SecretFields>) => call<{ secrets: SecretView[] }>("PATCH", `/api/houses/${encodeURIComponent(house)}/secrets/${encodeURIComponent(name)}`, secret),
+  removeSecret: (house: string, name: string) => call<{ secrets: SecretView[] }>("DELETE", `/api/houses/${encodeURIComponent(house)}/secrets/${encodeURIComponent(name)}`),
   signOut: () => call<void>("POST", "/api/logout"),
 };

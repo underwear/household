@@ -74,7 +74,6 @@ export interface SecretFields {
   hosts?: string[];
   header?: string | null;
   env?: string;
-  houses?: string[] | null;
   note?: string | null;
 }
 
@@ -326,42 +325,40 @@ export class ConfigStore {
     });
   }
 
-  /** Adds an owner's secret (`secrets.<name>`, after the keys); its pets get its placeholder from their next VM. */
-  async addSecret(name: string, fields: SecretFields): Promise<Household> {
+  /** Adds an owner's secret (`houses.<house>.secrets.<name>`); its pets get its placeholder from their next VM. */
+  async addSecret(houseName: string, name: string, fields: SecretFields): Promise<Household> {
     return this.edit((doc, household) => {
       assertName("secret", name);
-      if (household.secrets.some((secret) => secret.name === name)) throw new HouseholdError(`secret '${name}' already exists`);
+      if ((knownHouse(household, houseName).secrets ?? []).some((secret) => secret.name === name)) throw new HouseholdError(`secret '${name}' already exists`);
       if (!fields.value?.trim() || !fields.hosts?.length || !fields.env) throw new HouseholdError("a secret needs a value, at least one host and a variable");
-      secretsAfterKeys(doc);
-      setIn(doc, ["secrets", name], doc.createNode({ value: fields.value.trim(), hosts: fields.hosts.map((host) => host.trim()), env: fields.env.trim() }));
-      setFields(doc, ["secrets", name], { header: fields.header?.trim().toLowerCase() === DEFAULT_SECRET_HEADER ? null : fields.header, houses: housesOf(household, fields.houses), note: fields.note, onlyForCapabilities: fields.onlyForCapabilities });
+      setIn(doc, ["houses", houseName, "secrets", name], doc.createNode({ value: fields.value.trim(), hosts: fields.hosts.map((host) => host.trim()), env: fields.env.trim() }));
+      setFields(doc, ["houses", houseName, "secrets", name], { header: fields.header?.trim().toLowerCase() === DEFAULT_SECRET_HEADER ? null : fields.header, note: fields.note, onlyForCapabilities: fields.onlyForCapabilities });
     });
   }
 
-  /** Changes a secret; a new value reaches the gateway at once, a new variable or houses on the pets' next VM. */
-  async updateSecret(name: string, fields: SecretFields): Promise<Household> {
+  /** Changes a secret; a new value reaches the gateway at once, a new variable on the pets' next VM. */
+  async updateSecret(houseName: string, name: string, fields: SecretFields): Promise<Household> {
     return this.edit((doc, household) => {
-      if (!household.secrets.some((secret) => secret.name === name)) throw new NotFoundError(`unknown secret '${name}'`);
+      if (!(knownHouse(household, houseName).secrets ?? []).some((secret) => secret.name === name)) throw new NotFoundError(`unknown secret '${name}'`);
       if (fields.value !== undefined && !fields.value.trim()) throw new HouseholdError("a secret's value cannot be empty: remove the secret instead");
       if (fields.hosts !== undefined && fields.hosts.length === 0) throw new HouseholdError("a secret needs at least one host");
-      setFields(doc, ["secrets", name], {
+      setFields(doc, ["houses", houseName, "secrets", name], {
         value: fields.value?.trim(),
         hosts: fields.hosts?.map((host) => host.trim()),
         env: fields.env?.trim(),
         header: fields.header === undefined ? undefined : fields.header?.trim().toLowerCase() === DEFAULT_SECRET_HEADER ? null : fields.header,
-        houses: housesOf(household, fields.houses),
         note: fields.note,
         onlyForCapabilities: fields.onlyForCapabilities,
       });
     });
   }
 
-  async removeSecret(name: string): Promise<Household> {
+  async removeSecret(houseName: string, name: string): Promise<Household> {
     return this.edit((doc, household) => {
-      if (!household.secrets.some((secret) => secret.name === name)) throw new NotFoundError(`unknown secret '${name}'`);
-      const users = household.houses.flatMap(house => (house.capabilities ?? []).filter(capability => capability.keys.some(key => key.secret === name)).map(capability => `${house.name}/${capability.name}`));
+      if (!(knownHouse(household, houseName).secrets ?? []).some((secret) => secret.name === name)) throw new NotFoundError(`unknown secret '${name}'`);
+      const users = [knownHouse(household, houseName)].flatMap(house => (house.capabilities ?? []).filter(capability => capability.keys.some(key => key.secret === name)).map(capability => `${house.name}/${capability.name}`));
       if (users.length) throw new HouseholdError(`secret '${name}' is in use by ${users.join(", ")}`);
-      doc.deleteIn(["secrets", name]);
+      doc.deleteIn(["houses", houseName, "secrets", name]);
     });
   }
 
@@ -636,10 +633,12 @@ export class ConfigStore {
     const fresh = !existsSync(this.path);
     return withFileLock(this.path, async () => {
       const { doc, household } = await this.read();
+      if (doc.hasIn(["secrets"])) throw new HouseholdError("Legacy secrets need migration before editing: run house migrate apply, or start Household to migrate with a backup");
       if (fresh) setConfigVersion(doc, CONFIG_VERSION); // a new config is written at the latest: nothing to migrate
       const before = new Set(this.check(household));
       change(doc, household);
       const written = parseHousehold(doc.toJS(), this.path); // an edit that breaks the config is not written
+      if (configVersionOf(doc) < 4 && written.houses.some(house => house.secrets?.length)) throw new HouseholdError("Workspace secrets need config migration first: run house migrate apply, or start Household to migrate with a backup");
       const added = this.check(written).filter((problem) => !before.has(problem));
       if (added.length > 0) throw new HouseholdError(added.join("\n"));
       await writeWhole(this.path, doc.toString());
@@ -699,21 +698,12 @@ function setPetSettings(doc: Document, path: (string | number)[], settings: PetF
   if (isMap(node) && node.items.length === 0) doc.deleteIn([...path, "settings"]);
 }
 
-/** A key's or secret's houses as written: each one known; null (every house) for none. */
+/** A provider key's houses as written: each one known; null (every house) for none. */
 function housesOf(household: Household, houses: string[] | null | undefined): string[] | null | undefined {
   if (houses === undefined || houses === null) return houses;
   const names = [...new Set(houses.map((house) => house.trim()).filter(Boolean))];
   for (const house of names) knownHouse(household, house);
   return names.length > 0 ? names : null;
-}
-
-/** `secrets:` right after `keys:` (or first), the way the file reads: credentials, then houses. */
-function secretsAfterKeys(doc: Document): void {
-  if (doc.contents === null) doc.contents = doc.createNode({}) as never;
-  const top = doc.contents;
-  if (!isMap(top) || top.has("secrets")) return;
-  const after = top.items.findIndex((pair) => isScalar(pair.key) && pair.key.value === "keys");
-  top.items.splice(after + 1, 0, new Pair(new Scalar("secrets"), doc.createNode({})));
 }
 
 function knownKey(household: Household, name: string): void {

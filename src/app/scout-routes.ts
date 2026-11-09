@@ -58,7 +58,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       if (!house) throw new NotFoundError("Unknown workspace");
       const runs = () => deps.scouts.list(houseName);
       const capabilities = house.capabilities ?? [];
-      const envOf = (secret: string) => config.secrets.find(item => item.name === secret)?.env;
+      const envOf = (secret: string) => (house.secrets ?? []).find(item => item.name === secret)?.env;
       const capabilityView = (capability: CapabilityDefinition) => ({
         ...capabilityDefinitionInput(capability), kind: capabilityKind(capability),
         ...(capability.owner ? { ownerTitle: (house.scouts ?? []).find(scout => scout.name === capability.owner)?.title ?? capability.owner } : {}),
@@ -154,11 +154,11 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
         }
         if (tail === "keys" && request.method === "POST") {
           const value = await body(request, keyBody);
-          if (config.secrets.some(secret => secret.name === value.secret)) throw new HouseholdError(`A secret named ${value.secret} already exists`);
-          await deps.config.addSecret(value.secret, { value: value.value, hosts: value.hosts, env: value.env, header: value.header ?? null, houses: [houseName], onlyForCapabilities: [name] });
+          if ((house.secrets ?? []).some(secret => secret.name === value.secret)) throw new HouseholdError(`A secret named ${value.secret} already exists`);
+          await deps.config.addSecret(houseName, value.secret, { value: value.value, hosts: value.hosts, env: value.env, header: value.header ?? null, onlyForCapabilities: [name] });
           try {
             await deps.capabilities.save(houseName, { ...capability, keys: [...capability.keys, value.via === "vm" ? { secret: value.secret, via: "vm", env: value.env } : { secret: value.secret, via: "gateway" }] });
-          } catch (error) { await deps.config.removeSecret(value.secret).catch(() => {}); throw error; }
+          } catch (error) { await deps.config.removeSecret(houseName, value.secret).catch(() => {}); throw error; }
           await deps.applySecrets(); return json({ ok: true }, 201);
         }
         const keyMatch = /^keys\/([^/]+)$/.exec(tail);
@@ -166,7 +166,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
           const secret = decodeURIComponent(keyMatch[1]!);
           if (!capability.keys.some(key => key.secret === secret)) throw new NotFoundError("Unknown key");
           await deps.capabilities.save(houseName, { ...capability, keys: capability.keys.filter(key => key.secret !== secret) });
-          await deps.config.removeSecret(secret); await deps.applySecrets(); return json({ ok: true });
+          await deps.config.removeSecret(houseName, secret); await deps.applySecrets(); return json({ ok: true });
         }
         if (tail === "skills" && request.method === "GET") return json(await deps.storage.skills(houseName, name).list());
         if (tail === "skills/file") {

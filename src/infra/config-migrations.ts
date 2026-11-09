@@ -1,5 +1,6 @@
-import { isMap, isScalar, isSeq, type Document } from "yaml";
+import { isMap, isScalar, isSeq, visit, type Document, type YAMLMap } from "yaml";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
+import { HouseholdError } from "../core/errors";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -20,6 +21,7 @@ export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 1, store: "config", name: "a house's default scout becomes the General scout", change: migrateDefaultScouts },
   { id: 2, store: "config", name: "scouts' maximum run time is dropped", change: (doc) => { for (const path of legacyTimeouts(doc)) doc.deleteIn(path); } },
   { id: 3, store: "config", name: "the browser and dev capabilities install Node.js 22", change: migrateNodeInstalls },
+  { id: 4, store: "config", name: "secrets belong to individual houses", change: migrateHouseSecrets },
 ];
 
 /** The config version this Household writes: a config with a newer one is from a newer Household, and not read. */
@@ -81,4 +83,40 @@ function migrateNodeInstalls(doc: Document): void {
       if (legacy && template && item.get("install") === legacy) item.set("install", template.install);
     }
   }
+}
+
+/** Copy legacy shared credentials to their existing recipients, then remove the global catalog.
+ * Never discard an orphan or overwrite a local credential: the operator can resolve it from the backup.
+ */
+export function migrateHouseSecrets(doc: Document): void {
+  if (!doc.hasIn(["secrets"])) return;
+  // Materialize aliases before removing their anchors or copying credentials between houses.
+  visit(doc, { Alias: (_key, node) => doc.createNode(node.toJS(doc)) });
+  const secrets = doc.getIn(["secrets"]);
+  if (secrets == null) { doc.deleteIn(["secrets"]); return; }
+  if (!isMap(secrets)) throw new HouseholdError("Legacy secrets must be a mapping");
+  const houses = doc.getIn(["houses"]);
+  const names = isMap(houses) ? houses.items.map(pair => String(isScalar(pair.key) ? pair.key.value : "")) : [];
+  const copies: { house: string; name: string; value: YAMLMap }[] = [];
+  for (const pair of secrets.items) {
+    if (!isScalar(pair.key) || !isMap(pair.value)) throw new HouseholdError("Invalid legacy secret entry");
+    const name = String(pair.key.value);
+    const recipients = pair.value.get("houses");
+    if (recipients !== undefined && (!isSeq(recipients) || !recipients.items.length || recipients.items.some(item => !isScalar(item) || typeof item.value !== "string")))
+      throw new HouseholdError(`Secret '${name}' has invalid workspaces`);
+    // A house removed since it was named here got nothing anyway (removing a house never touched the secrets): skipped.
+    const named = isSeq(recipients) ? recipients.items.map(item => String((item as { value: unknown }).value)) : names;
+    const targets = named.filter(house => names.includes(house));
+    if (!targets.length)
+      throw new HouseholdError(`Secret '${name}' has no existing destination house; assign it before migrating`);
+    for (const house of new Set(targets)) {
+      if (doc.hasIn(["houses", house, "secrets", name])) throw new HouseholdError(`Secret '${house}/${name}' already exists; resolve the legacy conflict before migrating`);
+      const value = pair.value.clone() as YAMLMap;
+      value.delete("houses");
+      visit(value, { Node: (_key, node) => { if ("anchor" in node) delete node.anchor; } });
+      copies.push({ house, name, value });
+    }
+  }
+  for (const { house, name, value } of copies) setIn(doc, ["houses", house, "secrets", name], value);
+  doc.deleteIn(["secrets"]);
 }

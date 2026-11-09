@@ -1,6 +1,6 @@
 import { SUBSCRIPTION_PREFIX } from "../agent-adapters/codex-app-server/auth";
 import { HouseholdError } from "../core/errors";
-import type { Household } from "../core/household";
+import type { House, Household } from "../core/household";
 import type { AgentKey } from "../core/keys";
 import type { Allowance } from "../core/allowance";
 import { sameEndpoint } from "../core/network-policy";
@@ -9,7 +9,6 @@ import type { KeyView, SecretView } from "./web-views";
 import { formatHosts, secretPlaceholder } from "../core/secrets";
 import { keyKind, type Agents, type PlacedPet } from "./agents";
 import { keySecret, ownSecret } from "./gateway";
-import type { Secret } from "../core/secrets";
 import type { CredentialRule } from "../core/egress";
 
 /**
@@ -17,7 +16,7 @@ import type { CredentialRule } from "../core/egress";
  * every credential header its agent sends to that host, to strip) and the values of the keys some pet runs on (no
  * other key goes to the gateway).
  */
-export function petKeys(placed: PlacedPet[], keys: AgentKey[], resolved: ReadonlyMap<string, string> = new Map(), owned: readonly Secret[] = []): PetKeys {
+export function petKeys(placed: PlacedPet[], keys: AgentKey[], resolved: ReadonlyMap<string, string> = new Map(), houses: readonly Pick<House, "name" | "secrets">[] = []): PetKeys {
   const secrets: Record<string, string> = {};
   const pets = placed.map(({ house, pet, agent, key, keyUse, secrets: placedSecrets = [] }) => {
     let value = keys.find((each) => each.name === key)?.value;
@@ -31,10 +30,10 @@ export function petKeys(placed: PlacedPet[], keys: AgentKey[], resolved: Readonl
       return { ...wire, secret: keySecret(key), strip: [...new Set([wire.header, ...strip])] };
     });
     for (const { name, hosts, header, placeholder } of placedSecrets) {
-      const value = owned.find((each) => each.name === name)?.value;
+      const value = houses.find(each => each.name === house)?.secrets?.find(each => each.name === name)?.value;
       if (value === undefined) continue; // a secret gone since it was placed: its placeholder stays one
-      secrets[ownSecret(name)] = value;
-      for (const target of hosts) credentials.push({ target, header, prefix: "", secret: ownSecret(name), strip: [], match: placeholder });
+      secrets[ownSecret(house, name)] = value;
+      for (const target of hosts) credentials.push({ target, header, prefix: "", secret: ownSecret(house, name), strip: [], match: placeholder });
     }
     return { house, pet, credentials };
   });
@@ -61,15 +60,14 @@ export function keyViews(agents: Agents, household: Household, allowances?: (key
 }
 
 /** The owner's secrets as the web UI shows them. */
-export function secretViews(household: Household): SecretView[] {
-  return household.secrets.map((secret) => ({
+export function secretViews(house: House): SecretView[] {
+  return (house.secrets ?? []).map((secret) => ({
     name: secret.name,
     value: secret.value,
     hosts: formatHosts(secret.hosts),
     header: secret.header,
     env: secret.env,
     placeholder: secretPlaceholder(secret.name),
-    houses: secret.houses ?? null,
     ...(secret.onlyForCapabilities ? { onlyForCapabilities: secret.onlyForCapabilities } : {}),
     note: secret.note ?? null,
   }));

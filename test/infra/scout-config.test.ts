@@ -49,18 +49,18 @@ test("capability keys never appear in pet placements; a scout gets only its capa
     "other-token": secret({ onlyForCapabilities: ["other"], env: "OTHER_TOKEN" }),
   }, [heroku]), "test");
   const keys = scoutKeys(household.houses[0]!.scouts![0]!, household.houses[0]!.capabilities!);
-  expect(houseSecrets(household.secrets, "work").map(item => item.name)).toEqual(["house-token"]);
-  expect(scoutSecrets(household.secrets, "work", keys).map(item => item.name)).toEqual(["scout-token"]);
-  expect(scoutSecrets(household.secrets, "elsewhere", keys)).toEqual([]);
-  expect(JSON.stringify(scoutSecrets(household.secrets, "work", keys))).not.toContain("synthetic");
+  expect(houseSecrets(household.houses[0]!.secrets! ?? []).map(item => item.name)).toEqual(["house-token"]);
+  expect(scoutSecrets(household.houses[0]!.secrets! ?? [], keys).map(item => item.name)).toEqual(["scout-token"]);
+  expect(scoutSecrets([], keys)).toEqual([]);
+  expect(JSON.stringify(scoutSecrets(household.houses[0]!.secrets! ?? [], keys))).not.toContain("synthetic");
 });
 
 test("a capability cannot take a house secret or another capability's", () => {
   const heroku = capability({ keys: [{ secret: "token", via: "gateway" }] });
-  for (const fields of [{ onlyForCapabilities: undefined }, { onlyForCapabilities: ["other"] }, { houses: ["elsewhere"] }]) {
+  for (const fields of [{ onlyForCapabilities: undefined }, { onlyForCapabilities: ["other"] }]) {
     expect(() => parseHousehold(config([], { token: secret(fields) }, [heroku]), "test")).toThrow("restricted");
   }
-  expect(() => parseHousehold(config([], { token: secret({ houses: undefined }) }), "test")).toThrow("must name its workspaces");
+  expect(parseHousehold(config([], { token: secret({ houses: undefined }) }), "test").houses[0]!.secrets).toHaveLength(1);
 });
 
 test("earlier scouts load as blueprints (their own keys, setup, agent and call dropped); a v1 scout-only secret stays restricted", () => {
@@ -69,15 +69,15 @@ test("earlier scouts load as blueprints (their own keys, setup, agent and call d
     houses: { work: { network: { allow: [] }, scouts: [{ name: "breaker", agent: "a", key: "k", description: "x", setup: "echo", network: { open: true } }] } },
   }, "test");
   expect(household.houses[0]!.scouts).toEqual([{ name: "breaker", description: "x", instructions: "", capabilities: [] }]); // kept in place: edits address scouts by index
-  expect(household.secrets[0]!.onlyForCapabilities).toEqual([]);
-  expect(houseSecrets(household.secrets, "work")).toEqual([]); // never the pets'
+  expect(household.houses[0]!.secrets![0]!.onlyForCapabilities).toEqual([]);
+  expect(houseSecrets(household.houses[0]!.secrets! ?? [])).toEqual([]); // never the pets'
 });
 
 test("config CRUD: capabilities keep scripts; a used capability and its keys stay protected", async () => {
   const store = new ConfigStore(join(tempDir(), "config.yaml"));
   await store.createHouse("work");
   await store.addKey("claude", { provider: "anthropic", value: "synthetic" });
-  await store.addSecret("token", secret());
+  await store.addSecret("work", "token", secret());
   const heroku = capability({ install: "\n  echo hi  \n", network: { any: false, allow: ["api.example.com:8443"] }, keys: [{ secret: "token", via: "gateway" }] });
   await store.addCapability("work", heroku);
   expect((await store.load()).houses[0]!.capabilities![0]).toEqual(heroku);
@@ -87,15 +87,15 @@ test("config CRUD: capabilities keep scripts; a used capability and its keys sta
   expect((await store.load()).houses[0]!.scouts![0]).toEqual(scout);
   await store.setScoutAgent("work", { agent: "claude-code-tmux", key: "claude" });
   await expect(store.removeKey("claude")).rejects.toThrow("in use"); // the scouts' agent runs on it
-  await expect(store.removeSecret("token")).rejects.toThrow("in use");
-  await expect(store.updateSecret("token", { onlyForCapabilities: null })).rejects.toThrow("restricted");
+  await expect(store.removeSecret("work", "token")).rejects.toThrow("in use");
+  await expect(store.updateSecret("work", "token", { onlyForCapabilities: null })).rejects.toThrow("restricted");
   await expect(store.removeCapability("work", "heroku")).rejects.toThrow("used by breaker");
   await store.removeScout("work", "breaker");
   await store.updateCapability("work", "heroku", { ...heroku, keys: [] });
   await store.removeCapability("work", "heroku");
   const result = await store.load();
-  expect(result.secrets[0]!.onlyForCapabilities).toEqual(["heroku"]); // removing it never widens its keys
-  expect(houseSecrets(result.secrets, "work")).toEqual([]);
+  expect(result.houses[0]!.secrets![0]!.onlyForCapabilities).toEqual(["heroku"]); // removing it never widens its keys
+  expect(houseSecrets(result.houses[0]!.secrets! ?? [])).toEqual([]);
 });
 
 test("turning scouts on gives a house the General scout, made of the open tools", async () => {

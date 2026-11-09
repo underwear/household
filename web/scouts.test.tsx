@@ -42,6 +42,8 @@ test("routes: Scouts and Capabilities tabs, a scout's pages and a capability hav
 test("scouts off: no nav entry; pages say so; the feature switch links to its settings only when on", () => {
   const off = { ...house, features: { ...house.features!, scouts: false } };
   const shell = (h: WorkspaceView, path = "/workspaces/work") => renderToStaticMarkup(<Shell me={{} as never} houses={[h]} house="work" path={path} theme="dark" onToggleTheme={() => {}} onSignOut={() => {}} onNewWorkspace={() => {}}>{null}</Shell>);
+  expect(shell(house)).toContain('href="/workspaces/work/secrets"');
+  expect(shell(house, "/workspaces/work/secrets")).toContain(">Secrets<");
   const active = /href="\/workspaces\/work\/scouts"[^>]*class="nav-item active"|class="nav-item active"[^>]*href="\/workspaces\/work\/scouts"/;
   expect(shell(off)).not.toContain('href="/workspaces/work/scouts"');
   expect(shell(house)).toContain('href="/workspaces/work/scouts"');
@@ -136,9 +138,9 @@ test("capabilities: the list (drafts from bots on top) and a capability's page",
 
 test("secrets: kept for capabilities, never the bots'; a capability's skills are labelled as its", () => {
   const secret = { name: "heroku", value: "fake", hosts: ["api.heroku.com"], header: "Authorization", env: "HEROKU_API_KEY", houses: ["work"], onlyForCapabilities: ["heroku-prod"] } as unknown as SecretView;
-  const html = renderToStaticMarkup(<SecretDialog houses={["work"]} secret={secret} onClose={() => {}} save={noop} />);
-  expect(html).toContain("Only for capabilities");
-  expect(html).toContain("bots and sideworkers never do");
+  const html = renderToStaticMarkup(<SecretDialog house="work" secret={secret} onClose={() => {}} save={noop} />);
+  expect(html).toContain("Only scouts with a capability");
+  expect(html).toContain("Bots and sideworkers never get it");
   const skills = renderToStaticMarkup(<SkillsPage house="work" capability="heroku-prod" notify={() => {}} />);
   expect(skills).toContain("Loading skills…");
 });

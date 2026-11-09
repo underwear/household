@@ -202,3 +202,9 @@ html:has(.scrim) { overflow: hidden; }
 /* A check that passed, at the top of the step after it (a connection tested, a Slack DM found). */
 .check-note { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--side); color: var(--muted); font: 400 var(--text-sm)/1.45 var(--font-sans); }
 .check-note > svg { flex: none; margin-top: 3px; color: var(--idle); }
+
+/* A fold for the rarely changed fields at a form's end («Advanced»): the field-help summary, the fields under it. */
+.disclosure > .field { margin-top: var(--space-3); }
+/* A check-note that explains rather than confirms: its mark in the quiet tone. */
+.check-note.info > svg { color: var(--faint); }
+.check-note code { font-size: var(--text-xs); overflow-wrap: anywhere; }

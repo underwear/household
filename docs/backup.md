@@ -50,3 +50,8 @@ Stop the daemon on the old machine before starting the new one: both would answe
 `household.yaml` is a plain file in `~/.config/household/`. You can keep a copy, edit it by hand and run `house reload` to apply it. It alone does not carry chat history, memory or the bots' files: for those, use `house export`.
 
 When a new version has to migrate the config or the database, Household copies both aside first, as it starts. `house migrate backups` lists those copies; `house migrate restore <name>` puts one back.
+
+
+Config migration 4 moves the old top-level `secrets` into `houses.<name>.secrets`. Shared secrets become independent copies in each existing recipient workspace; restricted secrets stay only in their named workspaces. New workspaces inherit none. If a destination is missing or already has the same secret name, migration stops without overwriting it.
+
+Manage these credentials in the workspace’s **Secrets** menu. CLI commands now include the workspace, for example `house secret add work github --host api.github.com --env GITHUB_TOKEN` (the value is read from stdin). Before editing an old configuration, restart Household to run migrations with a backup, or stop it and run `house migrate apply`.

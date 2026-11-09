@@ -7,7 +7,7 @@ import { writeSecrets } from "../infra/secrets";
 import type { PlacedPet } from "./agents";
 import { keySecret } from "./gateway";
 import { petKeys } from "./keys";
-import type { Secret } from "../core/secrets";
+import type { House } from "../core/household";
 
 /** A reload stages credentials before publishing policy; failed reloads keep the previous watcher. */
 export class SubscriptionKeys {
@@ -20,7 +20,7 @@ export class SubscriptionKeys {
     private readonly refresh = startCodexRefresh,
   ) {}
 
-  async prepare(placed: PlacedPet[], keys: AgentKey[], secrets: readonly Secret[] = []) {
+  async prepare(placed: PlacedPet[], keys: AgentKey[], houses: readonly Pick<House, "name" | "secrets">[] = []) {
     const used = new Set(placed.map(({ key }) => key));
     const subscriptions = keys.filter(({ name, value }) => used.has(name) && value.startsWith(SUBSCRIPTION_PREFIX));
     const tokens = new Map<string, string>();
@@ -36,7 +36,7 @@ export class SubscriptionKeys {
       },
     });
     try {
-      const credentials = petKeys(placed, keys, tokens, secrets);
+      const credentials = petKeys(placed, keys, tokens, houses);
       return {
         credentials,
         commit: () => {

@@ -7,7 +7,6 @@ import { useDialog } from "./components/dialog";
 import { WorkspacePage } from "./components/workspace";
 import { WorkspacesPage, NewWorkspaceDialog } from "./components/workspaces";
 import { KeysSection } from "./components/keys";
-import { SecretsSection } from "./components/secrets";
 import { Cluster, Page } from "./components/layout";
 import { Link } from "./components/link";
 import { BotDetailPage } from "./components/bot-detail";
@@ -112,7 +111,6 @@ export function App() {
           <Page title="Settings">
             <TimezoneSettings />
             <KeysSection keys={keys} houses={houses.map((each) => each.name)} providers={me.providers} noteMax={me.noteMax} refresh={refresh} notify={notify} />
-            <SecretsSection houses={houses.map((each) => each.name)} noteMax={me.noteMax} notify={notify} />
           </Page>
         )}
         {route.page === "workspace" && house && <WorkspacePage key={house.name} house={house} tab={route.tab} known={me} keys={keys} capacity={capacity} refresh={refresh} notify={notify} />}

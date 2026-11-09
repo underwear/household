@@ -10,12 +10,13 @@ function setup() {
   const clock = fakeClock();
   const houses: House[] = [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "pet", title: "Pet" }, { name: "worker" }], people: { owners: [] }, channels: [] }];
   const secrets: Secret[] = [];
+  houses[0]!.secrets = secrets;
   const notices: string[] = [], notifications: string[] = [], logs: string[] = [];
   const saved: unknown[][] = [];
   let failSave = false;
   const requests = new SecretRequests({
     clock, waitMs: 1000,
-    house: name => houses.find(h => h.name === name), secrets: () => secrets,
+    house: name => houses.find(h => h.name === name), secrets: name => houses.find(house => house.name === name)?.secrets ?? [],
     notice: async (_house, _pet, text) => { notices.push(text); },
     notify: (_house, pet, text) => { notifications.push(`${pet}: ${text}`); }, log: text => logs.push(text),
     save: async (...args) => { if (failSave) throw new Error(`error contains ${args[2]}`); saved.push(args); },
@@ -98,7 +99,7 @@ test("cancel, timeout and stop dispose pending values and notify without leaking
 
 test("existing names cannot be overwritten; open house and removed members are refused", async () => {
   const s = setup();
-  s.secrets.push({ name: "weather", value: "hidden", hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", env: "WEATHER", houses: ["other"] });
+  s.secrets.push({ name: "weather", value: "hidden", hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", env: "WEATHER" });
   expect(await s.requests.request("work", "pet", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.example.com"], reason: "Need it" })).toMatchObject({ status: "refused" });
   await s.requests.handle(s.input("/secret weather replacement api.example.com"));
   expect(s.saved).toHaveLength(0);
@@ -198,7 +199,7 @@ test("one house-wide request, short command, manual entry fallback, and a shared
 test("multiple tokens share domains with unique names/env; env conflicts are checked again at approval", async () => {
   const s = setup();
   const args = { name: "github-atlas", env: "ATLAS_TOKEN", domains: ["api.github.com"], reason: "Read issues" };
-  s.secrets.push({ name: "github", value: "hidden", hosts: [{ host: "api.github.com", port: 443 }], header: "authorization", env: "GITHUB_TOKEN", houses: ["work"] });
+  s.secrets.push({ name: "github", value: "hidden", hosts: [{ host: "api.github.com", port: 443 }], header: "authorization", env: "GITHUB_TOKEN" });
   expect(await s.requests.request("work", "pet", { ...args, env: "GITHUB_TOKEN" })).toMatchObject({ status: "refused" });
   await expect(s.requests.request("work", "pet", { ...args, env: "PATH" })).rejects.toThrow("env");
   const request = await s.requests.request("work", "pet", args);
@@ -227,5 +228,14 @@ test("a retaining chat accepts /secret on the host, never forwards raw tokens or
   await s.requests.handle(s.input("xapp-SYNTHETIC-DO-NOT-FORWARD", { retainsIncomingSecrets: true, sendRaw: async () => { forwarded = true; } }));
   expect(forwarded).toBe(false);
   expect(s.deletes()).toBe(0);
+  await s.requests.stop();
+});
+
+
+test("secret requests check names and variables only within their own house", async () => {
+  const s = setup();
+  s.houses.push({ ...s.houses[0]!, name: "other", secrets: [{ name: "weather", value: "private", hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", env: "WEATHER_TOKEN" }] });
+  expect(await s.requests.request("work", "pet", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.example.com"], reason: "Need weather" })).toMatchObject({ status: "pending" });
+  expect(await s.requests.request("other", "pet", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.example.com"], reason: "Need weather" })).toMatchObject({ status: "refused" });
   await s.requests.stop();
 });

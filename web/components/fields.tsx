@@ -104,12 +104,14 @@ export interface TextFieldProps extends CommonProps {
   maxLength?: number;
   type?: "text" | "search" | "url" | "password";
   inputMode?: "text" | "numeric" | "url";
+  /** A caution that does not stop a save. */
+  warning?: ReactNode;
 }
 
-export function TextField({ label, hideLabel, hint, help, error, value, onChange, mono, ...input }: TextFieldProps) {
+export function TextField({ label, hideLabel, hint, help, error, warning, value, onChange, mono, ...input }: TextFieldProps) {
   const control = useControl(hint, error);
   return (
-    <Field id={control.id} label={label} hideLabel={hideLabel} hint={hint} help={help} error={error}>
+    <Field id={control.id} label={label} hideLabel={hideLabel} hint={hint} help={help} error={error} warning={warning}>
       <input
         {...control}
         {...input}

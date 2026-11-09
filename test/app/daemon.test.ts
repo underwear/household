@@ -980,16 +980,16 @@ test("secret add/rotate/remove hot-applies gateway rules without restarting a pe
     const lifecycle = () => runtime.calls.filter(line => /^(?:start|stop|launch|rm|create) /.test(line));
     const before = lifecycle();
     const api = (method: string, path: string, body?: object) => callControl<ApiAnswer>(paths.socket, "/api", { method, path, body });
-    const added = await api("POST", "/api/secrets", { name: "qa", value: "qa-hot-one", hosts: ["example.com"], env: "SECRET_QA", houses: ["work"] });
+    const added = await api("POST", "/api/houses/work/secrets", { name: "qa", value: "qa-hot-one", hosts: ["example.com"], env: "SECRET_QA" });
     expect(added!.status).toBe(201);
     expect(lifecycle()).toEqual(before);
     expect(policyOf(paths).rules[0]!.intercept).toContainEqual({ host: "example.com", port: 443 });
     expect(policyOf(paths).rules[0]!.policy.allow.some(entry => entry.host === "example.com")).toBe(false);
-    expect(readFileSync(`${paths.gatewaySecretsDir}/secret.qa`, "utf8")).toBe("qa-hot-one");
-    expect((await api("PATCH", "/api/secrets/qa", { value: "qa-hot-two" }))!.status).toBe(200);
-    expect(readFileSync(`${paths.gatewaySecretsDir}/secret.qa`, "utf8")).toBe("qa-hot-two");
+    expect(readFileSync(`${paths.gatewaySecretsDir}/secret.work.qa`, "utf8")).toBe("qa-hot-one");
+    expect((await api("PATCH", "/api/houses/work/secrets/qa", { value: "qa-hot-two" }))!.status).toBe(200);
+    expect(readFileSync(`${paths.gatewaySecretsDir}/secret.work.qa`, "utf8")).toBe("qa-hot-two");
     expect(lifecycle()).toEqual(before);
-    expect((await api("DELETE", "/api/secrets/qa"))!.status).toBe(200);
+    expect((await api("DELETE", "/api/houses/work/secrets/qa"))!.status).toBe(200);
     expect(policyOf(paths).rules[0]!.intercept.some(entry => entry.host === "example.com")).toBe(false);
     expect(lifecycle()).toEqual(before);
   } finally { await daemon.stop(); }

@@ -10,7 +10,7 @@ function fixture() {
   const run: ScoutRun = { capabilities: [], id: "scout-test", house: "work", scout: "expert", parent: "pet", task: "test", report: "owner", status: "done", createdAt: Date.now(), steps: 0, actions: [], secretRequests: [{ key: "token", status: "pending" }], files: [], definition };
   values.set("scouts.runs.v1", JSON.stringify([run]));
   const deps: ScoutDeps = {
-    store: { get: key => values.get(key), set: (key, value) => { values.set(key, value); }, delete: key => { values.delete(key); } }, configured: async () => ({ daemon: {}, keys: [], secrets: [], houses: [] }),
+    store: { get: key => values.get(key), set: (key, value) => { values.set(key, value); }, delete: key => { values.delete(key); } }, configured: async () => ({ daemon: {}, keys: [], houses: [] }),
     choose: async (_caller, _card, signal) => new Promise(resolve => { decide = resolve; signal.addEventListener("abort", () => resolve(undefined)); }),
     prepare: async () => undefined, launch: async () => {}, ready: async () => true, remove: async () => {}, closedNotice: () => async () => {}, notice: async () => {},
     send: (_h, _p, text) => { sent.push(text); }, secret: async (_r, _k, value) => { delivered.push(value); }, log: () => {},

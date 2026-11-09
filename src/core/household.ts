@@ -81,6 +81,8 @@ export interface SideworkerProfile {
 export interface SideworkerLimits { maxWorkers: number; cpus: number; memoryMiB: number }
 
 export interface House {
+  /** Credentials owned by this house. Names are unique only within it. */
+  secrets?: Secret[];
   inboxes?: HouseInbox[];
   capabilities?: CapabilityDefinition[];
   scouts?: ScoutDefinition[];
@@ -105,8 +107,6 @@ export interface Household {
   daemon: { agentPort?: number; webPort?: number };
   /** The agent-provider keys the pets run on, in the config's order (core/keys.ts). */
   keys: AgentKey[];
-  /** The owner's own secrets, each for some houses' pets (core/secrets.ts). */
-  secrets: Secret[];
   houses: House[];
 }
 
