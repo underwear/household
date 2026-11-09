@@ -95,7 +95,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     dialog.open({
       title: `Disconnect ${c.team}?`,
       body: "Its bots lose access right away, reads in progress included. What they already read stays in their history and backups.",
-      children: <p className="hint">This removes the token from this host. To revoke it in Slack too, remove the app from your account in Slack.</p>,
+      children: <p className="hint">The token is removed from this host and revoked at Slack.</p>,
       confirmLabel: "Disconnect",
       danger: true,
       onConfirm: async () => {

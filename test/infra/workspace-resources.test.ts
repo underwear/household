@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import { ConfigStore } from "../../src/infra/config-store";
@@ -40,4 +41,15 @@ test("migration leaves room for one helper beside pets that fill the default bud
   const raw = parse(await Bun.file(path).text()).houses;
   expect(raw.work.resources).toEqual({ cpus: 10, memoryMiB: 9216 }); // 8 vCPU / 8 GiB of pets + a default 2 vCPU / 1 GiB helper
   expect(raw.small.resources).toEqual({ cpus: 8, memoryMiB: 8192 }); // the default already leaves room
+});
+
+test("a helper admitted while an edit is written is not overcommitted: the old file comes back", async () => {
+  const path = join(tempDir(), "household.yaml");
+  await Bun.write(path, stringify(config));
+  const store = new ConfigStore(path);
+  // Before the write no helper runs; once the new file is on disk, one has taken 5 vCPU (admitted against the old one).
+  store.resourceAllocations = () => (readFileSync(path, "utf8").includes("cpus: 4") ? [{ name: "sw-late", kind: "sideworker", cpus: 5, memoryMiB: 1024 }] : []);
+  const before = await Bun.file(path).text();
+  await expect(store.updatePet("work", "sibling", { cpus: 4 })).rejects.toThrow("close helpers");
+  expect(await Bun.file(path).text()).toBe(before);
 });

@@ -107,7 +107,7 @@ export class SlackConnectors {
     if (!scopes.length || scopes.some(s => ![...SLACK_READ_SCOPES, "identify", "chat:write"].includes(s))) throw new HouseholdError("Use a dedicated token with only the documented Slack connector scopes");
     const items = this.read(), old = items.find(c => c.house === house && c.teamId === data.team_id && c.userId === data.user_id);
     if (old) this.abort(old.id);
-    const c: Connection = { id: randomUUID(), house, token, allowWrite, teamId: data.team_id, team: typeof data.team === "string" ? data.team : data.team_id, userId: data.user_id, user: typeof data.user === "string" ? data.user : data.user_id, scopes, pets, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false, ...rotation };
+    const c: Connection = { id: randomUUID(), house, token, allowWrite: allowWrite && scopes.includes("chat:write"), teamId: data.team_id, team: typeof data.team === "string" ? data.team : data.team_id, userId: data.user_id, user: typeof data.user === "string" ? data.user : data.user_id, scopes, pets, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false, ...rotation };
     this.write([...items.filter(i => i !== old), c]); return this.view(c);
   }
   async connect(house: string, input: unknown) {
@@ -127,14 +127,19 @@ export class SlackConnectors {
     const allowed = this.pets(house, pets), items = this.read();
     const c = items.find(c => c.house === house && c.id === id);
     if (!c) throw new HouseholdError("Connection not found");
-    c.pets = allowed; this.write(items); this.abort(id); return this.view(c);
+    // Reads in progress stop only when a bot lost access (they share one controller per connection).
+    const lost = c.pets.some(p => !allowed.includes(p));
+    c.pets = allowed; this.write(items); if (lost) this.abort(id); return this.view(c);
   }
   private abort(id: string) { this.active.get(id)?.abort(); this.active.delete(id); }
   disconnect(house: string, id: string) {
     this.house(house);
     const items = this.read();
-    if (!items.some(c => c.house === house && c.id === id)) throw new HouseholdError("Connection not found");
-    this.abort(id); this.write(items.filter(c => c.house !== house || c.id !== id));
+    const gone = items.find(c => c.house === house && c.id === id);
+    if (!gone) throw new HouseholdError("Connection not found");
+    this.abort(id); this.write(items.filter(c => c !== gone));
+    // Revoked at Slack too, so the token is dead everywhere; best effort: offline, it is gone from here all the same.
+    void slackRead(this.fetcher, gone.token, "auth.revoke").catch(() => {});
   }
   private parent(caller: PetIdentity): string | undefined {
     const house = this.houses.find(h => h.name === caller.house), pet = house?.pets.find(p => p.name === caller.pet);
@@ -173,7 +178,8 @@ export class SlackConnectors {
     const c = this.allowed(caller, id), parsed = slackOperation(operation, params);
     if (parsed.spec.write && !c.allowWrite) throw new HouseholdError("Message sending is disabled for this Slack connection");
     if (!parsed.spec.scopes.some(s => c.scopes.includes(s))) throw new HouseholdError("Slack token lacks the required scope; reconnect with the requested permissions");
-    const key = `${caller.house}/${caller.pet}`;
+    // Per connection: its bots and their sideworkers share one Slack user's rate limits.
+    const key = id;
     if (!this.budgets.has(key)) this.budgets.set(key, new TokenBucket(1, 10));
     if (!this.budgets.get(key)!.take()) throw new HouseholdError("Too many Slack requests; retry shortly");
     if (!this.active.has(id)) this.active.set(id, new AbortController());

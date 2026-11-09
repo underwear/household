@@ -1,7 +1,7 @@
 export type SlackFetch = (url: string | URL, init?: RequestInit) => Promise<Response>;
 export class SlackReadError extends Error {
   constructor(readonly reason: string, readonly retryAfter?: number) {
-    super(reason === "ratelimited" ? `Slack rate limit; retry after ${retryAfter ?? 60} seconds` : `Slack request failed (${reason})`);
+    super(reason === "ratelimited" ? `Slack rate limit; retry after ${retryAfter ?? 60} seconds` : reason === "response_too_large" ? "Slack response too large (over 512 KiB); ask for fewer items with a smaller limit or count" : `Slack request failed (${reason})`);
   }
 }
 export async function slackRead(fetcher: SlackFetch, token: string, method: string, params: Record<string, string | number | boolean> = {}, signal?: AbortSignal) {

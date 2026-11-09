@@ -24,7 +24,7 @@ Each connection belongs to one **Household workspace**, independently of its Sla
 
 Only selected regular bots can use a connection. Sideworkers inherit their parent's current access; scouts and disabled bots cannot use it. Removing a bot's access, disconnecting an account, or a configuration change that removes or disables a granted bot cancels in-flight reads. Other reloads (a sideworker starting, a setting saved) leave reads and a sign-in in progress alone. Tokens stay in the host's private SQLite state and backups, never in tool results, YAML configuration, or bot environments. Read content can enter the authorized bot's history, chat and AI-provider context.
 
-Disconnect removes the local credential, not the Slack authorization. Revoke the application in Slack to invalidate its token everywhere. Revoked or expired tokens are marked as needing reconnection after the next failed request.
+Disconnect removes the local credential and revokes the token at Slack (best effort: if Slack cannot be reached, remove the app from your Slack account to be sure). Revoked or expired tokens are marked as needing reconnection after the next failed request.
 
 ## Agent tools
 

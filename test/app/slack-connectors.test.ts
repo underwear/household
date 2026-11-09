@@ -92,7 +92,8 @@ test("scope filtering prevents unavailable operations", async () => {
 test("revocation cancels in-flight results even if the transport ignores abort", async () => {
   for (const remove of [false, true]) {
     const s = setup(), id = await s.connect(); let finish!: (r: Response) => void;
-    s.api(async () => new Promise(resolve => { finish = resolve; }));
+    // The read hangs; disconnecting also revokes the token at Slack, which answers at once.
+    s.api(async url => String(url).endsWith("/auth.revoke") ? Response.json({ ok: true }) : new Promise(resolve => { finish = resolve; }));
     const pending = s.service.request(caller, id, "search.messages", { query: "secret" });
     await Promise.resolve();
     if (remove) s.service.disconnect("home", id); else s.service.setPets("home", id, []);
@@ -113,7 +114,7 @@ test("reconciliation removes deleted house credentials and revoked token require
 
 test("rate limits, oversized streams and upstream failures are bounded and sanitized", async () => {
   await expect(slackRead(async () => new Response("private", { status: 429, headers: { "retry-after": "42" } }), "token", "auth.test")).rejects.toThrow("42 seconds");
-  await expect(slackRead(async () => new Response("x".repeat(600 * 1024)), "token", "auth.test")).rejects.toThrow("too_large");
+  await expect(slackRead(async () => new Response("x".repeat(600 * 1024)), "token", "auth.test")).rejects.toThrow("smaller limit or count");
   const s = setup(), id = await s.connect();
   s.api(async () => { throw new Error("private-token"); });
   await expect(s.service.request(caller, id, "search.messages", { query: "hi" })).rejects.toThrow("Slack request failed or was cancelled");
@@ -159,4 +160,29 @@ test("OAuth requests write scope only on explicit opt-in", () => {
   expect(scopes(false)).not.toContain("chat:write");
   expect(scopes(true)).toContain("chat:write");
   for (const params of [{ channel: "D123", text: "hi", username: "fake" }, { channel: "D123", text: "hi", token: "secret" }, { channel: "D123", text: "hi", unfurl_links: true }]) expect(() => slackOperation("chat.postMessage", params)).toThrow();
+});
+
+test("disconnect revokes the token at Slack too; sending shows only when the token can send", async () => {
+  const s = setup(), id = await s.connect();
+  s.service.disconnect("home", id); await Bun.sleep(0);
+  expect(s.calls.some(c => c.url.endsWith("/auth.revoke"))).toBe(true);
+  const read = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], allowWrite: true });
+  expect(read.allowWrite).toBe(false); // no chat:write in its scopes
+});
+
+test("a bot gaining access leaves reads in progress alone; one losing it stops them", async () => {
+  const s = setup(), id = await s.connect();
+  let release!: () => void;
+  s.api((_url, init) => new Promise((resolve, reject) => { release = () => resolve(Response.json({ ok: true, messages: [] })); init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))); }));
+  const kept = s.service.request(caller, id, "search.messages", { query: "x" }); await Bun.sleep(5);
+  s.service.setPets("home", id, ["alice", "bob"]);
+  release(); await expect(kept).resolves.toBeDefined();
+  const cut = s.service.request(caller, id, "search.messages", { query: "x" }); await Bun.sleep(5);
+  s.service.setPets("home", id, ["alice"]);
+  await expect(cut).rejects.toThrow();
+});
+
+test("malformed JSON to the Slack routes is a 400-class error, not a crash", async () => {
+  const s = setup(), routes = slackConnectorRoutes(s.service);
+  await expect(routes(new Request("http://127.0.0.1:8780/api/houses/home/connectors/slack/connect", { method: "POST", body: "{nope" }))).rejects.toThrow("not valid JSON");
 });

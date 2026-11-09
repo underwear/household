@@ -638,6 +638,21 @@ export class ConfigStore {
     return ran;
   }
 
+  /** Why `after` takes a workspace further over its CPU/RAM budget than `before` was, with the helpers running now. */
+  private overBudget(before: Household, after: Household): string | undefined {
+    for (const house of after.houses) {
+      const allocations = this.resourceAllocations?.(house.name);
+      const previous = before.houses.find(h => h.name === house.name);
+      const was = previous && workspaceBudget(previous, allocations), budget = workspaceBudget(house, allocations);
+      for (const key of ["cpus", "memoryMiB"] as const) {
+        const excess = budget.reserved[key] + budget.helpers[key] - budget.total[key];
+        const oldExcess = was ? was.reserved[key] + was.helpers[key] - was.total[key] : 0;
+        if (excess > Math.max(0, oldExcess)) return `Workspace '${house.name}' has allocated ${budget.reserved[key] + budget.helpers[key]} ${key}; close helpers or increase the budget before changing reservations.`;
+      }
+    }
+    return undefined;
+  }
+
   private async edit(change: (doc: Document, household: Household) => void): Promise<Household> {
     await mkdir(dirname(this.path), { recursive: true });
     const fresh = !existsSync(this.path);
@@ -649,19 +664,19 @@ export class ConfigStore {
       change(doc, household);
       const written = parseHousehold(doc.toJS(), this.path); // an edit that breaks the config is not written
       if (configVersionOf(doc) < 4 && written.houses.some(house => house.secrets?.length)) throw new HouseholdError("Workspace secrets need config migration first: run house migrate apply, or start Household to migrate with a backup");
-      for (const house of written.houses) {
-        const previous = household.houses.find(h => h.name === house.name);
-        const beforeBudget = previous && workspaceBudget(previous, this.resourceAllocations?.(house.name));
-        const budget = workspaceBudget(house, this.resourceAllocations?.(house.name));
-        for (const key of ["cpus", "memoryMiB"] as const) {
-          const excess = budget.reserved[key] + budget.helpers[key] - budget.total[key];
-          const oldExcess = beforeBudget ? beforeBudget.reserved[key] + beforeBudget.helpers[key] - beforeBudget.total[key] : 0;
-          if (excess > Math.max(0, oldExcess)) throw new HouseholdError(`Workspace '${house.name}' has allocated ${budget.reserved[key] + budget.helpers[key]} ${key}; close helpers or increase the budget before changing reservations.`);
-        }
-      }
+      const problem = this.overBudget(household, written);
+      if (problem) throw new HouseholdError(problem);
       const added = this.check(written).filter((problem) => !before.has(problem));
       if (added.length > 0) throw new HouseholdError(added.join("\n"));
+      const previousText = existsSync(this.path) ? await Bun.file(this.path).text() : undefined;
       await writeWhole(this.path, doc.toString());
+      // A helper admitted against the old file while this one was written: the check above could not see it. Put the
+      // old file back rather than leave the workspace over its budget.
+      const late = this.overBudget(household, written);
+      if (late) {
+        if (previousText !== undefined) await writeWhole(this.path, previousText);
+        throw new HouseholdError(late);
+      }
       return written;
     });
   }
