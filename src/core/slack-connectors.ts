@@ -1,0 +1,21 @@
+import { z } from "zod";
+
+export const SLACK_READ_SCOPES = ["search:read", "channels:read", "channels:history", "groups:read", "groups:history", "im:read", "im:history", "mpim:read", "mpim:history", "users:read", "files:read"] as const;
+export const slackConnectSchema = z.strictObject({
+  token: z.string().trim().regex(/^xoxp-[A-Za-z0-9-]+$/).max(4096),
+  allowWrite: z.boolean().default(false),
+  pets: z.array(z.string().min(1).max(64)).max(100),
+});
+export interface SlackConnectionView {
+  id: string;
+  teamId: string;
+  team: string;
+  userId: string;
+  user: string;
+  scopes: string[];
+  pets: string[];
+  allowWrite?: boolean;
+  connectedAt: string;
+  needsReconnect: boolean;
+}
+export interface SlackConnectorsView { oauthReady: boolean; connections: SlackConnectionView[] }

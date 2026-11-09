@@ -1,3 +1,4 @@
+import { SlackConnections } from "./slack-connectors";
 import { useEffect, useState } from "react";
 import { CalendarDays, Files, Mail } from "lucide-react";
 import { api, type GoogleConnectionView, type GoogleConnectorsView, type GoogleService, type WorkspaceView } from "../api";
@@ -8,7 +9,7 @@ import { Cell, List, ListRow, Page, Section } from "./layout";
 import { relative } from "./bot-crons";
 
 /** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
-export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }] as const;
+export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations on demand.", mark: "S" }] as const;
 type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
 /** A Google account's services: what the owner picks to share (and what bots may do with each), and their names. */
 const SERVICES = [
@@ -46,6 +47,7 @@ function ConnectorMark({ type }: { type: ConnectorType }) {
  * Adding one is a dialog of two steps (type, then the provider's form) that ends on the provider's sign-in page.
  */
 export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; notify: (text: string, warning?: boolean) => void }) {
+  const [slackAdding, setSlackAdding] = useState(false);
   const [view, setView] = useState<GoogleConnectorsView>();
   const [error, setError] = useState("");
   const [setup, setSetup] = useState<{ existing?: GoogleConnectionView }>();
@@ -113,7 +115,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
             </button>
           </p>
         )}
-        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={view ? "Nothing connected yet. Add a Google account and choose its services, permissions and bot access." : error ? undefined : "Loading…"}>
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={view ? "No Google accounts connected. Add a connector and choose its bot access." : error ? undefined : "Loading…"}>
           {connections.map((c) => (
             <ListRow
               key={c.id}
@@ -163,7 +165,8 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           ))}
         </List>
       </Section>
-      {setup && <ConnectorSetup house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      <SlackConnections key={house.name} house={house} adding={slackAdding} onClose={() => setSlackAdding(false)} notify={notify} />
+      {setup && <ConnectorSetup onSlack={() => { setSetup(undefined); setSlackAdding(true); }} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
       {access && (
         <BotAccess
           key={access.id}
@@ -189,7 +192,7 @@ const sharable = (house: WorkspaceView) => house.pets.filter((p) => !p.sideworke
  * Add connector, in two steps: what to connect, then the provider's form (services and bots), which leaves for its
  * sign-in page. Reconnecting an account starts at the form, with that account's choices.
  */
-function ConnectorSetup({ house, ready, existing, onClose }: { house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
+function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
   const [step, setStep] = useState(existing ? 1 : 0);
   const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
@@ -206,6 +209,7 @@ function ConnectorSetup({ house, ready, existing, onClose }: { house: WorkspaceV
         back: step === 1 && !existing ? () => setStep(0) : undefined,
         onConfirm: async () => {
           if (step === 0) {
+            if (type === "slack") { onSlack(); return; }
             setStep(1);
             return "stay";
           }

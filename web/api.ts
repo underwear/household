@@ -1,3 +1,5 @@
+import type { SlackConnectionView, SlackConnectorsView } from "../src/core/slack-connectors";
+export type { SlackConnectionView, SlackConnectorsView };
 import type { GoogleConnectorsView, GoogleConnectionView, GoogleService } from "../src/core/google-connectors";
 export type { GoogleConnectorsView, GoogleConnectionView, GoogleService };
 import type { HouseInbox as WorkspaceInbox, InboxView } from "../src/core/house-inboxes";
@@ -181,6 +183,12 @@ export const api = {
   allowHosts: (name: string, hosts: readonly string[]) => call<WriteView>("POST", `${housePath(name)}/allow/bulk`, { hosts }),
   disallowHost: (name: string, host: string) => call<WriteView>("DELETE", `${housePath(name)}/allow/${encodeURIComponent(host)}`),
   revokeTemporary: (name: string, pet: string, domain: string, port = 443) => call<WriteView>("DELETE", `${housePath(name)}/temporary/${encodeURIComponent(domain)}?port=${port}&pet=${encodeURIComponent(pet)}`),
+  authorizeSlack: (house: string, pets: string[], allowWrite = false) => call<{ url: string }>("POST", `${housePath(house)}/connectors/slack/authorize`, { pets, allowWrite }),
+  slackConnections: (house: string) => call<SlackConnectorsView>("GET", `${housePath(house)}/connectors/slack`),
+  completeSlack: (house: string, url: string) => call<{ ok: boolean }>("POST", `${housePath(house)}/connectors/slack/complete`, { url }),
+  connectSlack: (house: string, token: string, pets: string[], allowWrite = false) => call<SlackConnectionView>("POST", `${housePath(house)}/connectors/slack/connect`, { token, pets, allowWrite }),
+  shareSlack: (house: string, id: string, pets: string[]) => call<SlackConnectionView>("PATCH", `${housePath(house)}/connectors/slack/${encodeURIComponent(id)}`, { pets }),
+  disconnectSlack: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/slack/${encodeURIComponent(id)}`),
   googleConnections: (house: string) => call<GoogleConnectorsView>("GET", `${housePath(house)}/connectors/google`),
   connectGoogle: (house: string, services: GoogleService[], pets: string[], write: boolean) => call<{ url: string }>("POST", `${housePath(house)}/connectors/google/connect`, { services, pets, write }),
   shareGoogle: (house: string, id: string, pets: string[]) => call<GoogleConnectionView>("PATCH", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`, { pets }),
