@@ -32,3 +32,33 @@ test("pet set --cpus and --memory: up to this host's, not past it", async () => 
   expect(fits.code).toBe(0);
   expect(fits.config).toContain(`owl: { key: claude, cpus: ${cpus}, memoryMiB: 512 }`);
 });
+
+test("online pet edits use daemon reservations and never fall back to direct YAML on rejection", async () => {
+  const { serveControl } = await import("../../src/infra/control-socket");
+  const { ConfigStore } = await import("../../src/infra/config-store");
+  const dirs = { HOUSEHOLD_CONFIG_DIR: tempDir(), HOUSEHOLD_STATE_DIR: tempDir() };
+  const paths = resolvePaths(dirs);
+  writeFileSync(paths.configFile, "houses:\n  work:\n    resources: {cpus: 8, memoryMiB: 8192}\n    network: {allow: []}\n    pets:\n      parent: {cpus: 2, memoryMiB: 1024}\n");
+  const config = new ConfigStore(paths.configFile);
+  config.resourceAllocations = () => [{ name: "sw-one", kind: "sideworker", cpus: 6, memoryMiB: 1024 }];
+  const seen: string[] = [];
+  const server = await serveControl(paths.socket, { "/api": async (input: any) => {
+    seen.push(input.method);
+    try {
+      if (input.method === "PATCH") await config.updatePet("work", "parent", input.body);
+      else await config.addPet("work", input.body.name, input.body);
+      return { status: 200, body: {} };
+    } catch (error) { return { status: 400, body: { error: (error as Error).message } }; }
+  } });
+  try {
+    for (const args of [["set", "work", "parent", "--cpus", "4"], ["add", "work", "another"]]) {
+      const before = readFileSync(paths.configFile, "utf8");
+      const proc = Bun.spawn([process.execPath, cli, "pet", ...args], { env: { ...process.env, ...dirs }, stdout: "pipe", stderr: "pipe" });
+      const output = await new Response(proc.stderr).text();
+      expect(await proc.exited).toBe(1);
+      expect(output).toContain("allocated 10 cpus");
+      expect(readFileSync(paths.configFile, "utf8")).toBe(before);
+    }
+    expect(seen).toEqual(["PATCH", "POST"]);
+  } finally { await server.stop(); }
+});

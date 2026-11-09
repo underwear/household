@@ -53,7 +53,7 @@ export const DEFAULT_SIDEWORKER_LIMITS = { cpus: 2, memoryMiB: 1024 };
 
 export const workspaceResourcesSchema = z.strictObject({ cpus: petCpuSchema, memoryMiB: petMemorySchema });
 export const DEFAULT_WORKSPACE_RESOURCES: PetResources = { cpus: 8, memoryMiB: 8192 };
-export interface ResourceAllocation extends PetResources { name: string; kind: "pet" | "scout" | "sideworker"; state?: string }
+export interface ResourceAllocation extends PetResources { name: string; kind: "pet" | "scout" | "sideworker"; state?: string; resident?: PetResources }
 export interface WorkspaceBudget {
   total: PetResources; reserved: PetResources; helpers: PetResources; available: PetResources;
   allocations: ResourceAllocation[];
@@ -61,11 +61,20 @@ export interface WorkspaceBudget {
 const sumResources = (items: PetResources[]): PetResources => items.reduce((sum, item) => ({ cpus: sum.cpus + item.cpus, memoryMiB: sum.memoryMiB + item.memoryMiB }), { cpus: 0, memoryMiB: 0 });
 /** Reservations survive sleep and pause; only deleting/resizing a configured pet releases them. */
 export function workspaceBudget(house: { resources?: PetResources; pets: { name: string; cpus?: number | null; memoryMiB?: number | null; sideworker?: unknown; scout?: unknown }[] }, helpers: ResourceAllocation[] = []): WorkspaceBudget {
-  const pets: ResourceAllocation[] = house.pets.filter(p => !p.sideworker && !p.scout).map(p => ({ name: p.name, kind: "pet", ...petResources(p) }));
-  const reserved = sumResources(pets), used = sumResources(helpers);
+  const allocations = new Map<string, ResourceAllocation>();
+  for (const pet of house.pets.filter(p => !p.sideworker && !p.scout)) allocations.set(pet.name, { name: pet.name, kind: "pet", ...petResources(pet) });
+  for (const item of helpers) {
+    const before = allocations.get(item.name);
+    allocations.set(item.name, before ? { ...before, ...item, kind: before.kind === "pet" && item.kind !== "pet" ? item.kind : before.kind,
+      cpus: Math.max(before.cpus, item.cpus), memoryMiB: Math.max(before.memoryMiB, item.memoryMiB),
+      ...(before.kind === "pet" && item.state === "resident" && (item.cpus > before.cpus || item.memoryMiB > before.memoryMiB) ? { state: "resize pending" } : {}) } : item);
+  }
+  const pets = [...allocations.values()].filter(a => a.kind === "pet");
+  const workers = [...allocations.values()].filter(a => a.kind !== "pet");
+  const reserved = sumResources(pets), used = sumResources(workers);
   // Existing YAML without a budget remains loadable, including large pet reservations.
   const total = house.resources ?? { cpus: Math.max(DEFAULT_WORKSPACE_RESOURCES.cpus, reserved.cpus), memoryMiB: Math.max(DEFAULT_WORKSPACE_RESOURCES.memoryMiB, reserved.memoryMiB) };
-  return { total, reserved, helpers: used, available: { cpus: Math.max(0, total.cpus - reserved.cpus - used.cpus), memoryMiB: Math.max(0, total.memoryMiB - reserved.memoryMiB - used.memoryMiB) }, allocations: [...pets, ...helpers] };
+  return { total, reserved, helpers: used, available: { cpus: Math.max(0, total.cpus - reserved.cpus - used.cpus), memoryMiB: Math.max(0, total.memoryMiB - reserved.memoryMiB - used.memoryMiB) }, allocations: [...pets, ...workers] };
 }
 export function assertWorkspaceCapacity(house: Parameters<typeof workspaceBudget>[0], helpers: ResourceAllocation[], requested: PetResources): void {
   workspaceResourcesSchema.parse(requested);

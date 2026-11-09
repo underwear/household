@@ -994,3 +994,33 @@ test("secret add/rotate/remove hot-applies gateway rules without restarting a pe
     expect(lifecycle()).toEqual(before);
   } finally { await daemon.stop(); }
 });
+
+test("reload rejects an out-of-process pet growth that overcommits active helpers", async () => {
+  const { paths, config, deps, runtime } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { agent: "claude-code-tmux", key: "claude", cpus: 2, memoryMiB: 1024 });
+  deps.records.set("sideworkers.v1", JSON.stringify([{ house: "work", name: "sw-one", parent: "sibling", cwd: "/home/agent", createdAt: 1, cpus: 6, memoryMiB: 1024 }]));
+  const daemon = await startDaemon(deps);
+  try {
+    // Simulate a hand edit or an older CLI with no live allocation callback.
+    await new ConfigStore(paths.configFile).updatePet("work", "sibling", { cpus: 4 });
+    const before = [...runtime.calls];
+    await expect(callControl(paths.socket, "/reload")).rejects.toThrow("resource budget exceeded");
+    expect(runtime.calls).toEqual(before);
+  } finally { await daemon.stop(); }
+});
+
+test("startup keeps management available for legacy overcommit with disabled pet reservations", async () => {
+  const { config, deps, paths } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { agent: "claude-code-tmux", key: "claude", cpus: 6, memoryMiB: 1024, enabled: false });
+  deps.records.set("sideworkers.v1", JSON.stringify([{ house: "work", name: "sw-one", parent: "sibling", cwd: "/home/agent", createdAt: 1, cpus: 4, memoryMiB: 1024 }]));
+  const daemon = await startDaemon(deps);
+  try {
+    const budget = await callControl<{status: number; body: {available: {cpus: number}}}>(paths.socket, "/api", {method: "GET", path: "/api/houses/work/resources"});
+    expect(budget!.status).toBe(200);
+    expect(budget!.body.available.cpus).toBe(0);
+    const closed = await callControl<{status: number}>(paths.socket, "/api", {method: "DELETE", path: "/api/houses/work/sideworkers/sw-one"});
+    expect(closed!.status).toBe(200);
+  } finally { await daemon.stop(); }
+});

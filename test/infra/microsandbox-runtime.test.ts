@@ -501,3 +501,35 @@ test("when neither the pull nor the build works, the error says both", async () 
   env.builder.buildImage = async () => { throw new Error("docker build  failed: no docker"); };
   await expect(env.runtime.prepareImage("house-agent:test", "/context")).rejects.toThrow("could not pull ghcr.io/underwear/house-agent:v1.0.0 (denied); building it here failed too: docker build  failed: no docker");
 });
+
+test("resident maxima survive staged shrink and a new runtime instance; stopped VMs release them", async () => {
+  const { ACTIVE_RESOURCES_LABEL } = await import("../../src/infra/microsandbox-runtime");
+  const item = { name: "household.work.pet", status: "Running", config: { labels: { "household.owner": "me" } as Record<string,string>, resources: { cpus: 6, memory_mib: 6144 } } };
+  const backend: MicrosandboxRun = async command => {
+    const args = command.slice(1);
+    if (args[0] === "--version") return { ok: true, stdout: "msb 0.7.13", stderr: "" };
+    if (args[0] === "list") return { ok: true, stdout: JSON.stringify([{ name: item.name }]), stderr: "" };
+    if (args[0] === "inspect") return { ok: true, stdout: JSON.stringify(item), stderr: "" };
+    if (args[0] === "modify") {
+      if (args.includes("--label")) {
+        const label = args[args.indexOf("--label") + 1]!;
+        item.config.labels[label.slice(0,label.indexOf("="))] = label.slice(label.indexOf("=")+1);
+      }
+      if (args.includes("--cpus")) item.config.resources.cpus = Number(args[args.indexOf("--cpus")+1]);
+      if (args.includes("--memory")) item.config.resources.memory_mib = parseFloat(args[args.indexOf("--memory")+1]!);
+    }
+    if (args[0] === "stop") item.status = "Stopped";
+    return { ok: true, stdout: "", stderr: "" };
+  };
+  const options = { homesDir: tempDir(), proxyPort: 3128, relayPort: 8080, builder: { buildImage: async () => "", exportImage: async () => {}, cancel() {} }, run: backend };
+  const runtime = new MicrosandboxRuntime(options);
+  await runtime.configureResources(item.name, { cpus: 2, memoryMiB: 1024 });
+  expect(item.config.resources.cpus).toBe(2);
+  expect(JSON.parse(item.config.labels[ACTIVE_RESOURCES_LABEL]!)).toEqual({ cpus: 6, memoryMiB: 6144 });
+  const adopted = new MicrosandboxRuntime(options);
+  expect((await adopted.machine(item.name))!.resources).toEqual({ cpus: 6, memoryMiB: 6144 });
+  await adopted.configureResources(item.name, { cpus: 1, memoryMiB: 512 });
+  expect((await adopted.machine(item.name))!.resources!.cpus).toBe(6);
+  await adopted.stopContainer(item.name);
+  expect((await adopted.machine(item.name))!.resources).toBeUndefined();
+});

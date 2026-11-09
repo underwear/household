@@ -1,6 +1,6 @@
 import { AGENT_TOOL_ENV } from "../core/install-env";
 import { effectivePetHome } from "../core/household";
-import { petResources } from "../core/resources";
+import { petResources, type ResourceAllocation } from "../core/resources";
 import type { EnvironmentPhase } from "../core/environment";
 import type { PetInstructions } from "../infra/pet-instructions";
 import { HouseSkills, GUEST_SKILLS, BUILTIN_SKILLS, GUEST_BUILTIN_SKILLS, PERSONAL_SKILLS } from "../infra/house-skills";
@@ -104,6 +104,13 @@ export class PetPlane {
   /** Agent name → image id, built once per daemon run. */
   private readonly images = new Map<string, { ref: string; id: string }>();
   private waiting = true;
+  private resident: ContainerInfo[] = [];
+  /** Refresh before admission starts and after lifecycle changes; failures keep the previous reservation. */
+  async refreshResources(): Promise<void> { this.resident = await this.runtime.listContainers(this.mine); }
+  resourceAllocations(house: string): ResourceAllocation[] {
+    return this.resident.filter(vm => vm.labels[LABEL.house] === house && vm.resources).map(vm => ({ name: vm.labels[LABEL.pet]!, kind: "pet", ...vm.resources!, resident: { ...vm.resources! }, state: "resident" }));
+  }
+
   private readonly terminalReads = new Map<string, Promise<{ text: string } | undefined>>();
 
   /** Label selecting the pets of this Household instance. */
@@ -134,7 +141,12 @@ export class PetPlane {
    * Starts what is missing without waiting for it (see `awaitReady`); `onStopped` hears of each running VM it
    * stops or replaces. Resolves to the started pets and the removed VMs.
    */
-  async reconcile(
+  async reconcile(pets: PlacedPet[], onStopped: (pet: { house: string; pet: string }) => Promise<void> = async () => {}) {
+    await this.refreshResources();
+    try { return await this.reconcileVms(pets, onStopped); }
+    finally { await this.refreshResources(); }
+  }
+  private async reconcileVms(
     pets: PlacedPet[],
     onStopped: (pet: { house: string; pet: string }) => Promise<void> = async () => {},
   ): Promise<{ started: PlacedPet[]; removed: string[] }> {
@@ -214,6 +226,10 @@ export class PetPlane {
 
   /** Restarts the same owned VM, on its current launch configuration; never creates/removes it or discards its disks. */
   async restart(placed: PlacedPet, onLeave: () => Promise<void> = async () => {}, onStopped: () => Promise<void> = async () => {}): Promise<void> {
+    try { await this.restartVm(placed, onLeave, onStopped); }
+    finally { await this.refreshResources(); }
+  }
+  private async restartVm(placed: PlacedPet, onLeave: () => Promise<void> = async () => {}, onStopped: () => Promise<void> = async () => {}): Promise<void> {
     if (placed.enabled === false) throw new Error("bot is disabled; enable it before restarting");
     const name = petContainer(placed.house, placed.pet);
     const current = await this.runtime.container(name);

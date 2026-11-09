@@ -59,6 +59,8 @@ export type Mount =
   | { type: "disk"; source: string; target: string; size: string };
 
 export interface ContainerInfo {
+  /** Physical resident VM maxima, not staged next-boot settings. Absent for stopped VMs. */
+  resources?: import("../core/resources").PetResources;
   name: string;
   /** The runtime's state word: running, stopped, paused, … */
   state: string;
