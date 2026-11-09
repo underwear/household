@@ -1064,6 +1064,13 @@ test("inbox API creates, tests, polls, deduplicates, changes frequency and remov
     const list = await (await s.call("GET", path)).json();
     expect(list[0].inbox.intervalSeconds).toBe(900);
     expect(list[0].status.pendingCount).toBe(0);
+    const subscriber = path + "/incoming/subscribers/sibling";
+    expect((await s.call("PUT", subscriber, { subscribed: true, quiet: true })).status).toBe(200);
+    expect((await (await s.call("GET", path)).json())[0].inbox).toMatchObject({ pets: ["sibling"], quiet: ["sibling"] });
+    expect((await s.call("PUT", subscriber, { subscribed: false, quiet: true })).status).toBe(200);
+    expect((await (await s.call("GET", path)).json())[0].inbox).toMatchObject({ pets: [], quiet: [] });
+    expect((await s.call("PUT", path + "/incoming/subscribers/stranger", { subscribed: true, quiet: false })).status).toBe(400);
+    expect((await s.call("PUT", subscriber, { subscribed: true })).status).toBe(400);
     expect((await s.call("PUT", path + "/incoming", { ...body, pets: ["missing"] })).status).toBe(400);
     expect((await s.call("DELETE", path + "/incoming")).status).toBe(200);
     expect(await (await s.call("GET", path)).json()).toEqual([]);

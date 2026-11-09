@@ -247,6 +247,8 @@
 .switch[aria-checked="true"] { background: var(--idle); }
 .switch[aria-checked="true"] .switch-knob { transform: translateX(14px); background: oklch(0.98 0 0); }
 .switch:disabled { opacity: 0.5; cursor: default; }
+/* The button switch draws its own knob, not the checkbox one of primitives.css. */
+button.switch::before { content: none; }
 @media (prefers-reduced-motion: reduce) { .switch, .switch-knob { transition: none; } }
 
 /*
@@ -422,13 +424,20 @@ button.memory-chevron:hover { color: var(--ink); }
 /* A scout's access: what its capabilities make (network, keys in its VM), beside the one Save. */
 .access-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-radius: var(--radius-lg); background: var(--side); }
 
-.inbox-card-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
-.inbox-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.inbox-headers { display: flex; flex-direction: column; gap: 12px; }
-.inbox-header-row { display: flex; gap: 8px; align-items: end; }
-.inbox-header-row .field { min-width: 0; flex: 1; }
-.inbox-recent { margin-top: 16px; }
-.inbox-recent ul { list-style: none; padding: 0; }
-.inbox-recent li { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-
+/* Inboxes: a source's state and timings, its failure under it; header rows of its form; a pet's two switches. */
+.inbox-times { font-size: var(--text-sm); white-space: nowrap; }
+.cell.lines > .pet-state { font-size: var(--text-md); }
+.pet-state .tag { margin-left: var(--space-1); }
+.inbox-problem { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-1); padding-left: var(--space-3); border-left: 2px solid var(--danger); font-size: var(--text-sm); }
+.inbox-more { align-self: flex-start; }
+.inbox-header-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: var(--space-2); align-items: center; }
+.inbox-add-header { align-self: flex-start; }
+.form-grid.inbox-health { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 textarea.control.inbox-pointers { min-height: 6em; }
+.dialog .list .list-actions, .list-actions:has(.switch-field) { gap: var(--space-5); }
+@media (width < 600px) {
+  /* A pet's inboxes: its two switches under the inbox's name, where the name has room. */
+  .inbox-subscriptions .list-row { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .inbox-subscriptions .list-actions { justify-content: flex-start; padding-left: calc(28px + var(--space-3)); }
+  .form-grid.inbox-health { grid-template-columns: minmax(0, 1fr); }
+}

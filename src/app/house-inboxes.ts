@@ -207,6 +207,8 @@ export class HouseInboxes {
       for (const pet of pending.pets) {
         current();
         if (pending.delivered.includes(pet) || !inbox.pets.includes(pet)) continue;
+        // A quiet subscriber has the event in its history (recorded above) and is not woken for it.
+        if (inbox.quiet?.includes(pet)) { pending.delivered.push(pet); save(); continue; }
         const configured = this.houses.find(h => h.name === house)?.pets.find(p => p.name === pet);
         if (!configured) { pending.delivered.push(pet); save(); continue; }
         this.deliver.pet(house, { ...inbox, delivery: pending.delivery ?? "announce" }, pet, pending.item, pending.receivedAt ?? state.recent.find(e => e.id === pending.item.id)?.at);

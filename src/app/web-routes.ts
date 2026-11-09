@@ -1,5 +1,5 @@
 import type { HouseInboxes } from "./house-inboxes";
-import { houseInboxSchema } from "../core/house-inboxes";
+import { houseInboxSchema, inboxSubscriberSchema } from "../core/house-inboxes";
 import { resolveSlackDm } from "../channel-adapters/slack/setup";
 import type { Previews } from "./previews";
 import { houseFeatures, previewSettings, houseFeatureSettingsSchema } from "../core/house-features";
@@ -631,6 +631,12 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
         deps.houseInboxes!.assertChange(house!, inbox);
         return written(await config.putInbox(house!, inbox), house!, `updated inbox ${name}`);
       });
+    }],
+    ["PUT", at("/inboxes/([^/]+)/subscribers/([^/]+)"), async ({ request, params: [house, name, pet] }) => {
+      if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");
+      const subscriber = await bodyOf(request, inboxSubscriberSchema);
+      return deps.houseInboxes.edit(house!, name!, async () =>
+        written(await config.setInboxSubscriber(house!, name!, pet!, subscriber), house!, `${subscriber.subscribed ? "subscribed" : "unsubscribed"} ${pet} ${subscriber.subscribed ? "to" : "from"} inbox ${name}`));
     }],
     ["DELETE", at("/inboxes/([^/]+)"), async ({ params: [house, name] }) => {
       if (!deps.houseInboxes) return failure(503, "Inbox polling unavailable");

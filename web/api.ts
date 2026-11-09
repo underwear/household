@@ -183,6 +183,7 @@ export const api = {
   testInbox: (house: string, inbox: HouseInbox) => call<{ count: number; message: string }>("POST", `${housePath(house)}/inboxes/test`, inbox),
   addInbox: (house: string, inbox: HouseInbox) => call<WriteView>("POST", `${housePath(house)}/inboxes`, inbox),
   updateInbox: (house: string, inbox: HouseInbox) => call<WriteView>("PUT", under(house, "inboxes", inbox.name), inbox),
+  subscribeInbox: (house: string, name: string, pet: string, subscriber: { subscribed: boolean; quiet: boolean }) => call<WriteView>("PUT", `${under(house, "inboxes", name)}/subscribers/${encodeURIComponent(pet)}`, subscriber),
   removeInbox: (house: string, name: string) => call<WriteView>("DELETE", under(house, "inboxes", name)),
   pollInbox: (house: string, name: string) => call<InboxView>("POST", `${under(house, "inboxes", name)}/poll`),
   resolveSlack: (house: string, token: string, appToken: string, member: string) => call<{ chat: string; owner: string; url: string }>("POST", `${housePath(house)}/slack/resolve`, { token, appToken, member }),

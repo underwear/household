@@ -30,10 +30,15 @@ export const houseInboxSchema = z.strictObject({
   intervalSeconds: z.number().int().min(60).max(86400).default(300),
   channel: z.string().min(1).max(256),
   pets: z.array(z.string().min(1)).max(50).refine(v => new Set(v).size === v.length),
+  /** Subscribers that only collect events in their inbox history: never woken by this inbox. */
+  quiet: z.array(z.string().min(1)).max(50).refine(v => new Set(v).size === v.length).default([]),
   delivery: z.enum(["announce", "silent"]).default("announce"),
   initial: z.enum(["new", "latest"]).default("new"),
   source: pollSourceSchema,
-}).refine(v => v.delivery !== "silent" || v.pets.length > 0, "Silent delivery needs at least one subscribed pet");
+}).refine(v => v.delivery !== "silent" || v.pets.length > 0, "Silent delivery needs at least one subscribed pet")
+  .refine(v => v.quiet.every(pet => v.pets.includes(pet)), "Quiet pets must be subscribed");
+/** A pet's own switches for one inbox (its page's Inboxes tab). */
+export const inboxSubscriberSchema = z.strictObject({ subscribed: z.boolean(), quiet: z.boolean() });
 export const houseInboxesSchema = z.array(houseInboxSchema).max(30).refine(v => new Set(v.map(i => i.name)).size === v.length, "Inbox names must be unique");
 export type HouseInbox = z.infer<typeof houseInboxSchema>;
 export type PollSource = HouseInbox["source"];

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 export const HOUSE_TABS = ["overview", "pets", "channels", "inboxes", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "settings"] as const;
 export type HouseTab = (typeof HOUSE_TABS)[number];
 /** A pet's pages (tabs on its page), in order. */
-export const PET_TABS = ["overview", "agent", "instructions", "lifecycle", "channels", "tasks", "skills", "environment", "memory", "resources"] as const;
+export const PET_TABS = ["overview", "agent", "instructions", "lifecycle", "channels", "inboxes", "tasks", "skills", "environment", "memory", "resources"] as const;
 export type PetTab = (typeof PET_TABS)[number];
 /** A scout's pages (tabs on its page), in order. */
 export const SCOUT_TABS = ["overview", "instructions", "access", "runs"] as const;

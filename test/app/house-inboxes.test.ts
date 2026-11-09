@@ -244,3 +244,20 @@ test("operator cancellation does not increment failures or raise outage", async 
   expect(s.service.list("work")[0]!.status.failures).toBe(0);
   expect(s.posted).toHaveLength(0);
 });
+
+test("a quiet subscriber gets the event in its history without being woken", async () => {
+  const s = setup(async () => ({ items: [event("one")], cursor: "1" }), "latest");
+  s.source.quiet = ["bob"];
+  const woken: string[] = [];
+  const service = new HouseInboxes(s.store, { post: async () => {}, pet: (_h, _i, pet) => woken.push(pet) }, async () => ({ items: [event("one")], cursor: "1" }), Date.now, s.store.inboxEvents);
+  service.setHouses([s.house]);
+  await service.run("work", "mail");
+  expect(woken).toEqual(["alice"]);
+  expect(service.list("work")[0]!.status.pendingCount).toBe(0);
+  expect(s.store.inboxEvents.find("work", "bob", {}).events.map(e => e.title)).toEqual(["New one"]);
+});
+test("quiet pets must be subscribers", () => {
+  expect(houseInboxSchema.safeParse({ ...inbox(), quiet: ["carol"] }).success).toBe(false);
+  expect(houseInboxSchema.parse({ ...inbox(), quiet: ["bob"] }).quiet).toEqual(["bob"]);
+  expect(inbox().quiet).toEqual([]);
+});

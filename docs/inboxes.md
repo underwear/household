@@ -1,18 +1,22 @@
 # House inboxes
 
-In **House → Inboxes**, connect a source, choose a channel and subscribe individual pets. Choose **Announce in channel** for a House post per event, or **Silent — pets only** to deliver directly to pets without a House post. Silent delivery requires at least one subscriber; pets may still choose to reply in the selected channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.
+In **House → Inboxes**, connect a source, choose a channel and subscribe individual pets. Keep **Post events in the channel** on for a House post per event, or turn it off to deliver directly to pets without a House post. Without a post, at least one pet must receive; pets may still choose to reply in the selected channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.
 
 Pollers run on the host. Passwords and authorization headers stay in the private Household config, outside pet prompts and VM environments. Incoming content is marked as external, untrusted data. Subscribing a pet does not make the source an owner.
 
 ## Setup
 
 1. Choose **Telegram Bot Updates**, **RSS / Atom**, **Health check**, **JSON watcher**, **IMAP**, **POP3**, **Grafana**, **Datadog**, or **Custom HTTP**.
-2. Enter connection details and choose **Test connection & continue**. Testing reads the source without posting messages, notifying pets or changing its saved cursor.
+2. Enter connection details and choose **Test and continue**. Testing reads the source without posting messages, notifying pets or changing its saved cursor.
 3. Name the inbox. Choose **every minute**, **every 5 minutes**, **every 15 minutes**, or a custom interval from 60 seconds to 24 hours.
-4. Choose delivery mode, a channel and subscribers. Only pets placed in that channel are offered. In announcement mode, leave all unchecked for a channel-only feed. In silent mode, the channel determines where pets can reply.
-5. Choose **Start from now** (default) or **Deliver current items / snapshot**, then save.
+4. Choose a channel, whether events are posted in it, and which pets receive them. Only pets placed in that channel are offered. With posting on, leave every pet off for a channel-only feed. With posting off, the channel determines where pets can reply.
+5. On the first check, choose **Start from now** (default) or **Deliver what is there now** (up to 50 items or a snapshot), then save.
 
 The page shows status, next check, pending deliveries and the last 50 events. **Check now** uses the saved cursor. **Pause** retains state; **Resume** continues it. **Remove** discards pending events and polling state, but leaves posted chat history.
+
+## A pet's inboxes
+
+A pet's **Inboxes** tab lists every inbox of its house with two switches. **Receives** subscribes the pet (it must be placed in the inbox's channel first). **Silent** keeps receiving without waking it: events are archived for the pet and found with `inbox_history` / `inbox_search`, but no turn starts and no poller notice is sent to it. The same switches appear per pet in the inbox's form. The config keeps silent subscribers in the inbox's `quiet` list, a subset of `pets`. The last subscriber of an inbox that does not post cannot unsubscribe from the pet's tab.
 
 ## Built-in sources
 
@@ -95,7 +99,7 @@ The scheduler's “Recent events” list is capped at 50; the archive is not. Re
 
 ### Pet tools
 
-- `inbox_list({})`: subscribed inboxes and readable retained archives, without connection credentials.
+- `inbox_list({})`: subscribed inboxes (with `quiet` for silent ones) and readable retained archives, without connection credentials.
 - `inbox_history({inbox?, since?, until?, time?, before?, limit?})`: event slices, newest accepted first.
 - `inbox_search({query, ...sameFilters})`: word/prefix search across notification title, body **and metadata**. All search words must match.
 
@@ -203,6 +207,7 @@ Bun.serve({
 - Changing endpoint, mail account/folder or monitor establishes a new baseline. Rotating passwords or headers keeps the cursor; do not use a credential change to switch datasets.
 - Delivery mode is captured when an event is queued. Switching silent/announcement affects future events; already pending events keep their mode.
 - Removing a subscription stops future fan-out; entries already in a pet's durable queue remain.
+- Silent applies when an event is delivered: switching a pet to silent also stops waking it for events still pending.
 - Polling sees snapshots: an alert appearing and resolving entirely between checks can be missed.
 - The host can reach configured internal endpoints. VM allowlists do not govern host polling. Only the owner admin configures sources.
 

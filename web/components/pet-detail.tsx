@@ -15,6 +15,7 @@ import { PetMemory } from "./pet-memory";
 import { CalendarClock, Gauge, MessagesSquare, Pickaxe } from "lucide-react";
 import { PetCrons, relative, scheduledCount, usePetCrons, type Run } from "./pet-crons";
 import { PetChannels } from "./pet-channels";
+import { PetInboxes, subscribedCount, useHouseInboxes } from "./house-inboxes";
 import { Stat } from "./house-overview";
 import { useEffect, useState } from "react";
 import { api, type AgentView, type HouseView, type KeyView, type PetView, type PlatformView } from "../api";
@@ -62,6 +63,7 @@ export function PetDetailPage({ house, pet, tab = "overview", agents, keys, capa
   // "1 running · 1 busy": each state its workers are in, by how many.
   const workerStates = Object.entries(Object.groupBy(workers, (each) => petState(each.state).label)).map(([state, list]) => `${list!.length} ${state.toLowerCase()}`).join(" · ");
   const crons = usePetCrons(house.name, pet.name, !worker);
+  const inboxes = useHouseInboxes(house.name, !worker);
   const channels = house.channels.filter((channel) => channel.pets.includes(worker?.parent ?? pet.name));
   const defaults = channels.filter((channel) => channel.default === pet.name || channel.pets.length === 1).length;
   const next = crons.view?.jobs.filter((job) => job.state === "scheduled").sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
@@ -152,6 +154,7 @@ export function PetDetailPage({ house, pet, tab = "overview", agents, keys, capa
           { label: "Instructions", href: petPath(house.name, pet.name, "instructions"), current: tab === "instructions" },
           { label: "Lifecycle", href: petPath(house.name, pet.name, "lifecycle"), current: tab === "lifecycle" },
           { label: "Channels", href: petPath(house.name, pet.name, "channels"), current: tab === "channels" },
+          { label: "Inboxes", href: petPath(house.name, pet.name, "inboxes"), current: tab === "inboxes", count: subscribedCount(inboxes.items, pet.name) },
           { label: "Scheduled tasks", href: petPath(house.name, pet.name, "tasks"), current: tab === "tasks", count: scheduledCount(crons.view) },
           { label: "Skills", href: petPath(house.name, pet.name, "skills"), current: tab === "skills" },
           { label: "Environment", href: petPath(house.name, pet.name, "environment"), current: tab === "environment" },
@@ -265,6 +268,7 @@ export function PetDetailPage({ house, pet, tab = "overview", agents, keys, capa
       {tab === "instructions" && <PetInstructions key={`${house.name}/${pet.name}`} house={house.name} pet={pet} />}
       {tab === "lifecycle" && <PetLifecycleTab key={`${house.name}/${pet.name}`} house={house.name} pet={pet} refresh={refresh} notify={notify} />}
       {tab === "channels" && <PetChannels house={house} pet={pet} platforms={platforms} refresh={refresh} notify={notify} />}
+      {tab === "inboxes" && <PetInboxes house={house} pet={pet} inboxes={inboxes} notify={notify} />}
       {tab === "memory" && <PetMemory key={`${house.name}/${pet.name}`} house={house.name} pet={pet.name} />}
       {tab === "tasks" && <PetCrons house={house.name} pet={pet.name} crons={crons} />}
       {tab === "skills" && <SkillsPage key={`${house.name}/${pet.name}`} house={house.name} pet={pet.name} title={pet.title} worker={!!worker} notify={notify} />}

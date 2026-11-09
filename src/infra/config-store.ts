@@ -132,6 +132,26 @@ export class ConfigStore {
     });
   }
 
+  /** One pet's subscription to an inbox, from its own page: subscribed or not, and quiet (history only) or woken. */
+  async setInboxSubscriber(house: string, name: string, pet: string, { subscribed, quiet }: { subscribed: boolean; quiet: boolean }): Promise<Household> {
+    return this.edit((doc, household) => {
+      const h = knownHouse(household, house);
+      const current = h.inboxes ?? [];
+      const inbox = current.find(i => i.name === name);
+      if (!inbox) throw new NotFoundError("Inbox not found");
+      const others = inbox.pets.filter(p => p !== pet);
+      const pets = subscribed ? (inbox.pets.includes(pet) ? inbox.pets : [...others, pet]) : others;
+      const next = { ...inbox, pets, quiet: (inbox.quiet ?? []).filter(p => p !== pet).concat(subscribed && quiet ? [pet] : []) };
+      if (subscribed && !inbox.pets.includes(pet)) {
+        const channel = h.channels.find(c => c.chat === inbox.channel);
+        if (!h.pets.some(p => p.name === pet && !p.scout && !p.sideworker) || !channel?.pets.includes(pet)) throw new HouseholdError("Place the pet in the inbox's channel first");
+      }
+      const parsed = houseInboxSchema.safeParse(next);
+      if (!parsed.success) throw new HouseholdError(parsed.error.issues[0]?.message ?? "Invalid inbox");
+      setIn(doc, ["houses", house, "inboxes"], doc.createNode(current.map(i => i.name === name ? parsed.data : i)));
+    });
+  }
+
   async removeInbox(house: string, name: string): Promise<Household> {
     return this.edit((doc, household) => {
       const current = knownHouse(household, house).inboxes ?? [];

@@ -173,17 +173,19 @@
     <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../../#start">Quick start</a></li></ul></nav>
 
     <article><p class="crumb">Sources and delivery</p><h1>House inboxes</h1>
-<p>In <strong>House → Inboxes</strong>, connect a source, choose a channel and subscribe individual pets. Choose <strong>Announce in channel</strong> for a House post per event, or <strong>Silent — pets only</strong> to deliver directly to pets without a House post. Silent delivery requires at least one subscriber; pets may still choose to reply in the selected channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.</p>
+<p>In <strong>House → Inboxes</strong>, connect a source, choose a channel and subscribe individual pets. Keep <strong>Post events in the channel</strong> on for a House post per event, or turn it off to deliver directly to pets without a House post. Without a post, at least one pet must receive; pets may still choose to reply in the selected channel. Each subscriber gets its own durable queue entry and processes it when idle; paused pets wait until resumed. Replies stay in the selected channel, even when the pet also lives elsewhere.</p>
 <p>Pollers run on the host. Passwords and authorization headers stay in the private Household config, outside pet prompts and VM environments. Incoming content is marked as external, untrusted data. Subscribing a pet does not make the source an owner.</p>
 <h2 id="setup">Setup</h2>
 <ol>
 <li>Choose <strong>Telegram Bot Updates</strong>, <strong>RSS / Atom</strong>, <strong>Health check</strong>, <strong>JSON watcher</strong>, <strong>IMAP</strong>, <strong>POP3</strong>, <strong>Grafana</strong>, <strong>Datadog</strong>, or <strong>Custom HTTP</strong>.</li>
-<li>Enter connection details and choose <strong>Test connection &amp; continue</strong>. Testing reads the source without posting messages, notifying pets or changing its saved cursor.</li>
+<li>Enter connection details and choose <strong>Test and continue</strong>. Testing reads the source without posting messages, notifying pets or changing its saved cursor.</li>
 <li>Name the inbox. Choose <strong>every minute</strong>, <strong>every 5 minutes</strong>, <strong>every 15 minutes</strong>, or a custom interval from 60 seconds to 24 hours.</li>
-<li>Choose delivery mode, a channel and subscribers. Only pets placed in that channel are offered. In announcement mode, leave all unchecked for a channel-only feed. In silent mode, the channel determines where pets can reply.</li>
-<li>Choose <strong>Start from now</strong> (default) or <strong>Deliver current items / snapshot</strong>, then save.</li>
+<li>Choose a channel, whether events are posted in it, and which pets receive them. Only pets placed in that channel are offered. With posting on, leave every pet off for a channel-only feed. With posting off, the channel determines where pets can reply.</li>
+<li>On the first check, choose <strong>Start from now</strong> (default) or <strong>Deliver what is there now</strong> (up to 50 items or a snapshot), then save.</li>
 </ol>
 <p>The page shows status, next check, pending deliveries and the last 50 events. <strong>Check now</strong> uses the saved cursor. <strong>Pause</strong> retains state; <strong>Resume</strong> continues it. <strong>Remove</strong> discards pending events and polling state, but leaves posted chat history.</p>
+<h2 id="a-pet-s-inboxes">A pet's inboxes</h2>
+<p>A pet's <strong>Inboxes</strong> tab lists every inbox of its house with two switches. <strong>Receives</strong> subscribes the pet (it must be placed in the inbox's channel first). <strong>Silent</strong> keeps receiving without waking it: events are archived for the pet and found with <code>inbox_history</code> / <code>inbox_search</code>, but no turn starts and no poller notice is sent to it. The same switches appear per pet in the inbox's form. The config keeps silent subscribers in the inbox's <code>quiet</code> list, a subset of <code>pets</code>. The last subscriber of an inbox that does not post cannot unsubscribe from the pet's tab.</p>
 <h2 id="built-in-sources">Built-in sources</h2>
 <table>
 <thead>
@@ -239,7 +241,7 @@
 <p>The scheduler's “Recent events” list is capped at 50; the archive is not. Removing or pausing an inbox does not erase history. Backups include it. Archiving starts with this version: previously delivered notifications are not reconstructed from chat previews, and events skipped by initial baselining are not archived. Text limits still apply; an archived preview is not the original attachment or an unlimited provider response.</p>
 <h3>Pet tools</h3>
 <ul>
-<li><code>inbox_list({})</code>: subscribed inboxes and readable retained archives, without connection credentials.</li>
+<li><code>inbox_list({})</code>: subscribed inboxes (with <code>quiet</code> for silent ones) and readable retained archives, without connection credentials.</li>
 <li><code>inbox_history({inbox?, since?, until?, time?, before?, limit?})</code>: event slices, newest accepted first.</li>
 <li><code>inbox_search({query, ...sameFilters})</code>: word/prefix search across notification title, body <strong>and metadata</strong>. All search words must match.</li>
 </ul>
@@ -338,6 +340,7 @@ Bun.serve({
 <li>Changing endpoint, mail account/folder or monitor establishes a new baseline. Rotating passwords or headers keeps the cursor; do not use a credential change to switch datasets.</li>
 <li>Delivery mode is captured when an event is queued. Switching silent/announcement affects future events; already pending events keep their mode.</li>
 <li>Removing a subscription stops future fan-out; entries already in a pet's durable queue remain.</li>
+<li>Silent applies when an event is delivered: switching a pet to silent also stops waking it for events still pending.</li>
 <li>Polling sees snapshots: an alert appearing and resolving entirely between checks can be missed.</li>
 <li>The host can reach configured internal endpoints. VM allowlists do not govern host polling. Only the owner admin configures sources.</li>
 </ul>
@@ -356,7 +359,7 @@ Bun.serve({
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#setup">Setup</a></li><li><a href="#built-in-sources">Built-in sources</a></li><li><a href="#telegram-bot-updates">Telegram Bot Updates</a></li><li><a href="#rss-atom">RSS / Atom</a></li><li><a href="#health-check">Health check</a></li><li><a href="#json-watcher">JSON watcher</a></li><li><a href="#poller-problems-and-recovery">Poller problems and recovery</a></li><li><a href="#catch-up-after-vm-downtime">Catch-up after VM downtime</a></li><li><a href="#durable-event-history-and-metadata">Durable event history and metadata</a></li><li><a href="#custom-http-contract-version-1">Custom HTTP contract, version 1</a></li><li><a href="#delivery-and-failures">Delivery and failures</a></li><li><a href="#adding-a-built-in-poller">Adding a built-in poller</a></li><li><a href="#references">References</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#setup">Setup</a></li><li><a href="#a-pet-s-inboxes">A pet's inboxes</a></li><li><a href="#built-in-sources">Built-in sources</a></li><li><a href="#telegram-bot-updates">Telegram Bot Updates</a></li><li><a href="#rss-atom">RSS / Atom</a></li><li><a href="#health-check">Health check</a></li><li><a href="#json-watcher">JSON watcher</a></li><li><a href="#poller-problems-and-recovery">Poller problems and recovery</a></li><li><a href="#catch-up-after-vm-downtime">Catch-up after VM downtime</a></li><li><a href="#durable-event-history-and-metadata">Durable event history and metadata</a></li><li><a href="#custom-http-contract-version-1">Custom HTTP contract, version 1</a></li><li><a href="#delivery-and-failures">Delivery and failures</a></li><li><a href="#adding-a-built-in-poller">Adding a built-in poller</a></li><li><a href="#references">References</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

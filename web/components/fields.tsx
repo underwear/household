@@ -232,3 +232,18 @@ export function SwitchList({ label, options, on, onToggle, disabled }: { label: 
     </fieldset>
   );
 }
+
+/**
+ * One on/off setting as a switch, its words before it (read out as its name; `hideLabel` when the row around it
+ * says what it is). Clicking the words flips it too.
+ */
+export function Switch({ label, on, onChange, disabled, hideLabel, title }: { label: string; on: boolean; onChange: (on: boolean) => void; disabled?: boolean; hideLabel?: boolean; title?: string }) {
+  return (
+    <label className="switch-field" title={title}>
+      <span className={hideLabel ? "visually-hidden" : undefined}>{label}</span>
+      <button type="button" role="switch" aria-checked={on} className="switch" disabled={disabled} onClick={() => onChange(!on)}>
+        <span className="switch-knob" />
+      </button>
+    </label>
+  );
+}
