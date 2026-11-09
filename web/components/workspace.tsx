@@ -1,4 +1,4 @@
-import { SecretsSection } from "./secrets";
+import { SecretsPage } from "./secrets";
 import { WorkspaceConnectors } from "./workspace-connectors";
 import { WorkspaceInboxesPage } from "./workspace-inboxes";
 import { ScoutsPage } from "./scouts";
@@ -93,7 +93,7 @@ export function WorkspacePage({ house, tab, known, keys, capacity, refresh, noti
           )}
         </Page>
       )}
-      {tab === "secrets" && <Page title="Secrets"><SecretsSection key={house.name} house={house.name} noteMax={known.noteMax} notify={notify} /></Page>}
+      {tab === "secrets" && <SecretsPage key={house.name} house={house.name} allow={house.allow} noteMax={known.noteMax} refresh={refresh} notify={notify} />}
       {tab === "settings" && (
         <Page title="Settings">
           <WorkspaceFeatureSettings key={JSON.stringify([house.name, house.features, house.preview])} house={house} refresh={refresh} notify={notify} />

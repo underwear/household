@@ -139,8 +139,8 @@ test("capabilities: the list (drafts from bots on top) and a capability's page",
 test("secrets: kept for capabilities, never the bots'; a capability's skills are labelled as its", () => {
   const secret = { name: "heroku", value: "fake", hosts: ["api.heroku.com"], header: "Authorization", env: "HEROKU_API_KEY", houses: ["work"], onlyForCapabilities: ["heroku-prod"] } as unknown as SecretView;
   const html = renderToStaticMarkup(<SecretDialog house="work" secret={secret} onClose={() => {}} save={noop} />);
-  expect(html).toContain("Only for capabilities");
-  expect(html).toContain("bots and sideworkers never do");
+  expect(html).toContain("Only scouts with a capability");
+  expect(html).toContain("Bots and sideworkers never get it");
   const skills = renderToStaticMarkup(<SkillsPage house="work" capability="heroku-prod" notify={() => {}} />);
   expect(skills).toContain("Loading skills…");
 });

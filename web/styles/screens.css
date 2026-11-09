@@ -448,3 +448,8 @@ textarea.control.inbox-pointers { min-height: 6em; }
 .avatar.connector-mark { font: 600 var(--text-sm)/1 var(--font-sans); }
 /* An account's address wraps rather than lose its domain: work and personal ones differ there. */
 .connector-email { overflow-wrap: anywhere; }
+
+/* Secrets: a row's warning that bots cannot reach its hosts, with the way to fix it. */
+.secret-blocked { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: var(--text-sm); }
+.secret-blocked .text-link, .secret-blocked .text-btn { color: inherit; font-size: inherit; }
+.list-empty .text-btn { font: inherit; }
