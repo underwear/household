@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Connect Slack — Household</title>
+<script src="./callback.js" defer></script>
+<link rel="stylesheet" href="./callback.css">
+</head>
+<body><main>
+<p class="brand">HOUSEHOLD / SLACK</p>
+<h1 id="heading">Finish connecting Slack</h1>
+<p id="status" role="status">Copy the connection result, return to your Household dashboard, and paste it into “Connection result”.</p>
+<textarea id="result" aria-label="Connection result" readonly spellcheck="false" hidden></textarea>
+<button id="copy" type="button" hidden>Copy connection result</button>
+<p class="note">Your Household instance exchanges this one-time code directly with Slack using its private PKCE verifier. This page never receives your Slack access or refresh token.</p>
+<p class="note">The hosting provider receives the callback URL containing this code. This page has no analytics, external scripts, or token exchange service. Close it after connecting.</p>
+<noscript>Enable JavaScript to copy the result. Alternatively, copy this page’s full address and paste it into Household.</noscript>
+</main></body></html>
