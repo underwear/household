@@ -41,11 +41,34 @@ test("Slack OAuth binds state to owner session and fixed HTTPS callback, uses PK
   expect(JSON.stringify(s.c.list("home"))).not.toContain("oauth-access");
   await expect(s.c.finish(s.callback(start), "session")).rejects.toThrow("does not match");
 });
-test("pending Slack OAuth expires and is cancelled on workspace reload", async () => {
+test("pending Slack OAuth expires; a reload keeps it (a sideworker started, a setting saved) unless its workspace is gone", async () => {
   const s = setup(), start = s.begin(); s.advance();
   await expect(s.c.finish(s.callback(start), "session")).rejects.toThrow();
-  const next = s.begin(); s.c.setHouses([s.house]);
-  await expect(s.c.finish(s.callback(next), "session")).rejects.toThrow();
+  const kept = s.begin(); s.c.setHouses([{ ...s.house, pets: [...s.house.pets, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }] }]);
+  await s.c.finish(s.callback(kept), "session");
+  expect(s.c.list("home").connections).toHaveLength(1);
+  const gone = s.begin(); s.c.setHouses([]); s.c.setHouses([s.house]);
+  await expect(s.c.finish(s.callback(gone), "session")).rejects.toThrow();
+});
+
+test("a reload cancels in-flight reads only of connections a bot can no longer use", async () => {
+  let release!: () => void;
+  const store = new SqliteStore(":memory:");
+  const c = new SlackConnectors(store, async (url, init) => {
+    if (new URL(url).pathname.endsWith("auth.test")) return Response.json({ ok: true, team_id: "T1", user_id: "U1", team: "Team", user: "Igor" }, { headers: { "x-oauth-scopes": SLACK_READ_SCOPES.join(",") } });
+    await new Promise<void>((resolve, reject) => { release = resolve; init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))); });
+    return Response.json({ ok: true, messages: [] });
+  });
+  const house: House = { name: "home", pets: [{ name: "alice" }], channels: [], people: { owners: [] }, network: { kind: "allowlist", allow: [] } };
+  c.setHouses([house]);
+  const id = (await c.connect("home", { token: "xoxp-token", pets: ["alice"] })).id;
+  const read = () => c.request({ house: "home", pet: "alice" }, id, "search.messages", { query: "hello" });
+  const untouched = read(); await Bun.sleep(5);
+  c.setHouses([{ ...house, pets: [...house.pets, { name: "bob" }] }]);
+  release(); await expect(untouched).resolves.toBeDefined();
+  const cut = read(); await Bun.sleep(5);
+  c.setHouses([{ ...house, pets: [{ name: "alice", enabled: false }] }]);
+  await expect(cut).rejects.toThrow();
 });
 test("Slack refresh is single-flight and persists rotated credentials without exposing them", async () => {
   const s = setup(), id = await s.connect(); s.advance();

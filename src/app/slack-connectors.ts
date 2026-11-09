@@ -29,14 +29,26 @@ export class SlackConnectors {
   private view(c: Connection): SlackConnectionView {
     return { id: c.id, teamId: c.teamId, team: c.team, userId: c.userId, user: c.user, scopes: [...c.scopes], pets: [...c.pets], allowWrite: c.allowWrite === true, connectedAt: c.connectedAt, needsReconnect: c.needsReconnect };
   }
+  /**
+   * A reload (any config write, a sideworker started or closed): only what it took away stops. Connections of a removed
+   * house and those a bot can no longer use (removed, disabled) have their reads cancelled; pending sign-ins survive unless their house is gone.
+   */
   setHouses(houses: House[]) {
     this.generation++;
+    const before = this.houses;
     this.houses = houses;
-    const kept = this.read().filter(c => houses.some(h => h.name === c.house));
-    for (const c of kept) c.pets = c.pets.filter(p => houses.find(h => h.name === c.house)?.pets.some(pet => pet.name === p && !pet.sideworker && !pet.scout));
+    const saved = this.read();
+    // The bots that can use a connection now: granted, still there, enabled, neither a sideworker nor a scout.
+    const usable = (all: House[], c: Connection) => c.pets.filter(p => all.find(h => h.name === c.house)?.pets.some(pet => pet.name === p && pet.enabled !== false && !pet.sideworker && !pet.scout)).join(",");
+    const kept = saved.filter(c => houses.some(h => h.name === c.house));
+    for (const c of saved) if (!kept.includes(c)) this.abort(c.id);
+    for (const c of kept) {
+      const pets = c.pets.filter(p => houses.find(h => h.name === c.house)?.pets.some(pet => pet.name === p && !pet.sideworker && !pet.scout));
+      if (usable(before, c) !== usable(houses, c)) this.abort(c.id);
+      c.pets = pets;
+    }
     this.write(kept);
-    for (const id of this.active.keys()) this.abort(id);
-    this.pending.clear();
+    for (const [state, pending] of this.pending) if (!houses.some(h => h.name === pending.house) || pending.expires <= this.now()) this.pending.delete(state);
   }
   private house(name: string) {
     const house = this.houses.find(h => h.name === name);
