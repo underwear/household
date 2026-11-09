@@ -31,3 +31,13 @@ test("migration drops counts, preserves zero-count off switches, persists a budg
   expect(raw.scoutLimits).toEqual({ cpus: 1 });
   expect(raw.sideworkerLimits).toEqual({ cpus: 2, memoryMiB: 1024 });
 });
+
+test("migration leaves room for one helper beside pets that fill the default budget", async () => {
+  const path = join(tempDir(), "household.yaml");
+  const pets = Object.fromEntries(["a", "b", "c", "d"].map(name => [name, { cpus: 2, memoryMiB: 2048 }]));
+  await Bun.write(path, stringify({ version: 3, houses: { work: { network: { allow: [] }, pets, scoutLimits: { maxScouts: 2 } }, small: { network: { allow: [] }, pets: { one: { cpus: 2, memoryMiB: 1024 } } } } }));
+  const store = new ConfigStore(path); await store.migrate();
+  const raw = parse(await Bun.file(path).text()).houses;
+  expect(raw.work.resources).toEqual({ cpus: 10, memoryMiB: 9216 }); // 8 vCPU / 8 GiB of pets + a default 2 vCPU / 1 GiB helper
+  expect(raw.small.resources).toEqual({ cpus: 8, memoryMiB: 8192 }); // the default already leaves room
+});

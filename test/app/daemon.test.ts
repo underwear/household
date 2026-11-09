@@ -1007,6 +1007,9 @@ test("reload rejects an out-of-process pet growth that overcommits active helper
     const before = [...runtime.calls];
     await expect(callControl(paths.socket, "/reload")).rejects.toThrow("resource budget exceeded");
     expect(runtime.calls).toEqual(before);
+    // Closing the helper, as the error says, gets it back under the budget: its own reload is not refused.
+    const closed = await callControl<{status: number}>(paths.socket, "/api", {method: "DELETE", path: "/api/houses/work/sideworkers/sw-one"});
+    expect(closed!.status).toBe(200);
   } finally { await daemon.stop(); }
 });
 

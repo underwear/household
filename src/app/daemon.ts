@@ -456,7 +456,9 @@ export async function startDaemon(deps: DaemonDeps) {
     enqueue(async () => {
       const configured = loaded ?? (await config.load());
       for (const house of configured.houses) {
-        const allocations = config.resourceAllocations?.(house.name) ?? [];
+        // Helpers being removed do not count here: closing them is how an owner gets back under the budget, and each
+        // close reloads; counting them would refuse that reload too.
+        const allocations = (config.resourceAllocations?.(house.name) ?? []).filter(a => a.state !== "closing" && a.state !== "cleanup");
         const budget = workspaceBudget(house, allocations);
         const previous = appliedHousehold?.houses.find(h => h.name === house.name);
         const before = workspaceBudget(previous ?? { ...house, pets: house.pets.filter(p => p.enabled === false) }, allocations);

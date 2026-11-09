@@ -1,6 +1,6 @@
 import { isMap, isScalar, isSeq, type Document } from "yaml";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
-import { workspaceBudget } from "../core/resources";
+import { DEFAULT_SIDEWORKER_LIMITS, DEFAULT_WORKSPACE_RESOURCES, workspaceBudget } from "../core/resources";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -94,10 +94,17 @@ function migrateResourceBudgets(doc: Document): void {
     const path = ["houses", String(pair.key.value)];
     const node = doc.getIn(path);
     if (!isMap(node)) continue;
-    const raw = node.toJSON() as { resources?: { cpus: number; memoryMiB: number }; pets?: Record<string, { cpus?: number; memoryMiB?: number } | null> };
+    const raw = node.toJSON() as { resources?: { cpus: number; memoryMiB: number }; pets?: Record<string, { cpus?: number; memoryMiB?: number } | null>; scoutLimits?: { maxScouts?: number }; sideworkerLimits?: { maxWorkers?: number; cpus?: number; memoryMiB?: number } };
     if (!raw.resources) {
-      const budget = workspaceBudget({ pets: Object.entries(raw.pets ?? {}).map(([name, pet]) => ({ name, ...pet })) });
-      setIn(doc, [...path, "resources"], doc.createNode(budget.total));
+      const { reserved } = workspaceBudget({ pets: Object.entries(raw.pets ?? {}).map(([name, pet]) => ({ name, ...pet })) });
+      // Room for one helper of the workspace's own size beside its pets, unless both helpers were off (zero counts):
+      // pets alone filling the default would otherwise refuse every scout and sideworker they ran before.
+      const helpersOn = raw.scoutLimits?.maxScouts !== 0 || raw.sideworkerLimits?.maxWorkers !== 0;
+      const helper = helpersOn ? { cpus: raw.sideworkerLimits?.cpus ?? DEFAULT_SIDEWORKER_LIMITS.cpus, memoryMiB: raw.sideworkerLimits?.memoryMiB ?? DEFAULT_SIDEWORKER_LIMITS.memoryMiB } : { cpus: 0, memoryMiB: 0 };
+      setIn(doc, [...path, "resources"], doc.createNode({
+        cpus: Math.max(DEFAULT_WORKSPACE_RESOURCES.cpus, reserved.cpus + helper.cpus),
+        memoryMiB: Math.max(DEFAULT_WORKSPACE_RESOURCES.memoryMiB, reserved.memoryMiB + helper.memoryMiB),
+      }));
     }
     for (const [field, count, feature] of [["scoutLimits", "maxScouts", "scouts"], ["sideworkerLimits", "maxWorkers", "sideworkers"]]) {
       if (doc.getIn([...path, field!, count!]) === 0) setIn(doc, [...path, "features", feature!], doc.createNode(false));
