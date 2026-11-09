@@ -26,7 +26,7 @@ export class HouseInboxes {
     private readonly store: KeyValueStore,
     private readonly deliver: {
       post(house: string, inbox: HouseInbox, item: InboxItem): Promise<void>;
-      pet(house: string, inbox: HouseInbox, pet: string, item: InboxItem): void;
+      pet(house: string, inbox: HouseInbox, pet: string, item: InboxItem, receivedAt?: string): void;
     },
     private readonly poll: Poller = pollInbox,
     private readonly now: () => number = Date.now,
@@ -132,8 +132,9 @@ export class HouseInboxes {
         const item = redact(inbox, raw);
         // Source IDs are opaque and never need to be shown to a VM.
         item.id = id;
-        this.history?.record(house, inbox, item, this.now());
-        state.pending.push({ receivedAt: new Date(this.now()).toISOString(), item, channel: inbox.channel, pets: [...inbox.pets], delivery: inbox.delivery, delivered: [] });
+        const received = this.now();
+        this.history?.record(house, inbox, item, received);
+        state.pending.push({ receivedAt: new Date(received).toISOString(), item, channel: inbox.channel, pets: [...inbox.pets], delivery: inbox.delivery, delivered: [] });
         state.recent.unshift({ id, title: item.title, at: new Date(this.now()).toISOString(), status: "queued" });
       }
       state.seen = [...seen].slice(-5000);
@@ -177,7 +178,7 @@ export class HouseInboxes {
         if (pending.delivered.includes(pet) || !inbox.pets.includes(pet)) continue;
         const configured = this.houses.find(h => h.name === house)?.pets.find(p => p.name === pet);
         if (!configured) { pending.delivered.push(pet); save(); continue; }
-        this.deliver.pet(house, { ...inbox, delivery: pending.delivery ?? "announce" }, pet, pending.item);
+        this.deliver.pet(house, { ...inbox, delivery: pending.delivery ?? "announce" }, pet, pending.item, pending.receivedAt ?? state.recent.find(e => e.id === pending.item.id)?.at);
         pending.delivered.push(pet); save();
       }
       const recent = state.recent.find(i => i.id === pending.item.id);

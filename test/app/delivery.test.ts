@@ -1180,3 +1180,94 @@ test("presentation redaction does not change inbox correlation or native event i
     expect(updates.find(update => update.kind === "notification")).toMatchObject({ text: "Value [masked]" });
   } finally { delivery.stop(); }
 });
+
+function inboxEvent(n: number, inbox = 'alerts', place = 'pet:sibling@c1') {
+  return {origin:'inbox' as const,ref:`inbox-${n}` as MessageRef,place,text:`FULL_EXTERNAL_BODY_${n}`,header:{...fromChat(n,true),from:{id:`source-${inbox}`,name:inbox,trust:'guest' as const},channel:{...fromChat(n).channel,meta:{inbox,inboxTitle:inbox,eventTitle:`Event ${n}`,receivedAt:new Date(Date.UTC(2026,10,9,12,0,n)).toISOString()}},place:{id:place,kind:'pet-thread',title:'Sibling'}}};
+}
+
+test('offline inbox backlog returns as one digest grouped by source, then acknowledgments cover all originals',async()=>{
+ const s=setup();
+ try {
+  await s.delivery.suspend('work','sibling');
+  for(let n=0;n<100;n++)s.delivery.send('work','sibling',inboxEvent(n,n%2?'mail':'alerts'));
+  expect(s.sent).toHaveLength(0);
+  expect(s.store.unfinished('work','sibling')).toHaveLength(100);
+  s.delivery.resume('work','sibling');
+  await waitFor(()=>s.sent.length===1);
+  expect(s.sent[0]!.text).toContain('inbox_catchup');
+  expect(s.sent[0]!.text).toContain('"count":100');
+  expect(s.sent[0]!.text.match(/"count":50/g)).toHaveLength(2);
+  expect(s.sent[0]!.text).toContain('inbox_history');
+  expect(s.sent[0]!.text).not.toContain('FULL_EXTERNAL_BODY');
+  expect(s.sent[0]!.text.length).toBeLessThan(6000);
+  expect(s.store.unfinished('work','sibling').every(m=>m.status==='delivered')).toBe(true);
+  await s.post({kind:'turn-finished',text:''});
+  expect(s.store.unfinished('work','sibling')).toHaveLength(0);
+  s.delivery.resume('work','sibling');expect(s.sent).toHaveLength(1);
+ } finally{s.delivery.stop();}
+});
+
+test('digest survives daemon restart and does not merge distinct reply places',async()=>{
+ const store=new SqliteStore(':memory:');const first=setup({store});
+ await first.delivery.suspend('work','sibling');
+ first.delivery.send('work','sibling',inboxEvent(1));
+ first.delivery.send('work','sibling',inboxEvent(2,'alerts','pet:sibling@c2'));
+ first.delivery.stop();
+ const second=setup({store});
+ try {
+  await waitFor(()=>second.sent.length===1);
+  expect(second.sent[0]!.text).toContain('inbox_catchup');
+  expect(second.sent[0]!.text).toContain('"count":1');
+  expect(second.sent[0]!.text).not.toContain('pet:sibling@c2');
+  await second.post({kind:'turn-finished',text:''});
+  await waitFor(()=>second.sent.length===2);
+  expect(second.sent[1]!.text).toContain('pet:sibling@c2');
+ }finally{second.delivery.stop();}
+});
+
+test('interrupted delivered inbox events are recovered as uncertain catch-up, not raw replay',async()=>{
+ const s=setup();
+ try {
+  s.delivery.send('work','sibling',inboxEvent(1));
+  s.clock.tick(1200);await waitFor(()=>s.sent.length===1);
+  expect(s.sent[0]!.text).toContain('FULL_EXTERNAL_BODY_1');
+  await s.delivery.suspend('work','sibling');
+  expect(s.store.unfinished('work','sibling')[0]!.status).toBe('received');
+  s.delivery.resume('work','sibling');await waitFor(()=>s.sent.length===2);
+  expect(s.sent[1]!.text).toContain('completion was not confirmed');
+  expect(s.sent[1]!.text).not.toContain('FULL_EXTERNAL_BODY_1');
+  await s.post({kind:'turn-finished',text:''});expect(s.store.unfinished('work','sibling')).toHaveLength(0);
+ }finally{s.delivery.stop();}
+});
+
+test('temporarily unavailable VM retains events and gives a digest when ready',async()=>{
+ let ready=false;const s=setup({idle:async()=>ready});
+ try {
+  s.delivery.send('work','sibling',inboxEvent(1));
+  s.delivery.send('work','sibling',inboxEvent(2));
+  await Bun.sleep(20);expect(s.sent).toHaveLength(0);
+  ready=true;s.clock.tick(1200);
+  await waitFor(()=>s.sent.length===1);
+  expect(s.sent[0]!.text).toContain('"count":2');
+  expect(s.sent[0]!.text).toContain('inbox_catchup');
+ }finally{s.delivery.stop();}
+});
+
+test('a send interrupted by VM loss retries a compact digest without losing queue rows',async()=>{
+ const s=setup();const original=s.pet.agent.send;let attempts=0;
+ s.pet.agent.send=async(...args)=>{if(++attempts===1)throw Error('VM unavailable');return original(...args);};
+ try{
+  s.delivery.send('work','sibling',inboxEvent(1));
+  s.clock.tick(1200);await waitFor(()=>s.sent.length===1);
+  expect(s.sent[0]!.text).toContain('inbox_catchup');
+  expect(s.store.unfinished('work','sibling')[0]!.status).toBe('delivered');
+ }finally{s.delivery.stop();}
+});
+
+test('failed inbox turn does not leave catch-up delivery blocked forever',async()=>{
+ const s=setup();try{
+  s.delivery.send('work','sibling',inboxEvent(1));s.clock.tick(1200);await waitFor(()=>s.sent.length===1);
+  await s.post({kind:'turn-failed',error:'session disappeared',scope:'session'});
+  await waitFor(()=>s.sent.length===2);expect(s.sent[1]!.text).toContain('inbox_catchup');
+ }finally{s.delivery.stop();}
+});

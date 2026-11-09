@@ -66,6 +66,16 @@ Use `~1` for a slash in a property name and `~0` for a tilde. Missing fields are
 
 The poller stores only SHA-256 hashes and a transition counter in its cursor, not copies of the previous JSON body. Repeated identical responses are quiet. Returning to an earlier value is a new transition, including after a restart. Events contain current changed field values, or a whole-response preview limited to 16,000 characters, with a truncation marker. “Start from now” establishes a silent baseline; “Deliver current items / snapshot” emits the first snapshot. Errors or invalid JSON preserve the last successful baseline.
 
+## Catch-up after VM downtime
+
+When a pet is paused, its VM is unavailable, or queued events are restored after a daemon restart, pending inbox notifications are delivered as a **catch-up digest** once its agent is idle and ready. Backlogs accumulated while busy also use this format.
+
+The digest groups events by inbox: counts, received-time range, up to three example titles and ready-to-use `inbox_history` filters. Full bodies and metadata remain in the archive; they are not pasted into the VM in bulk. This is a pet notification only, with no additional House channel post, so silent delivery stays silent.
+
+Different reply places/channels and intervening owner messages remain separate. Very large backlogs are split into batches of at most 500 events / 30 inbox groups, with each batch waiting for the prior inbox turn to finish. Original durable queue rows remain the acknowledgment units: a digest does not delete events or mark them done before delivery. Completed batches are not replayed on the next wake-up.
+
+Inbox events delivered before an interrupted session but not confirmed complete return in a digest too. It explicitly says they **may already have been seen**; the pet should consult history and avoid repeating actions blindly. No old event body is automatically replayed in that recovery path. If Household itself was offline, pollers resume from their saved cursors when it starts; they cannot recover events a provider has already expired (for example Telegram's 24-hour retention).
+
 ## Durable event history and metadata
 
 Every accepted new event is archived in the host SQLite database **before delivery**, including silent events and events whose channel delivery needs retrying. The archive keeps title, full accepted notification text, URL, source kind, delivery mode, arbitrary JSON-object `metadata`, and both timestamps:

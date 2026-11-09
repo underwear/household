@@ -12,6 +12,7 @@ export type Activity = "idle" | "busy" | "dialog";
 export interface Next {
   messages: Message[];
   complete: boolean;
+  digest?: boolean;
 }
 
 /**
@@ -24,6 +25,7 @@ export class PetInbox {
   private readonly waiting: Message[] = [];
   /** Ids of messages no later one may join: boundaries the queue does not show (`close`). */
   private readonly closed = new Set<number>();
+  private readonly catchup = new Set<number>();
 
   get activity(): Activity {
     return this.current;
@@ -49,8 +51,14 @@ export class PetInbox {
     this.current = "idle";
   }
 
-  push(message: Message): void {
+  push(message: Message, catchup = false): void {
     this.waiting.push(message);
+    if (catchup && message.origin === "inbox") this.catchup.add(message.id);
+  }
+
+  /** Pending external events accumulated while delivery was unavailable. */
+  markInboxCatchup(): void {
+    for (const message of this.waiting) if (message.origin === "inbox") this.catchup.add(message.id);
   }
 
   /**
@@ -61,6 +69,18 @@ export class PetInbox {
     const { waiting, closed } = this;
     const first = waiting[0];
     if (this.current === "dialog" || !first || ((first.origin === "cron" || first.origin === "inbox") && this.current !== "idle")) return { messages: [], complete: true };
+    if (first.origin === "inbox" && this.catchup.has(first.id) && first.header && first.place) {
+      const messages: Message[] = [];
+      const groups = new Set<string>();
+      for (const message of waiting) {
+        if (message.origin !== "inbox" || !message.header || message.place !== first.place || messages.length >= 500) break;
+        const group = String(message.header.channel.meta?.inbox ?? message.header.from.id);
+        if (!groups.has(group) && groups.size >= 30) break;
+        groups.add(group); messages.push(message);
+        if (closed.has(message.id)) break;
+      }
+      return { messages, complete: true, digest: true };
+    }
     const ends = (i: number) => closed.has(waiting[i]!.id); // a boundary right after message i
     let count = 1;
     while (count < max && count < waiting.length && !ends(count - 1) && joins(first, waiting[count]!)) count += 1;
@@ -77,7 +97,7 @@ export class PetInbox {
 
   /** The first `count` waiting messages were handed out. */
   delivered(count = 1): void {
-    for (const { id } of this.waiting.splice(0, count)) this.closed.delete(id);
+    for (const { id } of this.waiting.splice(0, count)) { this.closed.delete(id); this.catchup.delete(id); }
   }
 
   /** Changes the text of a message still waiting; false when it is not waiting (any more). */

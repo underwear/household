@@ -312,7 +312,7 @@ export async function startDaemon(deps: DaemonDeps) {
   // What each subscription key has left, read off the gateway; a used-up key's requests stop there (keys.<k>.allowOverage lets them go on).
   const allowances = new KeyAllowances(records, (text) => events.info(text));
   let appliedHousehold: Household | undefined;
-  const houseInboxes = new HouseInboxes(records, { post: (h, i, e) => chat.postInbox(h, i, e), pet: (h, i, p, e) => chat.deliverInbox(h, i, p, e) }, undefined, undefined, deps.inboxEvents);
+  const houseInboxes = new HouseInboxes(records, { post: (h, i, e) => chat.postInbox(h, i, e), pet: (h, i, p, e, at) => chat.deliverInbox(h, i, p, e, at) }, undefined, undefined, deps.inboxEvents);
   const crons = deps.crons ? new Crons(deps.crons, delivery,
     (house, pet) => placed.some((item) => item.house === house && item.pet === pet && !item.sideworker && !item.scout),
     (message) => events.info(message), undefined,

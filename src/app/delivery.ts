@@ -1,3 +1,4 @@
+import { inboxDigest } from "../core/inbox-digest";
 import { effectivePetHome } from "../core/household";
 import { fetched } from "../core/attachment";
 import { block, CLOCK_TAG, tagFreeJson } from "../core/tags";
@@ -114,6 +115,7 @@ export class Delivery {
       box.home = home;
       this.boxes.set(name, box);
       const unfinished = this.store.unfinished(house, pet);
+      for (const message of unfinished) if (message.origin === "inbox" && message.status !== "received") this.mark(message, "received");
       this.restore(house, pet, box, unfinished.filter((message) => message.status === "received"));
       this.fail(house, pet, unfinished.filter((message) => message.status !== "received"), "interrupted");
       if (box.inbox.size > 0) this.events.info(`pet ${house}/${pet}: ${box.inbox.size} queued message(s) from before the restart`);
@@ -132,7 +134,7 @@ export class Delivery {
         box.inbox.close();
         refused.shift();
       }
-      box.inbox.push(message);
+      box.inbox.push(message, message.origin === "inbox");
     }
   }
 
@@ -261,6 +263,7 @@ export class Delivery {
     while (box.flushing) await Bun.sleep(10);
     this.restarted(house, pet);
     box.inbox.stopped();
+    box.inbox.markInboxCatchup();
   }
 
   isSuspended(house: string, pet: string): boolean {
@@ -276,6 +279,7 @@ export class Delivery {
   restarted(house: string, pet: string): void {
     const box = this.boxes.get(key(house, pet));
     if (!box) return;
+    this.recoverInbox(box);
     for (const message of box.awaiting) this.mark(message, "failed");
     box.awaiting = [];
     box.cronTurns.clear();
@@ -283,6 +287,15 @@ export class Delivery {
     box.memoryEpoch++;
     box.typed = [];
     this.report({ kind: "turn-lost", house, pet, why: "session" });
+  }
+
+  /** An interrupted event may have been seen; summarize it instead of replaying its full body. */
+  private recoverInbox(box: Mailbox): void {
+    for (const message of box.awaiting) if (message.origin === "inbox") {
+      this.mark(message, "received");
+      box.inbox.push(message, true);
+    }
+    box.awaiting = box.awaiting.filter(message => message.origin !== "inbox");
   }
 
   stop(): void {
@@ -368,6 +381,7 @@ export class Delivery {
     const message = this.store.add(house, pet, draft);
     box.queue(message);
     if (unfetched(message)) void this.fetch(house, pet, box, message);
+    if (draft.origin === "inbox" && (this.suspended.has(key(house, pet)) || box.inbox.activity !== "idle")) box.inbox.markInboxCatchup();
     this.events.info(`pet ${house}/${pet}: message queued (pet is ${box.inbox.activity}, ${box.inbox.size} waiting)`);
     void this.flush(house, pet);
     return this.state(house, pet);
@@ -429,10 +443,12 @@ export class Delivery {
     if (visible.kind === "tool-started" || visible.kind === "tool-finished" || visible.kind === "tool-review") this.report({ kind: "progress", house, pet, event: visible });
     if (visible.kind === "notification" && visible.audience === "chat") this.report({ kind: "notification", house, pet, text: visible.text });
     if (event.kind === "session-started" && !event.continues) {
+      this.recoverInbox(box);
       for (const message of box.awaiting) if (message.origin === "cron") this.mark(message, "failed");
       box.awaiting = box.awaiting.filter((message) => message.origin !== "cron");
       box.cronTurns.clear();
     }
+    if (event.kind === "turn-failed") this.recoverInbox(box);
     if (event.kind === "turn-failed") this.report({ kind: "turn-lost", house, pet, why: "failed", ...turn });
     if (event.kind === "session-started" && !event.continues) this.report({ kind: "turn-lost", house, pet, why: "session" });
     if (event.kind === "dialog-opened") this.report({ kind: "dialog", house, pet, dialog: event.dialog, ...(event.input ? { input: event.input } : {}) });
@@ -505,6 +521,7 @@ export class Delivery {
       for (let next = box.inbox.next(this.timing.batchMax); next.messages.length > 0; next = box.inbox.next(this.timing.batchMax)) {
         if (this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet))) return;
         if (next.messages[0]?.origin === "cron" && box.awaiting.some(message => message.origin === "cron")) return;
+        if (next.messages[0]?.origin === "inbox" && box.awaiting.some(message => message.origin === "inbox")) { box.inbox.markInboxCatchup(); return; }
         // A fresh mailbox cannot know whether the surviving VM is still working. Probe before
         // every cron, including restored ones; an unavailable/unknown session is retried safely.
         if (next.messages[0]?.origin === "cron" || next.messages[0]?.origin === "inbox") {
@@ -512,6 +529,7 @@ export class Delivery {
           try { idle = await box.agent.isIdle?.(this.execIn(house, pet)) ?? false; } catch { /* retry */ }
           if (this.boxes.get(key(house, pet)) !== box || this.suspended.has(key(house, pet))) return;
           if (!idle || box.inbox.activity !== "idle") {
+            box.inbox.markInboxCatchup();
             box.retry.schedule(() => void this.flush(house, pet));
             return;
           }
@@ -529,7 +547,7 @@ export class Delivery {
         const memory = this.memoryContext?.(house, pet);
         const memoryEpoch = box.memoryEpoch;
         const memoryText = memory && memory.revision !== box.memoryRevision ? memory.text : "";
-        const typed = { text: clock + memoryText + promptText(...messages), messages };
+        const typed = { text: clock + memoryText + (next.digest ? inboxDigest(messages) : promptText(...messages)), messages };
         box.typed = [...box.typed, typed].slice(-TYPED_KEPT);
         const scheduled = messages.filter(message => message.origin === "cron");
         // Commit before the external side effect. A crash with uncertain submission must not replay a cron.
@@ -539,14 +557,18 @@ export class Delivery {
         try {
           result = await box.agent.send(this.execIn(house, pet), typed.text, () => box.inbox.activity !== "dialog" && ((scheduled.length === 0 && !messages.some(m => m.origin === "inbox")) || box.inbox.activity === "idle") && !this.suspended.has(key(house, pet)));
         } catch (error) {
-          if (!scheduled.length) throw error;
-          result = { status: "stuck", reason: "scheduled submission failed; outcome uncertain" };
+          if (messages.every(message => message.origin === "inbox")) result = { status: "refused", reason: "inbox submission interrupted; retrying as a catch-up digest" };
+          else {
+            if (!scheduled.length) throw error;
+            result = { status: "stuck", reason: "scheduled submission failed; outcome uncertain" };
+          }
         }
         box.sending = [];
         if (result.status !== "sent") box.awaiting = box.awaiting.filter(message => !scheduled.includes(message));
         if (this.boxes.get(key(house, pet)) !== box) return;
         if (result.status !== "sent") box.typed = box.typed.filter((each) => each !== typed);
         if (result.status === "refused") {
+          if (messages.some(m => m.origin === "inbox")) box.inbox.markInboxCatchup();
           for (const message of scheduled) this.mark(message, "received");
           if (result.reason !== box.refusal) this.events.info(`${name}: message kept in queue (${result.reason}); retrying`);
           box.refusal = result.reason;

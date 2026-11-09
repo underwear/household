@@ -300,7 +300,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     this.records.remember(house, { refs: [...refs, ref], place: place.id, pet: inbox.pets[0] ?? "", journals: [...inbox.pets], sender: { kind: "household" }, text, excerpt: headAndTail(text), relayed: true });
   }
 
-  deliverInbox(house: string, inbox: HouseInbox, pet: string, item: InboxItem): void {
+  deliverInbox(house: string, inbox: HouseInbox, pet: string, item: InboxItem, receivedAt?: string): void {
     const config = this.channels.house(house)?.channels.find(c => c.chat === inbox.channel);
     if (!config) throw new Error("Inbox channel is no longer configured");
     const spot = this.channels.spotsOf(house, pet).spots.find(s => s.key === channelKey(config));
@@ -314,7 +314,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       header: {
         event: { kind: "message", id: record.id, relayed: true },
         from: { id: this.records.personId(house, `inbox:${inbox.name}` as SenderRef), name: inbox.title, trust: "guest" },
-        channel: this.channels.headerChannel(house, config, { inbox: inbox.name, source: inbox.source.kind }),
+        channel: this.channels.headerChannel(house, config, { inbox: inbox.name, source: inbox.source.kind, inboxTitle: inbox.title, eventTitle: item.title, ...(receivedAt ? { receivedAt } : {}), ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}) }),
         place: this.channels.publicPlace(house, spot.place),
       },
     });
