@@ -1,4 +1,4 @@
-import { SlackSetup } from "./slack-setup";
+import { SlackSetup, slackUrl } from "./slack-setup";
 import { useState } from "react";
 import { api, type ChannelFields, type ChannelKindView, type ChannelView, type HouseView, type PlatformView } from "../api";
 import { Dialog } from "./dialog";
@@ -55,7 +55,16 @@ export function ChannelsPage({ house, ask, save, kinds, platforms, noteMax }: Ch
                   <span className="strong ellipsis">{channelLabel(channel)}</span>
                   <span className="id ellipsis">
                     {/* A field that says what it is (a token: its bot) shows that, not the value. */}
-                    {[...Object.entries(channel.fields).map(([key, value]) => (key in channel.shown ? (channel.shown[key] ?? "") : value)).filter(Boolean), `chat ${channel.chat}`].join(" · ")}
+                    {[...Object.entries(channel.fields).map(([key, value]) => (key in channel.shown ? (channel.shown[key] ?? "") : value)).filter(Boolean), ...(channel.kind === "slack-private" ? [] : [`chat ${channel.chat}`])].join(" · ")}
+                    {/* A Slack DM's id says nothing to a person: a way to it instead. */}
+                    {channel.kind === "slack-private" && (
+                      <>
+                        {" · "}
+                        <a href={slackUrl(channel.chat)} target="_blank" rel="noreferrer" className="text-link">
+                          Open in Slack ↗
+                        </a>
+                      </>
+                    )}
                   </span>
                   {channel.note && <span className="hint">{channel.note}</span>}
                   {channel.problem && <span className="error">{channel.problem}</span>}

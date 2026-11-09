@@ -20,8 +20,8 @@ A bot cannot delete a user's Slack message. For this channel, `!secret` still pe
 2. Install it in the intended workspace. Requested bot scopes are `chat:write`, `im:history`, `im:read`, `im:write`, `reactions:read`, `reactions:write`, `files:read`, `files:write`. There is no user token or channel-history scope.
 3. Copy the `xoxb-…` Bot User OAuth Token. Under Basic Information → App-Level Tokens, generate an `xapp-…` token with **only `connections:write`**.
 4. In Household admin, open **Channels → Add channel → Slack Bot DM**. Paste both tokens in **App**, then enter your Slack member ID in **Your account** (Slack profile → More → Copy member ID).
-5. Choose **Find my bot DM**. Household opens/resumes the private conversation automatically, without sending a message. Review the owner account, choose your pets and the pet that replies in Messages, then **Connect Slack**. The channel and owner access are saved together. Tokens stay on the host.
-6. To change pets later, edit the connection. Tokens and technical addresses are tucked into **Connection settings**.
+5. Choose **Find my bot DM**. Household opens/resumes the private conversation automatically, without sending a message. Review the owner account, choose your pets and the **Default** pet that replies in Messages, then **Connect Slack**. The channel and owner access are saved together. Tokens stay on the host.
+6. To change tokens, pets or the default later, choose **Edit** on the channel: one form, like every other channel's, with the bot DM read-only and a link to open it in Slack.
 
 ### Optional CLI setup
 

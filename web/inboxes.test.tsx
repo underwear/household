@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { houseInboxSchema } from "../src/core/house-inboxes";
-import type { HouseView, InboxView, PetView } from "./api";
+import type { ChannelKindView, ChannelView, HouseView, InboxView, PetView } from "./api";
+import { SlackSetup, slackUrl } from "./components/slack-setup";
 import { HouseInboxesPage, PetInboxes, everyWords, inboxState, subscribedCount } from "./components/house-inboxes";
 
 const pet = (name: string, title: string, emoji: string) => ({ name, title, emoji, display: `${emoji} ${title}` }) as PetView;
@@ -55,4 +56,15 @@ test("the house's Inboxes page renders in the design's parts while it loads", ()
   expect(html).toContain('<button class="btn primary">+ Add inbox</button>');
   expect(html).toContain("Loading…");
   expect(html).toContain('class="text-link"');
+});
+
+test("a Slack DM's edit form is one form, as every channel's: no folded settings, its DM read only with a way to it", () => {
+  const spec = { kind: "slack-private", label: "Slack Bot DM", chat: { label: "Workspace:DM" } } as unknown as ChannelKindView;
+  const channel = { kind: "slack-private", label: "Slack Bot DM", name: "Slack", ownName: "Slack", chat: "T01:D02", fields: { token: "xoxb-x", appToken: "xapp-x" }, pets: ["sibling"], default: null, note: null } as unknown as ChannelView;
+  const html = renderToStaticMarkup(<SlackSetup house={HOUSE} spec={spec} channel={channel} onClose={() => {}} back={() => {}} save={async () => {}} />);
+  expect(html).toContain("Edit Slack · Slack Bot DM");
+  expect(html).not.toContain("<details");
+  expect(html).toContain('href="https://app.slack.com/client/T01/D02"');
+  expect(html).toContain("Socket Mode app token");
+  expect(slackUrl("T01:D02")).toBe("https://app.slack.com/client/T01/D02");
 });
