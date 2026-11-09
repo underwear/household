@@ -88,9 +88,9 @@ test("capability test VMs are absent from pet observability and cannot be cancel
   await expect(f.scouts.file(caller,self.pet,"credentials.json")).rejects.toThrow("Unknown scout run");
 });
 
-test("concurrent capability tests share the house concurrency ceiling", async () => {
+test("concurrent capability tests share the workspace resource budget", async () => {
   const f=fixture();f.scouts.run(self.house,self.pet)!.status="done";
-  f.deps.configured=async()=>({daemon:{},keys:[],secrets:[],houses:[{name:"work",features:{scouts:true},scoutLimits:{maxScouts:1},scoutAgent:{agent:"codex-app-server",key:"codex"},scouts:[scoutDefinitionSchema.parse({ name: "expert", description: "Test" })],network:{kind:"allowlist",allow:[]},pets:[{name:"pet"}],people:{owners:[]},channels:[]}]});
+  f.deps.configured=async()=>({daemon:{},keys:[],secrets:[],houses:[{name:"work",features:{scouts:true},resources:{cpus:4,memoryMiB:4096},scoutAgent:{agent:"codex-app-server",key:"codex"},scouts:[scoutDefinitionSchema.parse({ name: "expert", description: "Test" })],network:{kind:"allowlist",allow:[]},pets:[{name:"pet"}],people:{owners:[]},channels:[]}]});
   let prepares=0;f.deps.prepare=async()=>{prepares++;return {definition:definition.name,parent:"pet",homePath:"/tmp/test",instructions:"scout",network:{kind:"allowlist",allow:[]}};};
   const capability={name:"media",description:"",install:"echo",network:{any:true,allow:[]},keys:[]};
   const results=await Promise.allSettled([f.scouts.launchProbe("work",capability),f.scouts.launchProbe("work",capability)]);

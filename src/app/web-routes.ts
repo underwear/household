@@ -7,7 +7,7 @@ import { houseFeatures, previewSettings, houseFeatureSettingsSchema } from "../c
 import { sideworkerProfileProblems } from "./agents";
 import { sideworkerProfilesSchema } from "../infra/config-schema";
 import type { Sideworkers } from "./sideworkers";
-import { DEFAULT_SIDEWORKER_LIMITS, sideworkerLimitsSchema, beyondHost } from "../core/resources";
+import { workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, DEFAULT_SIDEWORKER_LIMITS, sideworkerLimitsSchema, beyondHost } from "../core/resources";
 import { petCpuSchema, petMemorySchema, petResources, type HostCapacity } from "../core/resources";
 import { hostCapacity } from "../infra/host";
 import type { Monitoring } from "./monitoring";
@@ -50,6 +50,7 @@ const RESERVED_SKILL = "Names starting with household- are Household's own skill
 const newSkill = (path: string) => /^([^/]+)\/SKILL\.md$/.exec(path)?.[1];
 
 export interface WebRoutesDeps {
+  resourceAllocations?(house: string): ResourceAllocation[];
   connectorRoutes?: (request: Request) => Promise<Response | undefined>;
   scoutRoutes?: (request:Request)=>Promise<Response|undefined>;
   previews?: Pick<Previews, "list" | "close">;
@@ -211,6 +212,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       name: house.name,
       features: houseFeatures(house),
       preview: previewSettings(house),
+      resources: workspaceBudget(house, deps.resourceAllocations?.(house.name)),
       sideworkerLimits: house.sideworkerLimits ?? DEFAULT_SIDEWORKER_LIMITS,
       sideworkerProfiles: house.sideworkerProfiles ?? [],
       allow: [
@@ -354,6 +356,17 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const problems = sideworkerProfileProblems(deps.agents, { ...current, sideworkerProfiles: profiles }, household.keys);
       if (problems.length) throw new HouseholdError(problems.join("; "));
       return written(await config.setSideworkerProfiles(house!, profiles), house!, "sideworker profiles changed");
+    }],
+    ["GET", at("/resources"), async ({ params: [name] }) => {
+      const house = findHouse(await config.load(), name!);
+      if (!house) throw new NotFoundError("workspace not found");
+      return json(workspaceBudget(house, deps.resourceAllocations?.(name!)));
+    }],
+    ["PUT", at("/resources"), async ({ request, params: [name] }) => {
+      const resources = await bodyOf(request, workspaceResourcesSchema);
+      const problems = beyondHost(resources, host);
+      if (problems.length) throw new HouseholdError(problems.join("; "));
+      return written(await config.setWorkspaceResources(name!, resources), name!, "workspace resource budget changed");
     }],
     ["PUT", at("/sideworker-limits"), async ({ request, params: [house] }) => {
       const limits = await bodyOf(request, sideworkerLimitsSchema);

@@ -24,7 +24,7 @@ A **capability** is one thing a scout can do: an install script, the network it 
 
 You add the keys' values yourself. Bots can **draft** a capability they need; nothing changes until you apply it.
 
-**Settings** on the Scouts page: how many scouts may run at once, and the harness, CPU and memory of scouts that set none.
+**Settings** on the Scouts page: the default harness, CPU and memory. Bots can choose CPU/RAM per launch within the shared [workspace resource budget](../resources/). Scouts, install tests and sideworkers draw from the same pool; there is no scout count limit.
 
 ## A run
 

@@ -43,10 +43,33 @@ export function allocatedTotal(pets: CountedPet[], editing?: CountedPet): PetRes
     .reduce((sum, each) => ({ cpus: sum.cpus + each.cpus, memoryMiB: sum.memoryMiB + each.memoryMiB }), { cpus: 0, memoryMiB: 0 });
 }
 
-/** House-wide concurrency ceiling and allocation for each new worker. */
+/** Default helper VM size. Legacy counts are accepted on read and discarded. */
 export const sideworkerLimitsSchema = z.strictObject({
-  maxWorkers: z.number().int().min(0).max(64),
+  maxWorkers: z.number().int().min(0).max(64).optional(),
   cpus: petCpuSchema,
   memoryMiB: petMemorySchema,
-});
-export const DEFAULT_SIDEWORKER_LIMITS = { maxWorkers: 2, cpus: 2, memoryMiB: 1024 };
+}).transform(({ maxWorkers: _legacy, ...resources }) => resources);
+export const DEFAULT_SIDEWORKER_LIMITS = { cpus: 2, memoryMiB: 1024 };
+
+export const workspaceResourcesSchema = z.strictObject({ cpus: petCpuSchema, memoryMiB: petMemorySchema });
+export const DEFAULT_WORKSPACE_RESOURCES: PetResources = { cpus: 8, memoryMiB: 8192 };
+export interface ResourceAllocation extends PetResources { name: string; kind: "pet" | "scout" | "sideworker"; state?: string }
+export interface WorkspaceBudget {
+  total: PetResources; reserved: PetResources; helpers: PetResources; available: PetResources;
+  allocations: ResourceAllocation[];
+}
+const sumResources = (items: PetResources[]): PetResources => items.reduce((sum, item) => ({ cpus: sum.cpus + item.cpus, memoryMiB: sum.memoryMiB + item.memoryMiB }), { cpus: 0, memoryMiB: 0 });
+/** Reservations survive sleep and pause; only deleting/resizing a configured pet releases them. */
+export function workspaceBudget(house: { resources?: PetResources; pets: { name: string; cpus?: number | null; memoryMiB?: number | null; sideworker?: unknown; scout?: unknown }[] }, helpers: ResourceAllocation[] = []): WorkspaceBudget {
+  const pets: ResourceAllocation[] = house.pets.filter(p => !p.sideworker && !p.scout).map(p => ({ name: p.name, kind: "pet", ...petResources(p) }));
+  const reserved = sumResources(pets), used = sumResources(helpers);
+  // Existing YAML without a budget remains loadable, including large pet reservations.
+  const total = house.resources ?? { cpus: Math.max(DEFAULT_WORKSPACE_RESOURCES.cpus, reserved.cpus), memoryMiB: Math.max(DEFAULT_WORKSPACE_RESOURCES.memoryMiB, reserved.memoryMiB) };
+  return { total, reserved, helpers: used, available: { cpus: Math.max(0, total.cpus - reserved.cpus - used.cpus), memoryMiB: Math.max(0, total.memoryMiB - reserved.memoryMiB - used.memoryMiB) }, allocations: [...pets, ...helpers] };
+}
+export function assertWorkspaceCapacity(house: Parameters<typeof workspaceBudget>[0], helpers: ResourceAllocation[], requested: PetResources): void {
+  workspaceResourcesSchema.parse(requested);
+  const budget = workspaceBudget(house, helpers);
+  if (requested.cpus > budget.available.cpus || requested.memoryMiB > budget.available.memoryMiB)
+    throw new Error(`Workspace resource budget exceeded: requested ${requested.cpus} vCPU / ${gib(requested.memoryMiB)}; available ${budget.available.cpus} vCPU / ${gib(budget.available.memoryMiB)}. Choose a smaller VM or close a helper; use workspace_resources for allocations.`);
+}

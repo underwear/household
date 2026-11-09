@@ -1,6 +1,6 @@
 import { houseInboxesSchema, telegramInboxProblems } from "../core/house-inboxes";
 import { houseFeaturesSchema, previewSettingsSchema } from "../core/house-features";
-import { petCpuSchema, petMemorySchema, sideworkerLimitsSchema } from "../core/resources";
+import { workspaceResourcesSchema, workspaceBudget, petCpuSchema, petMemorySchema, sideworkerLimitsSchema } from "../core/resources";
 import { validTimezone } from "../core/timezone";
 import { z } from "zod";
 import { botProblems, channelProblems, PLATFORMS, type Platform } from "../core/channels";
@@ -237,10 +237,10 @@ export const sideworkerProfilesSchema = z.array(z.strictObject({
 });
 
 export const scoutLimitsSchema = z.strictObject({
-  maxScouts: z.number().int().min(0).max(64),
+  maxScouts: z.number().int().min(0).max(64).optional(),
   cpus: petCpuSchema.optional(),
   memoryMiB: petMemorySchema.optional(),
-});
+}).transform(({ maxScouts: _legacy, ...resources }) => resources);
 /** The agent every scout of a house runs on. */
 export const scoutAgentSchema = z.strictObject({
   agent: name, key: name,
@@ -297,6 +297,7 @@ const legacyScout = (scout: Record<string, unknown>) => typeof scout.agent === "
 const withoutTimeout = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== "timeoutMinutes")) : value;
 const scoutsInput = z.preprocess((raw) => Array.isArray(raw) ? raw.map(scout => scout && typeof scout === "object" ? legacyScout(scout as Record<string, unknown>) : scout) : raw, scoutDefinitionsSchema);
 const house = z.strictObject({
+  resources: workspaceResourcesSchema.optional(),
   inboxes: houseInboxesSchema.optional(),
   capabilities: capabilityDefinitionsSchema.optional(),
   scouts: scoutsInput.optional(),
@@ -332,6 +333,7 @@ export function parseHousehold(raw: unknown, source: string): Household {
     secrets: Object.entries(result.data?.secrets ?? {}).map(([secretName, { value, hosts, header, env, houses, onlyForCapabilities, note: said }]) => ({ name: secretName, value, hosts, ...(onlyForCapabilities === undefined ? {} : { onlyForCapabilities }), header: header ?? DEFAULT_SECRET_HEADER, env, ...(houses === undefined ? {} : { houses }), ...(said === undefined ? {} : { note: said }) })),
     houses: Object.entries(result.data?.houses ?? {}).map(([houseName, value]) => ({
       name: houseName,
+      ...(value.resources ? { resources: value.resources } : {}),
       ...(value.inboxes ? { inboxes: value.inboxes } : {}),
       ...(value.capabilities ? { capabilities: value.capabilities } : {}),
       ...(value.scouts ? { scouts: value.scouts } : {}),
@@ -377,6 +379,8 @@ export function parseHousehold(raw: unknown, source: string): Household {
     if (secret.onlyForCapabilities?.length && !secret.houses?.length) problems.push(`capability-only secret '${secret.name}' must name its workspaces`);
   }
   for (const house of household.houses) {
+    const budget = workspaceBudget(house);
+    if (budget.reserved.cpus > budget.total.cpus || budget.reserved.memoryMiB > budget.total.memoryMiB) problems.push(`workspace '${house.name}': pet reservations exceed the CPU/RAM budget`);
     for (const capability of house.capabilities ?? []) for (const key of capability.keys) {
       const secret = household.secrets.find(item => item.name === key.secret);
       if (!secret || !secret.houses?.includes(house.name) || !secret.onlyForCapabilities?.includes(capability.name))

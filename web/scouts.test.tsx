@@ -59,7 +59,7 @@ test("Scouts: two tabs, scout cards, a quiet line when none runs, recent runs; s
   for (const gone of ["Default scout", "Special scouts", "Resources", "assemble"]) expect(html).not.toContain(gone);
   expect(html).toContain(">Settings<");
   expect(html).toContain("+ New scout");
-  expect(html).toContain("None running · up to 2 at once");
+  expect(html).toContain("None running · shared workspace resource budget");
   expect(html).toContain("Prod Ops has no harness");
   expect(html).toContain('href="/workspaces/work/scouts/prod-ops"');
   expect(html).toContain(">Recent runs<");

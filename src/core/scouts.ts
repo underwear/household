@@ -44,10 +44,10 @@ export interface ScoutDefinition {
 export interface ScoutResources { cpus: number; memoryMiB: number }
 /** The agent a scout runs on: its own, or the house's for scouts that set none. */
 export interface ScoutAgent { agent: string; key: string; model?: string; reasoningEffort?: string; mode?: string }
-/** How many scouts a house runs at once, and what each gets. */
-export interface ScoutLimits { maxScouts: number; cpus: number; memoryMiB: number }
-export const DEFAULT_SCOUT_LIMITS: ScoutLimits = { maxScouts: 2, cpus: 2, memoryMiB: 2048 };
-export const scoutLimits = (house: { scoutLimits?: Partial<ScoutLimits> }): ScoutLimits => ({ ...DEFAULT_SCOUT_LIMITS, ...house.scoutLimits });
+/** Default VM size; maxScouts is accepted only for legacy callers and never enforced. */
+export interface ScoutLimits { maxScouts?: number; cpus: number; memoryMiB: number }
+export const DEFAULT_SCOUT_LIMITS: ScoutLimits = { cpus: 2, memoryMiB: 2048 };
+export const scoutLimits = (house: { scoutLimits?: Partial<ScoutLimits> }): ScoutLimits => ({ cpus: house.scoutLimits?.cpus ?? DEFAULT_SCOUT_LIMITS.cpus, memoryMiB: house.scoutLimits?.memoryMiB ?? DEFAULT_SCOUT_LIMITS.memoryMiB });
 /** What one run is: a scout's definition with its agent and resources as of the call. */
 export type ScoutRunDefinition = Omit<ScoutDefinition, "agent" | "resources"> & ScoutAgent & { resources: ScoutResources };
 /** The agent and resources a scout runs on: its own where it sets them, else the house's. */

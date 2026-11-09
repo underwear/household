@@ -448,3 +448,10 @@ textarea.control.inbox-pointers { min-height: 6em; }
 .avatar.connector-mark { font: 600 var(--text-sm)/1 var(--font-sans); }
 /* An account's address wraps rather than lose its domain: work and personal ones differ there. */
 .connector-email { overflow-wrap: anywhere; }
+
+.resource-budget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
+.resource-budget-bar { display: flex; height: 10px; border-radius: var(--radius-md); overflow: hidden; background: var(--line); }
+.resource-budget-bar > span { flex-shrink: 0; }
+.resource-pets { background: var(--idle); }
+.resource-helpers { background: var(--muted); }
+@media (max-width: 600px) { .resource-budget-grid { grid-template-columns: 1fr; } }

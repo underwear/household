@@ -78,13 +78,14 @@ export interface SideworkerProfile {
   mode?: string;
 }
 
-export interface SideworkerLimits { maxWorkers: number; cpus: number; memoryMiB: number }
+export interface SideworkerLimits { maxWorkers?: number; cpus: number; memoryMiB: number }
 
 export interface House {
+  resources?: import("./resources").PetResources;
   inboxes?: HouseInbox[];
   capabilities?: CapabilityDefinition[];
   scouts?: ScoutDefinition[];
-  scoutLimits?: Partial<ScoutLimits> & { maxScouts: number };
+  scoutLimits?: Partial<ScoutLimits>;
   /** The agent of every scout of the house that does not set its own. */
   scoutAgent?: ScoutAgent;
   features?: Partial<HouseFeatures>;

@@ -284,6 +284,10 @@ export function useResourceForm({ host, houses }: Capacity, house: string, pet?:
   const changed = pet !== undefined && (value.cpus !== saved.cpus || value.memoryMiB !== saved.memoryMiB);
   // A new bot has no name yet that any bot has: it counts on top of the rest.
   const total = allocatedTotal(houses.flatMap((each) => each.pets.map((one) => ({ ...one, house: each.name }))), { house, name: pet?.name ?? "", enabled: pet?.enabled, ...value });
+  const budget = houses.find(h => h.name === house)?.resources;
+  const previous = pet ? petResources(pet) : { cpus: 0, memoryMiB: 0 };
+  const remaining = budget && { cpus: budget.total.cpus - budget.reserved.cpus - budget.helpers.cpus + previous.cpus - value.cpus, memoryMiB: budget.total.memoryMiB - budget.reserved.memoryMiB - budget.helpers.memoryMiB + previous.memoryMiB - value.memoryMiB };
+  const budgetError = remaining && (remaining.cpus < 0 || remaining.memoryMiB < 0) ? "This reservation exceeds the workspace budget. Close helpers or increase capacity in Workspace Settings." : undefined;
   const fields = (
     <>
       <FormGrid>
@@ -293,10 +297,11 @@ export function useResourceForm({ host, houses }: Capacity, house: string, pet?:
           hint={!ramError && value.memoryMiB < 1024 ? "Under 1 GiB a harness may run out of memory." : undefined}
           warning={!ramError && crowds(value.memoryMiB, host.memoryMiB) ? CROWDED : undefined} />
       </FormGrid>
+      {remaining && <p className={budgetError ? "error" : "hint"} role="status">{budgetError ?? `Reserved for this pet, including while paused. Left for helpers: ${remaining.cpus} vCPU · ${remaining.memoryMiB / 1024} GiB.`}</p>}
       {!cpuError && !ramError && <AllocatedLine total={total} host={host} hostRam={maxRam} />}
     </>
   );
-  const error = cpuError ? `CPU: ${cpuError}` : ramError ? `RAM: ${ramError}` : undefined;
+  const error = cpuError ? `CPU: ${cpuError}` : ramError ? `RAM: ${ramError}` : budgetError;
   return { fields, value, error, changed };
 }
 

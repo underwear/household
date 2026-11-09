@@ -187,6 +187,7 @@ export async function startDaemon(deps: DaemonDeps) {
   let placed: PlacedPet[] = [];
   let monitoring: Monitoring | undefined;
   const sideworkers = new Sideworkers({
+    otherAllocations: house => scouts.allocations(house),
     store: records, agents, place: (house, pet, place) => chat.spawnPlace(house, pet, place), prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", true),
     // In its parent's place: it was spawned, with a button to its own thread; once closed, that it is finished.
     announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.placement === "same" ? undefined : worker.name, worker.originPlace),
@@ -249,6 +250,7 @@ export async function startDaemon(deps: DaemonDeps) {
   const scoutArtifacts = new ScoutArtifacts(paths.stateDir, scoutStorage, (run,text)=>scouts.redact(run.house,run.id,text));
   const scoutPostedFiles = new Set<string>();
   const scouts = new Scouts({
+    otherAllocations: house => sideworkers.allocations(house),
     store: records, configured: () => config.load(),
     place: (house,pet,place)=>chat.spawnPlace(house,pet,place),
     channel: (house,pet)=>chat.targetChannel(house,pet),
@@ -446,6 +448,7 @@ export async function startDaemon(deps: DaemonDeps) {
     }
     return results;
   };
+  config.resourceAllocations = house => [...sideworkers.allocations(house), ...scouts.allocations(house)];
   /** `loaded`: the config at the start. Resolves to the channels that could not open, one line each. */
   const reload = (loaded?: Household) =>
     enqueue(async () => {
@@ -529,6 +532,7 @@ export async function startDaemon(deps: DaemonDeps) {
     let assets: WebAssets;
     try {
       const handle = webRoutes({
+        resourceAllocations: house => [...sideworkers.allocations(house), ...scouts.allocations(house)],
         connectorRoutes: googleConnectorRoutes(googleConnectors),
         scoutRoutes: scoutRoutes({config,storage:scoutStorage,scouts,capabilities,tests:capabilityTests,apply:applyConfig,applySecrets,
           vm:{log:async(house,id,source,read)=>placed.some(p=>p.house===house&&p.pet===id)?readPetLog(pets.exec(house,id),source,read):undefined,

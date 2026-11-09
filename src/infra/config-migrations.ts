@@ -1,5 +1,6 @@
 import { isMap, isScalar, isSeq, type Document } from "yaml";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
+import { workspaceBudget } from "../core/resources";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -20,6 +21,7 @@ export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 1, store: "config", name: "a house's default scout becomes the General scout", change: migrateDefaultScouts },
   { id: 2, store: "config", name: "scouts' maximum run time is dropped", change: (doc) => { for (const path of legacyTimeouts(doc)) doc.deleteIn(path); } },
   { id: 3, store: "config", name: "the browser and dev capabilities install Node.js 22", change: migrateNodeInstalls },
+  { id: 4, store: "config", name: "workspace CPU/RAM budgets replace helper count limits", change: migrateResourceBudgets },
 ];
 
 /** The config version this Household writes: a config with a newer one is from a newer Household, and not read. */
@@ -79,6 +81,27 @@ function migrateNodeInstalls(doc: Document): void {
       const legacy = typeof name === "string" ? LEGACY_NODE_INSTALLS[name] : undefined;
       const template = CAPABILITY_TEMPLATES.find(each => each.name === name);
       if (legacy && template && item.get("install") === legacy) item.set("install", template.install);
+    }
+  }
+}
+
+/** Preserve a legacy zero-count off switch using feature flags; retain the VM size defaults. */
+function migrateResourceBudgets(doc: Document): void {
+  const houses = doc.getIn(["houses"]);
+  if (!isMap(houses)) return;
+  for (const pair of houses.items) {
+    if (!isScalar(pair.key)) continue;
+    const path = ["houses", String(pair.key.value)];
+    const node = doc.getIn(path);
+    if (!isMap(node)) continue;
+    const raw = node.toJSON() as { resources?: { cpus: number; memoryMiB: number }; pets?: Record<string, { cpus?: number; memoryMiB?: number } | null> };
+    if (!raw.resources) {
+      const budget = workspaceBudget({ pets: Object.entries(raw.pets ?? {}).map(([name, pet]) => ({ name, ...pet })) });
+      setIn(doc, [...path, "resources"], doc.createNode(budget.total));
+    }
+    for (const [field, count, feature] of [["scoutLimits", "maxScouts", "scouts"], ["sideworkerLimits", "maxWorkers", "sideworkers"]]) {
+      if (doc.getIn([...path, field!, count!]) === 0) setIn(doc, [...path, "features", feature!], doc.createNode(false));
+      if (doc.hasIn([...path, field!, count!])) doc.deleteIn([...path, field!, count!]);
     }
   }
 }

@@ -28,7 +28,7 @@ test("scouts: definitions, defaults and limits; a scout's network is its capabil
   const f = await fixture();
   expect((await f.create())!.status).toBe(201);
   const list = await f.json("GET", "scouts");
-  expect(list.limits).toEqual({ maxScouts: 2, cpus: 2, memoryMiB: 2048 });
+  expect(list.limits).toEqual({ cpus: 2, memoryMiB: 2048 });
   expect(list.scouts[0].name).toBe("breaker");
   expect(list.scouts[0].network.open).toBe(true); // no capability limits it
   expect((await f.call("POST", "capabilities", { name: "heroku", install: "echo hi", network: { any: false, allow: ["api.heroku.com"] } }))!.status).toBe(201);
@@ -42,7 +42,7 @@ test("scouts: definitions, defaults and limits; a scout's network is its capabil
   expect((await f.call("PATCH", "scouts/breaker", { workspace: { repo: "https://github.com/acme/ops.git" } }))!.status).toBe(200);
   expect((await f.json("GET", "scouts/breaker")).scout.network.allow).toEqual(["api.heroku.com", "github.com"]); // the repo's host comes along
   expect((await f.call("PUT", "scout-limits", { maxScouts: 4, cpus: 4, memoryMiB: 4096 }))!.status).toBe(200);
-  expect((await f.json("GET", "scout-limits"))).toEqual({ maxScouts: 4, cpus: 4, memoryMiB: 4096 });
+  expect((await f.json("GET", "scout-limits"))).toEqual({ cpus: 4, memoryMiB: 4096 });
   expect((await f.call("PUT", "scout-agent", { agent: "claude-code-tmux", key: "claude", model: "opus" }))!.status).toBe(200);
   expect((await f.config.load()).houses[0]!.scoutAgent).toEqual({ agent: "claude-code-tmux", key: "claude", model: "opus" });
   expect((await f.call("GET", "scouts/missing"))!.status).toBe(404);

@@ -15,7 +15,7 @@ const config = (scouts: unknown[] = [], secrets = {}, capabilities: CapabilityDe
 test("scout and capability defaults and validation", () => {
   expect(definition()).toEqual({ name: "breaker", description: "Diagnose incidents", instructions: "", capabilities: [] });
   expect(capabilityDefinitionSchema.parse({ name: "media" })).toEqual({ name: "media", description: "", install: "", network: { any: true, allow: [] }, keys: [] });
-  expect(scoutLimits({})).toEqual({ maxScouts: 2, cpus: 2, memoryMiB: 2048 });
+  expect(scoutLimits({})).toEqual({ cpus: 2, memoryMiB: 2048 });
   expect(() => definition({ capabilities: ["a", "a"] })).toThrow();
   expect(() => capability({ keys: [{ secret: "token", via: "vm", env: "HOME" }] })).toThrow(); // reserved variable
   expect(() => capability({ network: { any: false, allow: [] } })).toThrow("at least one host");
@@ -125,7 +125,7 @@ test("a maximum run time from an earlier version is read past and dropped from t
   await Bun.write(path, "houses:\n  work:\n    network: { allow: [] }\n    scoutLimits: { maxScouts: 3, timeoutMinutes: 60 }\n    scouts:\n      - { name: qa, description: QA, resources: { cpus: 4, timeoutMinutes: 90 } }\n");
   const store = new ConfigStore(path);
   const house = (await store.load()).houses[0]!;
-  expect(house.scoutLimits).toEqual({ maxScouts: 3 });
+  expect(house.scoutLimits).toEqual({});
   expect(house.scouts![0]!.resources).toEqual({ cpus: 4 });
   await store.migrate();
   expect(await Bun.file(path).text()).not.toContain("timeoutMinutes");

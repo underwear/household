@@ -63,6 +63,7 @@ test("missing file is an empty household; a new house starts with an empty allow
     houses: [
       {
         name: "work",
+        resources: { cpus: 8, memoryMiB: 8192 },
         network: { kind: "allowlist", allow: [] },
         pets: [{ name: "sibling" }],
         people: { owners: [] },
@@ -72,7 +73,7 @@ test("missing file is an empty household; a new house starts with an empty allow
   });
   expect(await text()).toBe(
     `version: ${CONFIG_VERSION}\n` + // a new config is written at the latest version
-    "houses:\n  work:\n    network:\n      allow: []\n    pets:\n      sibling: {}\n",
+    "houses:\n  work:\n    resources:\n      cpus: 8\n      memoryMiB: 8192\n    network:\n      allow: []\n    pets:\n      sibling: {}\n",
   );
 });
 
@@ -88,7 +89,7 @@ test("valueless keys (YAML null) read as empty and can be edited", async () => {
   const empty = store("houses:\n");
   expect(await empty.config.load()).toEqual({ daemon: {}, secrets: [], keys: [], houses: [] });
   await empty.config.createHouse("work");
-  expect(await empty.text()).toBe("houses:\n  work:\n    network:\n      allow: []\n");
+  expect(await empty.text()).toBe("houses:\n  work:\n    resources:\n      cpus: 8\n      memoryMiB: 8192\n    network:\n      allow: []\n");
 
   const { config, text } = store("houses:\n  work:\n    network:\n      allow:\n    pets:\n");
   expect(await config.load()).toEqual({
@@ -160,7 +161,7 @@ test("a pet's title and aliases, the house's channels and owners are set from th
   await config.addChannel("work", { kind: "telegram-private", token: "4242:work-bot-token", chat: "100200300", pets: ["sibling"], name: "DM" });
   expect(await text()).toBe(
     `version: ${CONFIG_VERSION}\n` + // a new config is written at the latest version
-    "houses:\n  work:\n    network:\n      allow: []\n    pets:\n      sibling:\n        title: Sibling\n    people:\n      owners:\n        telegram:\n          - 100200300\n" +
+    "houses:\n  work:\n    resources:\n      cpus: 8\n      memoryMiB: 8192\n    network:\n      allow: []\n    pets:\n      sibling:\n        title: Sibling\n    people:\n      owners:\n        telegram:\n          - 100200300\n" +
       "    channels:\n      - kind: telegram-private\n        name: DM\n        token: 4242:work-bot-token\n        chat: 100200300\n        pets:\n          - sibling\n",
   );
   const [house] = (await config.load()).houses;

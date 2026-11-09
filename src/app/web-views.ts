@@ -169,6 +169,7 @@ export interface ChannelView {
 }
 
 export interface HouseView {
+  resources?: import("../core/resources").WorkspaceBudget;
   features?: HouseFeatures;
   preview?: PreviewSettings;
   sideworkerLimits?: SideworkerLimits;

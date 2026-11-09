@@ -170,7 +170,7 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Sideworkers</h1>
 <p>A sideworker is another assistant a bot starts for one job: extra hands in its own VM, working on the bot's projects while the bot goes on talking to you. When the job is done, the bot closes it. How it compares with a bot and a scout: see the table on <a href="../bots/#bots-sideworkers-scouts">Bots</a>.</p>
@@ -193,10 +193,10 @@
 <h2 id="set-up">Set up</h2>
 <ul>
 <li><strong>Workspace → Settings → Sideworkers</strong> turns them on. Off pauses the running ones.</li>
-<li><strong>Workspace → Sideworkers</strong> lists what runs now, by bot. Its settings set how many may run at once in the workspace and the CPU and memory each new one gets.</li>
+<li><strong>Workspace → Sideworkers</strong> lists what runs now, by bot. Its settings set the default CPU and memory for a new VM. Bots can choose a different size for each launch.</li>
 <li><strong>Profiles</strong> are the harness setups a bot may start a worker on, besides its own: a harness, key, model and effort. Add one when you want work done by another model.</li>
 </ul>
-<p>Each worker is a VM: it takes its share of the host's CPU and memory while it runs.</p>
+<p>Each worker reserves its VM maximum from the shared workspace CPU/RAM budget. Configure the total in <strong>Workspace → Settings → Workspace capacity</strong>; pets reserve their own share and scouts and sideworkers share the rest. There is no worker count limit. See <a href="../resources/">Workspace resources</a>.</p>
 </article>
 
     <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#set-up">Set up</a></li></ul></nav>

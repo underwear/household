@@ -12,7 +12,7 @@ import { mcpHandler } from "../../src/infra/mcp-server";
 
 function fixture(overrides: Partial<SideworkerDeps> = {}) {
   const store = new SqliteStore(":memory:");
-  const config: Household = { daemon: {}, keys: [{name:"openai",provider:"openai",value:"sk-household-fake-key"},{name:"claude",provider:"anthropic",value:"sk-ant-api03-fake-key"}], secrets: [], houses: [{ name: "home", network: { kind: "allowlist", allow: [] }, people: { owners: [] },
+  const config: Household = { daemon: {}, keys: [{name:"openai",provider:"openai",value:"sk-household-fake-key"},{name:"claude",provider:"anthropic",value:"sk-ant-api03-fake-key"}], secrets: [], houses: [{ name: "home", resources: { cpus: 16, memoryMiB: 16384 }, network: { kind: "allowlist", allow: [] }, people: { owners: [] },
     pets: [{ name: "parent", agent: "codex-app-server", model: "gpt-6.1-terra", mode: "auto", key:"openai", environment: { setup: "echo setup" } }, { name: "other" }],
     channels: [{ kind: "telegram-private", token: "dummy", chat: "1", pets: ["parent"] }], sideworkerLimits: { maxWorkers: 2, cpus: 3, memoryMiB: 2048 } }] };
   const sent: { house: string; pet: string; text: string }[] = [], logs: string[] = [];
@@ -40,8 +40,8 @@ test("workers preserve parent launch settings, share channels without changing d
   f.store.close();
 });
 
-test("count limit is atomic for concurrent spawns; only parent may close, only real enabled pets may spawn", async () => {
-  const f = fixture(); f.config.houses[0]!.sideworkerLimits!.maxWorkers = 1;
+test("resource budget is atomic for concurrent spawns; only parent may close, only real enabled pets may spawn", async () => {
+  const f = fixture(); f.config.houses[0]!.resources = { cpus: 7, memoryMiB: 8192 };
   const results = await Promise.allSettled([f.workers.spawn(parent, task), f.workers.spawn(parent, { ...task, name: "sw-two" })]);
   expect(results.map(result => result.status)).toEqual(["fulfilled", "rejected"]);
   expect(f.reloads()).toBe(1);
@@ -103,8 +103,8 @@ test("worker-only MCP visibility also prevents direct calls of hidden tools", as
   const handler = mcpHandler({ name: "test", version: "1" }, sideworkerTools(f.workers));
   const rpc = async (pet: string, method: string, params?: unknown) => (await handler({ house: "home", pet }, new Request("http://test/mcp", { method: "POST", body: JSON.stringify({ id: 1, method, params }) }))).json() as any;
   const listed = await rpc("sw-review", "tools/list");
-  expect(listed.result.tools.map((tool: any) => tool.name)).toEqual(["sideworkers"]);
-  expect((await rpc("parent", "tools/list")).result.tools).toHaveLength(4);
+  expect(listed.result.tools.map((tool: any) => tool.name)).toEqual(["workspace_resources", "sideworkers"]);
+  expect((await rpc("parent", "tools/list")).result.tools).toHaveLength(5);
   expect((await rpc("sw-review", "tools/call", { name: "sideworker_spawn", arguments: task })).error.code).toBe(-32602);
   f.store.close();
 });
@@ -375,5 +375,49 @@ test("Claude connectors are captured from the parent, including profile launches
   house.pets[0]!.settings = { claudeAiConnectors: "true" };
   await f.workers.spawn(parent, { ...task, name: "sw-codex", profile: "codex" });
   expect(f.workers.expanded(f.config).houses[0]!.pets.at(-1)!.settings).toBeUndefined();
+  f.store.close();
+});
+
+test("bot-selected VM sizes share the pool with scouts; failed cleanup retains allocation", async () => {
+  const f = fixture({ otherAllocations: () => [{ name: "scout-one", kind: "scout", cpus: 2, memoryMiB: 2048 }] });
+  f.config.houses[0]!.resources = { cpus: 8, memoryMiB: 8192 };
+  f.config.houses[0]!.sideworkerLimits!.maxWorkers = 0; // obsolete, not admission control
+  const worker = await f.workers.spawn(parent, { ...task, cpus: 1, memoryMiB: 512 });
+  expect(worker).toMatchObject({ cpus: 1, memoryMiB: 512 });
+  expect(await f.workers.resources(parent)).toMatchObject({ available: { cpus: 1, memoryMiB: 3584 } });
+  await expect(f.workers.spawn(parent, { ...task, name: "sw-too-big", cpus: 2 })).rejects.toThrow("available 1 vCPU");
+  f.deps.reload = async () => { throw new Error("cleanup failed"); };
+  await expect(f.workers.close(parent, task.name)).rejects.toThrow("cleanup failed");
+  expect((await f.workers.resources(parent)).available.cpus).toBe(1);
+  f.deps.reload = async () => {};
+  await f.workers.close(parent, task.name);
+  expect((await f.workers.resources(parent)).available.cpus).toBe(2);
+  f.store.close();
+});
+
+test("simultaneous scout and sideworker spawns cannot spend the same remaining CPU", async () => {
+  const { Scouts } = await import("../../src/app/scouts");
+  const f = fixture();
+  const house = f.config.houses[0]!;
+  house.resources = { cpus: 6, memoryMiB: 8192 };
+  house.features = { scouts: true, sideworkers: true };
+  house.scoutAgent = { agent: "codex-app-server", key: "openai" };
+  house.scouts = [{ name: "helper", description: "QA", instructions: "", capabilities: [] }];
+  const scouts = new Scouts({
+    store: f.store, configured: f.deps.configured, otherAllocations: name => f.workers.allocations(name),
+    choose: async () => "yes", prepare: async run => ({ definition: run.scout, parent: run.parent, homePath: "/tmp/test", instructions: "", network: { kind: "allowlist", allow: [] } }),
+    launch: async () => {}, ready: async () => true, remove: async () => {}, closedNotice: () => async () => {}, notice: async () => {}, send: () => {}, secret: async () => {}, log: () => {},
+  });
+  f.deps.otherAllocations = name => scouts.allocations(name);
+  const results = await Promise.allSettled([
+    f.workers.spawn(parent, { ...task, cpus: 2, memoryMiB: 1024 }),
+    scouts.spawn(parent, { scout: "helper", task: "Check", cpus: 2, memoryMiB: 1024 }),
+  ]);
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter(r => r.status === "rejected")).toHaveLength(1);
+  expect((await f.workers.resources(parent)).available.cpus).toBe(0);
+  await scouts.stop();
+  for (const worker of f.workers.list("home")) await f.workers.close(parent, worker.name);
+  expect((await f.workers.resources(parent)).available.cpus).toBe(2);
   f.store.close();
 });
