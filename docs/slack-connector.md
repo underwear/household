@@ -4,7 +4,7 @@ The Slack connector lets selected bots search and read Slack when they need cont
 
 ## Connect an account
 
-1. Open the intended Household workspace's **Connectors → Add connector → Slack**, select bots, and optionally enable message sending. Read access is the default.
+1. Open the intended Household workspace's **Connectors → Add connector → Slack**, choose **Read only** (the default) or **Read and send**, and select bots.
 2. Prepare sign-in and open the Slack link. Select your Slack workspace and approve access. Workspace admin restrictions still apply. Users authorize our shared distributed app; they do not need to create their own app.
 3. Slack returns to `https://agents-household.dev/slack/callback/`. Copy the connection result, return to Household, and paste it into **Connection result** within ten minutes.
 
@@ -22,7 +22,7 @@ Browser QA confirmed that `household://` redirects are issued correctly by Slack
 
 Each connection belongs to one **Household workspace**, independently of its Slack workspace. Connecting the same Slack account in two houses creates two separate grants. Neither a known connection ID nor a matching bot name allows access across houses.
 
-Only selected regular bots can use a connection. Sideworkers inherit their parent's current access; scouts and disabled bots cannot use it. Removing a bot's access, disconnecting an account, or reloading configuration cancels in-flight reads. Tokens stay in the host's private SQLite state and backups, never in tool results, YAML configuration, or bot environments. Read content can enter the authorized bot's history, chat and AI-provider context.
+Only selected regular bots can use a connection. Sideworkers inherit their parent's current access; scouts and disabled bots cannot use it. Removing a bot's access, disconnecting an account, or a configuration change that removes or disables a granted bot cancels in-flight reads. Other reloads (a sideworker starting, a setting saved) leave reads and a sign-in in progress alone. Tokens stay in the host's private SQLite state and backups, never in tool results, YAML configuration, or bot environments. Read content can enter the authorized bot's history, chat and AI-provider context.
 
 Disconnect removes the local credential, not the Slack authorization. Revoke the application in Slack to invalidate its token everywhere. Revoked or expired tokens are marked as needing reconnection after the next failed request.
 

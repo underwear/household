@@ -1,7 +1,7 @@
-import { SlackConnections } from "./slack-connectors";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CalendarDays, Files, Mail } from "lucide-react";
-import { api, type GoogleConnectionView, type GoogleConnectorsView, type GoogleService, type WorkspaceView } from "../api";
+import { api, type GoogleConnectionView, type GoogleConnectorsView, type GoogleService, type SlackConnectionView, type WorkspaceView } from "../api";
+import { SlackSetup, slackAccessWords, useSlackConnections } from "./slack-connectors";
 import { workspacePath, redirect } from "../router";
 import { Dialog, useDialog } from "./dialog";
 import { ChoiceList, FormGroup, SwitchList } from "./fields";
@@ -9,7 +9,7 @@ import { Cell, List, ListRow, Page, Section } from "./layout";
 import { relative } from "./bot-crons";
 
 /** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
-export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations on demand.", mark: "S" }] as const;
+export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }] as const;
 type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
 /** A Google account's services: what the owner picks to share (and what bots may do with each), and their names. */
 const SERVICES = [
@@ -43,15 +43,15 @@ function ConnectorMark({ type }: { type: ConnectorType }) {
 }
 
 /**
- * A workspace's Connectors page: the outside accounts its bots may read (Google for now), each with its own bot access.
- * Adding one is a dialog of two steps (type, then the provider's form) that ends on the provider's sign-in page.
+ * A workspace's Connectors page: the outside accounts its bots may read (Google accounts, Slack users), one list, each
+ * with its own bot access. Adding one is a dialog: the type, then the provider's own steps.
  */
 export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; notify: (text: string, warning?: boolean) => void }) {
-  const [slackAdding, setSlackAdding] = useState(false);
   const [view, setView] = useState<GoogleConnectorsView>();
   const [error, setError] = useState("");
-  const [setup, setSetup] = useState<{ existing?: GoogleConnectionView }>();
-  const [access, setAccess] = useState<GoogleConnectionView>();
+  const slack = useSlackConnections(house.name);
+  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView }>();
+  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView }>();
   const dialog = useDialog();
   const refresh = async () => {
     try {
@@ -70,7 +70,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     }
   }, [house.name]);
   const connections = view?.connections ?? [];
-  const pets = new Map(house.pets.map((pet) => [pet.name, pet]));
+  const loaded = view !== undefined && slack.connections !== undefined;
   const disconnect = (c: GoogleConnectionView) =>
     dialog.open({
       title: `Disconnect ${c.email}?`,
@@ -91,6 +91,20 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
         notify(`${c.email} disconnected`);
       },
     });
+  const disconnectSlack = (c: SlackConnectionView) =>
+    dialog.open({
+      title: `Disconnect ${c.team}?`,
+      body: "Its bots lose access right away, reads in progress included. What they already read stays in their history and backups.",
+      children: <p className="hint">This removes the token from this host. To revoke it in Slack too, remove the app from your account in Slack.</p>,
+      confirmLabel: "Disconnect",
+      danger: true,
+      onConfirm: async () => {
+        await api.disconnectSlack(house.name, c.id);
+        await slack.refresh();
+        notify(`Slack ${c.team} disconnected`);
+      },
+    });
+  const failed = [error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
   return (
     <Page
       title="Connectors"
@@ -107,81 +121,139 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           </>
         }
       >
-        {error && (
-          <p className="error" role="alert">
-            {error}{" "}
-            <button className="text-btn plain" onClick={() => void refresh()}>
+        {failed.map(({ what, message, retry }) => (
+          <p key={what} className="error" role="alert">
+            {what}: {message}{" "}
+            <button className="text-btn plain" onClick={() => void retry()}>
               Retry
             </button>
           </p>
-        )}
-        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={view ? "No Google accounts connected. Add a connector and choose its bot access." : error ? undefined : "Loading…"}>
+        ))}
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add a Google account or a Slack user and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
           {connections.map((c) => (
-            <ListRow
+            <ConnectionRow
               key={c.id}
-              actions={
-                <>
-                  <button className="text-btn plain" onClick={() => setAccess(c)}>
-                    Bot access
-                  </button>
-                  <button className={c.needsReconnect ? "btn small" : "text-btn plain"} onClick={() => setSetup({ existing: c })}>
-                    Reconnect
-                  </button>
-                  <button className="text-btn" onClick={() => disconnect(c)}>
-                    Disconnect
-                  </button>
-                </>
-              }
-            >
-              <Cell>
-                <ConnectorMark type="google" />
-                <span className="cell-lines">
-                  <span className="strong connector-email">{c.email}</span>
-                  <span className="faint">Google · {servicesWords(c.services)} · {accessWords(c)}</span>
-                  <span className="channel-company">
-                    {c.pets.length === 0 ? (
-                      <span className="faint">No bots yet: private until you grant access</span>
-                    ) : (
-                      c.pets.map((name) => (
-                        <span key={name} className="chip small">
-                          <span aria-hidden>{pets.get(name)?.emoji ?? "🤖"}</span>
-                          <span className="ellipsis">{pets.get(name)?.title ?? name}</span>
-                        </span>
-                      ))
-                    )}
-                  </span>
-                </span>
-              </Cell>
-              <Cell lines>
-                <span className="bot-state">
-                  <span className={`dot ${c.needsReconnect ? "danger" : "idle"}`} />
-                  {c.needsReconnect ? "Reconnect required" : "Connected"}
-                </span>
-                <span className="faint" title={new Date(c.connectedAt).toLocaleString()}>
-                  connected {relative(c.connectedAt) === "now" ? "just now" : relative(c.connectedAt)}
-                </span>
-              </Cell>
-            </ListRow>
+              house={house}
+              type="google"
+              title={<span className="strong connector-email">{c.email}</span>}
+              sub={`Google · ${servicesWords(c.services)} · ${accessWords(c)}`}
+              connection={c}
+              onAccess={() => setAccess({ google: c })}
+              onReconnect={() => setSetup({ type: "google", existing: c })}
+              onDisconnect={() => disconnect(c)}
+            />
+          ))}
+          {(slack.connections ?? []).map((c) => (
+            <ConnectionRow
+              key={c.id}
+              house={house}
+              type="slack"
+              title={<span className="strong ellipsis">{c.team} <span className="muted">· {c.user}</span></span>}
+              sub={`Slack · ${slackAccessWords(c)}`}
+              connection={c}
+              onAccess={() => setAccess({ slack: c })}
+              onReconnect={() => setSetup({ type: "slack", slack: c })}
+              onDisconnect={() => disconnectSlack(c)}
+            />
           ))}
         </List>
       </Section>
-      <SlackConnections key={house.name} house={house} adding={slackAdding} onClose={() => setSlackAdding(false)} notify={notify} />
-      {setup && <ConnectorSetup onSlack={() => { setSetup(undefined); setSlackAdding(true); }} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
-      {access && (
+      {setup && setup.type !== "slack" && <ConnectorSetup onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      {setup?.type === "slack" && (
+        <SlackSetup
+          key={setup.slack?.id ?? "new"}
+          house={house.name}
+          existing={setup.slack}
+          options={sharable(house)}
+          back={setup.slack ? undefined : () => setSetup({})}
+          onClose={() => setSetup(undefined)}
+          saved={async () => {
+            await slack.refresh();
+            notify(setup.slack ? `Slack ${setup.slack.team} reconnected` : "Slack connected");
+          }}
+        />
+      )}
+      {access && "google" in access && (
         <BotAccess
-          key={access.id}
+          key={access.google.id}
           house={house}
-          connection={access}
+          title={access.google.email}
+          body={`${servicesWords(access.google.services)}, ${accessWords(access.google)}. Changes apply on a bot's next request, no restart.`}
+          pets={access.google.pets}
           onClose={() => setAccess(undefined)}
           save={async (names) => {
-            await api.shareGoogle(house.name, access.id, names);
+            await api.shareGoogle(house.name, access.google.id, names);
             await refresh();
+            notify("Bot access saved");
+          }}
+        />
+      )}
+      {access && "slack" in access && (
+        <BotAccess
+          key={access.slack.id}
+          house={house}
+          title={`Slack ${access.slack.team}`}
+          body={`${access.slack.user}, ${slackAccessWords(access.slack)}. Changes apply right away; a bot losing access stops reading at once.`}
+          pets={access.slack.pets}
+          onClose={() => setAccess(undefined)}
+          save={async (names) => {
+            await api.shareSlack(house.name, access.slack.id, names);
+            await slack.refresh();
             notify("Bot access saved");
           }}
         />
       )}
       {dialog.element}
     </Page>
+  );
+}
+
+/** One connected account: its mark, name, what it gives and which bots have it; its state; Bot access, Reconnect, Disconnect. */
+function ConnectionRow({ house, type, title, sub, connection: c, onAccess, onReconnect, onDisconnect }: {
+  house: WorkspaceView; type: ConnectorType; title: ReactNode; sub: string;
+  connection: { pets: string[]; needsReconnect: boolean; connectedAt: string };
+  onAccess: () => void; onReconnect: () => void; onDisconnect: () => void;
+}) {
+  const pets = new Map(house.pets.map((pet) => [pet.name, pet]));
+  return (
+    <ListRow
+      actions={
+        <>
+          <button className="text-btn plain" onClick={onAccess}>Bot access</button>
+          <button className={c.needsReconnect ? "btn small" : "text-btn plain"} onClick={onReconnect}>Reconnect</button>
+          <button className="text-btn" onClick={onDisconnect}>Disconnect</button>
+        </>
+      }
+    >
+      <Cell>
+        <ConnectorMark type={type} />
+        <span className="cell-lines">
+          {title}
+          <span className="faint">{sub}</span>
+          <span className="channel-company">
+            {c.pets.length === 0 ? (
+              <span className="faint">No bots yet: private until you grant access</span>
+            ) : (
+              c.pets.map((name) => (
+                <span key={name} className="chip small">
+                  <span aria-hidden>{pets.get(name)?.emoji ?? "🤖"}</span>
+                  <span className="ellipsis">{pets.get(name)?.title ?? name}</span>
+                </span>
+              ))
+            )}
+          </span>
+        </span>
+      </Cell>
+      <Cell lines>
+        <span className="bot-state">
+          <span className={`dot ${c.needsReconnect ? "danger" : "idle"}`} />
+          {c.needsReconnect ? "Reconnect required" : "Connected"}
+        </span>
+        <span className="faint" title={new Date(c.connectedAt).toLocaleString()}>
+          connected {relative(c.connectedAt) === "now" ? "just now" : relative(c.connectedAt)}
+        </span>
+      </Cell>
+    </ListRow>
   );
 }
 
@@ -192,7 +264,7 @@ const sharable = (house: WorkspaceView) => house.pets.filter((p) => !p.sideworke
  * Add connector, in two steps: what to connect, then the provider's form (services and bots), which leaves for its
  * sign-in page. Reconnecting an account starts at the form, with that account's choices.
  */
-function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
+function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
   const [step, setStep] = useState(existing ? 1 : 0);
   const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
@@ -209,7 +281,7 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { onSlack:
         back: step === 1 && !existing ? () => setStep(0) : undefined,
         onConfirm: async () => {
           if (step === 0) {
-            if (type === "slack") { onSlack(); return; }
+            if (type === "slack") { onSlack(); return "stay"; }
             setStep(1);
             return "stay";
           }
@@ -260,15 +332,15 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { onSlack:
   );
 }
 
-/** Which bots may use one account; takes effect on their next request, no restart. */
-function BotAccess({ house, connection: c, onClose, save }: { house: WorkspaceView; connection: GoogleConnectionView; onClose: () => void; save: (pets: string[]) => Promise<void> }) {
-  const [pets, setBots] = useState(c.pets);
+/** Which bots may use one account; Google's take effect on a bot's next request, Slack's at once. */
+function BotAccess({ house, title, body, pets: initial, onClose, save }: { house: WorkspaceView; title: string; body: string; pets: string[]; onClose: () => void; save: (pets: string[]) => Promise<void> }) {
+  const [pets, setBots] = useState(initial);
   return (
     <Dialog
       onClose={onClose}
       spec={{
-        title: `Bot access: ${c.email}`,
-        body: `${servicesWords(c.services)}, ${accessWords(c)}. Changes apply on a bot's next request, no restart.`,
+        title: `Bot access: ${title}`,
+        body,
         confirmLabel: "Save access",
         busyLabel: "Saving…",
         onConfirm: () => save(pets),
