@@ -1,6 +1,7 @@
 /** Rebuild the published doc pages from their reviewed Markdown sources (docs/*.md), with one shared navigation. */
 const template = await Bun.file("landing/docs/index.html").text();
 const pages = [
+  { slug: "connectors", source: "docs/connectors.md", title: "Google connectors", heading: "Google connectors", crumb: "Connected services", description: "Connect Gmail, Drive and Calendar to a house; choose pets, inspect read-only tools, and manage local OAuth credentials." },
   { slug: "start", source: "docs/start.md", title: "Quick start", heading: "Quick start", crumb: "Getting started", description: "Install Household, run house onboard and house start, then write to your first pet." },
   { slug: "pets", source: "docs/pets.md", title: "Pets", heading: "Pets", crumb: "Pets", description: "What a pet is — a Claude Code or Codex agent in its own microVM that lives in your messenger — how it differs from sideworkers and scouts, and every tab of its page." },
   { slug: "sideworkers", source: "docs/sideworkers.md", title: "Sideworkers", heading: "Sideworkers", crumb: "Pets", description: "Extra agents a pet starts for one job, in VMs of their own: coding in another project with its own CLAUDE.md or AGENTS.md, a thread you can talk in, parallel work." },

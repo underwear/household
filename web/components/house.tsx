@@ -1,3 +1,4 @@
+import { HouseConnectors } from "./house-connectors";
 import { HouseInboxesPage } from "./house-inboxes";
 import { ScoutsPage } from "./scouts";
 import { CapabilitiesPage } from "./capabilities";
@@ -55,6 +56,7 @@ export function HousePage({ house, tab, known, keys, capacity, refresh, notify }
       {tab === "pets" && <PetsPage {...props} agents={known.agents} keys={keys} capacity={capacity} />}
       {tab === "channels" && <ChannelsPage {...props} kinds={known.channelKinds} platforms={known.platforms} noteMax={known.noteMax} />}
       {tab === "inboxes" && <HouseInboxesPage key={house.name} house={house} notify={notify} />}
+      {tab === "connectors" && <HouseConnectors key={house.name} house={house} notify={notify} />}
       {tab === "skills" && <SkillsPage key={house.name} house={house.name} notify={notify} />}
       {tab === "scouts" && <ScoutsPage house={house} agents={known.agents} keys={keys} host={capacity.host} refresh={refresh} notify={notify} />}
       {tab === "capabilities" && <CapabilitiesPage house={house} refresh={refresh} notify={notify} />}

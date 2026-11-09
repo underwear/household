@@ -33,11 +33,11 @@ mkdirSync(join(out, "bin"), { recursive: true });
 
 const run = (command: string[], cwd = root) => {
   const result = Bun.spawnSync(command, { cwd, stdout: "inherit", stderr: "inherit" });
-  if (result.exitCode !== 0) throw new Error(`${command.join(" ")} failed`);
+  if (result.exitCode !== 0) throw new Error(`${command[0]} failed (${result.exitCode})`);
 };
 
 console.log(`house for ${platform}`);
-run(["bun", "build", "--compile", `--target=${target.bun}`, "--minify", "src/cli/main.ts", "--outfile", join(out, "bin", "house")]);
+run(["bun", "build", "--compile", `--target=${target.bun}`, "--minify", "--define", `HOUSEHOLD_BUNDLED_GOOGLE_SECRET=${JSON.stringify(process.env.HOUSEHOLD_GOOGLE_CLIENT_SECRET ?? "")}`, "src/cli/main.ts", "--outfile", join(out, "bin", "house")]);
 
 console.log("codex");
 const codexVersion = pkg.dependencies["@openai/codex"];

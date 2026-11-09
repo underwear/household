@@ -35,3 +35,5 @@ Install the `household` agent skill too, for running Household afterwards:
 
 - [Repository](https://github.com/underwear/household): TypeScript on Bun; `house --help` lists every command
 - [License](https://github.com/underwear/household/blob/main/LICENSE): AGPL-3.0
+
+- [Google connectors](https://agents-household.dev/docs/connectors/): house-level Gmail, Drive and Calendar OAuth, per-pet access, read-only tools and local tokens

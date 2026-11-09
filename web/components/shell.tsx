@@ -29,6 +29,7 @@ const houseNav = (house: string, view?: HouseView): NavEntry[] => {
     { label: "Pets", icon: PawPrint, path: housePath(house, "pets") },
     { label: "Channels", icon: MessagesSquare, path: housePath(house, "channels") },
     { label: "Inboxes", icon: Archive, path: housePath(house, "inboxes") },
+    { label: "Connectors", icon: Globe, path: housePath(house, "connectors") },
     { label: "Shared Skills", icon: BookOpen, path: housePath(house, "skills") },
     ...(on.sideworkers ? [{ label: "Sideworkers", icon: Pickaxe, path: housePath(house, "sideworkers") }] : []),
     ...(on.scouts ? [{ label: "Scouts", icon: Compass, path: housePath(house, "scouts"), also: [housePath(house, "capabilities")] }] : []),

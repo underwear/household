@@ -1,3 +1,5 @@
+import type { GoogleConnectorsView, GoogleConnectionView, GoogleService } from "../src/core/google-connectors";
+export type { GoogleConnectorsView, GoogleConnectionView, GoogleService };
 import type { HouseInbox, InboxView } from "../src/core/house-inboxes";
 export type { HouseInbox, InboxView };
 export interface PreviewView { id: string; house: string; pet: string; port: number; title: string; status: "pending" | "opening" | "active"; url?: string; expires_at?: string; requested_at: string }
@@ -179,6 +181,10 @@ export const api = {
   allowHosts: (name: string, hosts: readonly string[]) => call<WriteView>("POST", `${housePath(name)}/allow/bulk`, { hosts }),
   disallowHost: (name: string, host: string) => call<WriteView>("DELETE", `${housePath(name)}/allow/${encodeURIComponent(host)}`),
   revokeTemporary: (name: string, pet: string, domain: string, port = 443) => call<WriteView>("DELETE", `${housePath(name)}/temporary/${encodeURIComponent(domain)}?port=${port}&pet=${encodeURIComponent(pet)}`),
+  googleConnections: (house: string) => call<GoogleConnectorsView>("GET", `${housePath(house)}/connectors/google`),
+  connectGoogle: (house: string, services: GoogleService[], pets: string[]) => call<{ url: string }>("POST", `${housePath(house)}/connectors/google/connect`, { services, pets }),
+  shareGoogle: (house: string, id: string, pets: string[]) => call<GoogleConnectionView>("PATCH", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`, { pets }),
+  disconnectGoogle: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`),
   inboxes: (house: string) => call<InboxView[]>("GET", `${housePath(house)}/inboxes`),
   testInbox: (house: string, inbox: HouseInbox) => call<{ count: number; message: string }>("POST", `${housePath(house)}/inboxes/test`, inbox),
   addInbox: (house: string, inbox: HouseInbox) => call<WriteView>("POST", `${housePath(house)}/inboxes`, inbox),

@@ -1,3 +1,4 @@
+import { googleOAuthCookieName } from "./google-connector-routes";
 import type { HouseInboxes } from "./house-inboxes";
 import { houseInboxSchema, inboxSubscriberSchema } from "../core/house-inboxes";
 import { resolveSlackDm } from "../channel-adapters/slack/setup";
@@ -49,6 +50,7 @@ const RESERVED_SKILL = "Names starting with household- are Household's own skill
 const newSkill = (path: string) => /^([^/]+)\/SKILL\.md$/.exec(path)?.[1];
 
 export interface WebRoutesDeps {
+  connectorRoutes?: (request: Request) => Promise<Response | undefined>;
   scoutRoutes?: (request:Request)=>Promise<Response|undefined>;
   previews?: Pick<Previews, "list" | "close">;
   sideworkers?: Pick<Sideworkers, "list" | "closeForOwner" | "expanded">;
@@ -720,7 +722,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
   /** An API request's answer: its route's, or the failure its error stands for. */
   async function answer(request: Request, path: string): Promise<Response> {
     try {
-      return await deps.scoutRoutes?.(request) ?? await api(request, path);
+      return await deps.connectorRoutes?.(request) ?? await deps.scoutRoutes?.(request) ?? await api(request, path);
     } catch (error) {
       if (error instanceof InstructionFileError) return failure(error.status, error.message);
       if (error instanceof MemoryError) return failure(error.status, error.message);
@@ -747,7 +749,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       return new Response(null, { status: 303, headers });
     }
     if (!url.pathname.startsWith("/api/")) return undefined;
-    const session = cookieValue(request.headers.get("cookie"), cookie);
+    const session = cookieValue(request.headers.get("cookie"), cookie) ?? (url.pathname === "/api/connectors/google/callback" && request.method === "GET" ? cookieValue(request.headers.get("cookie"), googleOAuthCookieName(url.port)) : undefined);
     if (url.pathname === "/api/logout" && request.method === "POST") {
       auth.signOut(session);
       return new Response(null, { status: 204, headers: { "set-cookie": clearedCookie(cookie) } });

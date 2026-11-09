@@ -1,3 +1,5 @@
+import { GoogleConnectors } from "../../src/app/google-connectors";
+import { googleConnectorRoutes } from "../../src/app/google-connector-routes";
 import { HouseInboxes } from "../../src/app/house-inboxes";
 import { Sideworkers } from "../../src/app/sideworkers";
 import { PetInstructions } from "../../src/infra/pet-instructions";
@@ -63,11 +65,13 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
   const inboxPosts: string[] = [];
   const inboxPets: string[] = [];
   const houseInboxes = new HouseInboxes(new SqliteStore(":memory:"), { post: async (_h, _i, event) => { inboxPosts.push(event.title); }, pet: (_h, _i, pet) => { inboxPets.push(pet); } });
+  const connectors = new GoogleConnectors(new SqliteStore(":memory:"), { id: "test", secret: "test" });
   const problems = new Map<string, string>();
   const server = serveWeb({
     port: 0,
     assets: ASSETS,
     handle: webRoutes({
+      connectorRoutes: googleConnectorRoutes(connectors),
       auth,
       houseInboxes,
       sideworkers,
@@ -118,6 +122,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
     });
   const signIn = async () => {
     houseInboxes.setHouses((await store.load()).houses);
+    connectors.setHouses((await store.load()).houses);
     const response = await call("GET", `/login?token=${auth.mintToken()}`);
     session = new RegExp(`${name}=([^;]+)`).exec(response.headers.get("set-cookie") ?? "")![1]!;
     return response;
@@ -1075,4 +1080,28 @@ test("inbox API creates, tests, polls, deduplicates, changes frequency and remov
     expect((await s.call("DELETE", path + "/incoming")).status).toBe(200);
     expect(await (await s.call("GET", path)).json()).toEqual([]);
   } finally { source.stop(true); }
+});
+
+
+test("Google enrollment and metadata require the dashboard session and same-origin writes", async () => {
+  const s = setup();
+  const path = "/api/houses/work/connectors/google";
+  expect((await s.call("GET", path)).status).toBe(401);
+  expect((await s.call("GET", "/api/connectors/google/callback?code=private-code&state=bad")).status).toBe(401);
+  await s.signIn();
+  expect((await s.call("GET", path)).status).toBe(200);
+  expect((await s.call("POST", path + "/connect", { services: ["gmail"], pets: ["sibling"] }, { origin: "https://evil.test" })).status).toBe(403);
+  const result = await s.call("POST", path + "/connect", { services: ["gmail"], pets: ["sibling"] });
+  expect(result.status).toBe(200);
+  expect((await result.json()).url).toStartWith("https://accounts.google.com/");
+  const oauthCookie = result.headers.get("set-cookie")!;
+  expect(oauthCookie).toContain("SameSite=Lax; Path=/api/connectors/google/callback; Max-Age=600");
+  const callbackCookie = oauthCookie.split(";")[0]!;
+  expect((await s.call("GET", path, undefined, { cookie: callbackCookie })).status).toBe(401);
+  const callback = await s.call("GET", "/api/connectors/google/callback?code=private-code&state=bad", undefined, { cookie: callbackCookie });
+  expect(callback.status).toBe(400); // authenticated, but bad OAuth state
+  expect(callback.headers.get("set-cookie")).toContain("Max-Age=0");
+  const bad = await s.call("GET", "/api/connectors/google/callback?code=private-code&state=bad");
+  expect(bad.status).toBe(400);
+  expect(await bad.text()).not.toContain("private-code");
 });
