@@ -43,7 +43,7 @@ and lets you talk to it from the messenger you already use.
 
 ## 🚀 Quick start
 
-**With your harness** — give Claude Code or Codex this prompt:
+**With your harness** — give your coding agent this prompt:
 
 ```text
 Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
@@ -72,7 +72,3 @@ Plus `openssl` and `python3`. The installer brings the rest: microsandbox, Codex
 ## 📚 Documentation
 
 Everything else — bots, scouts, sideworkers, inboxes, previews, backup — is in the **[docs](https://agents-household.dev/docs/)**.
-
-<div align="center">
-<sub>Made for people who'd rather sleep through the 3 am incident.</sub>
-</div>
