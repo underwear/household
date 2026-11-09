@@ -26,14 +26,16 @@ export async function pollJsonWatch(source: Source<"json-watch">, cursor: string
   const next = JSON.stringify({ hashes, generation });
   if (!old && initial === "new") return { items: [], cursor: next };
   const text = source.pointers.length ? changed.map(v => `${v.path || "/ (root)"}: ${v.present ? canonical(v.value) : "[missing]"}`).join("\n") : canonical(body);
-  return { cursor: next, items: [{ id: digest([hashes, generation]), title: old ? "JSON changed" : "Current JSON snapshot", text: text.length > 16000 ? text.slice(0, 15960) + "\n[Preview truncated]" : text }] };
+  return { cursor: next, items: [{ id: digest([hashes, generation]), title: old ? "JSON changed" : "Current JSON snapshot", metadata: { mode: source.pointers.length ? "fields" : "whole", changedPaths: changed.map(v => v.path), generation }, text: text.length > 16000 ? text.slice(0, 15960) + "\n[Preview truncated]" : text }] };
 }
 
 export async function pollHealth(source: Source<"health">, cursor: string | undefined, initial: Initial, signal: AbortSignal): Promise<PollResult> {
+  let httpStatus: number | null = null;
   let healthy = false, detail = "Request failed or timed out";
   const start = Date.now();
   try {
     const response = await fetch(source.url, { headers: source.headers, redirect: "error", signal: AbortSignal.any([signal, AbortSignal.timeout(source.timeoutMs)]) });
+    httpStatus = response.status;
     healthy = response.status === source.expectedStatus;
     detail = `HTTP ${response.status}; expected ${source.expectedStatus}; ${Date.now() - start} ms`;
     await response.body?.cancel();
@@ -47,6 +49,7 @@ export async function pollHealth(source: Source<"health">, cursor: string | unde
   const generation = (old?.generation ?? 0) + (emit ? 1 : 0);
   return { baselineHandled: true, cursor: JSON.stringify({ state, failures, generation }), items: emit ? [{
     id: digest([state, generation]), title: state === "down" ? "Endpoint is down" : old?.state === "down" ? "Endpoint recovered" : "Endpoint is healthy",
+    metadata: { state, httpStatus, expectedStatus: source.expectedStatus, latencyMs: Date.now() - start, timeoutMs: source.timeoutMs, consecutiveFailures: failures, reason: httpStatus === null ? "network_or_timeout" : healthy ? "expected_status" : "unexpected_status" },
     text: `${detail}\n${state === "down" ? `${failures} consecutive failed checks.` : "Health check passed."}`,
   }] : [] };
 }
@@ -78,7 +81,7 @@ export async function pollFeed(source: Source<"rss">, cursor: string | undefined
     if (cursor || initial === "latest") {
       if (items.length === 50) continue; // Leave overflow unseen for subsequent polls.
       const date = Date.parse(textOf(entry.published ?? entry.pubDate ?? entry.updated));
-      items.push({ id, title, text: body, ...(url ? { url } : {}), ...(Number.isFinite(date) ? { occurredAt: new Date(date).toISOString() } : {}) });
+      items.push({ id, title, text: body, metadata: { feedUrl: source.url, entryId: textOf(entry.id ?? entry.guid).slice(0,512), author: plain(entry.author ?? entry.creator).slice(0,500), categories: list(entry.category).slice(0,20).map(c => (typeof c === "object" && c ? c["@_term"] ?? plain(c) : plain(c)).slice(0,100)), format: atom ? "atom" : "rss" }, ...(url ? { url } : {}), ...(Number.isFinite(date) ? { occurredAt: new Date(date).toISOString() } : {}) });
     }
     seen.add(id);
   }

@@ -185,7 +185,7 @@ test("a v8 database migrates: the person's text comes from the queue (its latest
   store.remember("work", { refs: [ref("t.7")], place: SIBLING, pet: "sibling", journals: ["sibling"], sender: { kind: "pet", name: "sibling" }, text: "giraffe", excerpt: "giraffe" });
   store.revise("work", "t.4", "t.4.1", "now about a giraffe", "now about a giraffe", {});
   expect([search(["giraffe"]), search(["text"])]).toEqual([["m7", "m4"], []]);
-  expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 17 });
+  expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 18 });
 });
 
 test("a v9 database (the live one) migrates: records keep their ids and texts, get a key the index is linked by, old senders their ref", () => {
@@ -230,7 +230,7 @@ test("a v9 database (the live one) migrates: records keep their ids and texts, g
   vacuumed.run("VACUUM"); // the index is linked by `id`, which VACUUM keeps
   vacuumed.close();
   expect([search("work", ["elephant"]), search("work", ["giraffe"])]).toEqual([["m5", "m4", "m2", "m1"], ["m2"]]);
-  expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 17 });
+  expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 18 });
 });
 
 test("a v10 database migrates: a person's records get their header's channel from the queue, an old envelope's made into one", () => {

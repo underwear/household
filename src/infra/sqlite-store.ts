@@ -1,3 +1,4 @@
+import { InboxEventStore } from "./inbox-event-store";
 import { MemoryStore } from "./memory-store";
 import type { AgentEvent } from "../core/agent-events";
 import { CronStore } from "./cron-store";
@@ -154,6 +155,7 @@ export class SqliteStore implements MessageStore, KeyValueStore, ChatRecords, Ch
   private readonly db: Database;
   readonly crons: CronStore;
   readonly memory: MemoryStore;
+  readonly inboxEvents: InboxEventStore;
 
   constructor(path: string) {
     this.db = new Database(path, { create: true, strict: true });
@@ -161,6 +163,7 @@ export class SqliteStore implements MessageStore, KeyValueStore, ChatRecords, Ch
     migrate(this.db);
     this.crons = new CronStore(this.db);
     this.memory = new MemoryStore(this.db);
+    this.inboxEvents = new InboxEventStore(this.db);
   }
 
   cronEvent(ids: number[], event: AgentEvent) { this.crons.event(ids,event); }

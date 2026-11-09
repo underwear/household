@@ -1,6 +1,8 @@
 """Host-only read-only mail polling. Credentials arrive on stdin, never argv or logs."""
 import email
 import email.policy
+import email.utils
+import datetime
 import html
 import imaplib
 import json
@@ -42,7 +44,15 @@ def message(raw, identity, truncated=False):
             text = "".join(parser.parts)
     text = "From: " + str(msg.get("From", ""))[:500] + "\nDate: " + str(msg.get("Date", ""))[:150] + "\n\n" + text
     if truncated or len(text) > 15000: text = text[:15000] + "\n[Message truncated; open your mail client for the full email.]"
-    return {"id": identity, "title": str(msg.get("Subject", "(no subject)"))[:300], "text": text[:16000]}
+    item = {"id": identity, "title": str(msg.get("Subject", "(no subject)"))[:300], "text": text[:16000], "metadata": {
+        "from": str(msg.get("From", ""))[:500], "to": str(msg.get("To", ""))[:1000], "cc": str(msg.get("Cc", ""))[:1000],
+        "subject": str(msg.get("Subject", ""))[:300], "messageId": str(msg.get("Message-ID", ""))[:500],
+        "date": str(msg.get("Date", ""))[:150], "contentType": msg.get_content_type(), "truncated": truncated or len(text) > 15000}}
+    try:
+        dt = email.utils.parsedate_to_datetime(str(msg.get("Date", "")))
+        if dt.tzinfo: item["occurredAt"] = dt.astimezone(datetime.timezone.utc).isoformat()
+    except Exception: pass
+    return item
 
 class BoundedIMAP(imaplib.IMAP4_SSL):
     def read(self, size):
@@ -75,7 +85,9 @@ def imap_poll(source, cursor, initial):
             chunks = [entry[1] for entry in data if isinstance(entry, tuple)]
             if chunks:
                 raw = b"".join(chunks)
-                items.append(message(raw[:MAX_MESSAGE], validity + ":" + str(uid), len(raw) >= MAX_MESSAGE))
+                item = message(raw[:MAX_MESSAGE], validity + ":" + str(uid), len(raw) >= MAX_MESSAGE)
+                item["metadata"].update({"uid": uid, "uidValidity": validity, "mailbox": source.get("mailbox", "INBOX")})
+                items.append(item)
             last = uid
         return {"items": items, "cursor": json.dumps({"validity": validity, "uid": last})}
 
@@ -116,7 +128,9 @@ def pop_poll(source, cursor, initial):
                 raw = b"\r\n".join(conn.top(number, 30)[1])[:MAX_MESSAGE]
             else:
                 raw = b"\r\n".join(conn.retr(number)[1])[:MAX_MESSAGE]
-            items.append(message(raw, uid, size > MAX_MESSAGE))
+            item = message(raw, uid, size > MAX_MESSAGE)
+            item["metadata"]["uidl"] = uid
+            items.append(item)
             old.add(uid)
         return {"items": items, "cursor": json.dumps({"uids": [uid for uid in all_ids if uid in old]})}
     finally:

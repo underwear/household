@@ -29,6 +29,8 @@ import { PetInboxFiles } from "../infra/pet-inbox";
 import { AttachmentFetcher, sweepInboxes } from "./attachments";
 import { homesDirectory } from "./runtime-services";
 import { householdTimezone } from "../core/timezone";
+import { inboxTools } from "./inbox-tools";
+import type { InboxEventStore } from "../infra/inbox-event-store";
 import { PetMemory } from "./memory";
 import type { MemoryStore } from "../infra/memory-store";
 import { Crons } from "./crons";
@@ -90,6 +92,7 @@ export interface DaemonDeps {
   messages: MessageStore;
   crons?: CronStore;
   memory?: MemoryStore;
+  inboxEvents?: InboxEventStore;
   /** The houses' chats under Household's message ids, and where each pet was last written to. */
   records: ChatRecords & ChatIds & KeyValueStore;
   /** Where the pets' history searches run, off the daemon's connection. */
@@ -309,7 +312,7 @@ export async function startDaemon(deps: DaemonDeps) {
   // What each subscription key has left, read off the gateway; a used-up key's requests stop there (keys.<k>.allowOverage lets them go on).
   const allowances = new KeyAllowances(records, (text) => events.info(text));
   let appliedHousehold: Household | undefined;
-  const houseInboxes = new HouseInboxes(records, { post: (h, i, e) => chat.postInbox(h, i, e), pet: (h, i, p, e) => chat.deliverInbox(h, i, p, e) });
+  const houseInboxes = new HouseInboxes(records, { post: (h, i, e) => chat.postInbox(h, i, e), pet: (h, i, p, e) => chat.deliverInbox(h, i, p, e) }, undefined, undefined, deps.inboxEvents);
   const crons = deps.crons ? new Crons(deps.crons, delivery,
     (house, pet) => placed.some((item) => item.house === house && item.pet === pet && !item.sideworker && !item.scout),
     (message) => events.info(message), undefined,
@@ -616,7 +619,7 @@ export async function startDaemon(deps: DaemonDeps) {
     const initial = await enqueue(async () => {
       const loaded = await config.load();
       const port = loaded.daemon.agentPort ?? DEFAULT_AGENT_PORT;
-      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.secrets.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
+      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.secrets.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
         // A scout's home is in its run's storage, not among the pets' homes.
         const home=placed.find(p=>p.house===house&&p.pet===pet)?.scout?.homePath;
         return home?{files:new PetOutboxFiles(dirname(home)),volume:basename(home)}:undefined;
@@ -750,6 +753,7 @@ export async function runDaemon(paths: Paths, services: () => DaemonServices = (
       messages: store,
       crons: store.crons,
       memory: store.memory,
+      inboxEvents: store.inboxEvents,
       records: store,
       history,
       openChannels: openChannels({ state: store, events, telegramApi }),

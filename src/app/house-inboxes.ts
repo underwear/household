@@ -1,12 +1,14 @@
+import type { InboxEventStore } from "../infra/inbox-event-store";
 import { HouseholdError } from "../core/errors";
 import { createHash } from "node:crypto";
-import { InboxPollError, houseInboxSchema, pollResultSchema, type HouseInbox, type InboxItem, type InboxState, type InboxView } from "../core/house-inboxes";
+import { InboxPollError, inboxMetadataSchema, houseInboxSchema, pollResultSchema, type HouseInbox, type InboxItem, type InboxState, type InboxView } from "../core/house-inboxes";
 import type { House } from "../core/household";
 import type { KeyValueStore } from "../infra/sqlite-store";
 import { pollInbox, type Poller } from "../infra/inbox-pollers";
 
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const sourceIdentity = (source: HouseInbox["source"]) => {
+  if (source.kind === "telegram-bot") return hash({ kind: source.kind, bot: source.token.split(":")[0] });
   const { password, headers, ...identity } = source as HouseInbox["source"] & { password?: string; headers?: Record<string, string> };
   return hash(identity);
 };
@@ -28,6 +30,7 @@ export class HouseInboxes {
     },
     private readonly poll: Poller = pollInbox,
     private readonly now: () => number = Date.now,
+    private readonly history?: InboxEventStore,
   ) {}
   setHouses(houses: House[]) {
     this.houses = houses;
@@ -73,7 +76,7 @@ export class HouseInboxes {
   async test(input: HouseInbox): Promise<{ count: number; message: string }> {
     const inbox = houseInboxSchema.parse(input);
     let result;
-    try { result = pollResultSchema.parse(await this.poll(inbox.source.kind === "health" ? { ...inbox.source, failures: 1 } : inbox.source, undefined, inbox.source.kind === "health" ? "latest" : "new", AbortSignal.timeout(65_000))); }
+    try { result = pollResultSchema.parse(await (this.poll.test ?? this.poll)(inbox.source.kind === "health" ? { ...inbox.source, failures: 1 } : inbox.source, undefined, inbox.source.kind === "health" ? "latest" : "new", AbortSignal.timeout(65_000))); }
     catch (error) { throw new HouseholdError(error instanceof InboxPollError ? error.message : "Connection failed. Check the endpoint, TLS, credentials and expected source format."); }
     return { count: result.items.length, message: inbox.source.kind === "health" ? `${result.items[0]?.title ?? "Endpoint checked"}. No events delivered; monitoring state unchanged.` : "Connection works. No events posted, no pet notified, and no polling cursor changed." };
   }
@@ -129,7 +132,8 @@ export class HouseInboxes {
         const item = redact(inbox, raw);
         // Source IDs are opaque and never need to be shown to a VM.
         item.id = id;
-        state.pending.push({ item, channel: inbox.channel, pets: [...inbox.pets], delivery: inbox.delivery, delivered: [] });
+        this.history?.record(house, inbox, item, this.now());
+        state.pending.push({ receivedAt: new Date(this.now()).toISOString(), item, channel: inbox.channel, pets: [...inbox.pets], delivery: inbox.delivery, delivered: [] });
         state.recent.unshift({ id, title: item.title, at: new Date(this.now()).toISOString(), status: "queued" });
       }
       state.seen = [...seen].slice(-5000);
@@ -163,6 +167,7 @@ export class HouseInboxes {
       const pending = state.pending[0]!;
       // Explicit destination changes affect future events only. Never silently reroute an old message.
       if (pending.channel !== inbox.channel) throw new Error("Pending events belong to the previous channel");
+      this.history?.record(house, { ...inbox, pets: pending.pets, delivery: pending.delivery ?? "announce" }, pending.item, Date.parse(pending.receivedAt ?? state.recent.find(e => e.id === pending.item.id)?.at ?? new Date(this.now()).toISOString()));
       if (!pending.posted) {
         await this.deliver.post(house, { ...inbox, delivery: pending.delivery ?? "announce" }, pending.item);
         pending.posted = true; save();
@@ -184,10 +189,12 @@ export class HouseInboxes {
 /** Prevent a source that echoes its authentication material from forwarding it into a chat or VM. */
 function redact(inbox: HouseInbox, item: InboxItem): InboxItem {
   const source = inbox.source;
-  const values = "password" in source ? [source.password] : Object.values(source.headers).flatMap(v => [v, v.replace(/^(Bearer|Basic) /i, "")]);
+  const values = source.kind === "telegram-bot" ? [source.token] : "password" in source ? [source.password] : Object.values(source.headers).flatMap(v => [v, v.replace(/^(Bearer|Basic) /i, "")]);
   const clean = (text: string) => {
     for (const value of values.filter(v => v.length > 0).sort((a, b) => b.length - a.length)) text = text.split(value).join("[redacted credential]");
     return text;
   };
-  return { ...item, id: clean(item.id), title: clean(item.title), text: clean(item.text), ...(item.url ? { url: clean(item.url) } : {}) };
+  const scrub = (value: unknown): unknown => typeof value === "string" ? clean(value) : Array.isArray(value) ? value.map(scrub) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, v]) => [clean(key), scrub(v)])) : value;
+  const metadata = item.metadata ? inboxMetadataSchema.safeParse(scrub(item.metadata)) : undefined;
+  return { ...item, ...(metadata ? { metadata: metadata.success ? metadata.data : { truncated: true } } : {}), id: clean(item.id), title: clean(item.title).slice(0,300), text: clean(item.text).slice(0,16000), ...(item.url ? { url: clean(item.url) } : {}) };
 }

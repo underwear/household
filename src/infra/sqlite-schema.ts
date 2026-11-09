@@ -408,6 +408,24 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
   // queued over a restart is fetched, or shown, the same.
   `ALTER TABLE messages ADD COLUMN attachments TEXT;`,
   `ALTER TABLE chat_messages ADD COLUMN outgoing TEXT;`,
+  `CREATE TABLE inbox_events (
+    id INTEGER PRIMARY KEY, house TEXT NOT NULL, inbox TEXT NOT NULL, event_id TEXT NOT NULL,
+    inbox_title TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, delivery TEXT NOT NULL,
+    title TEXT NOT NULL, text TEXT NOT NULL, metadata TEXT NOT NULL, url TEXT,
+    received INTEGER NOT NULL, occurred INTEGER, UNIQUE(house,inbox,event_id));
+  CREATE INDEX inbox_events_received ON inbox_events(house,received,id);
+  CREATE INDEX inbox_events_occurred ON inbox_events(house,occurred,id);
+  CREATE INDEX inbox_events_source ON inbox_events(house,inbox,id);
+  CREATE TABLE inbox_event_pets (event INTEGER NOT NULL REFERENCES inbox_events(id), pet TEXT NOT NULL, PRIMARY KEY(event,pet));
+  CREATE INDEX inbox_event_pet ON inbox_event_pets(pet,event);
+  CREATE VIRTUAL TABLE inbox_event_search USING fts5(title,text,metadata,content='inbox_events',content_rowid='id',tokenize='unicode61 remove_diacritics 2');
+  CREATE TRIGGER inbox_event_insert AFTER INSERT ON inbox_events BEGIN
+    INSERT INTO inbox_event_search(rowid,title,text,metadata) VALUES(new.id,new.title,new.text,new.metadata);
+  END;
+  CREATE TRIGGER inbox_event_delete AFTER DELETE ON inbox_events BEGIN
+    INSERT INTO inbox_event_search(inbox_event_search,rowid,title,text,metadata) VALUES('delete',old.id,old.title,old.text,old.metadata);
+    DELETE FROM inbox_event_pets WHERE event=old.id;
+  END;`,
 ];
 
 /** The schema version this code migrates databases to; a database with a newer one is not opened. */

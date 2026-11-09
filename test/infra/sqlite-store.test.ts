@@ -78,7 +78,7 @@ test("the schema is versioned: an M3 database gets the new columns and its threa
   store.close();
   expect(new SqliteStore(fresh).unfinished("work", "sibling")[0]).toMatchObject({ edits: "7", header, place: DM_SIBLING, facts }); // read back whole
   const db = new Database(fresh);
-  expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 17 });
+  expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 18 });
   db.run("PRAGMA user_version = 99");
   db.close();
   expect(() => new SqliteStore(fresh)).toThrow("newer than this Household knows");
@@ -108,7 +108,7 @@ test("a v2 database (what the live daemon has) gets the meta column and keeps it
   expect(store.get("telegram.1.offset")).toBe("42");
   store.close();
   const raw = new Database(path);
-  expect(raw.query("PRAGMA user_version").get()).toEqual({ user_version: 17 });
+  expect(raw.query("PRAGMA user_version").get()).toEqual({ user_version: 18 });
   raw.close();
   expect(new SqliteStore(path).remember("work", { refs: [ref("7")], place: DM_SIBLING, pet: "sibling", journals: ["sibling"], sender: oleg, text: "kept", excerpt: "kept" }).id).toBe("m1"); // the chat tables came
 });
@@ -343,7 +343,7 @@ test("Oleg's v12 database migrates (K2): places by key (the thread stays his), t
     ["m2", { username: "inkerfu" }], // Telegram's numbers are kept only
   ]);
   const raw = new Database(path);
-  expect(raw.query("PRAGMA user_version").get()).toEqual({ user_version: 17 });
+  expect(raw.query("PRAGMA user_version").get()).toEqual({ user_version: 18 });
   expect(raw.query("SELECT count(*) AS n FROM chat_ids WHERE kind = 'place'").get()).toEqual({ n: 0 });
   raw.close();
 });

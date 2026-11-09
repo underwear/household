@@ -150,3 +150,34 @@ test("poller-owned baseline can alert immediately for a failed health check", as
   await s.service.run("work", "mail");
   expect(s.posted).toHaveLength(1);
 });
+
+test("archive persists redacted content and nested metadata before delivery, survives inbox removal", async () => {
+  const s = setup(async () => ({items: []}));
+  s.source.initial="latest";
+  s.source.source={kind:"telegram-bot",token:"12345:ABCDEFGHIJKLMNOPQRSTUVWXYZ_test"};
+  const secret=s.source.source.token;
+  const poll: Poller=async()=>({items:[{id:"one",title:"New",text:secret,metadata:{nested:{auth:secret},list:[secret],event:42},occurredAt:"2026-11-08T12:00:00Z"}]});
+  const service=new HouseInboxes(s.store,{post:async()=>{throw Error('offline');},pet:()=>{}},poll,()=>Date.parse("2026-11-09T12:00:00Z"),s.store.inboxEvents);
+  service.setHouses([s.house]);
+  await service.run('work','mail');
+  const archive=s.store.inboxEvents.find('work','alice',{});
+  expect(archive.events).toHaveLength(1);
+  expect(JSON.stringify(archive)).not.toContain(secret);
+  expect(archive.events[0]!.metadata.nested.auth).toBe('[redacted credential]');
+  expect(service.list('work')[0]!.status.pendingCount).toBe(1);
+  await service.run('work','mail');expect(s.store.inboxEvents.find('work','alice',{}).events).toHaveLength(1);
+  await service.edit('work','mail',async()=>service.setHouses([]),true);
+  expect(s.store.inboxEvents.find('work','alice',{}).events).toHaveLength(1);
+});
+
+test("Telegram token rotation preserves cursor and the probe uses its non-consuming test hook", async()=>{
+ const cursors:(string|undefined)[]=[];
+ const poll:Poller=async(_s,c)=>{cursors.push(c);return {items:[],cursor:'saved'};};
+ let probes=0;poll.test=async()=>{probes++;return {items:[]};};
+ const s=setup(poll);
+ s.source.source={kind:'telegram-bot',token:'12345:ABCDEFGHIJKLMNOPQRSTUVWXYZ_test'};
+ await s.service.test(s.source);expect(probes).toBe(1);expect(cursors).toEqual([]);
+ await s.service.run('work','mail');
+ s.source.source={kind:'telegram-bot',token:'12345:ABCDEFGHIJKLMNOPQRSTUVWXYZ_rotated'};
+ await s.service.run('work','mail');expect(cursors).toEqual([undefined,'saved']);
+});

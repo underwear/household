@@ -6,6 +6,7 @@ import { Page, Panel, Stack } from "./layout";
 import { written } from "./section";
 
 const sources = [
+  { value: "telegram-bot", label: "Telegram Bot Updates", description: "Receive updates from a dedicated bot. Never sends or edits messages." },
   { value: "rss", label: "RSS / Atom", description: "New entries from a feed. Articles, releases and changelogs." },
   { value: "health", label: "Health check", description: "Endpoint failures and recovery, without repeated alerts." },
   { value: "json-watch", label: "JSON watcher", description: "Changes to selected fields or the entire JSON response." },
@@ -76,6 +77,7 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
   const [step, setStep] = useState(inbox ? 2 : 0);
   const [kind, setKind] = useState<HouseInbox["source"]["kind"]>(inbox?.source.kind ?? "imap");
   const source = inbox?.source;
+  const [botToken, setBotToken] = useState(source?.kind === "telegram-bot" ? source.token : "");
   const [title, setTitle] = useState(inbox?.title ?? "");
   const [url, setUrl] = useState(source && "url" in source ? source.url : "");
   const [host, setHost] = useState(source && "host" in source ? source.host : "");
@@ -106,7 +108,7 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
     title: title.trim() || sources.find(s => s.value === kind)!.label,
     enabled: inbox?.enabled ?? true, intervalSeconds: Number(frequency === "custom" ? custom : frequency) * 60,
     channel: channel || "preview", pets, initial, delivery,
-    source: kind === "imap" ? { kind, host: host.trim(), port: Number(port || 993), username, password, mailbox } :
+    source: kind === "telegram-bot" ? { kind, token: botToken.trim() } : kind === "imap" ? { kind, host: host.trim(), port: Number(port || 993), username, password, mailbox } :
       kind === "pop3" ? { kind, host: host.trim(), port: Number(port || 995), username, password } :
       kind === "health" ? { kind, url: url.trim(), headers: requestHeaders(), timeoutMs: Number(timeout) * 1000, failures: Number(failures), expectedStatus: Number(expectedStatus) } :
       kind === "json-watch" ? { kind, url: url.trim(), headers: requestHeaders(), pointers: watchMode === "fields" ? pointers.split("\n").map(p => p.trim()).filter(Boolean) : [] } :
@@ -131,8 +133,12 @@ function InboxEditor({ house, inbox, onClose, save }: { house: HouseView; inbox?
       <ol className="slack-steps" aria-label="Inbox setup steps">{["Source", "Connection", "Delivery"].map((label, i) => <li key={label} aria-current={step === i ? "step" : undefined}><span>{i < step ? "✓" : i + 1}</span>{label}</li>)}</ol>
       {step === 0 && <ChoiceList label="What should this inbox watch?" value={kind} onChange={value => { setKind(value as typeof kind); setPort(""); setHeaders(value === "datadog" ? [["DD-API-KEY", ""], ["DD-APPLICATION-KEY", ""]] : value === "grafana" ? [["Authorization", "Bearer "]] : []); }} options={sources} />}
       {step === 1 && <>
-        <p className="hint">{mail ? "Read-only access over verified TLS. Use an app password if your provider requires one. OAuth-only mailboxes are not supported yet." : "Requests run on the host. Put credentials in headers; redirects are refused."}</p>
-        {mail ? <>
+        <p className="hint">{kind === "telegram-bot" ? "Incoming updates only. The bot token stays on the host and never enters a pet VM." : mail ? "Read-only access over verified TLS. Use an app password if your provider requires one. OAuth-only mailboxes are not supported yet." : "Requests run on the host. Put credentials in headers; redirects are refused."}</p>
+        {kind === "telegram-bot" ? <>
+          <TextField label="Bot token" type="password" value={botToken} onChange={setBotToken} placeholder="123456789:…" hint="Use a dedicated bot token from BotFather, not your Household channel bot." />
+          <p className="hint">Telegram has one update queue per bot. Polling acknowledges received updates; do not run another consumer on this token. Existing webhooks are refused and never removed.</p>
+          <p className="hint">Connection testing only checks bot identity and webhook status. It does not read or acknowledge updates. Telegram retains pending updates for up to 24 hours.</p>
+        </> : mail ? <>
           <TextField label="Mail server" value={host} onChange={setHost} placeholder="imap.example.com" />
           <TextField label="TLS port" value={port} onChange={setPort} inputMode="numeric" placeholder={kind === "imap" ? "993" : "995"} />
           <TextField label="Username" value={username} onChange={setUsername} placeholder="you@example.com" />

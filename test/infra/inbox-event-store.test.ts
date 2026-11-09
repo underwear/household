@@ -1,0 +1,34 @@
+import {expect,test} from "bun:test";
+import {SqliteStore} from "../../src/infra/sqlite-store";
+import {houseInboxSchema,inboxItemSchema} from "../../src/core/house-inboxes";
+import {tempDir} from "../helpers";
+import {join} from "node:path";
+const inbox=houseInboxSchema.parse({name:"alerts",title:"Alerts",channel:"one",pets:["alice"],source:{kind:"http",url:"https://example.com"}});
+const item=(id:string)=>({id,title:"CPU spike",text:"Ошибка платежа production",metadata:{service:"billing",nested:{region:"eu"}},occurredAt:"2026-11-08T12:00:00Z"});
+test("durable inbox archive deduplicates, retains metadata/dates and separates tenants and recipients",()=>{
+ const path=join(tempDir(),'history.db');let s=new SqliteStore(path);
+ s.inboxEvents.record("work",inbox,item("a"),Date.parse("2026-11-09T10:00:00Z"));
+ s.inboxEvents.record("work",{...inbox,pets:["bob"]},item("a"));
+ expect(s.inboxEvents.find("work","bob",{}).events).toEqual([]);
+ expect(s.inboxEvents.find("other","alice",{}).events).toEqual([]);
+ s.close();s=new SqliteStore(path);
+ const found=s.inboxEvents.find("work","alice",{query:"ошиб платеж",since:"2026-11-09T11:00:00+01:00",until:"2026-11-09T11:01:00+01:00"});
+ expect(found.events).toHaveLength(1);
+ expect(found.events[0]).toMatchObject({metadata:{service:"billing",nested:{region:"eu"}},occurredAt:"2026-11-08T12:00:00.000Z",receivedAt:"2026-11-09T10:00:00.000Z"});
+ expect(s.inboxEvents.find("work","alice",{query:"billing eu"}).events).toHaveLength(1);
+ expect(s.inboxEvents.find("work","alice",{since:"2026-11-09T00:00:00Z",time:"occurred"}).events).toHaveLength(0);
+ expect(s.inboxEvents.find("work","alice",{since:"2026-11-08T12:00:00Z",until:"2026-11-08T12:00:01Z",time:"occurred"}).events).toHaveLength(1);
+ expect(s.inboxEvents.list("work","alice")[0]!.events).toBe(1);s.close();
+});
+test("archive paginates stably, caps responses, treats FTS syntax as text, validates dates",()=>{
+ const s=new SqliteStore(':memory:');
+ for(let n=0;n<5;n++)s.inboxEvents.record('work',inbox,{...item(String(n)),text:'long '.repeat(3000)});
+ const first=s.inboxEvents.find('work','alice',{limit:2});
+ const second=s.inboxEvents.find('work','alice',{limit:2,before:first.next});
+ expect(first.events).toHaveLength(2);expect(second.events).toHaveLength(2);
+ expect(first.events[1]!.id).toBeGreaterThan(second.events[0]!.id);
+ expect(s.inboxEvents.find('work','alice',{limit:50}).events.length).toBeLessThan(5);
+ expect(s.inboxEvents.find('work','alice',{query:'" OR *'}).events).toEqual([]);
+ expect(()=>s.inboxEvents.find('work','alice',{since:'2026-11-09T00:00:00Z',until:'2026-11-08T00:00:00Z'})).toThrow();
+ expect(inboxItemSchema.safeParse({...item('bad'),metadata:{big:'x'.repeat(17000)}}).success).toBe(false);s.close();
+});

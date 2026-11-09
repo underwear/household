@@ -1,4 +1,4 @@
-import { houseInboxesSchema } from "../core/house-inboxes";
+import { houseInboxesSchema, telegramInboxProblems } from "../core/house-inboxes";
 import { houseFeaturesSchema, previewSettingsSchema } from "../core/house-features";
 import { petCpuSchema, petMemorySchema, sideworkerLimitsSchema } from "../core/resources";
 import { validTimezone } from "../core/timezone";
@@ -369,7 +369,7 @@ export function parseHousehold(raw: unknown, source: string): Household {
       })),
     })),
   };
-  const problems = [...household.houses.flatMap(channelProblems), ...botProblems(household.houses)];
+  const problems = [...household.houses.flatMap(channelProblems), ...botProblems(household.houses), ...telegramInboxProblems(household.houses)];
   for (const secret of household.secrets) {
     if (secret.onlyForCapabilities?.length && !secret.houses?.length) problems.push(`capability-only secret '${secret.name}' must name its houses`);
   }

@@ -6,7 +6,7 @@ Pollers run on the host. Passwords and authorization headers stay in the private
 
 ## Setup
 
-1. Choose **RSS / Atom**, **Health check**, **JSON watcher**, **IMAP**, **POP3**, **Grafana**, **Datadog**, or **Custom HTTP**.
+1. Choose **Telegram Bot Updates**, **RSS / Atom**, **Health check**, **JSON watcher**, **IMAP**, **POP3**, **Grafana**, **Datadog**, or **Custom HTTP**.
 2. Enter connection details and choose **Test connection & continue**. Testing reads the source without posting messages, notifying pets or changing its saved cursor.
 3. Name the inbox. Choose **every minute**, **every 5 minutes**, **every 15 minutes**, or a custom interval from 60 seconds to 24 hours.
 4. Choose delivery mode, a channel and subscribers. Only pets placed in that channel are offered. In announcement mode, leave all unchecked for a channel-only feed. In silent mode, the channel determines where pets can reply.
@@ -18,6 +18,7 @@ The page shows status, next check, pending deliveries and the last 50 events. **
 
 | Source | Connection | What arrives |
 | --- | --- | --- |
+| Telegram Bot Updates | Dedicated BotFather token, no webhook or other consumer | Incoming Bot API updates; never sends/edits messages |
 | RSS / Atom | Feed URL, optional headers | New entries identified by GUID/Atom ID, link, or content fallback |
 | Health check | URL, expected status, timeout, consecutive failure threshold | Down/recovered transitions |
 | JSON watcher | URL, optional headers, whole response or selected JSON Pointer paths | Changed values or current response preview |
@@ -32,6 +33,14 @@ Use read access appropriate to the Grafana alert resources or Datadog monitor. D
 Email requires Python 3.9+ on the host and a provider accepting a password or app password. OAuth-only mailboxes and STARTTLS ports (143/110) are not implemented. Certificates and hostnames are verified. Attachments are not forwarded; MIME text/HTML becomes plain text, with previews capped at 64 KiB per mail and 16,000 characters per event. Large POP3 messages require server support for `TOP`. Up to 10,000 mailbox IDs are supported. IMAP UIDVALIDITY changes establish a new baseline without replaying the folder.
 
 Recent-mail import takes the latest 50 existing messages, then catches up new mail in batches of 50. Grafana imports current alerts in batches of 50, up to 1,000 alerts. The default first successful check establishes a baseline without sending existing events.
+
+## Telegram Bot Updates
+
+Use a **dedicated bot token**. Household calls only `getMe`, `getWebhookInfo` and `getUpdates`. It never sends or edits messages, downloads attachments, answers callbacks, changes update subscriptions, or installs/removes a webhook. Tokens stay on the host, including Telegram's required token-in-URL API requests; transport errors are replaced with credential-free diagnostics.
+
+Telegram exposes a single update queue per bot. Advancing `offset` **acknowledges updates on Telegram**; this is an incoming-only consumer, not an independent read-only mirror. Do not share the token with another polling process. Household rejects bots already used by one of its channels or another inbox, including across houses and token rotation. Existing webhooks are refused without changing them. A competing external consumer may return HTTP 409; external consumers cannot always be detected in advance.
+
+Connection testing calls only `getMe` and `getWebhookInfo`: no updates read or acknowledged. Normal polling uses up to 50 updates and 10-second long polling per scheduled check. The next offset is saved with pending deliveries and used only after those deliveries drain. “Start from now” skips the pending queue counted at first connection, in batches; import starts with the oldest pending updates. Do not use this as an archive of historical Telegram chat messages: the API retains pending updates for at most 24 hours, and only returns updates the bot is permitted/subscribed to receive. Existing `allowed_updates` settings and privacy mode remain unchanged. Callback and non-message updates are retained as JSON previews; they are not acted upon.
 
 ## RSS / Atom
 
@@ -57,6 +66,42 @@ Use `~1` for a slash in a property name and `~0` for a tilde. Missing fields are
 
 The poller stores only SHA-256 hashes and a transition counter in its cursor, not copies of the previous JSON body. Repeated identical responses are quiet. Returning to an earlier value is a new transition, including after a restart. Events contain current changed field values, or a whole-response preview limited to 16,000 characters, with a truncation marker. “Start from now” establishes a silent baseline; “Deliver current items / snapshot” emits the first snapshot. Errors or invalid JSON preserve the last successful baseline.
 
+## Durable event history and metadata
+
+Every accepted new event is archived in the host SQLite database **before delivery**, including silent events and events whose channel delivery needs retrying. The archive keeps title, full accepted notification text, URL, source kind, delivery mode, arbitrary JSON-object `metadata`, and both timestamps:
+
+- `occurredAt`: source event time, when provided; otherwise null.
+- `receivedAt`: when Household accepted the event, always present.
+
+The scheduler's “Recent events” list is capped at 50; the archive is not. Removing or pausing an inbox does not erase history. Backups include it. Archiving starts with this version: previously delivered notifications are not reconstructed from chat previews, and events skipped by initial baselining are not archived. Text limits still apply; an archived preview is not the original attachment or an unlimited provider response.
+
+### Pet tools
+
+- `inbox_list({})`: subscribed inboxes and readable retained archives, without connection credentials.
+- `inbox_history({inbox?, since?, until?, time?, before?, limit?})`: event slices, newest accepted first.
+- `inbox_search({query, ...sameFilters})`: word/prefix search across notification title, body **and metadata**. All search words must match.
+
+`since` is inclusive, `until` exclusive; timestamps must include a timezone. `time` defaults to `received`; `occurred` filters by source time, falling back to received time when absent. Pass returned `next` as `before` with unchanged filters to continue. Default 10 events, maximum 50, also capped by response size. Results include metadata and both timestamps.
+
+```json
+{"inbox":"production-alerts","since":"2026-11-09T00:00:00+01:00","until":"2026-11-10T00:00:00+01:00","limit":10}
+```
+
+Each pet can read only events addressed to it when they were accepted, within its own house. A new subscriber does not retroactively gain old events; removal of a subscription stops new delivery but preserves access to its own archived events. Scouts/sideworkers do not automatically inherit this access. Retrieved notifications and metadata remain untrusted external content, not owner instructions. Known source credentials are redacted recursively from content and metadata before storage or delivery.
+
+### Built-in metadata
+
+| Source | Metadata |
+| --- | --- |
+| Telegram | `updateId`, `type`, chat and sender IDs/names, message/thread IDs, callback identifiers/data when present; message date supplies `occurredAt` |
+| IMAP / POP3 | `from`, `to`, `cc`, `subject`, `messageId`, raw date, content type, truncation flag; IMAP UID/UIDVALIDITY/mailbox or POP3 UIDL; a valid timezone-aware mail date supplies `occurredAt` |
+| RSS / Atom | `feedUrl`, `entryId`, author, categories, feed format; published/updated time supplies `occurredAt` |
+| Grafana | Fingerprint, start time, bounded labels, current/previous state; disappearance includes the prior state |
+| Datadog | Monitor ID, current/previous state |
+| Health check | State, HTTP status, expected status, latency, timeout, failure count and reason |
+| JSON watcher | Whole/fields mode, changed JSON Pointer paths and transition generation |
+| Custom HTTP | Any provider-defined JSON object conforming to the size/depth bounds below |
+
 ## Custom HTTP contract, version 1
 
 Household sends **GET** to the configured URL, preserving query parameters and adding `limit=50` and, after a response supplies it, `cursor=<opaque cursor>`.
@@ -74,7 +119,8 @@ Respond with HTTP 200 and JSON:
       "title": "Payment service latency",
       "text": "p95 latency exceeded 2 seconds for five minutes.",
       "url": "https://status.example.com/incidents/184",
-      "occurredAt": "2026-11-09T08:30:00Z"
+      "occurredAt": "2026-11-09T08:30:00Z",
+      "metadata": { "service": "payments", "severity": "warning", "ticketId": 184 }
     }
   ],
   "nextCursor": "184"
@@ -90,6 +136,7 @@ Respond with HTTP 200 and JSON:
 | `text` | Required plain-text string, maximum 16,000 characters |
 | `url` | Optional HTTP(S) URL, without embedded credentials |
 | `occurredAt` | Optional ISO 8601 timestamp with timezone |
+| `metadata` | Optional arbitrary JSON object, up to 16 KiB serialized UTF-8 and 8 levels deep; arrays, objects, strings, numbers, booleans and null allowed inside |
 | `nextCursor` | Optional opaque string, maximum 4,096 characters; omission retains the previous cursor |
 
 On the **first request without a cursor**, return the most recent 50 events and a cursor after them. “Start from now” records these IDs/cursor without delivery; “import recent” delivers them. Subsequent requests return the next oldest events after the cursor, advancing only through returned items. An empty array means caught up. If more than 50 wait, the next page arrives on the following poll. Without cursors, return a recent rolling window; Household remembers the last 5,000 IDs per inbox.
@@ -147,12 +194,13 @@ Configuration and polling state are included in normal Household backups. Restor
 
 Add a validated source variant to `pollSourceSchema`, implement its handler, register it in the exhaustive registry in `src/infra/inbox-pollers.ts`, and add the corresponding connection fields in the admin UI.
 
-The host-only handler contract is `(source, cursor, initial, signal) => Promise<PollResult>`. Return up to 50 normalized `InboxItem` events and an opaque cursor (up to 1 MB). The application persists the cursor with pending delivery before dispatch; no poller-local files or in-memory caches are needed. Honor cancellation and do not mutate remote data. Use safe fixed diagnostics (`InboxPollError`) rather than including provider responses or credentials in errors.
+A handler may provide a separate non-consuming `test` probe; Telegram uses one because a connection check must not acknowledge updates. The host-only handler contract is `(source, cursor, initial, signal) => Promise<PollResult>`. Return up to 50 normalized `InboxItem` events and an opaque cursor (up to 1 MB). The application persists the cursor with pending delivery before dispatch; no poller-local files or in-memory caches are needed. Honor cancellation and do not mutate remote data. Use safe fixed diagnostics (`InboxPollError`) rather than including provider responses or credentials in errors.
 
 `inbox-pollers/common.ts` supplies bounded HTTP reads, canonical JSON and SHA-256 hashes. Each implementation owns the meaning of its cursor: feed IDs, watched-field hashes, or health state/counters. Event IDs must distinguish separate transitions (A → B → A) while remaining stable for retries. `baselineHandled: true` is reserved for built-in pollers that own first-check delivery semantics, such as health monitoring; it is not part of the external HTTP contract. Other sources use the normal first-check baseline suppression. Pollers never choose recipients or delivery modes.
 
 ## References
 
+- [Telegram Bot API: getting updates](https://core.telegram.org/bots/api#getting-updates)
 - [Grafana Alertmanager API routes](https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/api/generated_base_api_alertmanager.go)
 - [Datadog monitor details API](https://docs.datadoghq.com/api/latest/monitors/get-a-monitors-details/)
 - [Python IMAP client](https://docs.python.org/3/library/imaplib.html)
