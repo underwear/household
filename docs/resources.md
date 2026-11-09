@@ -1,6 +1,6 @@
 # Workspace resources
 
-Each workspace has one CPU/RAM budget. Configure it in **Workspace → Settings → Workspace capacity**. The resource bars show the total, permanent pet reservations, helper allocations and remaining capacity. The allocation list shows each pet, scout and sideworker with its VM maximum and lifecycle state. It refreshes every five seconds.
+Each workspace has one CPU/RAM budget. It has its own page, **Workspace → Resources**: a bar per resource shows the total, what bots reserve, what scouts and sideworkers hold and what is free; **Who holds what** lists each bot, scout and sideworker with its VM size and state, refreshed every five seconds. **Change capacity…** sets the total. The workspace's Overview shows what is free.
 
 Set a pet's CPU/RAM on its **Resources** tab, or when creating it. This reserves that capacity even while the pet is paused, asleep or restarting. Deleting the pet releases its reservation after VM cleanup. Reducing its size stages the change for its next boot: the budget keeps the larger running VM maxima until restart or stop, including across daemon restarts. The allocation list marks this as resize pending. The form previews how much remains for helpers.
 

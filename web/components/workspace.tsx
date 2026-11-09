@@ -1,4 +1,4 @@
-import { WorkspaceResources } from "./workspace-resources";
+import { ResourcesPage } from "./workspace-resources";
 import { WorkspaceConnectors } from "./workspace-connectors";
 import { WorkspaceInboxesPage } from "./workspace-inboxes";
 import { ScoutsPage } from "./scouts";
@@ -93,9 +93,9 @@ export function WorkspacePage({ house, tab, known, keys, capacity, refresh, noti
           )}
         </Page>
       )}
+      {tab === "resources" && <ResourcesPage key={house.name} house={house} host={capacity.host} refresh={refresh} notify={notify} />}
       {tab === "settings" && (
         <Page title="Settings">
-          <WorkspaceResources key={house.name} house={house} host={capacity.host} refresh={refresh} notify={notify} />
           <WorkspaceFeatureSettings key={JSON.stringify([house.name, house.features, house.preview])} house={house} refresh={refresh} notify={notify} />
           <DeleteSection house={house} ask={dialog.open} refresh={refresh} notify={notify} />
         </Page>

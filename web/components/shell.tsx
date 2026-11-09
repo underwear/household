@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AppWindow, Compass, BookOpen, Archive, ChevronDown, Globe, Building2, LayoutDashboard, LayoutList, LogOut, Menu, Plus, MessagesSquare, Moon, Bot, Settings, SlidersHorizontal, Sun, Pickaxe, X, type LucideIcon } from "lucide-react";
+import { Gauge, AppWindow, Compass, BookOpen, Archive, ChevronDown, Globe, Building2, LayoutDashboard, LayoutList, LogOut, Menu, Plus, MessagesSquare, Moon, Bot, Settings, SlidersHorizontal, Sun, Pickaxe, X, type LucideIcon } from "lucide-react";
 import type { WorkspaceView, MeView } from "../api";
 import { houseFeatures } from "../../src/core/house-features";
 import { workspacePath, isCurrent, botPath, type WorkspaceTab } from "../router";
@@ -35,6 +35,7 @@ const houseNav = (house: string, view?: WorkspaceView): NavEntry[] => {
     ...(on.scouts ? [{ label: "Scouts", icon: Compass, path: workspacePath(house, "scouts"), also: [workspacePath(house, "capabilities")] }] : []),
     ...(on.preview ? [{ label: "Previews", icon: AppWindow, path: workspacePath(house, "previews") }] : []),
     { label: "Network", icon: Globe, path: workspacePath(house, "network") },
+    { label: "Resources", icon: Gauge, path: workspacePath(house, "resources") },
     { label: "Settings", icon: Settings, path: workspacePath(house, "settings") },
   ];
 };

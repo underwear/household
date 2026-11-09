@@ -7,6 +7,7 @@ import { useDialog, type DialogSpec } from "./dialog";
 import { Link } from "./link";
 import { Cell, List, ListRow, Section } from "./layout";
 import { ownBots, petState } from "./bot-state";
+import { FreeLink } from "./workspace-resources";
 import { gib, petResources } from "../../src/core/resources";
 
 /** Closing a sideworker: its work stops now and its VM goes; what it wrote in the shared files stays. */
@@ -59,7 +60,7 @@ export function WorkspaceSideworkers({ house, refresh }: { house: WorkspaceView;
   };
   const retry = (worker: SideworkerRecord) => dialog.open({ ...closeWorkerDialog(house.name, { name: worker.name, title: worker.name }, reload), title: `Retry closing ${worker.name}?`, confirmLabel: "Retry close" });
   return (
-    <Section title="Running" hint={`${active} allocated · shares the workspace CPU/RAM budget with scouts.`}>
+    <Section title="Running" hint={<>{active} running{house.resources && <> · <FreeLink house={house} /> for more, shared with scouts</>}.</>}>
       {error && <p className="error" role="alert">{error}</p>}
       <List
         columns="minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 1.4fr) auto auto"

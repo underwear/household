@@ -1,5 +1,6 @@
-import { ResourceBudgetSummary } from "./workspace-resources";
-import { Globe, MessagesSquare, Bot, Pickaxe, type LucideIcon } from "lucide-react";
+import { Gauge, Globe, MessagesSquare, Bot, Pickaxe, type LucideIcon } from "lucide-react";
+import { gib } from "../../src/core/resources";
+import { overBudget } from "./workspace-resources";
 import { houseFeatures } from "../../src/core/house-features";
 import type { ReactNode } from "react";
 import type { WorkspaceView } from "../api";
@@ -22,10 +23,13 @@ export function WorkspaceOverviewPage({ house }: { house: WorkspaceView }) {
       <div className="stats">
         <Stat href={workspacePath(house.name, "bots")} icon={Bot} label="Bots" value={pets.length} sub={pets.length === 0 ? "none yet" : `${running} running`} />
         <Stat href={workspacePath(house.name, "channels")} icon={MessagesSquare} label="Channels" value={house.channels.length} sub={closed ? `${closed} not open` : count(house.owners.length, "owner")} warn={closed > 0} />
-        <Stat href={workspacePath(house.name, "sideworkers")} icon={Pickaxe} label="Sideworkers" value={workers} sub={!houseFeatures(house).sideworkers ? "off in this workspace" : "shares workspace resources"} />
+        <Stat href={workspacePath(house.name, "sideworkers")} icon={Pickaxe} label="Sideworkers" value={workers} sub={!houseFeatures(house).sideworkers ? "off in this workspace" : workers ? "running now" : "none running"} />
+        {house.resources && (
+          <Stat href={workspacePath(house.name, "resources")} icon={Gauge} label="Free resources" value={`${house.resources.available.cpus} vCPU`}
+            sub={overBudget(house.resources) ? "over capacity" : `${gib(house.resources.available.memoryMiB)} RAM`} warn={overBudget(house.resources)} />
+        )}
         <Stat href={workspacePath(house.name, "network")} icon={Globe} label="Hosts allowed" value={house.allow.length} sub={temporary ? `${temporary} temporary` : "no temporary access"} />
       </div>
-      {house.resources && <ResourceBudgetSummary budget={house.resources} />}
       <Section
         title="Bots"
         actions={

@@ -25,6 +25,7 @@ import { keysFor, useHarnessForm } from "./bots";
 import { SkillPreview } from "./skills";
 import { ScoutDocumentEditor } from "./scout-editor";
 import { ScoutsTabs, kindTag } from "./capabilities";
+import { FreeLink } from "./workspace-resources";
 
 type Notify = (text: string, warning?: boolean) => void;
 const done = (run: ScoutRunView) => ["done", "failed", "cancelled"].includes(run.status);
@@ -118,11 +119,11 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
       {!view ? !error && <p className="hint">Loading…</p> : (
         <>
           {running.length > 0 ? (
-            <Section title="Running" hint={`${running.length} running · shared workspace resource budget.`}>
+            <Section title="Running" hint={<>{running.length} running{house.resources && <> · <FreeLink house={house} /> for more, shared with sideworkers</>}.</>}>
               <ScoutRuns house={house.name} pets={house.pets} runs={running} scouts={view.scouts} running refresh={load} />
             </Section>
           ) : (
-            <Section><p className="blank-line"><span><span className="dot off" /> None running · shared workspace resource budget</span></p></Section>
+            <Section><p className="blank-line"><span><span className="dot off" /> None running{house.resources && <> · <FreeLink house={house} /> to start one</>}</span></p></Section>
           )}
           <Section>
             {view.scouts.length === 0 ? (
@@ -334,7 +335,7 @@ function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
       },
       children: (
         <>
-          <p className="hint">Scouts share the workspace CPU/RAM budget with sideworkers. Bots choose a size for each run; these are the defaults.</p>
+          <p className="hint">Scouts start from this workspace’s free resources, shared with sideworkers; a bot may choose a size for each run. These are the defaults.</p>
           <FormGroup title="Harness">
             <p className="hint">Every scout runs on it unless it sets its own. A change applies from the next run.</p>
             {form.fields}

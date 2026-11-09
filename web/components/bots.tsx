@@ -1,5 +1,5 @@
 import { BotResourceSummary, useWorkspaceMetrics } from "./bot-resource-summary";
-import { allocatedTotal, crowds, CROWDED_SHARE, petResources, petCpuSchema, petMemorySchema, type HostCapacity, type PetResources as BotResources } from "../../src/core/resources";
+import { allocatedTotal, crowds, gib, CROWDED_SHARE, petResources, petCpuSchema, petMemorySchema, type HostCapacity, type PetResources as BotResources } from "../../src/core/resources";
 import { PET_NAME_PATTERN as BOT_NAME_PATTERN, PET_NAME_HINT as BOT_NAME_HINT } from "../../src/core/names";
 import type { AgentModel as HarnessModel } from "../../src/core/agent";
 import { useEffect, useState } from "react";
@@ -289,7 +289,7 @@ export function useResourceForm({ host, houses }: Capacity, house: string, pet?:
   const previous = allocation ?? (pet ? petResources(pet) : { cpus: 0, memoryMiB: 0 });
   const effective = { cpus: Math.max(value.cpus, allocation?.resident?.cpus ?? 0), memoryMiB: Math.max(value.memoryMiB, allocation?.resident?.memoryMiB ?? 0) };
   const remaining = budget && { cpus: budget.total.cpus - budget.reserved.cpus - budget.helpers.cpus + previous.cpus - effective.cpus, memoryMiB: budget.total.memoryMiB - budget.reserved.memoryMiB - budget.helpers.memoryMiB + previous.memoryMiB - effective.memoryMiB };
-  const budgetError = remaining && (remaining.cpus < 0 || remaining.memoryMiB < 0) ? "This reservation exceeds the workspace budget. Close helpers or increase capacity in Workspace Settings." : undefined;
+  const budgetError = remaining && (remaining.cpus < 0 || remaining.memoryMiB < 0) ? "More than this workspace’s capacity: choose less, close a scout or sideworker, or raise the capacity on the Resources page." : undefined;
   const fields = (
     <>
       <FormGrid>
@@ -299,7 +299,7 @@ export function useResourceForm({ host, houses }: Capacity, house: string, pet?:
           hint={!ramError && value.memoryMiB < 1024 ? "Under 1 GiB a harness may run out of memory." : undefined}
           warning={!ramError && crowds(value.memoryMiB, host.memoryMiB) ? CROWDED : undefined} />
       </FormGrid>
-      {remaining && <p className={budgetError ? "error" : "hint"} role="status">{budgetError ?? `Reserved for this pet, including while paused. Reductions release capacity after VM restart. Left for helpers: ${remaining.cpus} vCPU · ${remaining.memoryMiB / 1024} GiB.`}</p>}
+      {remaining && <p className={budgetError ? "error" : "hint"} role="status">{budgetError ?? `Kept for this bot even while paused; a smaller size frees the rest at its next start. Leaves ${remaining.cpus} vCPU · ${gib(remaining.memoryMiB)} for scouts and sideworkers.`}</p>}
       {!cpuError && !ramError && <AllocatedLine total={total} host={host} hostRam={maxRam} />}
     </>
   );

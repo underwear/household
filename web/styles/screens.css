@@ -449,9 +449,25 @@ textarea.control.inbox-pointers { min-height: 6em; }
 /* An account's address wraps rather than lose its domain: work and personal ones differ there. */
 .connector-email { overflow-wrap: anywhere; }
 
-.resource-budget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
-.resource-budget-bar { display: flex; height: 10px; border-radius: var(--radius-md); overflow: hidden; background: var(--line); }
-.resource-budget-bar > span { flex-shrink: 0; }
-.resource-pets { background: var(--idle); }
-.resource-helpers { background: var(--muted); }
-@media (max-width: 600px) { .resource-budget-grid { grid-template-columns: 1fr; } }
+/* Workspace · Resources: a meter per resource (bots' share, then scouts' and sideworkers', then free), its legend. */
+.resource-meters { display: flex; flex-direction: column; gap: var(--space-4); max-width: 960px; }
+.resource-meter { display: grid; grid-template-columns: 48px minmax(0, 1fr) minmax(150px, auto); align-items: center; gap: var(--space-4); }
+.resource-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--line); }
+.resource-bar.over { box-shadow: 0 0 0 1px var(--danger); }
+.resource-bar > span { flex: none; }
+.resource-bots { background: var(--ink); }
+.resource-helpers { background: var(--muted); opacity: 0.6; }
+.resource-free { text-align: right; font-size: var(--text-md); white-space: nowrap; }
+.resource-free.danger .strong { color: var(--danger); }
+.resource-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); padding-left: calc(48px + var(--space-4)); }
+.resource-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.resource-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.resource-amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stats:has(> :nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (width < 1024px) { .stats:has(> :nth-child(5)) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (width < 600px) {
+  .stats:has(> :nth-child(5)) { grid-template-columns: minmax(0, 1fr); }
+  .resource-meter { grid-template-columns: minmax(0, 1fr) auto; }
+  .resource-meter .resource-bar { grid-column: 1 / -1; grid-row: 2; }
+  .resource-legend { padding-left: 0; }
+}
