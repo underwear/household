@@ -1,29 +1,86 @@
+<div align="center">
+
+<a href="https://agents-household.dev"><img src="landing/favicon.svg" width="88" alt="Household logo"></a>
+
 # Household
 
-Run personal assistant bots in Telegram using Claude Code or Codex as their harness, each in its own microVM, with network access
-and credentials under your control.
+**A home for your bots.**
 
-## Requirements
+Household runs each bot with a harness like Claude Code or Codex in its own sandbox,<br>
+and lets you talk to it from the messenger you already use.
 
-macOS on Apple silicon, or Linux with `/dev/kvm` (your machine, a VM with nested virtualization, or a KVM VPS);
-openssl and python3. The installer brings the rest: microsandbox, Codex, the web UI. No Bun, no Docker.
+[![Website](https://img.shields.io/badge/agents--household.dev-1f1d1a?style=flat-square&logo=homeassistantcommunitystore&logoColor=72c191)](https://agents-household.dev)
+[![Docs](https://img.shields.io/badge/docs-read-f2f0eb?style=flat-square)](https://agents-household.dev/docs/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-72c191?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/macOS%20%C2%B7%20Linux%2BKVM-1f1d1a?style=flat-square&logo=linux&logoColor=white)](#requirements)
 
-## Quick start
+[Quick start](#quick-start) · [What's inside](#whats-inside) · [Docs](https://agents-household.dev/docs/) · [Website](https://agents-household.dev)
+
+<br>
+
+<img src=".github/assets/hero.svg" width="760" alt="The Ops bot's Telegram thread: Grafana fires at 3 am, the bot frees the disk, restarts the API and reports in the morning">
+
+</div>
+
+<br>
+
+## ✨ Why Household
+
+- 🏠 **A bot that stays.** Not a chat session that forgets you: a persistent assistant with its own memory, projects and tools.
+- 🔒 **Its own microVM.** Every bot, scout and sideworker runs in a separate sandbox. Network access and secrets are yours to grant, one host at a time.
+- 💬 **Where you already are.** Talk to your bots in Telegram threads: progress, Stop and decisions come as buttons.
+- 🧰 **Real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
+- 📬 **Wakes up on its own.** Inboxes hand mail, feeds, health checks and Grafana or Datadog alerts to the bots you choose.
+
+## 🚀 Quick start
+
+**With your harness** — give Claude Code or Codex this prompt:
+
+```text
+Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
+```
+
+**Or do it yourself:**
 
 ```sh
 curl -fsSL https://agents-household.dev/install.sh | sh
-house onboard      # a key, a workspace, its Telegram channel, an assistant bot, scouts and sideworkers, step by step
+house onboard   # a key, a workspace, its Telegram channel, an assistant bot — step by step
 house start
 ```
 
-`house update` moves to the newest release. `house dashboard` signs you in to the web admin; `house --help` lists everything else.
+`house dashboard` signs you in to the web admin, `house update` moves to the newest release, `house --help` lists everything else.
 
-A **workspace** groups bots, channels, network rules and secrets. A **bot** is your persistent assistant; its **harness** is the runtime it uses, such as Claude Code or Codex. The CLI remains `house`, with `house workspace` and `house bot` commands, and `--harness` for runtime selection. Existing configuration keys (`houses`, `pets`, `agent`) remain compatible.
+### Requirements
 
-## Slack
+| Runs on | |
+|---|---|
+| 🍎 Your Mac | Apple silicon |
+| 🐧 Your Linux machine | with `/dev/kvm` |
+| ☁️ A VM or a VPS | Linux with KVM inside: nested virtualization or a KVM-enabled VPS |
 
-Talk to your bots in a Slack bot DM, alongside Telegram: the default bot in Messages, others in threads, progress, Stop and decisions with buttons. No public URL; tokens stay on the host. See [connecting Slack](docs/slack.md).
+Plus `openssl` and `python3`. The installer brings the rest: microsandbox, Codex, the web UI. No Docker.
 
-## Inboxes
+## 🧩 What's inside
 
-A workspace can watch mail, feeds, health checks, Grafana and Datadog alerts, a Telegram bot or your own endpoint, and hand new events to the bots you choose, from the admin. See [inboxes](docs/inboxes.md).
+| | |
+|---|---|
+| **Workspace** | Groups bots, channels, network rules and secrets. |
+| **Bot** | Your persistent assistant, on a **harness** — Claude Code or Codex. |
+| **Scouts** | Specialists a bot calls for one task — "buy two bus tickets", "find out why prod returns 500" — in a fresh VM with only the access you allow. |
+| **Sideworkers** | Extra hands a bot starts for one job, while it keeps talking to you. |
+| **Inboxes** | Sources that hand new events to your bots. |
+| **Previews** | Open a web app running in a bot's VM by a link, with your approval. |
+
+| Harnesses | Messengers |
+|---|---|
+| ✅ Claude Code | ✅ Telegram — bot, threaded mode |
+| ✅ Codex | 🕒 More coming soon |
+| 🕒 More coming soon | |
+
+## 📚 Documentation
+
+Everything else — bots, scouts, sideworkers, inboxes, previews, backup — is in the **[docs](https://agents-household.dev/docs/)**.
+
+<div align="center">
+<sub>Made for people who'd rather sleep through the 3 am incident.</sub>
+</div>
