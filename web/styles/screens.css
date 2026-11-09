@@ -443,3 +443,26 @@ textarea.control.inbox-pointers { min-height: 6em; }
   .inbox-subscriptions .list-actions { justify-content: flex-start; padding-left: calc(28px + var(--space-3)); }
   .form-grid.inbox-health { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* House connectors: provider-independent account list and a separate setup flow. */
+.connectors-page { max-width: 1120px; }
+.connector-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,390px),1fr)); gap: var(--space-4); }
+.connector-card { display:flex; flex-direction:column; gap:var(--space-5); padding:var(--space-5); border:1px solid var(--line); border-radius:var(--radius-lg); min-width:0; }
+.connector-card-head { display:flex; align-items:center; gap:var(--space-3); }
+.connector-mark { display:grid; place-items:center; width:42px; height:42px; flex:none; border:1px solid var(--line); border-radius:12px; background:var(--panel); font-size:22px; font-weight:600; }
+.connector-identity { flex:1; min-width:0; }
+.connector-identity .h3 { overflow-wrap:anywhere; margin:3px 0 0; }
+.connector-status { font-size:var(--text-xs); color:var(--muted); white-space:nowrap; }
+.connector-status.attention { color:var(--danger); }
+.connector-service { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:var(--text-sm); }
+.connector-card-foot { display:flex; justify-content:space-between; align-items:center; gap:var(--space-4); border-top:1px solid var(--line); padding-top:var(--space-4); }
+.connector-card-foot > div { min-width:0; overflow-wrap:anywhere; font-size:var(--text-sm); }
+.connectors-empty { display:flex; flex-direction:column; align-items:center; gap:var(--space-4); text-align:center; border:1px dashed var(--line); border-radius:var(--radius-lg); padding:60px 24px; }
+.connector-empty-icon { display:grid; place-items:center; width:64px; height:64px; border:1px solid var(--line); border-radius:18px; color:var(--muted); }
+.connector-help { color:var(--muted); font-size:var(--text-sm); }
+.connector-help summary { cursor:pointer; width:fit-content; }
+.connector-help p { margin-top:var(--space-3); max-width:760px; }
+.connector-type { display:flex; width:100%; align-items:center; gap:var(--space-4); text-align:left; padding:var(--space-4); background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:var(--radius-lg); cursor:pointer; }
+.connector-type:hover { background:var(--hover); border-color:var(--muted); }
+.connector-type > .stack { flex:1; }
+@media(width < 600px) { .connector-card-head { flex-wrap:wrap; } .connector-status { margin-left:55px; } .connectors-empty { padding:36px 20px; } }

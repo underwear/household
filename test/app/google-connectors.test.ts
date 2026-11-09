@@ -13,6 +13,7 @@ const caller = { house: "home", pet: "alice" };
 const allScopes = Object.values(GOOGLE_SCOPES).flat().join(" ");
 function setup() {
   let now = 1000000, refreshCount = 0;
+  let subject = "123", email = "me@example.com";
   const calls: { url: string; init?: RequestInit }[] = [];
   let api: GoogleFetch = async () => Response.json({ messages: [] });
   let token: GoogleFetch = async (_url, init) => {
@@ -23,7 +24,7 @@ function setup() {
   const fetcher: GoogleFetch = async (url, init) => {
     calls.push({ url: String(url), init });
     if (String(url) === "https://oauth2.googleapis.com/token") return token(url, init);
-    if (String(url).includes("/userinfo")) return Response.json({ sub: "123", email: "me@example.com", email_verified: true });
+    if (String(url).includes("/userinfo")) return Response.json({ sub: subject, email, email_verified: true });
     return api(url, init);
   };
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
@@ -33,7 +34,7 @@ function setup() {
   const begin = () => new URL(service.begin("home", { services: ["gmail", "drive", "calendar"], pets: ["alice"] }, origin, "session").url);
   const callback = (start: URL) => new URL(`${start.searchParams.get("redirect_uri")}?code=code&state=${start.searchParams.get("state")}`);
   const connect = async () => { await service.finish(callback(begin()), "session"); return service.list("home").connections[0]!.id; };
-  return { service, house, calls, begin, callback, connect, store, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
+  return { service, house, calls, begin, callback, connect, store, identity: (id: string, address: string) => { subject = id; email = address; }, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
 }
 
 test("OAuth uses PKCE, state, exact loopback callback and selected scopes; rejects wrong session and replay", async () => {
@@ -151,4 +152,22 @@ test("admin routes do not return tokens; callbacks are one-shot and safe on fail
   expect(replay!.status).toBe(400);
   expect(await replay!.text()).not.toContain("private-");
   expect(await (await route(new Request(`${origin}/api/houses/home/connectors/google`)))!.text()).not.toContain("private-");
+});
+
+
+test("multiple Google accounts coexist; reconnecting and disconnecting one leaves the others unchanged", async () => {
+  const s = setup();
+  const first = await s.connect();
+  s.identity("456", "work@example.com");
+  await s.service.finish(s.callback(s.begin()), "session");
+  const second = s.service.list("home").connections.find(c => c.email === "work@example.com")!;
+  s.service.setPets("home", second.id, ["bob"]);
+  s.identity("123", "me@example.com");
+  await s.service.finish(s.callback(s.begin()), "session");
+  const accounts = s.service.list("home").connections;
+  expect(accounts).toHaveLength(2);
+  expect(accounts.find(c => c.email === "work@example.com")).toEqual({ ...second, pets: ["bob"] });
+  expect(accounts.find(c => c.email === "me@example.com")!.id).not.toBe(first);
+  s.service.disconnect("home", accounts.find(c => c.email === "me@example.com")!.id);
+  expect(s.service.list("home").connections).toEqual([{ ...second, pets: ["bob"] }]);
 });

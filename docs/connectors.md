@@ -1,6 +1,6 @@
 # Google connectors
 
-Open a house's **Connectors** page. Select Gmail, Drive, Calendar, or any combination, choose which pets may use the account, and press **Connect Google**. Google opens in your browser and asks for read-only access. A connection with no pets selected is private until you grant access. Multiple Google accounts can belong to one house.
+Open a house's **Connectors** page, press **Add connector**, and choose a type. Google is currently available. Select Gmail, Drive, Calendar, or any combination, choose which pets may use the account, and press **Continue to Google**. Google opens in your browser and asks for read-only access. A connection with no pets selected is private until you grant access. Multiple Google accounts can belong to one house. Add each through **Add connector**; each account gets its own card. Use **Manage** on a card to change pet access, reconnect, or disconnect just that account.
 
 Official release builds use Household's shared Desktop OAuth client: you do not need a Google Cloud project. Google connectors are available starting with v0.5.6. Source builds can set `HOUSEHOLD_GOOGLE_CLIENT_ID` and `HOUSEHOLD_GOOGLE_CLIENT_SECRET` in the daemon's environment; these identify the Desktop application, not a user's account. Release builds inject the distributable Desktop client secret from the matching repository secret, without committing it to source.
 

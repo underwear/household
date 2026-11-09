@@ -8,6 +8,8 @@ export interface DialogSpec {
   /** Fields, if the dialog asks for something: the first one gets the focus. */
   children?: ReactNode;
   confirmLabel: string;
+  /** Picker dialogs navigate through their options rather than a submit button. */
+  hideConfirm?: boolean;
   cancelLabel?: string;
   /** The confirm button's words while it works («Restarting…»); «Working…» by default. */
   busyLabel?: string;
@@ -167,18 +169,18 @@ export function Dialog({ spec, onClose }: { spec: DialogSpec; onClose: () => voi
               <button type="button" name="cancel" className="btn primary" onClick={onClose} disabled={busy}>
                 {spec.cancelLabel ?? "Cancel"}
               </button>
-              <button type="submit" className={spec.danger ? "btn danger" : "btn"} disabled={busy}>
+              {!spec.hideConfirm && <button type="submit" className={spec.danger ? "btn danger" : "btn"} disabled={busy}>
                 {busy ? (spec.busyLabel ?? "Working…") : spec.confirmLabel}
-              </button>
+              </button>}
             </>
           ) : (
             <>
               <button type="button" name="cancel" className="btn" onClick={onClose} disabled={busy}>
                 {spec.cancelLabel ?? "Cancel"}
               </button>
-              <button type="submit" className={spec.danger ? "btn danger-fill" : "btn primary"} disabled={busy}>
+              {!spec.hideConfirm && <button type="submit" className={spec.danger ? "btn danger-fill" : "btn primary"} disabled={busy}>
                 {busy ? (spec.busyLabel ?? "Working…") : spec.confirmLabel}
-              </button>
+              </button>}
             </>
           )}
         </div>
