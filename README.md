@@ -26,8 +26,10 @@ and lets you talk to it from the messenger you already use.
 
 ## ✨ Why Household
 
-- 🏠 **A bot that stays.** Not a chat session that forgets you: a persistent assistant with its own memory, projects and tools.
-- 🔒 **Its own microVM.** Every bot, scout and sideworker runs in a separate sandbox. Network access and secrets are yours to grant, one host at a time.
+- 🔒 **Its own microVM.** Every bot runs in a separate sandbox, away from your machine and from the other bots.
+- 🌐 **Network on your terms.** A bot reaches only the hosts the workspace allows, and asks you when it needs one more.
+- 🔑 **Secrets it never sees.** The bot holds only placeholders; Household puts the real keys into requests on their way out, to the hosts you chose.
+- 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find out why prod returns 500" gets the production key, the bot never does.
 - 💬 **Where you already are.** Talk to your bots in Telegram threads: progress, Stop and decisions come as buttons.
 - 🧰 **Real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
 - 📬 **Wakes up on its own.** Inboxes hand mail, feeds, health checks and Grafana or Datadog alerts to the bots you choose.
