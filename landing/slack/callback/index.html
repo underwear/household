@@ -16,7 +16,7 @@
 <p id="status" role="status">Copy the connection result, return to your Household dashboard, and paste it into “Connection result”.</p>
 <textarea id="result" aria-label="Connection result" readonly spellcheck="false" hidden></textarea>
 <button id="copy" type="button" hidden>Copy connection result</button>
-<p class="note">Your Household instance exchanges this one-time code directly with Slack using its private PKCE verifier. This page never receives your Slack access or refresh token.</p>
+<p class="note">Your Household instance exchanges this one-time code directly with Slack using a private PKCE verifier unique to this sign-in. The code alone cannot grant access to your Slack account. This page never receives the verifier or your Slack tokens.</p>
 <p class="note">The hosting provider receives the callback URL containing this code. This page has no analytics, external scripts, or token exchange service. Close it after connecting.</p>
 <noscript>Enable JavaScript to copy the result. Alternatively, copy this page’s full address and paste it into Household.</noscript>
 </main></body></html>
