@@ -18,6 +18,7 @@ export interface SideworkerLaunch {
   model: string;
   reasoningEffort?: string;
   mode?: string;
+  settings?: Record<string, string>;
 }
 
 export interface SideworkerRecord {
@@ -111,7 +112,7 @@ export class Sideworkers {
       const workers = this.list(house.name).filter(worker => !worker.closing);
       const pets: Pet[] = workers.map(worker => {
         const parent = house.pets.find(pet => pet.name === worker.parent)!;
-        return { ...parent, ...(worker.launch ? { ...worker.launch, reasoningEffort: worker.launch.reasoningEffort, mode: worker.launch.mode } : {}),
+        return { ...parent, ...(worker.launch ? { ...worker.launch, reasoningEffort: worker.launch.reasoningEffort, mode: worker.launch.mode, settings: worker.launch.settings } : {}),
           enabled: parent.enabled !== false && houseFeatures(house).sideworkers,
           originPlace: worker.originPlace,
           ...(worker.placement === "same" ? { chatPlace: worker.originPlace } : {}),
@@ -129,7 +130,7 @@ export class Sideworkers {
     const found = agentOf(this.deps.agents, pet, config.keys, house);
     if ("problem" in found) throw new Error(found.problem);
     return { home: found.agent.home, launch: { agent: found.agent.name, key: found.key.name, model: found.model,
-      ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...(found.mode === undefined ? {} : { mode: found.mode }) } };
+      ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...(found.mode === undefined ? {} : { mode: found.mode }), ...(found.settings ? { settings: { ...found.settings } } : {}) } };
   }
   async profiles(caller: PetIdentity) {
     const config = await this.deps.configured();
@@ -153,9 +154,17 @@ export class Sideworkers {
       if (input.profile !== undefined && (typeof input.profile !== "string" || !input.profile)) throw new Error("profile must name a configured house sideworker profile");
       const selected = input.profile === undefined ? parent : house.sideworkerProfiles?.find(profile => profile.name === input.profile);
       if (!selected) throw new Error(`Unknown sideworker profile '${input.profile}'; use sideworker_profiles`);
-      const parentHome = this.launch(config, house.name, parent).home;
+      const inherited = this.launch(config, house.name, parent);
+      const parentHome = inherited.home;
       if (parentHome === SIDEWORKER_HOME) throw new Error("Parent home conflicts with the private worker home");
       const { launch } = this.launch(config, house.name, selected);
+      // Pet-only settings follow the parent even when a profile selects another model/key.
+      const adapter = this.deps.agents.get(launch.agent);
+      for (const setting of adapter?.settings ?? []) {
+        if (!setting.petOnly) continue;
+        const value = parent.settings?.[setting.key];
+        if (value !== undefined && inherited.launch.agent === launch.agent) (launch.settings ??= {})[setting.key] = value;
+      }
       const limit = house.sideworkerLimits?.maxWorkers ?? 2;
       if (this.list(caller.house).length >= limit) throw new Error(`House sideworker limit (${limit}) reached. Close an existing sideworker first.`);
       if (!house.channels.some(channel => channel.pets.includes(caller.pet))) throw new Error("Attach your pet to a channel before spawning a sideworker");

@@ -247,3 +247,9 @@ export function Switch({ label, on, onChange, disabled, hideLabel, title }: { la
     </label>
   );
 }
+
+export function CheckboxField({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  const control = useControl(hint, undefined);
+  return <div className="field"><label className="check" htmlFor={control.id}><input {...control} type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} /><span>{label}</span></label>
+    {hint && <p id={`${control.id}-hint`} className="hint">{hint}</p>}</div>;
+}

@@ -24,6 +24,10 @@ export interface AgentModel {
 export interface AgentSetting {
   /** The config's key for it: a camelCase identifier (`subagentModel`). */
   key: string;
+  /** Render a boolean choice as a checkbox (string values true/false in config). */
+  checkbox?: boolean;
+  /** Only pets configure this; sideworkers inherit it and scouts cannot use it. */
+  petOnly?: boolean;
   label: string;
   /** What choosing it does, in a line. */
   description?: string;
@@ -153,6 +157,8 @@ export type SendResult =
   | { status: "stuck"; reason: string };
 
 export interface PetContext {
+  /** Scouts must not inherit account integrations. */
+  scout?: boolean;
   /** Override the native home and initial cwd for an isolated sideworker session. */
   home?: string;
   workspace?: string;

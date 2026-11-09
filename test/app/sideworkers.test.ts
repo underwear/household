@@ -345,3 +345,23 @@ test("worker placement is captured before asynchronous setup, stays in one chann
   expect(schema.properties.placement.enum).toEqual(["same", "thread"]);
   f.store.close();
 });
+
+
+test("Claude connectors are captured from the parent, including profile launches, and never leak to another adapter", async () => {
+  const f = fixture();
+  const house = f.config.houses[0]!;
+  Object.assign(house.pets[0]!, { agent: "claude-code-tmux", key: "claude", model: "opus", mode: "auto", settings: { claudeAiConnectors: "true" } });
+  house.sideworkerProfiles = [{ name: "small", agent: "claude-code-tmux", key: "claude", model: "haiku" }, { name: "codex", agent: "codex-app-server", key: "openai" }];
+  for (const profile of [undefined, "small"]) {
+    const worker = await f.workers.spawn(parent, { ...task, name: profile ? "sw-small" : "sw-default", profile });
+    expect(worker.launch?.settings).toEqual({ claudeAiConnectors: "true" });
+  }
+  house.pets[0]!.settings = {};
+  const restored = new Sideworkers(f.deps).expanded(f.config);
+  expect(restored.houses[0]!.pets.slice(2).map(pet => pet.settings)).toEqual([{ claudeAiConnectors: "true" }, { claudeAiConnectors: "true" }]);
+  house.sideworkerLimits!.maxWorkers = 3;
+  house.pets[0]!.settings = { claudeAiConnectors: "true" };
+  await f.workers.spawn(parent, { ...task, name: "sw-codex", profile: "codex" });
+  expect(f.workers.expanded(f.config).houses[0]!.pets.at(-1)!.settings).toBeUndefined();
+  f.store.close();
+});

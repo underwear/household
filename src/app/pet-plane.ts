@@ -356,7 +356,7 @@ export class PetPlane {
       ...Object.fromEntries(secrets.map(({ env, placeholder }) => [env, placeholder])),
       // Where root's installs of per-user tools went (Playwright's browsers, rustup's toolchains).
       ...AGENT_TOOL_ENV,
-      ...agent.env({ ...(placed.scout ? { home: agent.home, workspace: "/work" } : {}), ...(placed.sideworker ? { home: effectivePetHome(placed, agent.home), workspace: placed.sideworker.cwd } : {}), caCertPath: PET_CA_CERT, eventsUrl: `${relay}/events`, mcpUrl: `${relay}/mcp`, instructions: placed.instructions ?? "", model, ...(reasoningEffort === undefined ? {} : { reasoningEffort }), ...(mode === undefined ? {} : { mode }), ...(settings === undefined ? {} : { settings }) }),
+      ...agent.env({ ...(placed.scout ? { home: agent.home, workspace: "/work", scout: true } : {}), ...(placed.sideworker ? { home: effectivePetHome(placed, agent.home), workspace: placed.sideworker.cwd } : {}), caCertPath: PET_CA_CERT, eventsUrl: `${relay}/events`, mcpUrl: `${relay}/mcp`, instructions: placed.instructions ?? "", model, ...(reasoningEffort === undefined ? {} : { reasoningEffort }), ...(mode === undefined ? {} : { mode }), ...(settings === undefined ? {} : { settings }) }),
       ...keyUse.env,
       ...(skillsPath ? skillLinks(agent.skillsDirectory!, !placed.sideworker && !placed.scout) : {}),
       HTTPS_PROXY: proxy,

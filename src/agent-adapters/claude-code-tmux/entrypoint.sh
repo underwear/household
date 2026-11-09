@@ -1,7 +1,7 @@
 #!/bin/sh
 # Pet main process: seed $HOME once (the home volume keeps it, so files claude rewrote are never reset),
 # run claude in tmux, and live exactly as long as that session. Hooks and Household's MCP server come from
-# root-owned files; --strict-mcp-config leaves out MCP servers configured anywhere else.
+# root-owned files. Account connectors are opt-in; the default isolates all other MCP sources.
 set -eu
 trap 'exit 0' TERM
 cp -rn /opt/household/seed/. "$HOME/"
@@ -20,7 +20,9 @@ if [ -z "${HOUSEHOLD_WORKSPACE:-}" ]; then mkdir -p "$workspace"; fi
 # Each sideworker uses an independent HOME; trust its explicitly delegated workspace.
 jq --arg p "$workspace" ' .projects[$p].hasTrustDialogAccepted = true ' "$HOME/.claude.json" > "$HOME/.claude.json.tmp"
 mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
+set -- --strict-mcp-config
+if [ "${ENABLE_CLAUDEAI_MCP_SERVERS:-false}" = "true" ]; then set --; fi
 tmux new-session -d -s main -x 160 -y 48 -c "$workspace" claude --settings /etc/household/claude-settings.json \
-  --mcp-config /etc/household/mcp.json --strict-mcp-config --model "$HOUSEHOLD_MODEL" \
+  --mcp-config /etc/household/mcp.json "$@" --model "$HOUSEHOLD_MODEL" \
   --permission-mode "$HOUSEHOLD_PERMISSION_MODE" --append-system-prompt "$HOUSEHOLD_INSTRUCTIONS"
 while tmux has-session -t main 2>/dev/null; do sleep 2; done

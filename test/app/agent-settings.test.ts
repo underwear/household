@@ -18,7 +18,7 @@ test("an agent's own settings: each one it has, with one of its options; placed 
   expect(agentOf(agents, { ...pet, settings: {} }, keys)).not.toHaveProperty("settings");
   expect(agentOf(agents, { ...pet, settings: { subagentModel: "haiku" } }, keys)).toMatchObject({ settings: { subagentModel: "haiku" } });
   expect(agentOf(agents, { ...pet, settings: { subagentModel: "gpt-9" } }, keys)).toMatchObject({ problem: "unknown value 'gpt-9' for setting 'subagentModel' of agent claude-code-tmux (its values: opus, sonnet, haiku, fable)" });
-  expect(agentOf(agents, { ...pet, settings: { turbo: "on" } }, keys)).toMatchObject({ problem: "unknown setting 'turbo' for agent claude-code-tmux (its settings: subagentModel)" });
+  expect(agentOf(agents, { ...pet, settings: { turbo: "on" } }, keys)).toMatchObject({ problem: "unknown setting 'turbo' for agent claude-code-tmux (its settings: claudeAiConnectors, subagentModel)" });
   expect(agentOf(agents, { ...pet, agent: plain.name, settings: { subagentModel: "haiku" } }, keys)).toMatchObject({ problem: "agent plain has no settings: leave settings out" });
   const household: Household = { daemon: {}, keys, secrets: [], houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ ...pet, settings: { subagentModel: "sonnet" } }], people: { owners: [] }, channels: [] }] };
   expect(placePets(agents, household)[0]).toMatchObject({ settings: { subagentModel: "sonnet" } });
@@ -65,4 +65,11 @@ test("a key's overage switch: off unless written, written only when on", async (
   expect(await Bun.file(file).text()).not.toContain("allowOverage");
   await config.addKey("paid", { provider: "anthropic", value: "sk-ant-oat01-paid", allowOverage: true });
   expect((await config.load()).keys[1]).toMatchObject({ name: "paid", allowOverage: true });
+});
+
+
+test("connector opt-in is validated as a pet setting", async () => {
+  // Validation uses the same metadata that exposes the checkbox.
+  expect(agentOf(agents, { ...pet, settings: { claudeAiConnectors: "true" } }, keys)).toMatchObject({ settings: { claudeAiConnectors: "true" } });
+  expect(agentOf(agents, { ...pet, settings: { claudeAiConnectors: "yes" } }, keys)).toHaveProperty("problem");
 });

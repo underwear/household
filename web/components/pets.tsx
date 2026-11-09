@@ -7,7 +7,7 @@ import { Brain, MessagesSquare, Pickaxe } from "lucide-react";
 import { api, type AgentModelsView, type AgentView, type HouseView, type KeyView, type PetFields, type PetView } from "../api";
 import { petPath } from "../router";
 import { Dialog } from "./dialog";
-import { CheckList, ChoiceList, SelectField, StepperField, TextField } from "./fields";
+import { CheckList, ChoiceList, SelectField, StepperField, TextField, CheckboxField } from "./fields";
 import { FormGrid, Page } from "./layout";
 import { channelLabel } from "./houses";
 import { Link } from "./link";
@@ -106,15 +106,16 @@ export type AgentChoice = Pick<PetFields, "agent" | "model" | "reasoningEffort" 
  * `AgentView.settings`). `fields` is the form, `value` what it says, `error` why it cannot be saved yet, `changed`
  * whether it differs from `pet`'s.
  */
-export function useAgentForm(agents: AgentView[], keys: KeyView[], pet?: Pick<PetView, "agent" | "model" | "reasoningEffort" | "mode" | "key"> & Partial<Pick<PetView, "settings">>) {
+export function useAgentForm(agents: AgentView[], keys: KeyView[], pet?: Pick<PetView, "agent" | "model" | "reasoningEffort" | "mode" | "key"> & Partial<Pick<PetView, "settings">>, scope: "pet" | "scout" = "pet") {
   const [agentName, setAgentName] = useState(pet?.agent ?? agents[0]?.name ?? "");
   const agent = agents.find((candidate) => candidate.name === agentName);
+  const availableSettings = (agent?.settings ?? []).filter(setting => scope === "pet" || !setting.petOnly);
   const [model, setModel] = useState(pet?.model ?? agent?.defaultModel ?? "");
   const [reasoningEffort, setReasoningEffort] = useState<string | null>(pet?.reasoningEffort ?? null);
   const [mode, setMode] = useState(pet?.mode ?? agent?.defaultMode ?? null);
   /** The agent's own settings as chosen: a key absent or null is its Default. */
   const [settings, setSettings] = useState<Record<string, string | null>>(pet?.settings ?? {});
-  const settingsChanged = (agent?.settings ?? []).some(({ key }) => (pet?.settings?.[key] ?? null) !== (settings[key] ?? null));
+  const settingsChanged = availableSettings.some(({ key }) => (pet?.settings?.[key] ?? null) !== (settings[key] ?? null));
   const fittingFor = (providers: readonly string[] | undefined) => keys.filter((each) => providers?.includes(each.provider));
   const only = (providers: readonly string[] | undefined) => {
     const fits = fittingFor(providers);
@@ -162,7 +163,7 @@ export function useAgentForm(agents: AgentView[], keys: KeyView[], pet?: Pick<Pe
   // Another kind of key (a subscription for an API key) gives the pet another placeholder: a new container.
   const restarts = pet !== undefined && (pet.agent !== agentName || pet.model !== model || pet.mode !== mode || (pet.reasoningEffort ?? null) !== reasoningEffort || settingsChanged || (pet.key !== null && kindOf(pet.key) !== kindOf(key)));
   // Only the agent's own settings go (another agent's stay out); every one named, null for Default, so a cleared one is removed.
-  const value: AgentChoice = { agent: agentName, model, reasoningEffort, mode, settings: Object.fromEntries((agent?.settings ?? []).map(({ key }) => [key, settings[key] ?? null])), key: key || null }; // the key always named: the store refuses a pet without one
+  const value: AgentChoice = { agent: agentName, model, reasoningEffort, mode, settings: Object.fromEntries(availableSettings.map(({ key }) => [key, settings[key] ?? null])), key: key || null }; // the key always named: the store refuses a pet without one
   const error = !key ? "Choose a key it runs on." : !model ? "Choose a model." : invalidEffort ? "Choose a supported reasoning effort or Default for this model." : undefined;
   const fields = (
     <>
@@ -229,8 +230,10 @@ export function useAgentForm(agents: AgentView[], keys: KeyView[], pet?: Pick<Pe
             ]}
           />
         )}
-        {(agent?.settings ?? []).map((setting) => {
+        {availableSettings.map((setting) => {
           const chosen = settings[setting.key] ?? "";
+          if (setting.checkbox) return <CheckboxField key={setting.key} label={setting.label} hint={setting.description}
+            checked={chosen === "true"} onChange={checked => setSettings(current => ({ ...current, [setting.key]: checked ? "true" : null }))} />;
           const option = setting.options.find(({ id }) => id === chosen);
           return (
             <SelectField key={setting.key} label={setting.label} value={chosen}

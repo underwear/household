@@ -156,10 +156,18 @@ function claudeModelOptions(model: string) {
 
 /**
  * Claude Code's own knobs a pet may set, beyond model, effort and mode (`pets.<p>.settings`), each an environment
- * variable of 2.1.296. Only what moves the subscription's spend: a subagent inherits the main model unless told
- * otherwise, and that is the least visible cost of a session.
+ * variable of 2.1.296.
  */
 const SETTINGS = [
+  {
+    key: "claudeAiConnectors",
+    label: "Claude.ai connectors",
+    description: "Use this account’s Claude.ai connectors for this pet and its sideworkers. Scouts always run without them. Also allows other MCP servers configured in the agent’s environment.",
+    checkbox: true,
+    petOnly: true,
+    options: [{ id: "true", label: "Enabled" }, { id: "false", label: "Disabled" }],
+    defaultLabel: "disabled",
+  },
   {
     key: "subagentModel",
     label: "Subagent model",
@@ -201,12 +209,13 @@ export const claudeCodeTmux: AgentAdapter = {
   skillsDirectory: ".claude/skills",
   workspaceSkillsDirectory: ".claude/skills",
   home: HOME,
-  env: ({ caCertPath, eventsUrl, mcpUrl, instructions, model, mode, reasoningEffort, settings, home, workspace }) => ({
+  env: ({ caCertPath, eventsUrl, mcpUrl, instructions, model, mode, reasoningEffort, settings, home, workspace, scout }) => ({
     ...(home === undefined ? {} : { HOME: home }),
     ...(workspace === undefined ? {} : { HOUSEHOLD_WORKSPACE: workspace }),
     // Household's timer is the only one on claude's permission dialogs (it puts them to the person, then refuses).
     CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT: "1",
     CLAUDE_CODE_DISABLE_CRON: "1",
+    ENABLE_CLAUDEAI_MCP_SERVERS: !scout && settings?.claudeAiConnectors === "true" ? "true" : "false",
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
     // Fast mode is billed to credits whatever the plan, and nothing in a pet asks for it: no `/fast`, ever.
     CLAUDE_CODE_DISABLE_FAST_MODE: "1",

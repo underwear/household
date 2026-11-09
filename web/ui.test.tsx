@@ -1,3 +1,4 @@
+import { claudeCodeTmux } from "../src/agent-adapters/claude-code-tmux";
 import { NETWORK_PRESETS } from "../src/core/network-presets";
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -576,4 +577,20 @@ test("a key's allowance line: what is left per window and when it resets; used u
   const edit = renderToStaticMarkup(<KeyDialog houses={["work"]} providers={["anthropic"]} keyView={{ ...keys[0]!, allowOverage: true }} onClose={() => {}} save={async () => {}} />);
   expect(edit).toContain("Go on in overage (billed apart from the subscription)");
   expect(edit).toContain("the provider bills that to credits");
+});
+
+
+test("Claude connectors render as a pet checkbox and are absent from scout settings and values", () => {
+  const claude = { ...agents[0]!, settings: [...claudeCodeTmux.settings!] };
+  function Form({ scope, enabled }: { scope: "pet" | "scout"; enabled: boolean }) {
+    const form = useAgentForm([claude], [], { ...work.pets[0]!, agent: claude.name, settings: enabled ? { claudeAiConnectors: "true" } : {} }, scope);
+    return <>{form.fields}<output>{JSON.stringify(form.value.settings)}</output></>;
+  }
+  const on = renderToStaticMarkup(<Form scope="pet" enabled />);
+  expect(on).toContain("Claude.ai connectors");
+  expect(on).toMatch(/type="checkbox" checked=""/);
+  expect(renderToStaticMarkup(<Form scope="pet" enabled={false} />)).not.toMatch(/type="checkbox" checked=""/);
+  const scout = renderToStaticMarkup(<Form scope="scout" enabled />);
+  expect(scout).not.toContain("Claude.ai connectors");
+  expect(scout).not.toContain("claudeAiConnectors");
 });

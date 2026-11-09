@@ -599,10 +599,11 @@ test("sideworkers mount private harness home and parent's shared home, with sepa
 
 test("scout runs mount only their private material and use scout instructions", async () => {
   const {runtime,plane}=setup();
-  const scoutAgent={...agent,env:({home,workspace,instructions}:Parameters<AgentAdapter["env"]>[0])=>({HOME:home!,CWD:workspace!,INSTRUCTIONS:instructions})};
+  const scoutAgent={...agent,env:({home,workspace,instructions,scout}:Parameters<AgentAdapter["env"]>[0])=>({HOME:home!,CWD:workspace!,INSTRUCTIONS:instructions,SCOUT:String(scout)})};
   await plane.reconcile([{...pets[0]!,pet:"sc-a",agent:scoutAgent,scout:{definition:"helper",parent:"sibling",homePath:"/private/run/home",skillsPath:"/private/run/skills",instructions:"Owner's",env:{TASK_SECRET:"private"},setup:"echo scout",network:{kind:"allowlist",allow:[]}},instructions:"SCOUT ONLY"}]);
   const spec=runtime.specs[0]!;
   expect(spec.env?.INSTRUCTIONS).toBe("SCOUT ONLY");
+  expect(spec.env?.SCOUT).toBe("true");
   expect(spec.env?.HOME).toBe("/home/fake");expect(spec.env?.CWD).toBe("/work");
   expect(spec.environmentSetup).toBe("echo scout");
   expect(spec.mounts?.some(m=>m.source.includes("sibling"))).toBe(false);

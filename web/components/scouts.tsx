@@ -320,7 +320,7 @@ function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
 }) {
   const [max, setMax] = useState(String(view.limits.maxScouts));
   const [text, setText] = useState(resourceText(view.limits));
-  const form = useAgentForm(agents, keys, agentStart(agents, view.agent));
+  const form = useAgentForm(agents, keys, agentStart(agents, view.agent), "scout");
   const [opened] = useState(() => JSON.stringify(agentValue(form.value)));
   const count = Number(max), resources = resourceValue(text);
   // At worst every run is as large as the largest scout.
@@ -366,7 +366,7 @@ function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
 function ScoutRuntimeDialog({ scout, defaults, agents, keys, onClose, save }: { scout: ScoutView; defaults: ScoutDetailView["defaults"]; agents: AgentView[]; keys: KeyView[]; onClose: () => void; save: (patch: Partial<ScoutDefinition>) => Promise<void> }) {
   const [mode, setMode] = useState(scout.agent || scout.resources ? "own" : "house");
   const [text, setText] = useState(resourceText({ ...defaults.limits, ...scout.resources }));
-  const form = useAgentForm(agents, keys, agentStart(agents, scout.agent ?? defaults.agent));
+  const form = useAgentForm(agents, keys, agentStart(agents, scout.agent ?? defaults.agent), "scout");
   return (
     <Dialog onClose={onClose} spec={{
       title: `What ${scout.title ?? scout.name} runs on`,

@@ -25,6 +25,7 @@ test("provisioning: CA trust in env; the key's placeholder by its kind, the real
     // Household's timer is the only one on claude's permission dialogs (the name is in the 2.1.296 binary).
     CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT: "1",
     CLAUDE_CODE_DISABLE_CRON: "1",
+    ENABLE_CLAUDEAI_MCP_SERVERS: "false",
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
     // Fast mode is billed to credits whatever the plan: never in a pet.
     CLAUDE_CODE_DISABLE_FAST_MODE: "1",
@@ -71,7 +72,7 @@ test("claude gets Household's MCP server (and no other) from a root-owned file, 
   expect(JSON.parse(file("mcp.json"))).toEqual({ mcpServers: { [MCP_SERVER]: { type: "http", url: "${HOUSEHOLD_MCP_URL}", headers: { "x-household-token": "${HOUSEHOLD_PET_TOKEN}" } } } });
   expect(file("Dockerfile")).toContain("COPY --chmod=644 mcp.json /etc/household/mcp.json");
   expect(file("entrypoint.sh")).toContain(
-    '--mcp-config /etc/household/mcp.json --strict-mcp-config --model "$HOUSEHOLD_MODEL" \\\n  --permission-mode "$HOUSEHOLD_PERMISSION_MODE" --append-system-prompt "$HOUSEHOLD_INSTRUCTIONS"',
+    '--mcp-config /etc/household/mcp.json "$@" --model "$HOUSEHOLD_MODEL" \\\n  --permission-mode "$HOUSEHOLD_PERMISSION_MODE" --append-system-prompt "$HOUSEHOLD_INSTRUCTIONS"',
   );
 });
 
@@ -512,8 +513,7 @@ test("Claude's pinned Anthropic aliases expose native effort levels and pass onl
 
 test("the subagent model is claude's own setting: one of its model aliases, into CLAUDE_CODE_SUBAGENT_MODEL; none set leaves subagents on the pet's model", () => {
   const context = { caCertPath: "/ca", eventsUrl: "http://gw/events", mcpUrl: "http://gw/mcp", instructions: "", model: "opus" };
-  const [subagent, ...rest] = claudeCodeTmux.settings!;
-  expect(rest).toEqual([]);
+  const subagent = claudeCodeTmux.settings!.find(setting => setting.key === "subagentModel");
   expect(subagent!.key).toBe("subagentModel");
   expect(subagent!.options.map(({ id }) => id)).toEqual(["opus", "sonnet", "haiku", "fable"]);
   expect(subagent!.defaultLabel).toBe("the pet's own model");
@@ -556,4 +556,21 @@ test("scheduled readiness distinguishes busy Claude from its editable input box"
     expect(await claudeCodeTmux.isIdle!(async () => ({ ok: true, output }))).toBe(idle);
   }
   expect(await claudeCodeTmux.isIdle!(async () => ({ ok: false, output: READY }))).toBe(false);
+});
+
+
+test("account connectors are opt-in for pets and always off for scouts, including the launch arguments", () => {
+  const context = { caCertPath: "/ca", eventsUrl: "http://gw/events", mcpUrl: "http://gw/mcp", instructions: "", model: "opus" };
+  const entrypoint = readFileSync(join(claudeCodeTmux.imageContext, "entrypoint.sh"), "utf8");
+  const launch = entrypoint.slice(entrypoint.indexOf("set -- --strict-mcp-config"));
+  for (const scout of [false, true]) for (const enabled of [undefined, "false", "true"]) {
+    const env = claudeCodeTmux.env({ ...context, scout, settings: enabled ? { claudeAiConnectors: enabled } : {} });
+    const expected = !scout && enabled === "true";
+    expect(env.ENABLE_CLAUDEAI_MCP_SERVERS).toBe(String(expected));
+    const result = Bun.spawnSync(["sh", "-c", `tmux() { if [ "$1" = has-session ]; then return 1; fi; printf '%s\n' "$@"; }; ${launch}`], { env });
+    expect(result.exitCode).toBe(0);
+    const args = result.stdout.toString().trim().split("\n");
+    expect(args.includes("--strict-mcp-config")).toBe(!expected);
+    expect(args).toContain("/etc/household/mcp.json");
+  }
 });
