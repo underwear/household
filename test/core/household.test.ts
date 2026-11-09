@@ -7,7 +7,6 @@ import type { Platform } from "../../src/core/channels";
 const household: Household = {
   daemon: {},
   keys: [],
-  secrets: [],
   houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "sibling", agent: "claude-code-tmux" }], people: { owners: [] }, channels: [] }],
 };
 

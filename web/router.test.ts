@@ -21,3 +21,9 @@ test("workspace and bot bookmarks redirect to the renamed paths without rewritin
   expect(routeOf(botPath("house/pets", "agent", "harness"))).toEqual({ page: "bot", workspace: "house/pets", bot: "agent", tab: "harness" });
   expect(routeOf("/houses/work/pets/owl/not-a-tab")).toEqual({ page: "missing" });
 });
+
+
+test("Secrets has a dedicated workspace route", () => {
+  expect(workspacePath("work", "secrets")).toBe("/workspaces/work/secrets");
+  expect(routeOf("/workspaces/work/secrets")).toEqual({ page: "workspace", name: "work", tab: "secrets" });
+});

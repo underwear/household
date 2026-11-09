@@ -12,7 +12,7 @@ import { mcpHandler } from "../../src/infra/mcp-server";
 
 function fixture(overrides: Partial<SideworkerDeps> = {}) {
   const store = new SqliteStore(":memory:");
-  const config: Household = { daemon: {}, keys: [{name:"openai",provider:"openai",value:"sk-household-fake-key"},{name:"claude",provider:"anthropic",value:"sk-ant-api03-fake-key"}], secrets: [], houses: [{ name: "home", network: { kind: "allowlist", allow: [] }, people: { owners: [] },
+  const config: Household = { daemon: {}, keys: [{name:"openai",provider:"openai",value:"sk-household-fake-key"},{name:"claude",provider:"anthropic",value:"sk-ant-api03-fake-key"}], houses: [{ name: "home", network: { kind: "allowlist", allow: [] }, people: { owners: [] },
     pets: [{ name: "parent", agent: "codex-app-server", model: "gpt-6.1-terra", mode: "auto", key:"openai", environment: { setup: "echo setup" } }, { name: "other" }],
     channels: [{ kind: "telegram-private", token: "dummy", chat: "1", pets: ["parent"] }], sideworkerLimits: { maxWorkers: 2, cpus: 3, memoryMiB: 2048 } }] };
   const sent: { house: string; pet: string; text: string }[] = [], logs: string[] = [];

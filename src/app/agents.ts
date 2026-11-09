@@ -9,7 +9,7 @@ import { HouseholdError } from "../core/errors";
 import type { House, Household, Pet } from "../core/household";
 import { keyFor, type AgentKey } from "../core/keys";
 import { sameEndpoint, type Endpoint } from "../core/network-policy";
-import { houseSecrets, availableTo, type PlacedSecret, type Secret } from "../core/secrets";
+import { houseSecrets, type PlacedSecret } from "../core/secrets";
 
 export type Agents = ReadonlyMap<string, AgentAdapter>;
 
@@ -56,10 +56,11 @@ export interface PlacedPet {
  * not the agent's, are a config error, reported for all such pets at once, before any container is touched, so a
  * typo leaves everything running as it was.
  */
-export function placePets(agents: Agents, { houses, keys, secrets = [], timezone }: Pick<Household, "houses" | "keys" | "timezone"> & { secrets?: Secret[] }): PlacedPet[] {
+export function placePets(agents: Agents, { houses, keys, timezone }: Pick<Household, "houses" | "keys" | "timezone">): PlacedPet[] {
   const unknown: string[] = [];
   const placed = houses.flatMap((house) =>
     house.pets.flatMap((pet) => {
+      const secrets = house.secrets ?? [];
       const found = agentOf(agents, pet, keys, house.name);
       if ("problem" in found) unknown.push(`bot ${house.name}/${pet.name}: ${found.problem}`);
       if ("problem" in found) return [];
@@ -67,7 +68,7 @@ export function placePets(agents: Agents, { houses, keys, secrets = [], timezone
       const role: PromptRole = pet.scout ? { kind: "scout", name: pet.scout.definition, parent: pet.scout.parent, house: house.name, instructions: pet.scout.instructions }
         : pet.sideworker ? { kind: "sideworker", name: pet.name, parent: pet.sideworker.parent, house: house.name, cwd: pet.sideworker.cwd, ...(pet.sideworker.branch ? { branch: pet.sideworker.branch } : {}) }
         : { kind: "pet" };
-      return [{ instructions: systemPrompt({ role, features: houseFeatures(house), ...(role.kind === "pet" && pet.lifecycle ? { lifecycle: pet.lifecycle, timezone: householdTimezone(timezone) } : {}) }), house: house.name, pet: pet.name, ...(pet.sideworker ? { sideworker: pet.sideworker } : {}), ...(pet.scout ? { scout: pet.scout } : {}), ...(pet.enabled === undefined ? {} : { enabled: pet.enabled }), ...(pet.cpus === undefined ? {} : { cpus: pet.cpus }), ...(pet.memoryMiB === undefined ? {} : { memoryMiB: pet.memoryMiB }), ...(pet.environment === undefined ? {} : { environment: pet.environment }), agent: found.agent, model: found.model, ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...mode, ...(found.settings === undefined ? {} : { settings: found.settings }), key: found.key.name, keyUse: found.use, secrets: pet.scout ? (pet.scout.gatewaySecrets ?? []).filter(selected => secrets.some(secret => secret.name === selected.name && availableTo(secret,house.name) && !!secret.onlyForCapabilities?.some(capability => pet.scout!.capabilities?.includes(capability)))) : houseSecrets(secrets, house.name) }];
+      return [{ instructions: systemPrompt({ role, features: houseFeatures(house), ...(role.kind === "pet" && pet.lifecycle ? { lifecycle: pet.lifecycle, timezone: householdTimezone(timezone) } : {}) }), house: house.name, pet: pet.name, ...(pet.sideworker ? { sideworker: pet.sideworker } : {}), ...(pet.scout ? { scout: pet.scout } : {}), ...(pet.enabled === undefined ? {} : { enabled: pet.enabled }), ...(pet.cpus === undefined ? {} : { cpus: pet.cpus }), ...(pet.memoryMiB === undefined ? {} : { memoryMiB: pet.memoryMiB }), ...(pet.environment === undefined ? {} : { environment: pet.environment }), agent: found.agent, model: found.model, ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...mode, ...(found.settings === undefined ? {} : { settings: found.settings }), key: found.key.name, keyUse: found.use, secrets: pet.scout ? (pet.scout.gatewaySecrets ?? []).filter(selected => secrets.some(secret => secret.name === selected.name && !!secret.onlyForCapabilities?.some(capability => pet.scout!.capabilities?.includes(capability)))) : houseSecrets(secrets) }];
     }),
   );
   if (unknown.length > 0) throw new HouseholdError(unknown.join("\n"));

@@ -1,3 +1,5 @@
+import { Document } from "yaml";
+import { migrateHouseSecrets } from "./config-migrations";
 import { houseInboxesSchema, telegramInboxProblems } from "../core/house-inboxes";
 import { houseFeaturesSchema, previewSettingsSchema } from "../core/house-features";
 import { petCpuSchema, petMemorySchema, sideworkerLimitsSchema } from "../core/resources";
@@ -212,7 +214,6 @@ const secret = z.strictObject({
   hosts: z.array(secretHostEntry).min(1, "a secret needs at least one host"),
   header: z.string().trim().toLowerCase().regex(/^[a-z0-9-]{1,64}$/, "a header name: letters, digits and -").optional(),
   env: z.string().superRefine((text, ctx) => { const problem = envProblem(text); if (problem) ctx.addIssue({ code: "custom", message: problem }); }),
-  houses: houseNames,
   onlyForCapabilities: z.array(name).optional(),
   note,
 });
@@ -297,6 +298,7 @@ const legacyScout = (scout: Record<string, unknown>) => typeof scout.agent === "
 const withoutTimeout = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== "timeoutMinutes")) : value;
 const scoutsInput = z.preprocess((raw) => Array.isArray(raw) ? raw.map(scout => scout && typeof scout === "object" ? legacyScout(scout as Record<string, unknown>) : scout) : raw, scoutDefinitionsSchema);
 const house = z.strictObject({
+  secrets: map(secretInput),
   inboxes: houseInboxesSchema.optional(),
   capabilities: capabilityDefinitionsSchema.optional(),
   scouts: scoutsInput.optional(),
@@ -319,19 +321,24 @@ const port = z.number().int().min(0).max(65535).optional();
 const daemon = z.strictObject({ agentPort: port, webPort: port });
 
 // An empty file is YAML null too.
-const file = z.strictObject({ version: z.number().int().min(0).optional(), timezone: z.string().max(100).refine(validTimezone, "Expected an IANA timezone").optional(), daemon: daemon.optional(), keys: map(key), secrets: map(secretInput), houses: map(house) }).nullable();
+const file = z.strictObject({ version: z.number().int().min(0).optional(), timezone: z.string().max(100).refine(validTimezone, "Expected an IANA timezone").optional(), daemon: daemon.optional(), keys: map(key), houses: map(house) }).nullable();
 
 /** Validates the plain-JS form of household.yaml and turns it into the domain model. */
 export function parseHousehold(raw: unknown, source: string): Household {
+  if (raw && typeof raw === "object" && "secrets" in raw && (!("version" in raw) || Number(raw.version) < 4)) {
+    const doc = new Document(raw);
+    migrateHouseSecrets(doc);
+    raw = doc.toJS();
+  }
   const result = file.safeParse(raw);
   if (!result.success) throw new HouseholdError(`invalid config ${source}:\n${z.prettifyError(result.error)}`);
   const household: Household = {
     daemon: result.data?.daemon ?? {},
     ...(result.data?.timezone ? {timezone: result.data.timezone} : {}),
     keys: Object.entries(result.data?.keys ?? {}).map(([keyName, { provider, value, note: said, houses, allowOverage }]) => ({ name: keyName, provider, value, ...(said === undefined ? {} : { note: said }), ...(houses === undefined ? {} : { houses }), ...(allowOverage ? { allowOverage } : {}) })),
-    secrets: Object.entries(result.data?.secrets ?? {}).map(([secretName, { value, hosts, header, env, houses, onlyForCapabilities, note: said }]) => ({ name: secretName, value, hosts, ...(onlyForCapabilities === undefined ? {} : { onlyForCapabilities }), header: header ?? DEFAULT_SECRET_HEADER, env, ...(houses === undefined ? {} : { houses }), ...(said === undefined ? {} : { note: said }) })),
     houses: Object.entries(result.data?.houses ?? {}).map(([houseName, value]) => ({
       name: houseName,
+      ...(Object.keys(value.secrets).length ? { secrets: Object.entries(value.secrets).map(([name, { header, ...secret }]) => ({ name, ...secret, header: header ?? DEFAULT_SECRET_HEADER })) } : {}),
       ...(value.inboxes ? { inboxes: value.inboxes } : {}),
       ...(value.capabilities ? { capabilities: value.capabilities } : {}),
       ...(value.scouts ? { scouts: value.scouts } : {}),
@@ -373,30 +380,29 @@ export function parseHousehold(raw: unknown, source: string): Household {
     })),
   };
   const problems = [...household.houses.flatMap(channelProblems), ...botProblems(household.houses), ...telegramInboxProblems(household.houses)];
-  for (const secret of household.secrets) {
-    if (secret.onlyForCapabilities?.length && !secret.houses?.length) problems.push(`capability-only secret '${secret.name}' must name its workspaces`);
-  }
   for (const house of household.houses) {
     for (const capability of house.capabilities ?? []) for (const key of capability.keys) {
-      const secret = household.secrets.find(item => item.name === key.secret);
-      if (!secret || !secret.houses?.includes(house.name) || !secret.onlyForCapabilities?.includes(capability.name))
+      const secret = (house.secrets ?? []).find(item => item.name === key.secret);
+      if (!secret || !secret.onlyForCapabilities?.includes(capability.name))
         problems.push(`capability '${house.name}/${capability.name}' key '${key.secret}' must be a secret restricted to this capability and house`);
     }
     for (const capability of house.capabilities ?? []) if (capability.owner && !house.scouts?.some(scout => scout.name === capability.owner))
       problems.push(`capability '${house.name}/${capability.name}' belongs to unknown scout blueprint '${capability.owner}'`);
     for (const scout of house.scouts ?? []) {
       for (const name of scout.capabilities) if (house.capabilities?.find(capability => capability.name === name)?.owner) problems.push(`scout '${house.name}/${scout.name}': '${name}' is another blueprint's own capability`);
-      for (const problem of scoutProblems({ capabilities: blueprintCapabilities(scout, house.capabilities ?? []) }, house.capabilities ?? [], secret => household.secrets.find(item => item.name === secret)?.env))
+      for (const problem of scoutProblems({ capabilities: blueprintCapabilities(scout, house.capabilities ?? []) }, house.capabilities ?? [], secret => (house.secrets ?? []).find(item => item.name === secret)?.env))
         problems.push(`scout '${house.name}/${scout.name}': ${problem}`);
     }
   }
-  for (let i = 0; i < household.secrets.length; i++) {
-    const first = household.secrets[i]!;
-    for (const second of household.secrets.slice(i + 1)) {
-      if (first.env !== second.env || first.houses?.length === 0 || second.houses?.length === 0) continue;
-      const overlap = first.houses === undefined || second.houses === undefined || first.houses.some(house => second.houses!.includes(house));
-      const sharedRecipients = first.onlyForCapabilities === undefined && second.onlyForCapabilities === undefined || !!first.onlyForCapabilities?.some(capability => second.onlyForCapabilities?.includes(capability));
-      if (overlap && sharedRecipients) problems.push(`secrets '${first.name}' and '${second.name}' use the same environment variable '${first.env}' in overlapping houses`);
+  for (const house of household.houses) {
+    const secrets = house.secrets ?? [];
+    for (let i = 0; i < secrets.length; i++) {
+      const first = secrets[i]!;
+      for (const second of secrets.slice(i + 1)) {
+        if (first.env !== second.env) continue;
+        const sharedRecipients = first.onlyForCapabilities === undefined && second.onlyForCapabilities === undefined || !!first.onlyForCapabilities?.some(capability => second.onlyForCapabilities?.includes(capability));
+        if (sharedRecipients) problems.push(`secrets '${first.name}' and '${second.name}' use the same environment variable '${first.env}' in workspace '${house.name}'`);
+      }
     }
   }
   if (problems.length > 0) throw new HouseholdError(`invalid config ${source}:\n${problems.map((problem) => `✖ ${problem}`).join("\n")}`);

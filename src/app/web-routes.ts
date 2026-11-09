@@ -125,7 +125,7 @@ const optional = z.string().nullish();
 const petFields = { cpus: petCpuSchema.nullish(), memoryMiB: petMemorySchema.nullish(), enabled: z.boolean().optional(), title: optional, emoji: optional, aliases: z.array(z.string()).nullish(), agent: optional, model: optional, reasoningEffort: optional, mode: optional, settings: z.record(z.string(), z.string().nullable()).nullish(), key: optional, lifecycle: lifecycleSchema.nullish() };
 const newKeyBody = z.strictObject({ name: z.string(), provider: z.string(), value: z.string(), note: optional, houses: z.array(z.string()).nullish(), allowOverage: z.boolean().nullish() });
 const keyBody = z.strictObject({ provider: z.string().optional(), value: z.string().optional(), note: optional, houses: z.array(z.string()).nullish(), allowOverage: z.boolean().nullish() });
-const secretFields = { onlyForCapabilities: z.array(z.string()).nullish(), value: z.string().optional(), hosts: z.array(z.string()).max(20).optional(), header: optional, env: z.string().optional(), houses: z.array(z.string()).nullish(), note: optional };
+const secretFields = { onlyForCapabilities: z.array(z.string()).nullish(), value: z.string().optional(), hosts: z.array(z.string()).max(20).optional(), header: optional, env: z.string().optional(), note: optional };
 const newSecretBody = z.strictObject({ name: z.string(), ...secretFields });
 const secretBody = z.strictObject(secretFields);
 // `channels`: the chats of the house's channels it joins as it is added.
@@ -204,7 +204,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     for (const field of [spec.chat, ...spec.fields]) if (!(field === spec.chat ? added.chat : own[field.key])?.trim()) throw new HouseholdError(`${field.label} is required`);
   };
 
-  const houseView = (house: House, states: PetStatus[], keys: Household["keys"], secrets: Household["secrets"] = []): HouseView => {
+  const houseView = (house: House, states: PetStatus[], keys: Household["keys"]): HouseView => {
     const own = house.network.allow;
     const implied = agentHosts(deps.agents, house, keys).filter((host) => !own.some((entry) => sameEndpoint(entry, host)));
     return {
@@ -264,7 +264,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
   const viewOf = async (household: Household, name: string) => {
     const effective = deps.sideworkers?.expanded(household) ?? household;
     const house = findHouse(effective, name);
-    return house && houseView(house, await deps.petStates(), household.keys, household.secrets);
+    return house && houseView(house, await deps.petStates(), household.keys);
   };
 
   /** After a write to the keys: the reload, and the keys as written. */
@@ -279,14 +279,14 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
   };
 
   /** After a write to the secrets: the reload, and the secrets as written (never their values in the log). */
-  const secretsWritten = async (household: Household, what: string, status = 200): Promise<Response> => {
+  const secretsWritten = async (household: Household, houseName: string, what: string, status = 200): Promise<Response> => {
     events.info(`web: secret ${what}`);
     try {
       await (deps.applySecrets ?? deps.apply)();
     } catch {
       throw new NotApplied();
     }
-    return json({ secrets: secretViews(household) }, status);
+    return json({ secrets: secretViews(household.houses.find(house => house.name === houseName)!) }, status);
   };
 
   /** After a write: the reload, and the answer with the house as written (none for a delete). */
@@ -408,7 +408,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     }],
     ["GET", /^\/api\/houses$/, async () => {
       const [household, states] = await Promise.all([loadEffective(), deps.petStates()]);
-      return json(household.houses.map((house) => houseView(house, states, household.keys, household.secrets)));
+      return json(household.houses.map((house) => houseView(house, states, household.keys)));
     }],
     ["GET", /^\/api\/keys$/, async () => json(keyViews(deps.agents, await config.load(), deps.allowances))],
     ["POST", /^\/api\/keys$/, async ({ request }) => {
@@ -434,14 +434,18 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       if (active.length) throw new HouseholdError(`key '${name}' is used by sideworkers: ${active.join(", ")}; close them first`);
       return keysWritten(await config.removeKey(name!), `${name} removed`);
     }],
-    ["GET", /^\/api\/secrets$/, async () => json(secretViews(await config.load()))],
-    ["POST", /^\/api\/secrets$/, async ({ request }) => {
-      const { name, ...fields } = await bodyOf(request, newSecretBody);
-      return secretsWritten(await config.addSecret(name, fields), `${name} added`, 201);
+    ["GET", /^\/api\/houses\/([^/]+)\/secrets$/, async ({ params: [houseName] }) => {
+      const house = (await config.load()).houses.find(house => house.name === houseName);
+      if (!house) throw new NotFoundError(`unknown workspace '${houseName}'`);
+      return json(secretViews(house));
     }],
-    ["PATCH", /^\/api\/secrets\/([^/]+)$/, async ({ request, params: [name] }) =>
-      secretsWritten(await config.updateSecret(name!, await bodyOf(request, secretBody)), `${name} changed`)],
-    ["DELETE", /^\/api\/secrets\/([^/]+)$/, async ({ params: [name] }) => secretsWritten(await config.removeSecret(name!), `${name} removed`)],
+    ["POST", /^\/api\/houses\/([^/]+)\/secrets$/, async ({ request, params: [houseName] }) => {
+      const { name, ...fields } = await bodyOf(request, newSecretBody);
+      return secretsWritten(await config.addSecret(houseName!, name, fields), houseName!, `${houseName}/${name} added`, 201);
+    }],
+    ["PATCH", /^\/api\/houses\/([^/]+)\/secrets\/([^/]+)$/, async ({ request, params: [houseName, name] }) =>
+      secretsWritten(await config.updateSecret(houseName!, name!, await bodyOf(request, secretBody)), houseName!, `${houseName}/${name} changed`)],
+    ["DELETE", /^\/api\/houses\/([^/]+)\/secrets\/([^/]+)$/, async ({ params: [houseName, name] }) => secretsWritten(await config.removeSecret(houseName!, name!), houseName!, `${houseName}/${name} removed`)],
     ["POST", /^\/api\/houses$/, async ({ request }) => {
       const { name } = await bodyOf(request, nameBody);
       return written(await config.createHouse(name), name, "created", 201);

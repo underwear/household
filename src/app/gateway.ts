@@ -12,7 +12,7 @@ export const AGENT_API_SECRET = "household-agent-api";
 /** File in the gateway's secrets dir holding key `name`'s value (a `.` no key name has: never the agent API's file). */
 export const keySecret = (name: string) => `key.${name}`;
 /** The gateway's file of an owner's secret. */
-export const ownSecret = (name: string) => `secret.${name}`;
+export const ownSecret = (house: string, name: string) => `secret.${house}.${name}`;
 
 /** The daemon's agent API, as the gateway reaches it and with the secret the gateway must present. */
 export interface AgentApiAccess {

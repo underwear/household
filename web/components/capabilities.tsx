@@ -364,7 +364,7 @@ function KeyDialog({ capability, onClose, save }: { capability: CapabilityView; 
           <TextField label="Variable" mono value={env} onChange={setEnv} placeholder="HEROKU_API_KEY" error={envError || undefined} />
           <TextField label="Value" mono value={value} onChange={setValue} placeholder="hrku-…" hint="Kept by Household; only scouts with this capability get it." />
           <TextField label="Hosts" mono value={hosts} onChange={setHosts} placeholder="api.heroku.com" hint="Where it is used (comma-separated)." />
-          <TextField label="Secret name" mono value={secret} onChange={setSecret} hint="How Household Settings lists it." />
+          <TextField label="Secret name" mono value={secret} onChange={setSecret} hint="Its name in this workspace’s Secrets page." />
         </>
       ),
     }} />

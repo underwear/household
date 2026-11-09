@@ -131,3 +131,117 @@ test("migration 3: browser and dev capabilities left as their templates made the
   expect(template("dev")).not.toContain(" npm");
   migration.change(parseDocument("houses:\n  work:\n    network: { allow: [] }\n")); // nothing to rewrite: harmless
 });
+
+test("migration 4 copies shared secrets only to existing recipients, preserving capability restrictions and independent ownership", async () => {
+  const paths = household();
+  const old = `# Owner configuration
+version: 3
+secrets:
+  shared: # shared token
+    value: synthetic-shared
+    hosts: [api.example.com]
+    env: SHARED_TOKEN
+    note: keep this note
+  private:
+    value: synthetic-private
+    hosts: [api.example.com:8443]
+    env: PRIVATE_TOKEN
+    houses: [work]
+    header: x-api-key
+  scout:
+    value: synthetic-scout
+    hosts: [api.example.com]
+    env: SCOUT_TOKEN
+    houses: [work]
+    onlyForCapabilities: [deploy]
+houses:
+  work:
+    network: {allow: []}
+    capabilities:
+      - name: deploy
+        keys: [{secret: scout, via: gateway}]
+  home:
+    network: {allow: []}
+`;
+  writeFileSync(paths.configFile, old);
+  const config = new ConfigStore(paths.configFile);
+  // Read-only inspection can project legacy config, but ordinary edits cannot silently migrate without backup.
+  expect((await config.load()).houses[1]!.secrets!.map(secret => secret.name)).toEqual(["shared"]);
+  await expect(config.updateSecret("work", "private", { value: "changed" })).rejects.toThrow("migration");
+  expect(readFileSync(paths.configFile, "utf8")).toBe(old);
+  const backup = backUpBeforeMigrating(paths);
+  expect(backup.dir).toBeDefined();
+  expect(readFileSync(join(backup.dir!, "household.yaml"), "utf8")).toBe(old);
+  const records = new SqliteStore(paths.database);
+  try {
+    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4]);
+    const saved = readFileSync(paths.configFile, "utf8");
+    expect(saved).not.toMatch(/^secrets:/m);
+    expect(saved).toContain("# Owner configuration");
+    expect(saved).toContain("shared token");
+    const migrated = await config.load();
+    expect(migrated.houses[0]!.secrets!.find(secret => secret.name === "private")).toMatchObject({ header: "x-api-key", hosts: [{ host: "api.example.com", port: 8443 }] });
+    expect(migrated.houses[0]!.secrets!.find(secret => secret.name === "scout")!.onlyForCapabilities).toEqual(["deploy"]);
+    await config.updateSecret("work", "shared", { value: "changed" });
+    expect((await config.load()).houses[1]!.secrets![0]!.value).toBe("synthetic-shared");
+    await config.createHouse("future");
+    expect((await config.load()).houses.find(house => house.name === "future")!.secrets ?? []).toEqual([]);
+    expect(await migrateHousehold({ config, records })).toEqual([]);
+  } finally { records.close(); }
+});
+
+test("migration 4 refuses orphaned and colliding secrets without writing or exposing values", async () => {
+  const legacy = { value: "DO_NOT_PRINT_THIS", hosts: ["api.example.com"], env: "TOKEN" };
+  const cases = [
+    { version: 3, secrets: { token: legacy }, houses: {} },
+    { version: 3, secrets: { token: { ...legacy, houses: ["missing"] } }, houses: { work: { network: { allow: [] } } } },
+    { version: 3, secrets: { token: legacy }, houses: { work: { network: { allow: [] }, secrets: { token: legacy } } } },
+  ];
+  for (const raw of cases) {
+    const paths = household(), original = JSON.stringify(raw);
+    writeFileSync(paths.configFile, original);
+    const config = new ConfigStore(paths.configFile);
+    let message = "";
+    try { await config.migrate(); } catch (error) { message = String(error); }
+    expect(message).not.toBe("");
+    expect(message).not.toContain(legacy.value);
+    expect(readFileSync(paths.configFile, "utf8")).toBe(original);
+  }
+});
+
+test("latest config rejects global secrets and cross-house selectors", async () => {
+  const paths = household();
+  const secret = { value: "synthetic", hosts: ["api.example.com"], env: "TOKEN" };
+  for (const raw of [
+    { version: CONFIG_VERSION, secrets: { token: secret }, houses: {} },
+    { version: CONFIG_VERSION, houses: { work: { network: { allow: [] }, secrets: { token: { ...secret, houses: ["home"] } } } } },
+  ]) {
+    writeFileSync(paths.configFile, JSON.stringify(raw));
+    await expect(new ConfigStore(paths.configFile).load()).rejects.toThrow("invalid config");
+  }
+});
+
+
+test("migration 4 materializes YAML aliases so independent secrets survive removing the global catalog", async () => {
+  const paths = household();
+  writeFileSync(paths.configFile, `version: 3
+secrets:
+  first:
+    value: &token synthetic-aliased
+    hosts: &hosts [api.example.com]
+    env: FIRST_TOKEN
+  second:
+    value: *token
+    hosts: *hosts
+    env: SECOND_TOKEN
+houses:
+  work: {network: {allow: []}}
+  home: {network: {allow: []}}
+`);
+  const config = new ConfigStore(paths.configFile);
+  await config.migrate();
+  await config.updateSecret("work", "first", { value: "changed" });
+  const result = await config.load();
+  expect(result.houses[0]!.secrets![1]!.value).toBe("synthetic-aliased");
+  expect(result.houses[1]!.secrets!.map(secret => secret.value)).toEqual(["synthetic-aliased", "synthetic-aliased"]);
+});

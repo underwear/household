@@ -23,7 +23,7 @@ const pet = { name: "pet", agent: agent.name, model: "big", key: "test" };
 test("placement preserves explicit effort and omission retains native defaults", () => {
   expect(agentOf(agents, pet, keys)).not.toHaveProperty("reasoningEffort");
   expect(agentOf(agents, { ...pet, reasoningEffort: "high" }, keys)).toMatchObject({ reasoningEffort: "high" });
-  const household: Household = { daemon: {}, keys, secrets: [], houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ ...pet, reasoningEffort: "low" }], people: { owners: [] }, channels: [] }] };
+  const household: Household = { daemon: {}, keys, houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ ...pet, reasoningEffort: "low" }], people: { owners: [] }, channels: [] }] };
   expect(placePets(agents, household)[0]).toMatchObject({ reasoningEffort: "low" });
 });
 
@@ -48,7 +48,7 @@ test("unsupported effort edits and model switches leave persisted config unchang
 test("each pet is placed with the system prompt of its role", () => {
   const scout = { ...pet, name: "scout-1", scout: { definition: "general", parent: "pet", instructions: "Be careful.", homePath: "/tmp", network: { kind: "allowlist", allow: [] } } } as never;
   const worker = { ...pet, name: "pet-w1", sideworker: { parent: "pet", cwd: "/home/agent/work" } } as never;
-  const household: Household = { daemon: {}, keys, secrets: [], houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, features: { scouts: true }, pets: [pet, worker, scout], people: { owners: [] }, channels: [] }] };
+  const household: Household = { daemon: {}, keys, houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, features: { scouts: true }, pets: [pet, worker, scout], people: { owners: [] }, channels: [] }] };
   const [placedPet, placedWorker, placedScout] = placePets(agents, household);
   expect(placedPet!.instructions).toStartWith("Household runs you in a VM");
   expect(placedWorker!.instructions).toStartWith("You are sideworker pet-w1, dispatched by bot pet in workspace work");

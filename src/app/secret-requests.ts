@@ -2,7 +2,7 @@ import { CLOCK, type Clock } from "../core/clock";
 import type { House } from "../core/household";
 import { isWholeInternet } from "../core/network-policy";
 import { NAME_PATTERN } from "../core/names";
-import { availableTo, envProblem, formatHosts, secretHost, secretPlaceholder, type Secret } from "../core/secrets";
+import { envProblem, formatHosts, secretHost, secretPlaceholder, type Secret } from "../core/secrets";
 import { carriesHouseholdTag } from "../core/tags";
 import type { PetIdentity } from "../infra/agent-api";
 import type { McpTool } from "../infra/mcp-server";
@@ -26,7 +26,7 @@ export interface SecretInput {
 }
 export interface SecretRequestOptions {
   house(name: string): House | undefined;
-  secrets(): readonly Secret[];
+  secrets(house: string): readonly Secret[];
   save(house: string, name: string, value: string, hosts: string[], env: string): Promise<void>;
   notice(house: string, pet: string, text: string): Promise<void>;
   choose?(house: string, pet: string, card: OwnerCard<SecretDecision>, signal: AbortSignal): Promise<SecretDecision | undefined>;
@@ -72,9 +72,9 @@ export class SecretRequests {
     const { name } = args;
     const configured = this.options.house(house);
     if (this.stopped || !configured?.pets.some(p => p.name === pet) || configured.network.allow.some(isWholeInternet)) return { status: "refused", message: "Secret requests require an existing member of a restricted-network workspace." };
-    const existing = this.options.secrets().find(s => s.name === name);
+    const existing = this.options.secrets(house).find(s => s.name === name);
     if (existing) return { status: "refused", message: "That secret name already exists; choose a unique name. Nothing will be overwritten." };
-    if (this.options.secrets().some(s => availableTo(s, house) && s.env === env)) return { status: "refused", message: "That env is already used in this workspace; choose a unique environment variable." };
+    if (this.options.secrets(house).some(s => s.env === env)) return { status: "refused", message: "That env is already used in this workspace; choose a unique environment variable." };
     const key = keyOf(house, pet);
     if (this.confirmations.has(house) || [...this.pending.values()].some(r => r.house === house)) return { status: "busy", message: "This workspace already has an active secret request or confirmation. Wait for its outcome." };
     const recent = (this.rate.get(house) ?? []).filter(t => t > this.clock.now() - HOUR);
@@ -174,13 +174,13 @@ export class SecretRequests {
     if (this.stopped || !house || house.network.allow.some(isWholeInternet)) {
       await input.notice("Secrets work only in a house with a network allowlist. Nothing saved.").catch(() => {}); return true;
     }
-    if (this.options.secrets().some(s => s.name === name)) {
+    if (this.options.secrets(input.house).some(s => s.name === name)) {
       await input.notice("A secret by that name exists: change it on the admin's Secrets page. /secret never overwrites.").catch(() => {}); return true;
     }
     if (this.confirmations.has(input.house)) {
       await input.notice("Another secret is waiting for your answer: finish it first.").catch(() => {}); return true;
     }
-    if (this.options.secrets().some(s => availableTo(s, input.house) && s.env === env)) {
+    if (this.options.secrets(input.house).some(s => s.env === env)) {
       await input.notice("That variable is taken in this house. Nothing saved.").catch(() => {}); return true;
     }
     const pet = request?.pet ?? input.pet;
@@ -257,7 +257,7 @@ export class SecretRequests {
         return;
       }
       const configured = this.options.house(house);
-      if (!configured || configured.network.allow.some(isWholeInternet) || (pet && !configured.pets.some(p => p.name === pet)) || this.options.secrets().some(s => s.name === name || (availableTo(s, house) && s.env === env))) throw new Error("not applicable");
+      if (!configured || configured.network.allow.some(isWholeInternet) || (pet && !configured.pets.some(p => p.name === pet)) || this.options.secrets(house).some(s => s.name === name || (s.env === env))) throw new Error("not applicable");
       pending.cancelTimer();
       const value = pending.value;
       pending.value = "";

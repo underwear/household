@@ -4,20 +4,20 @@ import { api, type SecretFields, type SecretView } from "../api";
 import { DEFAULT_SECRET_HEADER, SECRET_PRESETS, envProblem, secretPlaceholder } from "../../src/core/secrets";
 import { Dialog, useDialog } from "./dialog";
 import { CheckList, SelectField, TextField } from "./fields";
-import { WorkspacesField, masked } from "./keys";
+import { masked } from "./keys";
 import { Cell, List, ListRow, Section } from "./layout";
 import { RowActions, written } from "./section";
 
 /**
- * Household settings · Secrets: the owner's own tokens (GitHub, npm, …). Bots hold a placeholder in a variable;
+ * Workspace · Secrets: the owner's own tokens (GitHub, npm, …). Bots hold a placeholder in a variable;
  * the gateway puts the value in its place, in one header, only on requests to the secret's hosts.
  */
-export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; noteMax?: number; notify: (text: string, warning?: boolean) => void }) {
+export function SecretsSection({ house, noteMax, notify }: { house: string; noteMax?: number; notify: (text: string, warning?: boolean) => void }) {
   const [secrets, setSecrets] = useState<SecretView[]>();
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<SecretView | "new">();
   const dialog = useDialog();
-  const load = useCallback(() => api.secrets().then(setSecrets, (e: Error) => setError(e.message)), []);
+  const load = useCallback(() => api.secrets(house).then(setSecrets, (e: Error) => setError(e.message)), [house]);
   useEffect(() => void load(), [load]);
   const save = async (write: Promise<unknown>, done: string) => {
     try {
@@ -33,14 +33,14 @@ export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; 
       body: "Bots stop getting it right away. They keep running.",
       confirmLabel: "Remove",
       danger: true,
-      onConfirm: () => save(api.removeSecret(secret.name), `Secret ${secret.name} removed`),
+      onConfirm: () => save(api.removeSecret(house, secret.name), `Secret ${secret.name} removed`),
     });
   const reveal = (secret: SecretView) =>
     dialog.open({ title: `Secret ${secret.name}`, body: <span className="id key-value">{secret.value}</span>, confirmLabel: "Done", onConfirm: async () => {} });
   return (
     <Section
       title="Secrets"
-      hint="Your own tokens. Bots get a placeholder; the gateway swaps in the value only for the hosts you name."
+      hint="Tokens for this workspace only. Bots get a placeholder; the gateway swaps in the value only for the hosts you name."
       actions={
         <button className="btn" onClick={() => setEditing("new")}>
           + Add secret
@@ -69,7 +69,7 @@ export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; 
             <Cell lines>
               <span className="id ellipsis" title={secret.hosts.join(", ")}>{secret.hosts.join(", ")}</span>
               <span className="muted">
-                {masked(secret.value)} · {secret.houses ? secret.houses.join(", ") : "every workspace"}
+                {masked(secret.value)}
                 {secret.header !== DEFAULT_SECRET_HEADER && ` · ${secret.header}`}
               </span>
             </Cell>
@@ -78,11 +78,11 @@ export function SecretsSection({ houses, noteMax, notify }: { houses: string[]; 
       </List>
       {editing && (
         <SecretDialog
-          houses={houses}
+          house={house}
           noteMax={noteMax}
           secret={editing === "new" ? undefined : editing}
           onClose={() => setEditing(undefined)}
-          save={(name, fields) => (editing === "new" ? save(api.addSecret(name, fields), `Secret ${name} added`) : save(api.updateSecret(name, fields), `Secret ${name} saved`))}
+          save={(name, fields) => (editing === "new" ? save(api.addSecret(house, name, fields), `Secret ${name} added`) : save(api.updateSecret(house, name, fields), `Secret ${name} saved`))}
         />
       )}
       {dialog.element}
@@ -95,23 +95,22 @@ const hostsOf = (text: string) => text.split(/[\s,]+/).map((host) => host.trim()
 
 /**
  * A secret's form: a preset (new ones) fills its hosts and variable; then its name, value, hosts, variable, header,
- * workspaces and note. Gateway rules update immediately; placeholder variables refresh at the next VM start.
+ * capabilities and note. Gateway rules update immediately; placeholder variables refresh at the next VM start.
  */
-export function SecretDialog({ houses, noteMax, secret, onClose, save }: { houses: string[]; noteMax?: number; secret?: SecretView; onClose: () => void; save: (name: string, fields: SecretFields) => Promise<void> }) {
-  const [scouts, setScouts] = useState<{ house: string; name: string; title: string }[]>([]); // the workspaces' capabilities
+export function SecretDialog({ house, noteMax, secret, onClose, save }: { house: string; noteMax?: number; secret?: SecretView; onClose: () => void; save: (name: string, fields: SecretFields) => Promise<void> }) {
+  const [capabilities, setCapabilities] = useState<{ name: string }[]>([]);
   const [onlyForScouts, setOnlyForScouts] = useState<string[]>(secret?.onlyForCapabilities ?? []);
   const [scoutError, setScoutError] = useState<string>();
-  useEffect(() => { let active = true; Promise.all(houses.map(async house => ({ house, view: await capabilityApi.list(house).catch(() => ({ capabilities: [] })) }))).then(found => { if (active) setScouts(found.flatMap(({ house, view }) => view.capabilities.map(c => ({ house, name: c.name, title: c.name })))); }, e => active && setScoutError(e.message)); return () => { active = false; }; }, [houses.join("\n")]);
+  useEffect(() => { let active = true; capabilityApi.list(house).then(view => { if (active) setCapabilities(view.capabilities); }, e => { if (active) setScoutError(e.message); }); return () => { active = false; }; }, [house]);
   const [preset, setPreset] = useState("");
   const [name, setName] = useState(secret?.name ?? "");
   const [value, setValue] = useState(secret?.value ?? "");
   const [hosts, setHosts] = useState(secret?.hosts.join(", ") ?? "");
   const [env, setEnv] = useState(secret?.env ?? "");
   const [header, setHeader] = useState(secret?.header ?? DEFAULT_SECRET_HEADER);
-  const [only, setOnly] = useState<string[]>(secret?.houses ?? []);
   const [note, setNote] = useState(secret?.note ?? "");
   const envError = env && envProblem(env.trim());
-  const variableChanges = !secret || secret.env !== env.trim() || JSON.stringify(secret.houses ?? []) !== JSON.stringify(only);
+  const variableChanges = !secret || secret.env !== env.trim();
   return (
     <Dialog
       onClose={onClose}
@@ -121,8 +120,7 @@ export function SecretDialog({ houses, noteMax, secret, onClose, save }: { house
         confirmLabel: secret ? "Save" : "Add secret",
         onConfirm: async () => {
           if (envError) throw new Error(`Variable: ${envError}`);
-          if (onlyForScouts.length && !only.length) throw new Error("Choose the workspace of these capabilities.");
-          await save(name.trim(), { onlyForCapabilities: onlyForScouts.length ? onlyForScouts : (secret?.onlyForCapabilities ? [] : null), value: value.trim(), hosts: hostsOf(hosts), env: env.trim(), header: header.trim() || null, houses: only.length ? only : null, note: note.trim() || null });
+          await save(name.trim(), { onlyForCapabilities: onlyForScouts.length ? onlyForScouts : (secret?.onlyForCapabilities ? [] : null), value: value.trim(), hosts: hostsOf(hosts), env: env.trim(), header: header.trim() || null, note: note.trim() || null });
         },
         children: (
           <>
@@ -149,8 +147,7 @@ export function SecretDialog({ houses, noteMax, secret, onClose, save }: { house
                 hint={name.trim() ? `Bots get ${secretPlaceholder(name.trim())} here.` : undefined} />
               <TextField label="Header" mono value={header} onChange={setHeader} hint="Where the placeholder is swapped, Basic credentials included." />
             </div>
-            {houses.length > 0 && <WorkspacesField houses={houses} checked={only} onChange={setOnly} />}
-            <CheckList label="Only for capabilities" checked={onlyForScouts} options={[...new Set(scouts.filter(s => !only.length || only.includes(s.house)).map(s => s.name))].map(name => ({ value: name, label: scouts.filter(s => s.name === name && (!only.length || only.includes(s.house))).map(s => houses.length > 1 ? `${s.title} (${s.house})` : s.title).join(", ") }))} onToggle={name => setOnlyForScouts(previous => previous.includes(name) ? previous.filter(s => s !== name) : [...previous, name])} empty="No capabilities in the selected workspaces." />
+            <CheckList label="Only for capabilities" checked={onlyForScouts} options={capabilities.map(({ name }) => ({ value: name, label: name }))} onToggle={name => setOnlyForScouts(previous => previous.includes(name) ? previous.filter(s => s !== name) : [...previous, name])} empty="No capabilities in this workspace." />
 
             {scoutError && <p className="error">Could not load capabilities: {scoutError}</p>}
             <TextField label="Note" hint="Only you see this." value={note} onChange={setNote} maxLength={noteMax} />

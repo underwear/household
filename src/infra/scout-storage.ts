@@ -44,7 +44,7 @@ finally: os.close(fd)
   }
   /** The values of a scout's keys that sit inside its VM, for the run's output redactor; never returned to a pet/API. */
   vmValues(house: string, definition: Pick<ScoutDefinition, "capabilities">, capabilities: readonly CapabilityDefinition[], secrets: readonly Secret[]): string[] {
-    return scoutKeys(definition, capabilities).flatMap(key => { const secret = key.via === "vm" ? scoutVmSecret(secrets, house, key) : undefined; return secret ? [secret.value] : []; });
+    return scoutKeys(definition, capabilities).flatMap(key => { const secret = key.via === "vm" ? scoutVmSecret(secrets, key) : undefined; return secret ? [secret.value] : []; });
   }
   /**
    * One run's home, skills and task secrets, and what its VM gets: the env (keys inside its VM and task secrets), the
@@ -64,12 +64,12 @@ finally: os.close(fd)
     const env:Record<string,string> = {};
     for(const key of keys) {
       if(key.via !== "vm") continue;
-      const secret = scoutVmSecret(options.ownedSecrets, house, key);
+      const secret = scoutVmSecret(options.ownedSecrets, key);
       if(!secret) throw new Error(`Key ${key.secret} of ${key.capability} is unavailable`);
       env[key.env] = secret.value;
     }
     for(const [key,value] of Object.entries(options.values ?? {})) { if(!/^[a-z][a-z0-9_]{0,31}$/.test(key) || value.length > 4096) throw new Error("Invalid task secret"); env[`SCOUT_SECRET_${key.toUpperCase()}`] = value; await writeFile(join(root,"secrets",key),value,{mode:0o600}); }
-    return {homePath,skillsPath,env,setup:scoutSetup(used,definition.workspace),gatewaySecrets:scoutSecrets(options.ownedSecrets,house,keys)};
+    return {homePath,skillsPath,env,setup:scoutSetup(used,definition.workspace),gatewaySecrets:scoutSecrets(options.ownedSecrets,keys)};
   }
 }
 

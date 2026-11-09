@@ -255,11 +255,11 @@ export async function startDaemon(deps: DaemonDeps) {
     choose: (caller,card,signal,channel,origin)=>chat.ownerCard(caller.house,caller.pet,card,signal,channel,origin),
     values: async run => {
       const current=await config.load();
-      return scoutStorage.vmValues(run.house,run.definition,run.capabilities,current.secrets);
+      return scoutStorage.vmValues(run.house,run.definition,run.capabilities,current.houses.find(house => house.name === run.house)?.secrets ?? []);
     },
     prepare: async (run,values)=>{
       const current=await config.load();
-      const material=await scoutStorage.prepare(run.house,run.id,run.definition,{capabilities:run.capabilities,values,ownedSecrets:current.secrets,sharedSkills:await new HouseSkills(houseSkillsRoot(paths.stateDir)).ensure(run.house)});
+      const material=await scoutStorage.prepare(run.house,run.id,run.definition,{capabilities:run.capabilities,values,ownedSecrets:current.houses.find(house => house.name === run.house)?.secrets ?? [],sharedSkills:await new HouseSkills(houseSkillsRoot(paths.stateDir)).ensure(run.house)});
       const network=scoutNetwork(run.definition,run.capabilities);
       return {...material,capabilities:run.capabilities.map(capability=>capability.name),definition:run.scout,parent:run.parent,network:{kind:"allowlist",allow:[...network.allow,...(network.open?[{host:"*",port:"*" as const,reach:"public" as const}]:[])]},instructions:run.definition.instructions};
     },
@@ -346,7 +346,7 @@ export async function startDaemon(deps: DaemonDeps) {
     return { ...spec, grants: networkRequests.petGrants(house.name).filter(g=>!scouts.isScout({house:house.name,pet:g.pet})) };
   }), ...scoutSubjects(wanted).map(spec=>({...spec,grants:networkRequests.petGrants(spec.subject.name).filter(g=>spec.subject.kind=== "scout" && g.pet===spec.subject.pet)}))];
   const applyNetwork = async (household: Household, wanted: PlacedPet[]) => {
-    const staged = await subscriptionKeys.prepare(wanted, household.keys, household.secrets);
+    const staged = await subscriptionKeys.prepare(wanted, household.keys, household.houses);
     try {
       const result = await network.reconcile(specsOf(household, wanted), staged.credentials, access);
       subjects = result.subjects;
@@ -388,7 +388,7 @@ export async function startDaemon(deps: DaemonDeps) {
   const applySecrets = () => enqueue(async () => {
     if (!appliedHousehold) throw new HouseholdError("Household is not ready");
     const latest = await config.load();
-    const household = { ...appliedHousehold, secrets: latest.secrets };
+    const household = { ...appliedHousehold, houses: appliedHousehold.houses.map(house => ({ ...house, secrets: latest.houses.find(each => each.name === house.name)?.secrets ?? [] })) };
     const refreshed = placePets(agents, scouts.expanded(sideworkers.expanded(latest)));
     const wanted = placed.map(pet => ({ ...pet, secrets: refreshed.find(p=>p.house===pet.house&&p.pet===pet.pet)?.secrets ?? [] }));
     await applyNetwork(household, wanted);
@@ -397,9 +397,9 @@ export async function startDaemon(deps: DaemonDeps) {
   });
   const secretRequests = new SecretRequests({
     house: name => appliedHousehold?.houses.find(house => house.name === name),
-    secrets: () => appliedHousehold?.secrets ?? [],
+    secrets: name => appliedHousehold?.houses.find(house => house.name === name)?.secrets ?? [],
     save: async (house, name, value, hosts, env) => {
-      await config.addSecret(name, { value, hosts, env, houses: [house] });
+      await config.addSecret(house, name, { value, hosts, env });
       await applySecrets();
     },
     choose: (house, pet, card, signal) => chat.ownerCard(house, pet, card, signal),
@@ -626,7 +626,7 @@ export async function startDaemon(deps: DaemonDeps) {
     const initial = await enqueue(async () => {
       const loaded = await config.load();
       const port = loaded.daemon.agentPort ?? DEFAULT_AGENT_PORT;
-      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...googleConnectorTools(googleConnectors), ...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.secrets.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
+      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...googleConnectorTools(googleConnectors), ...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.houses.find(item=>item.name===house)?.secrets?.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
         // A scout's home is in its run's storage, not among the pets' homes.
         const home=placed.find(p=>p.house===house&&p.pet===pet)?.scout?.homePath;
         return home?{files:new PetOutboxFiles(dirname(home)),volume:basename(home)}:undefined;

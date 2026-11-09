@@ -53,13 +53,12 @@ test("hand-written setup rejects unknown environment fields and invalid source t
 
 test("missing file is an empty household; a new house starts with an empty allowlist", async () => {
   const { config, text } = store();
-  expect(await config.load()).toEqual({ daemon: {}, secrets: [], keys: [], houses: [] });
+  expect(await config.load()).toEqual({ daemon: {}, keys: [], houses: [] });
   await config.createHouse("work");
   await config.addPet("work", "sibling");
   expect(await config.load()).toEqual({
     daemon: {},
     keys: [],
-    secrets: [],
     houses: [
       {
         name: "work",
@@ -86,7 +85,7 @@ test("domain errors surface and leave the file untouched", async () => {
 
 test("valueless keys (YAML null) read as empty and can be edited", async () => {
   const empty = store("houses:\n");
-  expect(await empty.config.load()).toEqual({ daemon: {}, secrets: [], keys: [], houses: [] });
+  expect(await empty.config.load()).toEqual({ daemon: {}, keys: [], houses: [] });
   await empty.config.createHouse("work");
   expect(await empty.text()).toBe("houses:\n  work:\n    network:\n      allow: []\n");
 
@@ -94,7 +93,6 @@ test("valueless keys (YAML null) read as empty and can be edited", async () => {
   expect(await config.load()).toEqual({
     daemon: {},
     keys: [],
-    secrets: [],
     houses: [{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [], people: { owners: [] }, channels: [] }],
   });
   await config.addPet("work", "sibling");

@@ -78,7 +78,7 @@ test("keys: added on a capability as a secret restricted to it; removed with it;
   await f.call("POST", "capabilities", { name: "heroku", network: { any: false, allow: ["api.heroku.com"] } });
   expect((await f.call("POST", "capabilities/heroku/keys", { secret: "heroku-prod", value: "hrku-synthetic", hosts: ["api.heroku.com"], via: "vm", env: "HEROKU_API_KEY" }))!.status).toBe(201);
   const config = await f.config.load();
-  expect(config.secrets.find(s => s.name === "heroku-prod")).toMatchObject({ houses: ["work"], onlyForCapabilities: ["heroku"] });
+  expect(config.houses[0]!.secrets!.find(s => s.name === "heroku-prod")).toMatchObject({ onlyForCapabilities: ["heroku"] });
   const detail = await f.json("GET", "capabilities/heroku");
   expect(detail.capability.keyVariables).toEqual([{ secret: "heroku-prod", via: "vm", env: "HEROKU_API_KEY" }]);
   expect(detail.capability.kind).toBe("access");
@@ -87,7 +87,7 @@ test("keys: added on a capability as a secret restricted to it; removed with it;
   await f.call("PUT", "capabilities/heroku", { name: "heroku", install: "echo", network: { any: false, allow: ["api.heroku.com"] }, keys: [] });
   expect((await f.json("GET", "capabilities/heroku")).capability.keys).toHaveLength(1);
   expect((await f.call("DELETE", "capabilities/heroku/keys/heroku-prod"))!.status).toBe(200);
-  expect((await f.config.load()).secrets.some(s => s.name === "heroku-prod")).toBe(false);
+  expect(((await f.config.load()).houses[0]!.secrets ?? []).some(s => s.name === "heroku-prod")).toBe(false);
 });
 
 test("a pet's draft waits for the owner; applying makes a revision by the pet; the owner's keys win", async () => {

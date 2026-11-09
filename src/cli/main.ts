@@ -56,12 +56,12 @@ const USAGE = `usage:
   house key set <name> --allow-overage on|off
                                  a subscription key: whether its bots go on once its allowance is used up, spending
                                  what the provider bills apart (credits); off (the default) refuses them until it resets
-  house secret add <name> --host h1,h2 --env VAR [--header <name>] [--workspaces a,b] [--value <value>] [--note <text>]
+  house secret add <workspace> <name> --host h1,h2 --env VAR [--header <name>] [--value <value>] [--note <text>]
                                  your own secret (a GitHub token, …): bots get a placeholder in VAR; the gateway puts
                                  the value in its place only in that header (authorization by default) to those hosts
                                  (exact hosts; the value from stdin when --value is left out)
-  house secret set <name> [--host …] [--env …] [--header …] [--workspaces …] [--value …] [--note …]  ("" removes)
-  house secret rm <name>         remove a secret
+  house secret set <workspace> <name> [--host …] [--env …] [--header …] [--value …] [--note …]  ("" removes)
+  house secret rm <workspace> <name>         remove a secret
   house workspace create <workspace>           add a workspace
   house workspace allow|disallow <workspace> <host>
                                  add or remove an allowlist entry: host, host:port (443 when left out),
@@ -223,7 +223,7 @@ async function list(paths: Paths): Promise<void> {
   const household = await new ConfigStore(paths.configFile).load();
   const { houses } = household;
   for (const key of household.keys) console.log(`key ${key.name}  ${key.provider}  ${keyKind(knownAgents(), key) ?? "unknown kind"}${key.houses ? `  workspaces: ${key.houses.join(", ")}` : ""}${key.note ? `  (${key.note})` : ""}`);
-  for (const secret of household.secrets) console.log(`secret ${secret.name}  ${secret.env}  ${formatHosts(secret.hosts).join(", ")}${secret.header === "authorization" ? "" : `  header ${secret.header}`}  workspaces: ${secret.houses?.join(", ") ?? "all"}${secret.note ? `  (${secret.note})` : ""}`);
+  for (const house of household.houses) for (const secret of house.secrets ?? []) console.log(`secret ${house.name}/${secret.name}  ${secret.env}  ${formatHosts(secret.hosts).join(", ")}${secret.header === "authorization" ? "" : `  header ${secret.header}`}${secret.note ? `  (${secret.note})` : ""}`);
   if (houses.length === 0) console.log("no workspaces");
   for (const house of houses) {
     const allow = house.network.allow.map((entry) => `${formatEndpoint(entry)}${entry.reach ? " (granted in chat)" : ""}`).join(", ");
@@ -362,20 +362,21 @@ async function main(argv: string[]): Promise<void> {
     console.log(`key '${args[1]}' ${values.houses ? `is for ${values.houses}` : "is for every workspace"}`);
     return notifyDaemon(paths);
   }
-  if (command === "secret" && args[0] === "add" && args.length === 2 && values.host && values.env) {
-    await config.addSecret(args[1]!, { value: await keyValue(values.value), hosts: listOf(values.host)!, env: values.env, header: values.header, houses: listOf(values.houses), note: values.note });
-    console.log(`secret '${args[1]}' added: bots get a placeholder in ${values.env} from their next VM`);
+  if (command === "secret" && values.houses !== undefined) throw new HouseholdError("Secrets belong to one workspace: use house secret add|set|rm <workspace> <name>, without --workspaces");
+  if (command === "secret" && args[0] === "add" && args.length === 3 && values.host && values.env) {
+    await config.addSecret(args[1]!, args[2]!, { value: await keyValue(values.value), hosts: listOf(values.host)!, env: values.env, header: values.header, note: values.note });
+    console.log(`secret '${args[1]}/${args[2]}' added: bots get a placeholder in ${values.env} from their next VM`);
     return notifyDaemon(paths);
   }
-  if (command === "secret" && args[0] === "set" && args.length === 2) {
+  if (command === "secret" && args[0] === "set" && args.length === 3) {
     const blank = (text: string | undefined) => (text === "" ? null : text);
-    await config.updateSecret(args[1]!, { value: values.value, hosts: listOf(values.host), env: values.env, header: blank(values.header), houses: values.houses === undefined ? undefined : (listOf(values.houses) ?? null), note: blank(values.note) });
-    console.log(`secret '${args[1]}' changed`);
+    await config.updateSecret(args[1]!, args[2]!, { value: values.value, hosts: listOf(values.host), env: values.env, header: blank(values.header), note: blank(values.note) });
+    console.log(`secret '${args[1]}/${args[2]}' changed`);
     return notifyDaemon(paths);
   }
-  if (command === "secret" && args[0] === "rm" && args.length === 2) {
-    await config.removeSecret(args[1]!);
-    console.log(`secret '${args[1]}' removed`);
+  if (command === "secret" && args[0] === "rm" && args.length === 3) {
+    await config.removeSecret(args[1]!, args[2]!);
+    console.log(`secret '${args[1]}/${args[2]}' removed`);
     return notifyDaemon(paths);
   }
   if (command === "key" && args[0] === "rm" && args.length === 2) {

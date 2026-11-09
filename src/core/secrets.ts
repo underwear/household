@@ -16,12 +16,9 @@ export interface Secret {
   header: string;
   /** The variable the pets get the placeholder in. */
   env: string;
-  /** The houses whose pets get it; none named: every house. */
-  houses?: string[];
   /** The owner's own words about it: for the web UI only. */
   note?: string;
-  /** Only these scouts in the named houses may use it; pets never get even its placeholder. */
-  /** Keys of these capabilities only (in its houses): never a pet's or a sideworker's, not even as a placeholder. */
+  /** Keys of these capabilities only (in this house): never a pet's or a sideworker's, not even as a placeholder. */
   onlyForCapabilities?: string[];
 }
 
@@ -39,25 +36,25 @@ export const DEFAULT_SECRET_HEADER = "authorization";
 /** What a pet holds in place of a secret: plain, so a person reading its environment knows it for one. */
 export const secretPlaceholder = (name: string) => `household-secret-${name}`;
 
-/** Whether a key or secret is for `house` (none named: for every house). */
+/** Whether a provider key is for `house` (none named: for every house). */
 export const availableTo = (item: { houses?: string[] }, house: string) => item.houses === undefined || item.houses.includes(house);
 
-/** The secrets a house's pets get. */
-export function houseSecrets(secrets: readonly Secret[], house: string): PlacedSecret[] {
-  return secrets.filter((secret) => availableTo(secret, house) && secret.onlyForCapabilities === undefined).map(({ name, hosts, header, env }) => ({ name, hosts, header, env, placeholder: secretPlaceholder(name) }));
+/** The secrets a house's pets get, from that house's own catalog. */
+export function houseSecrets(secrets: readonly Secret[]): PlacedSecret[] {
+  return secrets.filter((secret) => secret.onlyForCapabilities === undefined).map(({ name, hosts, header, env }) => ({ name, hosts, header, env, placeholder: secretPlaceholder(name) }));
 }
 
 /** A scout's gateway keys, from its capabilities: each a secret restricted to the capability it comes from. Nothing inherited. */
-export function scoutSecrets(secrets: readonly Secret[], house: string, keys: readonly (CapabilityKey & { capability: string })[]): PlacedSecret[] {
+export function scoutSecrets(secrets: readonly Secret[], keys: readonly (CapabilityKey & { capability: string })[]): PlacedSecret[] {
   return keys.filter(key => key.via === "gateway").flatMap(key => {
-    const secret = secrets.find(item => item.name === key.secret && availableTo(item, house) && item.onlyForCapabilities?.includes(key.capability));
+    const secret = secrets.find(item => item.name === key.secret && item.onlyForCapabilities?.includes(key.capability));
     return secret ? [{ name: secret.name, hosts: secret.hosts, header: secret.header, env: secret.env, placeholder: secretPlaceholder(secret.name) }] : [];
   });
 }
 
 /** The value of a scout's key that sits inside its VM, if its secret is restricted to that capability in this house. */
-export function scoutVmSecret(secrets: readonly Secret[], house: string, key: CapabilityKey & { capability: string }): Secret | undefined {
-  return secrets.find(item => item.name === key.secret && availableTo(item, house) && item.onlyForCapabilities?.includes(key.capability));
+export function scoutVmSecret(secrets: readonly Secret[], key: CapabilityKey & { capability: string }): Secret | undefined {
+  return secrets.find(item => item.name === key.secret && item.onlyForCapabilities?.includes(key.capability));
 }
 
 export const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,63}$/;
