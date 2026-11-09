@@ -190,6 +190,17 @@ houses:
   } finally { records.close(); }
 });
 
+test("migration 4 skips recipients removed before it (removing a house left their names behind); the rest still get the secret", async () => {
+  const paths = household();
+  writeFileSync(paths.configFile, JSON.stringify({ version: 3, secrets: { token: { value: "synthetic", hosts: ["api.example.com"], env: "TOKEN", houses: ["work", "removed"] } }, houses: { work: { network: { allow: [] } }, home: { network: { allow: [] } } } }));
+  const config = new ConfigStore(paths.configFile);
+  await config.migrate();
+  const migrated = await config.load();
+  expect(migrated.houses.find(house => house.name === "work")!.secrets!.map(secret => secret.name)).toEqual(["token"]);
+  expect(migrated.houses.find(house => house.name === "home")!.secrets ?? []).toEqual([]);
+  expect(readFileSync(paths.configFile, "utf8")).not.toContain("removed");
+});
+
 test("migration 4 refuses orphaned and colliding secrets without writing or exposing values", async () => {
   const legacy = { value: "DO_NOT_PRINT_THIS", hosts: ["api.example.com"], env: "TOKEN" };
   const cases = [

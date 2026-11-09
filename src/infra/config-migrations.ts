@@ -104,8 +104,10 @@ export function migrateHouseSecrets(doc: Document): void {
     const recipients = pair.value.get("houses");
     if (recipients !== undefined && (!isSeq(recipients) || !recipients.items.length || recipients.items.some(item => !isScalar(item) || typeof item.value !== "string")))
       throw new HouseholdError(`Secret '${name}' has invalid workspaces`);
-    const targets = isSeq(recipients) ? recipients.items.map(item => String((item as { value: unknown }).value)) : names;
-    if (!targets.length || targets.some(house => !names.includes(house)))
+    // A house removed since it was named here got nothing anyway (removing a house never touched the secrets): skipped.
+    const named = isSeq(recipients) ? recipients.items.map(item => String((item as { value: unknown }).value)) : names;
+    const targets = named.filter(house => names.includes(house));
+    if (!targets.length)
       throw new HouseholdError(`Secret '${name}' has no existing destination house; assign it before migrating`);
     for (const house of new Set(targets)) {
       if (doc.hasIn(["houses", house, "secrets", name])) throw new HouseholdError(`Secret '${house}/${name}' already exists; resolve the legacy conflict before migrating`);
