@@ -10,6 +10,10 @@ house start
 
 Then write to your pet. `house dashboard` opens the admin, where you can also connect [Slack](https://github.com/underwear/household/blob/main/docs/slack.md).
 
-Rather not type? Ask your own Claude Code or Codex: *"Read https://agents-household.dev/llms.txt and help me set up Household on my machine."*
+Don't like typing? Give this to your coding agent:
+
+```text
+Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
+```
 
 Next: [Pets](../pets/) · [Scouts](../scouts/) · [Inboxes](../inboxes/)
