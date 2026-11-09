@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm';
 const source = await Bun.file(new URL('../../landing/slack/callback/callback.js', import.meta.url)).text();
 function page(search: string, failCopy=false) {
   let copied='', cleared='', click!:()=>Promise<void>;
-  const nodes: Record<string, any> = Object.fromEntries(['status','result','copy'].map(id=>[id,{hidden:true,value:'',textContent:'',focus(){},select(){this.selected=true;},addEventListener(_name:string,fn:()=>Promise<void>){click=fn;}}]));
+  const nodes: Record<string, any> = Object.fromEntries(['status','result','copy'].map(id=>[id,{selected:false,hidden:true,value:'',textContent:'',focus(){},select(){this.selected=true;},addEventListener(_name:string,fn:()=>Promise<void>){click=fn;}}]));
   runInNewContext(source,{URL,URLSearchParams,location:{search,pathname:'/slack/callback/'},history:{replaceState(_a:unknown,_b:unknown,path:string){cleared=path;}},document:{getElementById(id:string){return nodes[id];}},navigator:{clipboard:{async writeText(value:string){if(failCopy)throw new Error('denied');copied=value;}}}});
   return {nodes,cleared,click:()=>click(),copied:()=>copied};
 }
