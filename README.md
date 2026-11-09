@@ -29,7 +29,7 @@ and lets you talk to it from the messenger you already use.
 - 🔒 **Its own microVM.** Every bot runs in a separate sandbox, away from your machine and from the other bots.
 - 🌐 **Network on your terms.** A bot reaches only the hosts the workspace allows, and asks you when it needs one more.
 - 🔑 **Secrets it never sees.** The bot holds only placeholders; Household puts the real keys into requests on their way out, to the hosts you chose.
-- 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find out why prod returns 500" gets the production key, the bot never does.
+- 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find this movie on a torrent site" sends a scout onto untrusted sites without exposing the bot’s files or secrets.
 - 💬 **Where you already are.** Talk to your bots in Telegram threads: progress, Stop and decisions come as buttons.
 - 🧰 **Real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
 - 📬 **Wakes up on its own.** Inboxes hand mail, feeds, health checks and Grafana or Datadog alerts to the bots you choose.
@@ -68,7 +68,7 @@ Plus `openssl` and `python3`. The installer brings the rest: microsandbox, Codex
 |---|---|
 | **Workspace** | Groups bots, channels, network rules and secrets. |
 | **Bot** | Your persistent assistant, on a **harness** — Claude Code or Codex. |
-| **Scouts** | Specialists a bot calls for one task — "buy two bus tickets", "find out why prod returns 500" — in a fresh VM with only the access you allow. |
+| **Scouts** | Specialists a bot calls for one task — "buy two bus tickets", "find this movie on a torrent site" — in a fresh VM with only the access you allow. |
 | **Sideworkers** | Extra hands a bot starts for one job, while it keeps talking to you. |
 | **Inboxes** | Sources that hand new events to your bots. |
 | **Previews** | Open a web app running in a bot's VM by a link, with your approval. |

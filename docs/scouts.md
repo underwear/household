@@ -1,6 +1,6 @@
 # Scouts
 
-A scout is a specialist your bots can call for one task: "buy two bus tickets", "find out why prod returns 500", "download this video". It works in its own fresh VM, with only the access you gave it, and is deleted when the task is done.
+A scout is a specialist your bots can call for one task: "buy two bus tickets", "find this movie on a torrent site", "download this video". It works in its own fresh VM, with only the access you gave it, and is deleted when the task is done.
 
 Scouts are how bots touch what is risky or valuable without holding it themselves: the open, untrusted internet, a production key, a closed network. A bot never sees a scout's keys, and a scout sees none of the bot's files or memory.
 
