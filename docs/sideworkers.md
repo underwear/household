@@ -22,7 +22,7 @@ A sideworker cannot start sideworkers or have scheduled tasks. You can close one
 ## Set up
 
 - **Workspace → Settings → Sideworkers** turns them on. Off pauses the running ones.
-- **Workspace → Sideworkers** lists what runs now, by bot. Its settings set how many may run at once in the workspace and the CPU and memory each new one gets.
+- **Workspace → Sideworkers** lists what runs now, by bot. Its settings set the default CPU and memory for a new VM. Bots can choose a different size for each launch.
 - **Profiles** are the harness setups a bot may start a worker on, besides its own: a harness, key, model and effort. Add one when you want work done by another model.
 
-Each worker is a VM: it takes its share of the host's CPU and memory while it runs.
+Each worker reserves its VM maximum from the shared workspace CPU/RAM budget. Configure the total in **Workspace → Settings → Workspace capacity**; pets reserve their own share and scouts and sideworkers share the rest. There is no worker count limit. See [Workspace resources](../resources/).

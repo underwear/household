@@ -174,7 +174,7 @@ houses:
   expect(readFileSync(join(backup.dir!, "household.yaml"), "utf8")).toBe(old);
   const records = new SqliteStore(paths.database);
   try {
-    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4]);
+    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4, 5]); // the secrets, then the resource budgets
     const saved = readFileSync(paths.configFile, "utf8");
     expect(saved).not.toMatch(/^secrets:/m);
     expect(saved).toContain("# Owner configuration");

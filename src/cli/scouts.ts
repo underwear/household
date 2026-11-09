@@ -44,8 +44,8 @@ export const SCOUT_USAGE = `  house scout ls <workspace>         its scouts (cap
   house scout rm <workspace> <name>
   house scout own <workspace> <name> give it a setup of its own (a capability named after it): edit it with house capability set
   house scout instructions <workspace> <name>  /  house scout instructions set <workspace> <name> [<file>]
-  house scout settings <workspace> [--max <n>] [--cpus <n>] [--memory <GiB>] [--harness <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]]
-                                 how many scouts run at once, and the harness and allocation of scouts that set none
+  house scout settings <workspace> [--cpus <n>] [--memory <GiB>] [--harness <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]]
+                                 default harness and VM size; scouts share the workspace CPU/RAM budget
   house scout run <workspace> <name> [--task <text>] [--bot <bot>] [--place <place-id>] [--placement same|thread] [--wait]
                                  start it yourself, with no Run card (task from stdin without --task); its thread opens
                                  in <bot>'s channel (default: the first bot in one), the bot hears nothing of it;
@@ -105,7 +105,7 @@ interface ScoutView {
   workspace?: { repo: string; branch?: string }; agent?: ScoutAgent; resources?: { cpus?: number; memoryMiB?: number };
   own: CapabilityView | null; network: { open: boolean; allow: string[]; limitedBy: string[] }; keysInVm: { capability: string; env: string }[]; problems: string[];
 }
-interface Limits { maxScouts: number; cpus: number; memoryMiB: number }
+interface Limits { maxScouts?: number; cpus: number; memoryMiB: number }
 interface RunView {
   id: string; scout: string; blueprint?: string; number?: number; byOwner?: boolean; capabilities: string[]; parent: string; task: string;
   status: string; steps: number; startedAt?: string; endedAt?: string; outcome?: string; report?: string; setupFailure?: string;
@@ -389,7 +389,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
         say(`${s.name}${s.title ? `  "${s.emoji ?? "🧭"} ${s.title}"` : ""}  capabilities: ${s.capabilities.join(", ") || "-"}${s.own ? " + own setup" : ""}  network: ${networkWords(s.network)}${s.problems.length ? `  ! ${s.problems.join("; ")}` : ""}`);
         say(`  ${firstLine(s.description, 110)}`);
       }
-      say(`\nsettings: up to ${view.limits.maxScouts} at once, ${view.limits.cpus} vCPU, ${gib(view.limits.memoryMiB)} each; harness: ${agentWords(view.agent)}`);
+      say(`\nsettings: shared workspace budget; default ${view.limits.cpus} vCPU, ${gib(view.limits.memoryMiB)} each; harness: ${agentWords(view.agent)}`);
       const live = view.runs.filter((r) => !ENDED.includes(r.status));
       if (live.length) say(`running: ${live.map((r) => `${r.id} (${runName(r)}, ${r.status})`).join(", ")}`);
     });
@@ -397,8 +397,9 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
   if (verb === "settings" && !name) {
     const [limits, agent] = await Promise.all([api<Limits>(paths, "GET", `${house(h)}/scout-limits`), api<ScoutAgent | null>(paths, "GET", `${house(h)}/scout-agent`)]);
     const changed = { limits: false, agent: false };
-    if (values.max !== undefined || values.cpus !== undefined || values.memory !== undefined) {
-      const next = { ...limits, ...(values.max !== undefined ? { maxScouts: number("--max", values.max) } : {}), ...resourcesOf(values, limits) };
+    if (values.max !== undefined) throw new Error("--max was removed; configure houses.<name>.resources CPU/RAM budget in household.yaml");
+    if (values.cpus !== undefined || values.memory !== undefined) {
+      const next = { ...limits, ...resourcesOf(values, limits) };
       Object.assign(limits, await api<Limits>(paths, "PUT", `${house(h)}/scout-limits`, next));
       changed.limits = true;
     }
@@ -410,7 +411,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       changed.agent = true;
     }
     return out(values, { limits, agent: shownAgent }, () => {
-      say(`at once     ${limits.maxScouts}`);
+      say("capacity    shared workspace CPU/RAM budget (no count limit)");
       say(`each        ${limits.cpus} vCPU, ${gib(limits.memoryMiB)} (unless a scout sets its own)`);
       say(`harness       ${agentWords(shownAgent)}`);
       if (changed.limits || changed.agent) say("saved; runs under way keep what they started with");

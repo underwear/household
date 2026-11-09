@@ -170,7 +170,7 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="./" aria-current="page">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="./" aria-current="page">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Scouts</h1>
 <p>A scout is a specialist your bots can call for one task: &quot;buy two bus tickets&quot;, &quot;find this movie on a torrent site&quot;, &quot;download this video&quot;. It works in its own fresh VM, with only the access you gave it, and is deleted when the task is done.</p>
@@ -191,7 +191,7 @@
 <li>A capability that brings access to something valuable lists its <strong>hosts</strong>: a scout that has it reaches only the hosts of its capabilities. So a scout with a production key cannot wander off to the open internet.</li>
 </ul>
 <p>You add the keys' values yourself. Bots can <strong>draft</strong> a capability they need; nothing changes until you apply it.</p>
-<p><strong>Settings</strong> on the Scouts page: how many scouts may run at once, and the harness, CPU and memory of scouts that set none.</p>
+<p><strong>Settings</strong> on the Scouts page: the default harness, CPU and memory. Bots can choose CPU/RAM per launch within the shared <a href="../resources/">workspace resource budget</a>. Scouts, install tests and sideworkers draw from the same pool; there is no scout count limit.</p>
 <h2 id="a-run">A run</h2>
 <ol>
 <li><strong>A bot calls a scout</strong> by name with a short task and what counts as success.</li>

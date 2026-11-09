@@ -2,7 +2,7 @@ import { houseInboxSchema, type HouseInbox } from "../core/house-inboxes";
 import type { CapabilityDefinition, ScoutAgent, ScoutDefinition, ScoutLimits } from "../core/scouts";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT } from "../builtin-capabilities";
 import { houseFeatureSettingsSchema, type HouseFeatures, type PreviewSettings } from "../core/house-features";
-import { sideworkerLimitsSchema } from "../core/resources";
+import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, type PetResources, sideworkerLimitsSchema } from "../core/resources";
 import type { SideworkerLimits, SideworkerProfile } from "../core/household";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -105,6 +105,8 @@ export interface ChannelFields {
  * the web UI still shows the house and can fix it (the daemon's reload refuses it).
  */
 export class ConfigStore {
+  resourceAllocations?: (house: string) => ResourceAllocation[];
+
   constructor(
     private readonly path: string,
     private readonly check: (household: Household) => string[] = () => [],
@@ -181,6 +183,14 @@ export class ConfigStore {
     });
   }
 
+  async setWorkspaceResources(name: string, resources: PetResources): Promise<Household> {
+    const value = workspaceResourcesSchema.parse(resources);
+    return this.edit((doc, household) => {
+      knownHouse(household, name);
+      setIn(doc, ["houses", name, "resources"], doc.createNode(value));
+    });
+  }
+
   async setSideworkerLimits(name: string, limits: SideworkerLimits): Promise<Household> {
     const value = sideworkerLimitsSchema.parse(limits);
     return this.edit((doc, household) => {
@@ -206,7 +216,7 @@ export class ConfigStore {
     });
   }
 
-  async setScoutLimits(house: string, limits: Partial<ScoutLimits> & { maxScouts: number }): Promise<Household> {
+  async setScoutLimits(house: string, limits: Partial<ScoutLimits>): Promise<Household> {
     const value = scoutLimitsSchema.parse(limits);
     return this.edit((doc, household) => {
       knownHouse(household, house);
@@ -291,7 +301,7 @@ export class ConfigStore {
     return this.edit((doc, household) => {
       assertCanCreateHouse(household, name);
       // Nothing beyond what its pets' agents need (the app adds those hosts); the owner extends `allow`.
-      setIn(doc, ["houses", name], doc.createNode({ network: { allow: [] } }));
+      setIn(doc, ["houses", name], doc.createNode({ resources: DEFAULT_WORKSPACE_RESOURCES, network: { allow: [] } }));
     });
   }
 
@@ -639,6 +649,16 @@ export class ConfigStore {
       change(doc, household);
       const written = parseHousehold(doc.toJS(), this.path); // an edit that breaks the config is not written
       if (configVersionOf(doc) < 4 && written.houses.some(house => house.secrets?.length)) throw new HouseholdError("Workspace secrets need config migration first: run house migrate apply, or start Household to migrate with a backup");
+      for (const house of written.houses) {
+        const previous = household.houses.find(h => h.name === house.name);
+        const beforeBudget = previous && workspaceBudget(previous, this.resourceAllocations?.(house.name));
+        const budget = workspaceBudget(house, this.resourceAllocations?.(house.name));
+        for (const key of ["cpus", "memoryMiB"] as const) {
+          const excess = budget.reserved[key] + budget.helpers[key] - budget.total[key];
+          const oldExcess = beforeBudget ? beforeBudget.reserved[key] + beforeBudget.helpers[key] - beforeBudget.total[key] : 0;
+          if (excess > Math.max(0, oldExcess)) throw new HouseholdError(`Workspace '${house.name}' has allocated ${budget.reserved[key] + budget.helpers[key]} ${key}; close helpers or increase the budget before changing reservations.`);
+        }
+      }
       const added = this.check(written).filter((problem) => !before.has(problem));
       if (added.length > 0) throw new HouseholdError(added.join("\n"));
       await writeWhole(this.path, doc.toString());

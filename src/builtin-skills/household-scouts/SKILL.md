@@ -47,7 +47,7 @@ disabled, ask your human to enable them.
    without text. It ends when your human presses Close on its card; Keep leaves it running for them.
 10. `scout_cancel({id})` stops any scout in your workspace. Cancel when it wanders (many new domains a minute), loops,
     or asks for access the task does not need, and tell your human.
-11. A scout has no time limit: it runs until your human closes it or it is cancelled, and holds a place of the workspace's limit
+11. A scout has no time limit: it runs until your human closes it or it is cancelled, and reserves its CPU/RAM from the workspace budget
     meanwhile. Stopping the scouts you called is your job. When one idles 30 minutes, Household reminds you; cancel it
     when you have what you need or it is stuck, or let it be when it waits for something worth waiting for.
 12. You may stop a scout VM at your discretion with `scout_cancel({id})`, without owner approval. Its chat history stays.
@@ -59,3 +59,5 @@ disabled, ask your human to enable them.
 
 Never ask your human to forward a scout's keys, try to get its credentials, or give it more personal data than the
 task needs.
+
+Before spawning, call `workspace_resources` to inspect the shared CPU/RAM budget, permanent pet reservations, helper allocations and available capacity. Choose `cpus` and `memoryMiB` in `scout_spawn` for the task. Omitted sizes use the scout blueprint or workspace defaults. Scouts awaiting approval already reserve their size; resources release only after VM cleanup. There is no count limit, and scouts share capacity with sideworkers. On a capacity error, recheck the budget and choose a smaller VM or close a finished helper.

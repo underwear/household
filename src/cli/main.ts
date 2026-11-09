@@ -435,6 +435,17 @@ async function main(argv: string[]): Promise<void> {
     const [change, house, pet] = args as [string, string, string];
     const aliases = values.aliases?.split(",").map((alias) => alias.trim()).filter(Boolean);
     const fields = { title: values.title, emoji: values.emoji, aliases, agent: values.agent, model: values.model, reasoningEffort: values["reasoning-effort"], mode: values.mode, settings: settingsOf(values.setting), key: values.key, ...resources(values.cpus, values.memory) };
+    const result = await callControl<{ status: number; body: { error?: string; warning?: string } }>(paths.socket, "/api", {
+      method: change === "add" ? "POST" : "PATCH",
+      path: `/api/houses/${encodeURIComponent(house)}/pets${change === "add" ? "" : `/${encodeURIComponent(pet)}`}`,
+      body: change === "add" ? { name: pet, ...fields } : fields,
+    });
+    if (result) {
+      if (result.status >= 400) throw new HouseholdError(result.body.error ?? "pet could not be changed");
+      console.log(`bot '${pet}' of workspace '${house}' ${change === "add" ? "added" : "changed"}`);
+      if (result.body.warning) console.warn(result.body.warning);
+      return;
+    }
     if (change === "add") {
       await config.addPet(house, pet, { lifecycle: DEFAULT_LIFECYCLE, ...fields });
       console.log(`bot '${pet}' added to workspace '${house}'; it is in no channel yet: list it in a channel's bots`);

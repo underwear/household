@@ -1,5 +1,6 @@
-import { Globe, MessagesSquare, Bot, Pickaxe, type LucideIcon } from "lucide-react";
-import { DEFAULT_SIDEWORKER_LIMITS } from "../../src/core/resources";
+import { Gauge, Globe, MessagesSquare, Bot, Pickaxe, type LucideIcon } from "lucide-react";
+import { gib } from "../../src/core/resources";
+import { overBudget } from "./workspace-resources";
 import { houseFeatures } from "../../src/core/house-features";
 import type { ReactNode } from "react";
 import type { WorkspaceView } from "../api";
@@ -15,7 +16,6 @@ export function WorkspaceOverviewPage({ house }: { house: WorkspaceView }) {
   const pets = ownBots(house.pets);
   const running = pets.filter((pet) => pet.state === "running").length;
   const workers = house.pets.length - pets.length;
-  const limits = house.sideworkerLimits ?? DEFAULT_SIDEWORKER_LIMITS;
   const closed = house.channels.filter((channel) => channel.problem).length;
   const temporary = house.temporary?.filter(({ expiresAt }) => expiresAt > Date.now()).length ?? 0;
   return (
@@ -23,7 +23,11 @@ export function WorkspaceOverviewPage({ house }: { house: WorkspaceView }) {
       <div className="stats">
         <Stat href={workspacePath(house.name, "bots")} icon={Bot} label="Bots" value={pets.length} sub={pets.length === 0 ? "none yet" : `${running} running`} />
         <Stat href={workspacePath(house.name, "channels")} icon={MessagesSquare} label="Channels" value={house.channels.length} sub={closed ? `${closed} not open` : count(house.owners.length, "owner")} warn={closed > 0} />
-        <Stat href={workspacePath(house.name, "sideworkers")} icon={Pickaxe} label="Sideworkers" value={workers} sub={!houseFeatures(house).sideworkers || limits.maxWorkers === 0 ? "off in this workspace" : `of ${limits.maxWorkers} at most`} />
+        <Stat href={workspacePath(house.name, "sideworkers")} icon={Pickaxe} label="Sideworkers" value={workers} sub={!houseFeatures(house).sideworkers ? "off in this workspace" : workers ? "running now" : "none running"} />
+        {house.resources && (
+          <Stat href={workspacePath(house.name, "resources")} icon={Gauge} label="Free resources" value={`${house.resources.available.cpus} vCPU`}
+            sub={overBudget(house.resources) ? "over capacity" : `${gib(house.resources.available.memoryMiB)} RAM`} warn={overBudget(house.resources)} />
+        )}
         <Stat href={workspacePath(house.name, "network")} icon={Globe} label="Hosts allowed" value={house.allow.length} sub={temporary ? `${temporary} temporary` : "no temporary access"} />
       </div>
       <Section

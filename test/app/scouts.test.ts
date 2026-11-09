@@ -362,3 +362,17 @@ test('aborting a deletion request through the tool leaves the active scout and t
  expect(removed).toEqual([]);
  await scouts.stop();
 });
+
+test("pending scouts and probes reserve the shared pool; chosen sizes override defaults and cleanup releases it", async () => {
+ const {scouts,config}=fixture(false,{otherAllocations:()=>[{name:'sw-one',kind:'sideworker',cpus:1,memoryMiB:512}]});
+ config.houses[0]!.resources={cpus:7,memoryMiB:8192};
+ config.houses[0]!.scoutLimits={maxScouts:0};
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Small task',cpus:1,memoryMiB:512});
+ expect(scouts.allocations('work')).toEqual([expect.objectContaining({name:id,cpus:1,memoryMiB:512,state:'waiting_approval'})]);
+ await expect(scouts.spawn(parent,{scout:'helper',task:'Too big',cpus:2})).rejects.toThrow('available 1 vCPU');
+ await expect(scouts.launchProbe('work',{name:'test',description:'',install:'',network:{any:true,allow:[]},keys:[]})).rejects.toThrow('budget exceeded');
+ await scouts.cancel(parent,id);
+ expect(scouts.allocations('work')).toEqual([]);
+ await scouts.spawn(parent,{scout:'helper',task:'Fits now',cpus:2,memoryMiB:1024});
+ await scouts.stop();
+});

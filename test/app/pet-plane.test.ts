@@ -612,3 +612,24 @@ test("scout runs mount only their private material and use scout instructions", 
   expect(spec.mounts?.find(m=>m.target==="/run/household/secrets")?.source).toBe("/private/run/home/../secrets");
   expect(spec.mounts?.find(m=>m.target==="/opt/household/skills")?.source).toBe("/private/run/skills");
 });
+
+test("staged reductions remain reserved across daemon adoption until the VM restarts", async () => {
+  const { workspaceBudget } = await import("../../src/core/resources");
+  const runtime = new FakeRuntime();
+  let active = { cpus: 6, memoryMiB: 6144 }, staged = active;
+  const list = runtime.listContainers.bind(runtime), start = runtime.startContainer.bind(runtime);
+  runtime.listContainers = async label => (await list(label)).map(vm => ({ ...vm, ...(["running", "paused"].includes(vm.state) ? { resources: { ...active } } : {}) }));
+  runtime.startContainer = async name => { await start(name); active = staged; };
+  const managed = Object.assign(runtime, { configureResources: async (_name: string, value: typeof active) => { staged = value; } });
+  const plane = new PetPlane(managed, "/ca", "me", 50, TRANSPORT);
+  const large = { ...pets[0]!, ...active }, small = { ...pets[0]!, cpus: 2, memoryMiB: 1024 };
+  await plane.reconcile([large]);
+  await plane.reconcile([small]);
+  const house = { resources: { cpus: 8, memoryMiB: 8192 }, pets: [{ name: small.pet, cpus: 2, memoryMiB: 1024 }] };
+  expect(workspaceBudget(house, plane.resourceAllocations("work")).available.cpus).toBe(2);
+  const adopted = new PetPlane(managed, "/ca", "me", 50, TRANSPORT);
+  await adopted.refreshResources();
+  expect(workspaceBudget(house, adopted.resourceAllocations("work")).available.cpus).toBe(2);
+  await adopted.restart(small);
+  expect(workspaceBudget(house, adopted.resourceAllocations("work")).available).toEqual({ cpus: 6, memoryMiB: 7168 });
+});

@@ -1,6 +1,7 @@
 import { isMap, isScalar, isSeq, visit, type Document, type YAMLMap } from "yaml";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
 import { HouseholdError } from "../core/errors";
+import { DEFAULT_SIDEWORKER_LIMITS, DEFAULT_WORKSPACE_RESOURCES, workspaceBudget } from "../core/resources";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -22,6 +23,7 @@ export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 2, store: "config", name: "scouts' maximum run time is dropped", change: (doc) => { for (const path of legacyTimeouts(doc)) doc.deleteIn(path); } },
   { id: 3, store: "config", name: "the browser and dev capabilities install Node.js 22", change: migrateNodeInstalls },
   { id: 4, store: "config", name: "secrets belong to individual houses", change: migrateHouseSecrets },
+  { id: 5, store: "config", name: "workspace CPU/RAM budgets replace helper count limits", change: migrateResourceBudgets },
 ];
 
 /** The config version this Household writes: a config with a newer one is from a newer Household, and not read. */
@@ -119,4 +121,32 @@ export function migrateHouseSecrets(doc: Document): void {
   }
   for (const { house, name, value } of copies) setIn(doc, ["houses", house, "secrets", name], value);
   doc.deleteIn(["secrets"]);
+}
+
+/** Preserve a legacy zero-count off switch using feature flags; retain the VM size defaults. */
+function migrateResourceBudgets(doc: Document): void {
+  const houses = doc.getIn(["houses"]);
+  if (!isMap(houses)) return;
+  for (const pair of houses.items) {
+    if (!isScalar(pair.key)) continue;
+    const path = ["houses", String(pair.key.value)];
+    const node = doc.getIn(path);
+    if (!isMap(node)) continue;
+    const raw = node.toJSON() as { resources?: { cpus: number; memoryMiB: number }; pets?: Record<string, { cpus?: number; memoryMiB?: number } | null>; scoutLimits?: { maxScouts?: number }; sideworkerLimits?: { maxWorkers?: number; cpus?: number; memoryMiB?: number } };
+    if (!raw.resources) {
+      const { reserved } = workspaceBudget({ pets: Object.entries(raw.pets ?? {}).map(([name, pet]) => ({ name, ...pet })) });
+      // Room for one helper of the workspace's own size beside its pets, unless both helpers were off (zero counts):
+      // pets alone filling the default would otherwise refuse every scout and sideworker they ran before.
+      const helpersOn = raw.scoutLimits?.maxScouts !== 0 || raw.sideworkerLimits?.maxWorkers !== 0;
+      const helper = helpersOn ? { cpus: raw.sideworkerLimits?.cpus ?? DEFAULT_SIDEWORKER_LIMITS.cpus, memoryMiB: raw.sideworkerLimits?.memoryMiB ?? DEFAULT_SIDEWORKER_LIMITS.memoryMiB } : { cpus: 0, memoryMiB: 0 };
+      setIn(doc, [...path, "resources"], doc.createNode({
+        cpus: Math.max(DEFAULT_WORKSPACE_RESOURCES.cpus, reserved.cpus + helper.cpus),
+        memoryMiB: Math.max(DEFAULT_WORKSPACE_RESOURCES.memoryMiB, reserved.memoryMiB + helper.memoryMiB),
+      }));
+    }
+    for (const [field, count, feature] of [["scoutLimits", "maxScouts", "scouts"], ["sideworkerLimits", "maxWorkers", "sideworkers"]]) {
+      if (doc.getIn([...path, field!, count!]) === 0) setIn(doc, [...path, "features", feature!], doc.createNode(false));
+      if (doc.hasIn([...path, field!, count!])) doc.deleteIn([...path, field!, count!]);
+    }
+  }
 }

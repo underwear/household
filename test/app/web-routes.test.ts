@@ -234,7 +234,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
     name: "work",
     features: { preview: false, sideworkers: true, scouts: false },
     preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" },
-    sideworkerLimits: { maxWorkers: 2, cpus: 2, memoryMiB: 1024 },
+    resources: expect.any(Object), sideworkerLimits: { cpus: 2, memoryMiB: 1024 },
     sideworkerProfiles: [],
     allow: [
       { host: "github.com", byAgent: false },
@@ -261,7 +261,7 @@ test("create a house, add and remove hosts, delete it: in household.yaml with it
   await signIn();
   const created = await call("POST", "/api/houses", { name: "lab" });
   expect(created.status).toBe(201);
-  expect(await created.json()).toEqual({ house: { name: "lab", features: { preview: false, sideworkers: true, scouts: false }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" }, sideworkerLimits: { maxWorkers: 2, cpus: 2, memoryMiB: 1024 }, sideworkerProfiles: [], allow: [], owners: [], channels: [], pets: [] } } satisfies WriteView);
+  expect(await created.json()).toEqual({ house: { name: "lab", features: { preview: false, sideworkers: true, scouts: false }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" }, resources: expect.any(Object), sideworkerLimits: { cpus: 2, memoryMiB: 1024 }, sideworkerProfiles: [], allow: [], owners: [], channels: [], pets: [] } } satisfies WriteView);
   expect(applied).toEqual(["reload"]);
 
   const added = await call("POST", "/api/houses/work/allow", { host: "db.internal:5432" });
@@ -927,16 +927,16 @@ test("a pet's personal skills are in work/.agents/skills whatever its agent, apa
 });
 
 
-test("house sideworker limits save, permit zero workers, and reject invalid host allocation", async () => {
+test("sideworker size defaults save, discard obsolete counts, and reject invalid host allocation", async () => {
   const { call, signIn, store } = setup();
   await signIn();
   const path = "/api/houses/work/sideworker-limits";
   expect((await call("PUT", path, { maxWorkers: 0, cpus: 1, memoryMiB: 512 })).status).toBe(200);
-  expect((await store.load()).houses[0]!.sideworkerLimits).toEqual({ maxWorkers: 0, cpus: 1, memoryMiB: 512 });
+  expect((await store.load()).houses[0]!.sideworkerLimits).toEqual({ cpus: 1, memoryMiB: 512 });
   for (const limits of [{ maxWorkers: -1, cpus: 1, memoryMiB: 512 }, { maxWorkers: 2, cpus: 9, memoryMiB: 1024 }, { maxWorkers: 2, cpus: 1, memoryMiB: 256 }, { maxWorkers: 2, cpus: 1, memoryMiB: 32768 }]) {
     expect((await call("PUT", path, limits)).status).toBe(400);
   }
-  expect((await store.load()).houses[0]!.sideworkerLimits?.maxWorkers).toBe(0);
+  expect((await store.load()).houses[0]!.sideworkerLimits?.maxWorkers).toBeUndefined();
   expect((await call("PUT", "/api/houses/missing/sideworker-limits", { maxWorkers: 1, cpus: 1, memoryMiB: 1024 })).status).toBe(404);
 });
 
@@ -1104,4 +1104,16 @@ test("Google enrollment and metadata require the dashboard session and same-orig
   const bad = await s.call("GET", "/api/connectors/google/callback?code=private-code&state=bad");
   expect(bad.status).toBe(400);
   expect(await bad.text()).not.toContain("private-code");
+});
+
+test("workspace resources API reports reservations and validates edits against pets and host", async () => {
+  const { call, signIn } = setup(); await signIn();
+  const path = "/api/houses/work/resources";
+  const budget = await (await call("GET", path)).json();
+  expect(budget).toMatchObject({ total: { cpus: 8, memoryMiB: 8192 }, reserved: { cpus: 2, memoryMiB: 1024 }, available: { cpus: 6, memoryMiB: 7168 } });
+  expect((await call("PUT", path, { cpus: 4, memoryMiB: 4096 })).status).toBe(200);
+  expect((await (await call("GET", path)).json()).available).toEqual({ cpus: 2, memoryMiB: 3072 });
+  expect((await call("PUT", path, { cpus: 1, memoryMiB: 4096 })).status).toBe(400);
+  expect((await call("PUT", path, { cpus: HOST.cpus + 1, memoryMiB: 4096 })).status).toBe(400);
+  expect((await call("GET", "/api/houses/missing/resources")).status).toBe(404);
 });

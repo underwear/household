@@ -8,6 +8,7 @@ import { HouseInboxes } from "./house-inboxes";
 import type { LiveNotice } from "./chat";
 import { askRedactedDialog, redactAgentEvent } from "./scout-redaction";
 import { ScoutSecretRequests } from "./scout-secrets";
+import { workspaceBudget } from "../core/resources";
 import { SCOUT_TOOLS, Scouts, scoutTools } from "./scouts";
 import { ScoutStorage } from "../infra/scout-storage";
 import { ScoutArtifacts } from "../infra/scout-artifacts";
@@ -185,11 +186,13 @@ export async function startDaemon(deps: DaemonDeps) {
   const { paths, config, agents, network, pets, events, messages, records, history, openChannels } = deps;
   // The database's schema migrated when it opened; the config's and the records' go here, in their order.
   await migrateHousehold({ config, records, log: (text) => events.info(text) });
+  await pets.refreshResources();
   let state: StatusReport["state"] = "starting";
   let timezone = householdTimezone();
   let placed: PlacedPet[] = [];
   let monitoring: Monitoring | undefined;
   const sideworkers = new Sideworkers({
+    otherAllocations: house => [...scouts.allocations(house), ...pets.resourceAllocations(house)],
     store: records, agents, place: (house, pet, place) => chat.spawnPlace(house, pet, place), prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", true),
     // In its parent's place: it was spawned, with a button to its own thread; once closed, that it is finished.
     announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.placement === "same" ? undefined : worker.name, worker.originPlace),
@@ -252,6 +255,7 @@ export async function startDaemon(deps: DaemonDeps) {
   const scoutArtifacts = new ScoutArtifacts(paths.stateDir, scoutStorage, (run,text)=>scouts.redact(run.house,run.id,text));
   const scoutPostedFiles = new Set<string>();
   const scouts = new Scouts({
+    otherAllocations: house => [...sideworkers.allocations(house), ...pets.resourceAllocations(house)],
     store: records, configured: () => config.load(),
     place: (house,pet,place)=>chat.spawnPlace(house,pet,place),
     channel: (house,pet)=>chat.targetChannel(house,pet),
@@ -452,10 +456,25 @@ export async function startDaemon(deps: DaemonDeps) {
     }
     return results;
   };
+  config.resourceAllocations = house => [...sideworkers.allocations(house), ...scouts.allocations(house), ...pets.resourceAllocations(house)];
   /** `loaded`: the config at the start. Resolves to the channels that could not open, one line each. */
   const reload = (loaded?: Household) =>
     enqueue(async () => {
-      const household = scouts.expanded(sideworkers.expanded(loaded ?? (await config.load())));
+      const configured = loaded ?? (await config.load());
+      for (const house of configured.houses) {
+        // Helpers being removed do not count here: closing them is how an owner gets back under the budget, and each
+        // close reloads; counting them would refuse that reload too.
+        const allocations = (config.resourceAllocations?.(house.name) ?? []).filter(a => a.state !== "closing" && a.state !== "cleanup");
+        const budget = workspaceBudget(house, allocations);
+        const previous = appliedHousehold?.houses.find(h => h.name === house.name);
+        const before = workspaceBudget(previous ?? { ...house, pets: house.pets.filter(p => p.enabled === false) }, allocations);
+        for (const key of ["cpus", "memoryMiB"] as const) {
+          const excess = budget.reserved[key] + budget.helpers[key] - budget.total[key];
+          const oldExcess = before ? before.reserved[key] + before.helpers[key] - before.total[key] : 0;
+          if (excess > Math.max(0, oldExcess) || excess > 0 && house.pets.some(p => p.enabled !== false && previous?.pets.some(old => old.name === p.name && old.enabled === false))) throw new HouseholdError(`Workspace '${house.name}' resource budget exceeded (${key}); close helpers or increase capacity before reloading.`);
+        }
+      }
+      const household = scouts.expanded(sideworkers.expanded(configured));
       const { houses } = household;
       const wanted = placePets(agents, household); // before any docker work: an unknown agent or key changes nothing
       assertOwners(houses); // nor an owner id typed wrong
@@ -536,6 +555,7 @@ export async function startDaemon(deps: DaemonDeps) {
     let assets: WebAssets;
     try {
       const handle = webRoutes({
+        resourceAllocations: house => [...sideworkers.allocations(house), ...scouts.allocations(house), ...pets.resourceAllocations(house)],
         connectorRoutes: async request => await googleRoutes(request) ?? await slackRoutes(request),
         scoutRoutes: scoutRoutes({config,storage:scoutStorage,scouts,capabilities,tests:capabilityTests,apply:applyConfig,applySecrets,
           vm:{log:async(house,id,source,read)=>placed.some(p=>p.house===house&&p.pet===id)?readPetLog(pets.exec(house,id),source,read):undefined,

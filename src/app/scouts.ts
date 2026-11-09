@@ -1,7 +1,8 @@
 import { scoutDomain } from "../core/scout-facts";
 import { randomBytes } from "node:crypto";
 import type { House, Household, Pet } from "../core/household";
-import { scoutNetworkWords, scoutLimits, scoutNetwork, scoutProblems, scoutRuntime, blueprintCapabilities, type CapabilityDefinition, type ScoutRunDefinition } from "../core/scouts";
+import { assertWorkspaceCapacity, workspaceResourcesSchema, type ResourceAllocation } from "../core/resources";
+import { scoutNetworkWords, scoutNetwork, scoutProblems, scoutRuntime, blueprintCapabilities, type CapabilityDefinition, type ScoutRunDefinition } from "../core/scouts";
 import { formatAllowEntry, type AllowEntry } from "../core/network-policy";
 import { houseFeatures } from "../core/house-features";
 import type { PetIdentity } from "../infra/agent-api";
@@ -49,6 +50,7 @@ export interface ScoutRun {
   threadDeleted?: boolean;
 }
 export interface ScoutDeps {
+  otherAllocations?(house: string): ResourceAllocation[];
   store: KeyValueStore; configured(): Promise<Household>;
   place?(house: string, pet: string, place?: string): { channel: string; origin: string; publicOrigin: string };
   channel?(house: string, pet: string): string | undefined;
@@ -183,6 +185,7 @@ export class Scouts {
   enabled(c: PetIdentity, houses: House[]) { return !!houses.find(h=>h.name===c.house && houseFeatures(h).scouts && h.pets.some(p=>p.name===c.pet)); }
   /** Blueprints a pet may call by name: what they are for, and the shared capabilities they tick (their own stays unnamed). */
   async catalog(c: PetIdentity) { const house=await this.house(c); return (house.scouts??[]).map(scout=>({name:scout.name,title:scout.title,description:scout.description,capabilities:scout.capabilities,network:scoutNetworkWords(scout,house.capabilities??[])})); }
+  allocations(house: string): ResourceAllocation[] { return this.runs.filter(r => r.house === house && (!terminal(r.status) || r.cleanupPending)).map(r => ({ name: r.id, kind: "scout", ...r.definition.resources, state: r.cleanupPending ? "cleanup" : r.status })); }
   list(house: string) { return this.runs.filter(r=>r.house===house && !r.probe).map(r=>structuredClone(r)); }
   /** Only Household's own facts: a fixed status, counts, tool names from a fixed list, neutral file handles. No domain names, no text. */
   status(c: PetIdentity,id:string) {
@@ -221,7 +224,7 @@ export class Scouts {
    * A pet calls a scout by name. It runs on the scout's agent and resources (the house's where it sets none), as they
    * are now, and only once the owner presses Run.
    */
-  async spawn(c:PetIdentity,input:{blueprint?:unknown;template?:unknown;scout?:unknown;capabilities?:unknown;task:unknown;secrets?:unknown;report?:unknown;place?:unknown;placement?:unknown},byOwner=false) {
+  async spawn(c:PetIdentity,input:{cpus?:unknown;memoryMiB?:unknown;blueprint?:unknown;template?:unknown;scout?:unknown;capabilities?:unknown;task:unknown;secrets?:unknown;report?:unknown;place?:unknown;placement?:unknown},byOwner=false) {
     if (input.place !== undefined && typeof input.place !== "string") throw new Error("place must be a place.id from the header or places");
     if (input.placement !== undefined && input.placement !== "same" && input.placement !== "thread") throw new Error("placement must be same or thread");
     const destination = this.deps.place?.(c.house, c.pet, input.place as string | undefined);
@@ -238,20 +241,21 @@ export class Scouts {
       if(!house.channels.some(ch=>ch.pets.includes(c.pet)))throw new Error("A channel is required for scouts");
       const origin = capturedChannel ?? (!this.deps.channel && !this.deps.place && house.channels.filter(ch=>ch.pets.includes(c.pet)).length === 1 ? channelKey(house.channels.find(ch=>ch.pets.includes(c.pet))!) : undefined);
       if(!origin || !house.channels.some(ch=>channelKey(ch)===origin && ch.pets.includes(c.pet)))throw new Error("The calling conversation is no longer available; start the scout from an attached channel");
-      const limits=scoutLimits(house);
-      if(this.runs.filter(r=>r.house===c.house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("Workspace scout limit reached; cancel a run first");
+
       if(input.capabilities!==undefined)throw new Error("Call a scout by name (scout); bots no longer assemble one from capabilities. Use scouts for the list");
       if(typeof blueprint!=="string"||!blueprint)throw new Error("scout: a name from the scouts tool");
       const def=house.scouts?.find(s=>s.name===blueprint);
       if(!def)throw new Error("Unknown scout; use scouts for the list");
       const {agent:_agent,resources:_resources,...base}=def;
       const names=blueprintCapabilities(def,all),runtime=scoutRuntime(house,def);
+      runtime.resources = workspaceResourcesSchema.parse({ cpus: input.cpus ?? runtime.resources.cpus, memoryMiB: input.memoryMiB ?? runtime.resources.memoryMiB });
+      assertWorkspaceCapacity(house, [...this.allocations(c.house), ...this.deps.otherAllocations?.(c.house) ?? []], runtime.resources);
       const problems=scoutProblems({capabilities:names},all,()=>undefined);
       if(problems.length)throw new Error(problems.join("; "));
       if(!runtime.agent)throw new Error("Your human has not chosen a harness for this scout yet (Scouts → Settings in the admin)");
       const definition:ScoutRunDefinition={...structuredClone(base),capabilities:names,...structuredClone(runtime.agent),resources:runtime.resources};
       const used=names.flatMap(name=>all.filter(capability=>capability.name===name));
-      const runtimeWords=def.agent||def.resources?[definition.model??definition.agent,`${definition.resources.cpus} vCPU`,`${Math.round(definition.resources.memoryMiB/102.4)/10} GiB`].join(" · "):undefined;
+      const runtimeWords=[definition.model??definition.agent,`${definition.resources.cpus} vCPU`,`${Math.round(definition.resources.memoryMiB/102.4)/10} GiB`].join(" · ");
       const number=1+this.runs.filter(each=>each.house===c.house&&each.blueprint===base.name).reduce((most,each)=>Math.max(most,each.number??0),0);
       const r:ScoutRun={...(runtimeWords?{runtime:runtimeWords}:{}),number,id:`scout-${randomBytes(5).toString('hex')}`,house:c.house,scout:base.name,blueprint:base.name,parent:c.pet,task:input.task,report:byOwner?"owner":(input.report as "pet"|"owner"|undefined)??"owner",...(byOwner?{byOwner:true}:{}),status:"waiting_approval",createdAt:this.now(),steps:0,actions:[],secretRequests:[],files:[],definition,capabilities:structuredClone(used)};
       r.channel=origin;
@@ -288,6 +292,7 @@ export class Scouts {
     if(terminal(r.status))return;
     const h=(await this.deps.configured()).houses.find(h=>h.name===r.house);
     if(!h||!houseFeatures(h).scouts){await this.end(r,"cancelled");return;}
+    assertWorkspaceCapacity(h, [...this.allocations(r.house).filter(a => a.name !== r.id), ...this.deps.otherAllocations?.(r.house) ?? []], d.resources);
     this.secrets.set(r.id,[...(this.secrets.get(r.id)??[]),...await this.deps.values?.(r)??[]]);
     const metadata=await this.deps.prepare(r,values);
     if(terminal(r.status)){await this.deps.remove(r);return;}
@@ -512,8 +517,7 @@ export class Scouts {
       if(!h||!houseFeatures(h).scouts)throw new Error("Scouts are disabled");
       const owner=capability.owner?h.scouts?.find(s=>s.name===capability.owner):undefined,runtime=scoutRuntime(h,owner);
       if(!runtime.agent)throw new Error(owner?"Choose a harness first (Scouts → Settings, or this scout's own)":"Choose the scouts' harness first (Scouts → Settings)");
-      const limits=scoutLimits(h);
-      if(this.runs.filter(r=>r.house===house&&!terminal(r.status)).length>=limits.maxScouts)throw new Error("Workspace scout limit reached");
+      assertWorkspaceCapacity(h, [...this.allocations(house), ...this.deps.otherAllocations?.(house) ?? []], runtime.resources);
       const definition:ScoutRunDefinition={name:capability.name,description:`Test of ${capability.name}`,instructions:"",capabilities:[capability.name],...structuredClone(runtime.agent),resources:runtime.resources};
       const run:ScoutRun={probe:true,id:`scout-${randomBytes(5).toString('hex')}`,house,scout:capability.name,parent:h.pets[0]?.name??"owner",task:"Test install",report:"owner",status:"running",createdAt:this.now(),startedAt:this.now(),steps:0,actions:[],secretRequests:[],files:[],definition,capabilities:[structuredClone(capability)]};
       this.runs.push(run);this.save();return run;
@@ -563,7 +567,7 @@ export function scoutTools(s:Scouts,enabled:(c:PetIdentity)=>boolean):McpTool<Pe
   return [
     make('scouts','List the scouts of your house (name, title, description, shared capabilities, network: open internet or only its hosts): pick the one whose description fits the task and call it with scout_spawn. Read the household-scouts skill.',{},[],c=>s.catalog(c)),
     make('scouts_running','House-generated facts about active scout runs. No scout text.',{},[],c=>s.running(c)),
-    make('scout_spawn','Call a scout by name (from the scouts tool) for one task. Your human approves every run (and sees the names of secrets you pass) before it starts. secrets values never appear in chat; do not put secrets in task. report defaults owner.',{scout:str,task:str,place:{type:'string',description:'Parent place.id from the request header or places; defaults to the current request place.'},placement:{type:'string',enum:['same','thread'],description:'thread (default): a dedicated place in the selected channel; same: share the selected place.'},secrets:{type:'object',additionalProperties:{type:'string'}},report:{type:'string',enum:['pet','owner']}},['scout','task'],(c,a)=>s.spawn(c,a)),
+    make('scout_spawn','Call a scout by name (from the scouts tool) for one task. Your human approves every run (and sees the names of secrets you pass) before it starts. secrets values never appear in chat; do not put secrets in task. report defaults owner. Use workspace_resources and choose cpus/memoryMiB within the shared available budget; omitted sizes use blueprint/workspace defaults.',{cpus:{type:'integer',minimum:1,maximum:1024},memoryMiB:{type:'integer',minimum:512,multipleOf:128},scout:str,task:str,place:{type:'string',description:'Parent place.id from the request header or places; defaults to the current request place.'},placement:{type:'string',enum:['same','thread'],description:'thread (default): a dedicated place in the selected channel; same: share the selected place.'},secrets:{type:'object',additionalProperties:{type:'string'}},report:{type:'string',enum:['pet','owner']}},['scout','task'],(c,a)=>s.spawn(c,a)),
     make('scouts_ended','Your scout runs that have ended and whose thread is still in the chat: id, scout, status, outcome. For scout_thread_delete.',{},[],c=>s.ended(c)),
     make('scout_thread_delete','Request deletion of a dedicated thread of a scout you called, at any time, active or ended. No prior chat agreement is needed: this tool asks your human with Delete thread / Keep and waits. Approval stops any active VM and deletes its thread; refusal or timeout keeps both unchanged. Irreversible: all messages and files in the thread are removed. Channels without deletion support keep history and do not prompt. Use scout_cancel to stop only the VM without approval.',id,['id'],(c,a,signal)=>s.deleteThread(c,a.id,signal)),
     make('scout_status','Get facts only: fixed status/outcome, steps, tool counts, domain counts (never names), secret requests and neutral file handles.',id,['id'],(c,a)=>s.status(c,a.id)),

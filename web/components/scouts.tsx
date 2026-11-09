@@ -25,6 +25,7 @@ import { keysFor, useHarnessForm } from "./bots";
 import { SkillPreview } from "./skills";
 import { ScoutDocumentEditor } from "./scout-editor";
 import { ScoutsTabs, kindTag } from "./capabilities";
+import { FreeLink } from "./workspace-resources";
 
 type Notify = (text: string, warning?: boolean) => void;
 const done = (run: ScoutRunView) => ["done", "failed", "cancelled"].includes(run.status);
@@ -118,11 +119,11 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
       {!view ? !error && <p className="hint">Loading…</p> : (
         <>
           {running.length > 0 ? (
-            <Section title="Running" hint={`${running.length} of ${view.limits.maxScouts} at once.`}>
+            <Section title="Running" hint={<>{running.length} running{house.resources && <> · <FreeLink house={house} /> for more, shared with sideworkers</>}.</>}>
               <ScoutRuns house={house.name} pets={house.pets} runs={running} scouts={view.scouts} running refresh={load} />
             </Section>
           ) : (
-            <Section><p className="blank-line"><span><span className="dot off" /> None running · up to {view.limits.maxScouts} at once</span></p></Section>
+            <Section><p className="blank-line"><span><span className="dot off" /> None running{house.resources && <> · <FreeLink house={house} /> to start one</>}</span></p></Section>
           )}
           <Section>
             {view.scouts.length === 0 ? (
@@ -311,43 +312,30 @@ const resourceValue = (t: { cpus: string; memory: string }): Resources => ({ cpu
 const resourcesValid = (r: Resources) => Object.values(r).every(n => Number.isInteger(n) && n >= 1);
 
 /**
- * The workspace's scout settings: how many run at once (and what that may take of this machine at worst), and the harness
- * and resources of every scout that sets none of its own.
+ * The workspace's default harness and VM size; callers can choose a size within the shared budget.
  */
 function ScoutSettingsDialog({ view, agents, keys, host, onClose, save }: {
   view: ScoutListView; agents: HarnessView[]; keys: KeyView[]; host?: HostCapacity; onClose: () => void;
   save: (limits: ScoutLimits, agent?: ScoutHarness) => Promise<void>;
 }) {
-  const [max, setMax] = useState(String(view.limits.maxScouts));
   const [text, setText] = useState(resourceText(view.limits));
   const form = useHarnessForm(agents, keys, agentStart(agents, view.agent), "scout");
   const [opened] = useState(() => JSON.stringify(agentValue(form.value)));
-  const count = Number(max), resources = resourceValue(text);
-  // At worst every run is as large as the largest scout.
-  const sizes = [resources, ...view.scouts.map(scout => ({ ...resources, ...scout.resources }))];
-  const cpus = Math.max(...sizes.map(each => each.cpus)) * (Number.isInteger(count) ? count : 0);
-  const memory = Math.max(...sizes.map(each => each.memoryMiB)) * (Number.isInteger(count) ? count : 0);
-  const over = host && (cpus > host.cpus || memory > host.memoryMiB);
+  const resources = resourceValue(text);
   return (
     <Dialog onClose={onClose} spec={{
       title: "Scout settings",
       wide: true,
       confirmLabel: "Save",
       onConfirm: async () => {
-        if (!Number.isInteger(count) || count < 0) throw new Error("Scouts at once: a whole number.");
         if (!resourcesValid(resources)) throw new Error("CPU and memory must be whole numbers.");
         const agentChanged = !view.agent || JSON.stringify(agentValue(form.value)) !== opened;
         if (agentChanged && form.error) throw new Error(form.error);
-        await save({ maxScouts: count, ...resources }, agentChanged ? agentValue(form.value) : undefined);
+        await save(resources, agentChanged ? agentValue(form.value) : undefined);
       },
       children: (
         <>
-          <FormGroup title="At once">
-            <StepperField label="Scouts at once" hideLabel value={max} onChange={setMax} min={0} step={1} unit="scouts" />
-            <p className={over ? "error" : "hint"}>
-              At worst {Number.isInteger(count) ? count : 0} × the largest scout: up to {cpus} vCPU and {gib(memory)}{host ? ` of this machine's ${host.cpus} vCPU and ${gib(host.memoryMiB)}` : ""}, beside the bots. A bot's call beyond it is refused.
-            </p>
-          </FormGroup>
+          <p className="hint">Scouts start from this workspace’s free resources, shared with sideworkers; a bot may choose a size for each run. These are the defaults.</p>
           <FormGroup title="Harness">
             <p className="hint">Every scout runs on it unless it sets its own. A change applies from the next run.</p>
             {form.fields}

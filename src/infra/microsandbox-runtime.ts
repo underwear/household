@@ -10,6 +10,7 @@ import { GUEST_SERVICES_INSTALL, GUEST_SERVICES_READY, GUEST_SERVICES_SCRIPT } f
 import { msbCommand } from "./release";
 
 export const MICROSANDBOX_VERSION = "0.7.13";
+export const ACTIVE_RESOURCES_LABEL = "household.active-resources";
 export const MAIN_JOB_LABEL = "household.main-job";
 /** The keys of the environment Household gave a VM, so a later launch configuration can drop the ones it no longer sets. */
 export const ENV_KEYS_LABEL = "household.env-keys";
@@ -187,7 +188,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
     const args = ["create", spec.image, "--name", spec.name, "--pull", "never", "--cpus", String(spec.cpus ?? this.options.cpus ?? 2), "--memory", spec.limits?.memory ?? "1G", "--no-net"];
     for (const port of new Set([this.options.proxyPort, this.options.relayPort])) args.push("--net-rule", `allow@host:tcp:${port}`);
     for (const [key, value] of Object.entries(spec.env ?? {})) args.push("--env", `${key}=${value}`);
-    for (const [key, value] of Object.entries({ ...spec.labels, [ENV_KEYS_LABEL]: Object.keys(spec.env ?? {}).join(",") })) args.push("--label", `${key}=${value}`);
+    for (const [key, value] of Object.entries({ ...spec.labels, [ACTIVE_RESOURCES_LABEL]: JSON.stringify({ cpus: spec.cpus ?? this.options.cpus ?? 2, memoryMiB: Number.parseFloat(spec.limits?.memory ?? "1G") * (/g$/i.test(spec.limits?.memory ?? "1G") ? 1024 : 1) }), [ENV_KEYS_LABEL]: Object.keys(spec.env ?? {}).join(",") })) args.push("--label", `${key}=${value}`);
     for (const mount of spec.mounts ?? []) {
       if (!isAbsolute(mount.target) || /[:,\x00-\x1f]/.test(mount.target)) throw new Error("invalid microsandbox mount target");
       if (mount.type === "disk") {
@@ -336,7 +337,11 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
       // Launching another agent next to one in a state Household cannot read could run it twice.
       if (job === "unknown") throw new Error("unknown microsandbox main job state");
     }
-    if (item.status !== "Running") await this.checked(["start", name]);
+    if (item.status !== "Running") {
+      const resources = item.config?.resources;
+      if (resources) await this.checked(["modify", name, "--label", `${ACTIVE_RESOURCES_LABEL}=${JSON.stringify({ cpus: resources.cpus, memoryMiB: resources.memory_mib })}`]);
+      await this.checked(["start", name]);
+    }
     try { await this.launchMain(name); } catch (error) {
       await this.checked(["stop", name]).catch(() => {});
       throw error;
@@ -357,6 +362,9 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
     const item = this.json(await this.checked(["inspect", name, "--format", "json"]));
     const current = item.config?.resources;
     if (!current) throw new Error("microsandbox resource configuration unavailable");
+    // Preserve the boot's maxima before staging a resize, including VMs created before this label existed.
+    if ((item.status === "Running" || item.status === "Paused") && !item.config?.labels?.[ACTIVE_RESOURCES_LABEL])
+      await this.checked(["modify", name, "--label", `${ACTIVE_RESOURCES_LABEL}=${JSON.stringify({ cpus: current.cpus, memoryMiB: current.memory_mib })}`]);
     if (current.cpus === resources.cpus && current.memory_mib === resources.memoryMiB) return;
     // Persist both effective and boot-time maximum values; reductions and growth apply on the next boot.
     await this.checked(["modify", name, "--cpus", String(resources.cpus), "--max-cpus", String(resources.cpus),
@@ -386,7 +394,11 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
   private async inspect(name: string, workload = true): Promise<ContainerInfo> {
     const item = this.json(await this.checked(["inspect", name, "--format", "json"]));
     if (item.name !== name || typeof item.status !== "string" || !item.config?.labels) throw new Error("invalid microsandbox inspection");
-    return { name, state: await this.stateOf(name, item.status, item.config.labels, workload), labels: item.config.labels };
+    const active = item.config.labels[ACTIVE_RESOURCES_LABEL];
+    const resources = active ? JSON.parse(active) : item.config.resources && { cpus: item.config.resources.cpus, memoryMiB: item.config.resources.memory_mib };
+    return { name, state: await this.stateOf(name, item.status, item.config.labels, workload), labels: item.config.labels,
+      ...(["Running", "Paused", "Starting", "Draining"].includes(item.status) && resources ? { resources } : {}) };
+
   }
 
   /**

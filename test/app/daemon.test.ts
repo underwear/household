@@ -510,7 +510,7 @@ test("the person's message reaches the pet's session; its reply through MCP reac
     expect(runtime.execs).toContain(`household.work.sibling: tmux load-buffer -b household - < <household-message id="m2">\n<household-header>\n${header}\n</household-header>\n<household-content>\nhow's it going?\n</household-content>\n</household-message>`);
 
     const tools = await callMcp(paths, "sibling", { method: "tools/list" });
-    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "household_connectors_slack_accounts", "household_connectors_slack_operations", "household_connectors_slack_request", "household_connectors_google_accounts", "household_connectors_google_operations", "household_connectors_google_request", "preview_open", "preview_list", "preview_close", "secret_request", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "places", "place_create", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
+    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["reply", "react", "history", "household_connectors_slack_accounts", "household_connectors_slack_operations", "household_connectors_slack_request", "household_connectors_google_accounts", "household_connectors_google_operations", "household_connectors_google_request", "preview_open", "preview_list", "preview_close", "secret_request", "workspace_resources", "sideworker_spawn", "sideworker_profiles", "sideworkers", "sideworker_close", "house_members", "house_send", "send_file", "edit_reply", "places", "place_create", "channel_format", "network_list", "network_request", "environment_setup", "environment_on_start", "environment_get", "environment_update"]);
     const replyTo = (args: object) => callMcp(paths, "sibling", { method: "tools/call", params: { name: "reply", arguments: args } });
     expect((await replyTo({ text: "fine" })).result).toEqual({ content: [{ type: "text", text: '{"id":"m5","channel":"c1","place":"pet:sibling@c1"}' }] });
     expect(channel.calls).toContain("post 🤖 Sibling: fine");
@@ -992,5 +992,38 @@ test("secret add/rotate/remove hot-applies gateway rules without restarting a pe
     expect((await api("DELETE", "/api/houses/work/secrets/qa"))!.status).toBe(200);
     expect(policyOf(paths).rules[0]!.intercept.some(entry => entry.host === "example.com")).toBe(false);
     expect(lifecycle()).toEqual(before);
+  } finally { await daemon.stop(); }
+});
+
+test("reload rejects an out-of-process pet growth that overcommits active helpers", async () => {
+  const { paths, config, deps, runtime } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { agent: "claude-code-tmux", key: "claude", cpus: 2, memoryMiB: 1024 });
+  deps.records.set("sideworkers.v1", JSON.stringify([{ house: "work", name: "sw-one", parent: "sibling", cwd: "/home/agent", createdAt: 1, cpus: 6, memoryMiB: 1024 }]));
+  const daemon = await startDaemon(deps);
+  try {
+    // Simulate a hand edit or an older CLI with no live allocation callback.
+    await new ConfigStore(paths.configFile).updatePet("work", "sibling", { cpus: 4 });
+    const before = [...runtime.calls];
+    await expect(callControl(paths.socket, "/reload")).rejects.toThrow("resource budget exceeded");
+    expect(runtime.calls).toEqual(before);
+    // Closing the helper, as the error says, gets it back under the budget: its own reload is not refused.
+    const closed = await callControl<{status: number}>(paths.socket, "/api", {method: "DELETE", path: "/api/houses/work/sideworkers/sw-one"});
+    expect(closed!.status).toBe(200);
+  } finally { await daemon.stop(); }
+});
+
+test("startup keeps management available for legacy overcommit with disabled pet reservations", async () => {
+  const { config, deps, paths } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { agent: "claude-code-tmux", key: "claude", cpus: 6, memoryMiB: 1024, enabled: false });
+  deps.records.set("sideworkers.v1", JSON.stringify([{ house: "work", name: "sw-one", parent: "sibling", cwd: "/home/agent", createdAt: 1, cpus: 4, memoryMiB: 1024 }]));
+  const daemon = await startDaemon(deps);
+  try {
+    const budget = await callControl<{status: number; body: {available: {cpus: number}}}>(paths.socket, "/api", {method: "GET", path: "/api/houses/work/resources"});
+    expect(budget!.status).toBe(200);
+    expect(budget!.body.available.cpus).toBe(0);
+    const closed = await callControl<{status: number}>(paths.socket, "/api", {method: "DELETE", path: "/api/houses/work/sideworkers/sw-one"});
+    expect(closed!.status).toBe(200);
   } finally { await daemon.stop(); }
 });
