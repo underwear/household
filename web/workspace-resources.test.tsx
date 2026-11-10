@@ -17,12 +17,12 @@ test("Workspace · Resources: a meter per resource in words for screen readers, 
   expect(html).toContain("Change capacity…");
   expect(html).toContain('aria-label="CPU: 2 vCPU for bots, 4 vCPU for scouts and sideworkers, 2 vCPU free of 8 vCPU"');
   expect(html).toContain('aria-label="RAM: 1 GiB for bots, 3 GiB for scouts and sideworkers, 4 GiB free of 8 GiB"');
-  expect(html).toContain("Reserved, not measured");
-  expect(html).toContain("Who holds what");
+  expect(html).toContain("In use");
+  expect(html).toContain("2</span><span class=\"muted\"> / 8 vCPU free");
   expect(html).toContain('href="/workspaces/work/bots/sibling/resources"'); // a bot's size is set on its own page
   expect(html).toContain("waiting for your approval");
   expect(html).toContain("being removed");
-  expect(html).not.toContain("More is held than this workspace allows");
+  expect(html).not.toContain("Over capacity");
 });
 
 test("more held than the capacity (an old config) is flagged; a capacity below what is held is refused before saving", () => {
@@ -30,7 +30,7 @@ test("more held than the capacity (an old config) is flagged; a capacity below w
   expect(overBudget(budget)).toBe(false);
   expect(overBudget(over)).toBe(true);
   const page = renderToStaticMarkup(<ResourcesPage house={{ ...house, resources: over } as WorkspaceView} host={host} refresh={async () => {}} notify={() => {}} />);
-  expect(page).toContain("More is held than this workspace allows");
+  expect(page).toContain("Over capacity");
   expect(page).toContain('class="resource-bar over"');
   const dialog = renderToStaticMarkup(<CapacityDialog house="work" budget={over} host={host} onClose={() => {}} save={async () => {}} />);
   expect(dialog).toContain("6 vCPU is held now: close a scout or sideworker first");

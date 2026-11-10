@@ -13,6 +13,8 @@ type Key = keyof PetResources;
 
 /** «2 GiB», «1.5 GiB», «4 vCPU»: one resource's amount in its unit. */
 const amount = (key: Key, value: number) => (key === "cpus" ? `${value} vCPU` : gib(value));
+/** «4», «1.5»: the same amount without its unit, for «4 / 8 vCPU». */
+const bare = (key: Key, value: number) => (key === "cpus" ? String(value) : String(Number((value / 1024).toFixed(3))));
 /** «1 vCPU · 2 GiB»: both resources. */
 export const resourcesText = ({ cpus, memoryMiB }: PetResources) => `${cpus} vCPU · ${gib(memoryMiB)}`;
 /** Whether what is reserved and running already goes beyond the workspace's total (a lowered total, an old config). */
@@ -42,7 +44,7 @@ function Meter({ label, budget, field }: { label: string; budget: WorkspaceBudge
         <span className="resource-helpers" style={{ width: share(budget.helpers[field]) }} />
       </div>
       <span className={over ? "resource-free danger" : "resource-free"}>
-        <span className="strong">{amount(field, budget.available[field])}</span> <span className="muted">free of {amount(field, total)}</span>
+        <span className="strong">{bare(field, budget.available[field])}</span><span className="muted"> / {amount(field, total)} free</span>
       </span>
     </div>
   );
@@ -81,7 +83,7 @@ export function ResourcesPage({ house, host, refresh, notify }: { house: Workspa
   const bots = new Set(house.pets.map((pet) => pet.name));
   return (
     <Page title="Resources" actions={<button type="button" className="btn" disabled={!budget} onClick={() => setChanging(true)}>Change capacity…</button>}>
-      <Section hint={<>What this workspace’s VMs may take of this machine ({resourcesText(host)}). Bots keep their size reserved, even paused; scouts and sideworkers start from what is left. Reserved, not measured: for live use, see a bot’s Resources tab.</>}>
+      <Section>
         {error && <p className="error" role="alert">{error}</p>}
         {budget ? (
           <div className="resource-meters">
@@ -89,15 +91,15 @@ export function ResourcesPage({ house, host, refresh, notify }: { house: Workspa
             <Meter label="RAM" budget={budget} field="memoryMiB" />
             <p className="resource-legend hint">
               <span><i className="resource-bots" />Bots {resourcesText(budget.reserved)}</span>
-              <span><i className="resource-helpers" />Scouts and sideworkers {resourcesText(budget.helpers)}</span>
+              <span><i className="resource-helpers" />Scouts & sideworkers {resourcesText(budget.helpers)}</span>
             </p>
-            {overBudget(budget) && <p className="hint danger" role="alert">More is held than this workspace allows: no scout or sideworker starts until some close, or you raise the capacity.</p>}
+            {overBudget(budget) && <p className="hint danger" role="alert">Over capacity: new scouts and sideworkers wait until some close.</p>}
           </div>
         ) : !error && <p className="hint">Loading…</p>}
       </Section>
       {budget && (
-        <Section title="Who holds what" hint="Scouts waiting for your approval and VMs still being removed count until they are gone.">
-          <List columns="minmax(0, 1fr) minmax(0, 1fr) auto" empty="Nothing yet: all of it is free.">
+        <Section title="In use">
+          <List columns="minmax(0, 1fr) minmax(0, 1fr) auto" empty="Nothing running.">
             {budget.allocations.map((allocation) => {
               const state = stateOf(allocation);
               return (
@@ -151,12 +153,11 @@ export function CapacityDialog({ house, budget, host, onClose, save }: { house: 
       },
       children: (
         <>
-          <p className="hint">The most this workspace’s VMs take together. Other workspaces have their own.</p>
           <FormGrid>
             <StepperField label="CPU" value={cpus} onChange={setCpus} min={1} max={host.cpus} step={1} unit="vCPU" error={below("cpus")} />
             <StepperField label="RAM" value={ram} onChange={setRam} min={0.5} max={host.memoryMiB / 1024} step={0.125} unit="GiB" error={below("memoryMiB")} />
           </FormGrid>
-          <p className="hint">Bots hold {resourcesText(budget.reserved)}; set each one’s size on its Resources tab. Scouts and sideworkers get what is left, as many as fit.</p>
+          <p className="hint">Bots reserve {resourcesText(budget.reserved)}; scouts and sideworkers share the rest.</p>
         </>
       ),
     }} />
