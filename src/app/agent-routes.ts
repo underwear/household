@@ -149,8 +149,24 @@ function historyTool(history: Pick<History, "find">): McpTool<PetIdentity> {
 }
 
 /** What the agent API answers, per path: hook events at /events, Household's MCP server (tools `reply`, `react`, `history`) at /mcp. */
-export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Chat, "reply" | "react"> & Partial<Pick<Chat, "replyFormat" | "editReply" | "places" | "createPlace">>, history: Pick<History, "find">, network?: Pick<NetworkRequests, "list" | "request">, environment?: Pick<PetEnvironment, "runEnvironmentSetup"> & Partial<Pick<PetEnvironment, "getEnvironment" | "updateEnvironment">>, crons?: Crons, memory?: PetMemory, extraTools: McpTool<PetIdentity>[] = [], isSideworker: (identity: PetIdentity) => boolean = () => false, guard?: { allow(caller: PetIdentity, tool: string): boolean; redact(caller: PetIdentity, payload: unknown): unknown; replied?(caller:PetIdentity,text:string):void }) {
+export function agentRoutes(delivery: Pick<Delivery, "onPayload">, chat: Pick<Chat, "reply" | "react"> & Partial<Pick<Chat, "replyFormat" | "editReply" | "places" | "createPlace" | "channelTools" | "channelTool">>, history: Pick<History, "find">, network?: Pick<NetworkRequests, "list" | "request">, environment?: Pick<PetEnvironment, "runEnvironmentSetup"> & Partial<Pick<PetEnvironment, "getEnvironment" | "updateEnvironment">>, crons?: Crons, memory?: PetMemory, extraTools: McpTool<PetIdentity>[] = [], isSideworker: (identity: PetIdentity) => boolean = () => false, guard?: { allow(caller: PetIdentity, tool: string): boolean; redact(caller: PetIdentity, payload: unknown): unknown; replied?(caller:PetIdentity,text:string):void }) {
   const tools = [replyTool(chat), reactTool(chat), historyTool(history), ...extraTools];
+  if (chat.channelTools && chat.channelTool) {
+    tools.push({
+      name: "channel_tools", description: "Discover adapter-specific tools and their argument schemas for a destination (e.g. Telegram widgets). Omitted place uses the current request destination.",
+      available: caller => !isSideworker(caller),
+      inputSchema: { type: "object", properties: { place: { type: "string" } }, additionalProperties: false },
+      call: async ({ house, pet }, { place }) => JSON.stringify(chat.channelTools!(house, pet, textArg("place", place))),
+    }, {
+      name: "channel_tool", description: "Call an adapter tool discovered with channel_tools. Pass its exact name, arguments, and destination place. For tools targeting an own-post, pass the Household id returned by an earlier call. Widget clicks arrive as user messages; update widget data to respond.",
+      available: caller => !isSideworker(caller),
+      inputSchema: { type: "object", properties: { name: { type: "string" }, arguments: { type: "object" }, place: { type: "string" }, id: { type: "string" } }, required: ["name", "arguments"], additionalProperties: false },
+      call: async ({ house, pet }, args, signal) => {
+        if (typeof args.name !== "string" || !args.arguments || typeof args.arguments !== "object" || Array.isArray(args.arguments)) throw new Error("name and arguments are required");
+        return JSON.stringify(await chat.channelTool!(house, pet, args.name, args.arguments as Record<string, unknown>, textArg("place", args.place), textArg("id", args.id), signal));
+      },
+    });
+  }
   if (chat.editReply) tools.push({
     name: "edit_reply",
     description: "Replace the text of your own previously sent reply without posting a new message. Use the id and channel returned by reply. Preserves its original format and any unanswered buttons; use channel_format for syntax. Only single-message text replies are editable, not split replies, attachments, old legacy posts, other bots' messages or Household notices. Returns the same id and channel.",

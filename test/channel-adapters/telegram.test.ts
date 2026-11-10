@@ -77,7 +77,7 @@ test("the channel's chat arrives; any other chat is ignored, one log line for ea
   await waitFor(() => received.length === 2);
   await Bun.sleep(50);
   expect(received.map((message) => message.ref)).toEqual([ref(7), ref(9)]);
-  expect(api.sent("getUpdates").at(-1)).toMatchObject({ offset: 6, allowed_updates: ["message", "edited_message", "callback_query", "message_reaction"] });
+  expect(api.sent("getUpdates").at(-1)).toMatchObject({ offset: 6, allowed_updates: ["message", "edited_message", "callback_query", "message_reaction", "widget_query"] });
 });
 
 test("two channels on one bot: one poller, each chat's updates to its channel, each chat's refs and threads its own", async () => {
@@ -1212,4 +1212,49 @@ test("ordinary DM keeps replies, files, buttons and status in the chat without t
   expect(received[1]).toMatchObject({ kind: "choice", answersTo: post, label: "Yes" });
   expect(api.calls.some(call => /ForumTopic/.test(call.method))).toBe(false);
   expect(api.calls.every(call => call.params.message_thread_id === undefined)).toBe(true);
+});
+
+test("private widgets send state, update only mapped widgets, and route clicks after restart", async () => {
+  const { api, open, listen, received, bot } = setup();
+  const channel = open();
+  const [send, update] = channel.tools();
+  const sent = await send!.call({ place: sibling }, { html: '<button onclick="TelegramWidget.request(\'next\')">Next</button>', caption: "Steps", chat_data: '{"step":0}' });
+  expect(api.sent("sendWidget")[0]).toMatchObject({ chat_id: OWNER, allow_queries: true, message_thread_id: 100, chat_data: '{"step":0}' });
+  await update!.call({ place: sibling, target: sent.post }, { chat_data: '{"step":1}' });
+  expect(api.sent("editMessageWidgetData")[0]).toMatchObject({ chat_id: OWNER, chat_data: '{"step":1}' });
+  await expect(update!.call({ place: inbox, target: sent.post }, { chat_data: "" })).rejects.toThrow("Not a widget");
+  await expect(update!.call({ place: sibling, target: ref(999) as unknown as PostRef }, { chat_data: "" })).rejects.toThrow("Not a widget");
+  const restarted = listen(open(OWNER, bot()));
+  const query = { id: "w1", from: OLEG, chat: { id: OWNER }, message_id: api.messages.at(-1)!.message_id, type: { type: "data" }, data: "next" };
+  api.push({ widget_query: query });
+  await waitFor(() => received.length === 1);
+  expect(received[0]).toMatchObject({ kind: "text", place: sibling.id, replyTo: sent.post, text: "Widget action: next", external: { widget: { event: "data", data: "next" } } });
+  expect(api.sent("answerWidgetQuery")[0]).toEqual({ widget_query_id: "w1", data: '{"received":true}' });
+  api.push({ widget_query: { ...query, id: "unknown", message_id: 999 } });
+  api.push({ widget_query: { ...query, id: "wallet", type: { type: "sign_data" } } });
+  api.push({ widget_query: { ...query, id: "outsider", from: { id: 999 } } });
+  await waitFor(() => api.sent("answerWidgetQuery").length === 4);
+  expect(received).toHaveLength(1);
+  expect(api.sent("answerWidgetQuery").slice(1).every(p => p.data === '{"received":false}')).toBe(true);
+  await restarted.stop();
+});
+
+test("widgets validate bytes and arguments before API calls; groups expose none", async () => {
+  const { api, bot } = setup();
+  const dm = new TelegramChannel(bot(), OWNER, "dm", "dm");
+  const group = new TelegramChannel(bot(), -100123, "group", "group");
+  expect(group.tools()).toEqual([]);
+  const [send, update] = dm.tools();
+  for (const args of [
+    { html: "", caption: "test" }, { html: "x".repeat(32769), caption: "test" },
+    { html: Buffer.from(crypto.getRandomValues(new Uint8Array(6000))).toString("hex"), caption: "test" },
+    { html: "<p>ok</p>", caption: "test", chat_data: "🙂".repeat(257) },
+    { html: "<p>ok</p>", caption: "test", height: 1.5 },
+    { html: "<p>ok</p>", caption: "test", chat_id: 999 },
+    { html: "<p>ok</p>" },
+  ]) await expect(send!.call({ place: sibling }, args)).rejects.toThrow();
+  await expect(update!.call({ place: sibling, target: ref(1) as unknown as PostRef }, {})).rejects.toThrow("Provide");
+  expect(api.calls).toHaveLength(0);
+  await send!.call({ place: sibling }, { html: "<p>ok</p>", caption: "test" });
+  expect(api.sent("sendWidget")[0]).not.toHaveProperty("message_thread_id");
 });

@@ -202,3 +202,14 @@ test("a person who is not the owner is a guest in history too (trust is Househol
     { id: "p2", name: "Ann Lee", trust: "guest" }, // names cleaned as in headers
   ]);
 });
+
+test("widget event history preserves automation provenance instead of upgrading it to owner instructions", async () => {
+  const { chat, work, find, records } = await setup();
+  const sent = await chat.reply("work", "sibling", "Widget");
+  const source = records.recordById("work", "c1", sent.id)!;
+  await work.say(text("Widget action: set:b", { place: SIBLING, interaction: true, replyTo: source.ref }));
+  const result = await find({ channel: "c1", query: "Widget action" });
+  expect(result.messages).toHaveLength(1);
+  expect(result.messages[0]).toMatchObject({ from: { trust: "automation" }, relayed: true, channel: { meta: { interaction: { source: "adapter", on: sent.id } } } });
+  await chat.stop();
+});

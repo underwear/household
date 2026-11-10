@@ -85,7 +85,7 @@ export function fakeTelegram(token: string, ...others: string[]) {
         if (!topics.delete(topic)) return Response.json({ ok: false, error_code: 400, description: "Bad Request: message thread not found" }, { status: 400 });
         return Response.json({ ok: true, result: true });
       }
-      if (["sendMessage", "sendRichMessage", "sendDocument", "sendPhoto", "sendVoice", "sendVideo"].includes(method)) {
+      if (["sendWidget", "sendMessage", "sendRichMessage", "sendDocument", "sendPhoto", "sendVoice", "sendVideo"].includes(method)) {
         messages.push({ ...params, message_id: nextMessage++ });
         return Response.json({ ok: true, result: { message_id: messages.at(-1)!.message_id, text: params.text } });
       }

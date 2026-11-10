@@ -100,10 +100,10 @@ export class History {
   }
 
   /** A record's sender as the header's `from`: the pet's own words are `you`, another pet's are that pet's. */
-  private from(house: string, pet: string, { sender }: FoundRecord, conversation: Conversation): HistoryFrom {
+  private from(house: string, pet: string, { sender, meta }: FoundRecord, conversation: Conversation): HistoryFrom {
     if (sender.kind === "pet") return sender.name === pet ? { kind: "you" } : { kind: "pet", name: sender.name };
     const id = sender.ref ? this.ids.personId(house, sender.ref) : undefined; // a few records older than M4.1 have no ref
-    return { ...(id ? { id } : {}), name: sender.name, trust: conversation.trust(sender.ref) };
+    return { ...(id ? { id } : {}), name: sender.name, trust: meta?.interaction ? "automation" : conversation.trust(sender.ref) };
   }
 
   private budget(house: string, pet: string): TokenBucket {

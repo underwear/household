@@ -1,0 +1,36 @@
+<p>Choose an option</p>
+<p id="selection"></p>
+<button onclick="choose('a')">Option A</button>
+<button onclick="choose('b')">Option B</button>
+<p id="status" style="color:var(--tg-theme-hint-color)"></p>
+<script>
+var pending = false;
+var token = 'WIDGET_TOKEN';
+function render() {
+  var state = {};
+  try { state = JSON.parse(TelegramWidget.chatData || '{}') || {}; } catch (e) {}
+  document.getElementById('selection').textContent = state.selected === 'a' ? 'Selected: A' : state.selected === 'b' ? 'Selected: B' : 'No selection';
+  document.getElementById('status').textContent = '';
+}
+function choose(value) {
+  if (pending) return;
+  pending = true;
+  document.getElementById('status').textContent = 'Sending…';
+  try {
+    TelegramWidget.request(token + ':set:' + value).then(function(answer) {
+      pending = false;
+      var receipt = {};
+      try { receipt = JSON.parse(answer.result || '{}') || {}; } catch (e) {}
+      document.getElementById('status').textContent = receipt.received === true ? 'Request received' : 'Request was not accepted';
+    }, function(error) {
+      pending = false;
+      document.getElementById('status').textContent = 'Could not send: ' + error.code;
+    });
+  } catch (error) {
+    pending = false;
+    document.getElementById('status').textContent = 'Could not send';
+  }
+}
+TelegramWidget.onEvent('chatDataChanged', render);
+render();
+</script>

@@ -8,6 +8,7 @@ export interface Update {
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
   callback_query?: CallbackQuery;
+  widget_query?: { id: string; from: CallbackQuery["from"]; chat?: { id: number }; message_id?: number; type: { type: string }; data: string };
   message_reaction?: MessageReaction;
 }
 

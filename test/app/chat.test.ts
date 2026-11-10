@@ -1837,3 +1837,58 @@ test("silent inbox records and queues events without a House channel notice", as
   expect(records.recordById("work", "c1", headers.at(-1).event.id)).toBeDefined();
   await chat.stop();
 });
+
+test("adapter tools scope posts and edits to the authenticated bot and route widget replies to their author", async () => {
+  const { chat, opened, records, calls } = setup();
+  await chat.setHouses([work()]);
+  const executed: unknown[] = [];
+  const tools: import("../../src/core/channel").ChannelTool[] = [{
+    name: "sample_send", description: "send", inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false },
+    call: async (context, args) => { executed.push(context); return { post: "widget-post" as PostRef, text: String(args.text) }; },
+  }, {
+    name: "sample_edit", description: "edit", target: "own-post", inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    call: async context => { executed.push(context); return { text: "updated" }; },
+  }];
+  Object.assign(opened[0]!, { tools: () => tools });
+  // Obtain the public address from the same mapping used by agents.
+  const publicPlace = chat.places("work", "chair").find(p => p.kind === "pet-thread")!.id;
+  const sent = await chat.channelTool("work", "chair", "sample_send", { text: "Widget" }, publicPlace);
+  expect(sent).toMatchObject({ channel: "c1", text: "Widget" });
+  expect(records.recordById("work", "c1", sent.id!)).toMatchObject({ pet: "chair", place: CHAIR, text: "Widget" });
+  expect(chat.channelTools("work", "chair", publicPlace)[0]).not.toHaveProperty("call");
+  await expect(chat.channelTool("work", "sibling", "sample_edit", {}, undefined, sent.id)).rejects.toThrow("not your own");
+  await expect(chat.channelTool("work", "chair", "sample_send", { text: "x", chat_id: 999 })).rejects.toThrow("invalid tool arguments");
+  await expect(chat.channelTool("work", "chair", "missing", {})).rejects.toThrow("does not support");
+  await chat.channelTool("work", "chair", "sample_edit", {}, publicPlace, sent.id);
+  expect(executed).toHaveLength(2);
+  expect(executed[1]).toMatchObject({ place: { id: CHAIR }, target: "widget-post" });
+  // Even when the default bot is sibling, a widget event returns to chair.
+  await opened[0]!.say(text("Widget action: next", { place: CHAIR, replyTo: "widget-post" as PostRef, interaction: true, external: { widget: { event: "data", data: "next" } } }));
+  expect(calls.some(c => c.startsWith("send work/chair") && c.includes("Widget action: next"))).toBe(true);
+  const before = calls.filter(c => c.startsWith("send ")).length;
+  const changed = work([{ ...DM, pets: ["sibling"] }]);
+  changed.pets = changed.pets.filter(p => p.name === "sibling");
+  await chat.setHouses([changed]);
+  await opened[0]!.say(text("Widget action: orphan", { replyTo: "widget-post" as PostRef, interaction: true }));
+  expect(calls.filter(c => c.startsWith("send "))).toHaveLength(before);
+  await chat.stop();
+});
+
+test("widget events carry their original post, have automation trust, and cannot answer open dialogs", async () => {
+  const { chat, opened, headers, records } = setup();
+  await chat.setHouses([work()]);
+  Object.assign(opened[0]!, { tools: () => [{ name: "send", description: "", inputSchema: { type: "object", properties: {}, additionalProperties: false }, call: async () => ({ post: "widget-ref" as PostRef, text: "Counter" }) }] });
+  const sent = await chat.channelTool("work", "chair", "send", {});
+  let settled = false;
+  const pending = chat.ask("work", "chair", { kind: "questions", questions: [{ text: "Which city?", options: [{ label: "Madrid" }, { label: "London" }], multiSelect: false }] });
+  void pending.then(() => { settled = true; });
+  await waitFor(() => opened[0]!.calls.some(c => c.startsWith("notice")));
+  await opened[0]!.say(text("Widget action: increment", { place: CHAIR, replyTo: "widget-ref" as PostRef, interaction: true, external: { widget: { event: "data", data: "increment" } } }));
+  expect(settled).toBe(false);
+  expect(headers.at(-1)).toMatchObject({ event: { kind: "interaction", on: { id: sent.id }, relayed: true }, from: { trust: "automation" } });
+  expect(headers.at(-1).event.id).not.toBe(sent.id);
+  expect(records.recordById("work", "c1", headers.at(-1).event.id)).toMatchObject({ relayed: true, facts: { shown: { interaction: { source: "adapter", on: sent.id } } } });
+  await opened[0]!.say(text("Madrid", { place: CHAIR }));
+  expect(await pending).toEqual({ kind: "answers", answers: [{ text: "Madrid" }] });
+  await chat.stop();
+});

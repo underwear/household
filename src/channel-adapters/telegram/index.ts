@@ -1,3 +1,4 @@
+import { widgetTools } from "./widgets";
 import { randomUUID } from "node:crypto";
 import { topicPlaceKey } from "../../core/channels";
 import type { Attachment, OutgoingAttachment } from "../../core/attachment";
@@ -101,6 +102,42 @@ export class TelegramChannel implements Channel, BotChat {
       title: (place) => `${this.prefix}.title.${place}`,
       place: (thread) => `${this.prefix}.place.${thread}`,
     };
+  }
+
+  tools() {
+    if (this.mode === "group" || this.chat <= 0) return [];
+    return widgetTools({
+      send: async (place, params, signal) => {
+        const where = await this.where(place);
+        const sent = await this.bot.api.call<{ message_id: number }>("sendWidget", { ...params, chat_id: this.chat, ...where, allow_queries: true }, { signal });
+        if (!Number.isSafeInteger(sent.message_id) || sent.message_id <= 0) throw new Error("sendWidget returned no message id");
+        this.bot.options.state.set(`${this.prefix}.widget.${sent.message_id}`, place.id);
+        return postRef(this.prefix, sent.message_id);
+      },
+      update: async (place, target, params, signal) => {
+        const id = messageIdOf(this.prefix, target);
+        if (id === undefined || this.bot.options.state.get(`${this.prefix}.widget.${id}`) !== place.id) throw new Error("Not a widget in this place");
+        await this.bot.api.call("editMessageWidgetData", { ...params, chat_id: this.chat, message_id: id }, { signal });
+      },
+    });
+  }
+
+  private async takeWidget(query: NonNullable<Update["widget_query"]>): Promise<void> {
+    const { state, log } = this.bot.options;
+    const place = query.message_id === undefined ? undefined : state.get(`${this.prefix}.widget.${query.message_id}`);
+    const valid = this.mode !== "group" && this.chat > 0 && query.chat?.id === this.chat && query.from.id === this.chat && !query.from.is_bot &&
+      query.type.type === "data" && typeof query.data === "string" && Buffer.byteLength(query.data) > 0 && Buffer.byteLength(query.data) <= 64 && !!place;
+    // Acknowledge before agent delivery: Telegram allows only 15 seconds for this response.
+    await this.bot.api.call("answerWidgetQuery", { widget_query_id: query.id, data: JSON.stringify({ received: !!valid }) }, { timeoutMs: 5000 })
+      .catch(error => log.error(`telegram ${this.name}: widget query acknowledgement failed: ${(error as Error).message}`));
+    if (!valid || !this.onMessage) return;
+    await this.onMessage({
+      kind: "text", ref: `${this.prefix}.widget-query.${query.id}` as MessageRef,
+      place, from: { ref: senderRef(query.from.id), name: [query.from.first_name, query.from.last_name].filter(Boolean).join(" ") || "Telegram user" },
+      replyTo: postRef(this.prefix, query.message_id!), interaction: true,
+      text: `Widget action: ${query.data}`,
+      external: { widget: { event: "data", data: query.data } },
+    });
   }
 
   listPlaces(): Place[] {
@@ -619,6 +656,11 @@ export class TelegramChannel implements Channel, BotChat {
    * to it (only the owner can answer, …); one on a button that is gone says so.
    */
   async take(update: Update): Promise<void> {
+    if (update.widget_query) {
+      try { await this.takeWidget(update.widget_query); }
+      catch (error) { this.bot.options.log.error(`telegram ${this.name}: widget event failed: ${(error as Error).message}`); }
+      return;
+    }
     const { log, state } = this.bot.options;
     const { name, onMessage } = this;
     let parsed: Parsed | undefined;

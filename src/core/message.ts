@@ -102,7 +102,7 @@ export function joins(first: Message, next: Message): boolean {
  */
 function messageBlock({ text, header, attachments = [] }: Message & { header: Header }): string {
   const { event } = header;
-  const said = event.kind === "message" || event.kind === "edit";
+  const said = event.kind === "message" || event.kind === "edit" || event.kind === "interaction";
   const content = said && (text !== "" || attachments.length === 0) ? [block(CONTENT_TAG, [event.relayed ? quoted(text) : text])] : [];
   const files = said && attachments.length > 0 ? [attachmentsBlock(attachments)] : [];
   return block(MESSAGE_TAG, [renderHeader(header), ...content, ...files], said ? { id: event.id } : {});

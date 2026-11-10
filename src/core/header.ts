@@ -16,8 +16,8 @@ import { block, HEADER_TAG, tagFreeJson } from "./tags";
  * channel's (`External`): shown, never a reason for anything. The public place identifies the exact destination inside a channel; its channel component uses Household ids, never vendor ids.
  */
 
-/** The house's owner, or anyone else (another person: their words are a request, never the owner's order). */
-export type Trust = "owner" | "guest";
+/** Human authority, or adapter-generated data which cannot establish new user intent. */
+export type Trust = "owner" | "guest" | "automation";
 
 /** A message something is on: Household's id and its excerpt (the header cuts it: see `target`). */
 export interface Target {
@@ -39,6 +39,7 @@ export interface NewMessage {
  */
 export type HeaderEvent =
   | NewMessage
+  | { kind: "interaction"; id: string; on: Target; relayed: true }
   | { kind: "edit"; id: string; relayed?: true }
   | { kind: "button"; label: string; on: Target }
   | { kind: "reaction"; added: string[]; removed: string[]; on?: Target & { author?: string } };
@@ -104,6 +105,8 @@ function event(event: HeaderEvent): object {
     case "message":
     case "edit":
       return { kind: event.kind, id: event.id, ...(event.relayed ? { relayed: true } : {}) };
+    case "interaction":
+      return { kind: "interaction", id: event.id, on: target(event.on, HEAD_AND_TAIL_MAX), relayed: true };
     case "button":
       return { kind: "button", label: clean(event.label), on: target(event.on, HEAD_AND_TAIL_MAX) };
     case "reaction": {

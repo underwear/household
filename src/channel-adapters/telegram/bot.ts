@@ -37,7 +37,7 @@ export const pause = (ms: number, signal?: AbortSignal) =>
 
 /** The chat an update is in; undefined for one that names none (a press on a message too old to be shown). */
 function chatOf(update: Update): number | undefined {
-  return (update.message ?? update.edited_message)?.chat.id ?? update.callback_query?.message?.chat.id ?? update.message_reaction?.chat.id;
+  return (update.message ?? update.edited_message)?.chat.id ?? update.callback_query?.message?.chat.id ?? update.message_reaction?.chat.id ?? update.widget_query?.chat?.id;
 }
 
 /**
@@ -115,7 +115,7 @@ export class TelegramBot {
     let failure: string | undefined;
     while (!signal.aborted) {
       try {
-        const params = { offset: Number(state.get(offset) ?? 0), timeout: pollSeconds, allowed_updates: ["message", "edited_message", "callback_query", "message_reaction"] };
+        const params = { offset: Number(state.get(offset) ?? 0), timeout: pollSeconds, allowed_updates: ["message", "edited_message", "callback_query", "message_reaction", "widget_query"] };
         const updates = await this.api.call<Update[]>("getUpdates", params, { timeoutMs: (pollSeconds + 10) * 1000, signal });
         if (failure) log.info(`telegram ${name}: polling again`);
         failure = undefined;
@@ -146,6 +146,10 @@ export class TelegramBot {
     const channel = chat === undefined ? undefined : this.chats.get(chat);
     if (channel && this.listening.has(channel)) return channel.take(update);
     const { log, name } = this.options;
+    if (update.widget_query) {
+      await this.api.call("answerWidgetQuery", { widget_query_id: update.widget_query.id, data: '{"received":false}' }, { timeoutMs: 5000 })
+        .catch(error => log.error(`telegram ${name}: widget query was not answered: ${(error as Error).message}`));
+    }
     if (update.callback_query) {
       await this.api
         .call("answerCallbackQuery", { callback_query_id: update.callback_query.id })

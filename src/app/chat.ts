@@ -448,6 +448,45 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     return { channel: header.id, ...header.replyFormat };
   }
 
+  channelTools(house: string, pet: string, place?: string) {
+    const target = this.destination(house, pet, undefined, place);
+    if (target.problem || !target.spot?.channel) throw new HouseholdError(target.problem ?? "no chat channel is available");
+    return (target.spot.channel.tools?.() ?? []).map(({ call, ...tool }) => tool);
+  }
+
+  async channelTool(house: string, pet: string, name: string, args: Record<string, unknown>, place?: string, id?: string, signal?: AbortSignal) {
+    const target = this.destination(house, pet, undefined, place);
+    if (target.problem || !target.spot?.channel) throw new HouseholdError(target.problem ?? "no chat channel is available");
+    const spot = target.spot;
+    const open = spot.channel!;
+    const tool = open.tools?.().find(tool => tool.name === name);
+    if (!tool) throw new HouseholdError("this channel does not support that tool");
+    const channel = this.records.channelId(house, spot.key);
+    let ref: PostRef | undefined;
+    if (tool.target) {
+      if (!id) throw new HouseholdError("id of your own post is required");
+      expectId("message", id);
+      const record = this.records.inJournal(house, pet, channel, id) ? this.records.recordById(house, channel, id) : undefined;
+      if (!record || record.pet !== pet || record.sender.kind !== "pet" || record.sender.name !== pet || record.place !== spot.place.id)
+        throw new HouseholdError("not your own post in this place");
+      ref = record.ref as PostRef;
+    } else if (id !== undefined) throw new HouseholdError("this tool does not take a target id");
+    const schema = tool.inputSchema;
+    if (Object.keys(args).some(key => !Object.hasOwn(schema.properties, key)) || schema.required?.some(key => !Object.hasOwn(args, key)))
+      throw new HouseholdError("invalid tool arguments; consult channel_tools");
+    if (carriesHouseholdTag(args)) throw new HouseholdError("arguments carry a Household tag");
+    if (!this.budget("replies", house, pet).take()) throw new HouseholdError("too many replies or edits: wait a little");
+    const live = this.live.turnOf(house, pet);
+    const result = await tool.call({ place: spot.place, target: ref, signal }, args);
+    if (result.post) {
+      const record = this.posted(house, pet, spot.place, [result.post], { kind: "pet", name: pet }, result.text);
+      this.live.replied(live, { channel: open, place: spot.place });
+      this.delivery.answered(house, pet);
+      return { id: record.id, channel, place: this.channels.publicPlace(house, spot.place).id, text: result.text };
+    }
+    return { id, channel, place: this.channels.publicPlace(house, spot.place).id, text: result.text };
+  }
+
   async reply(house: string, pet: string, text: string, buttons?: Choices, channel?: string, format: ReplyMode = "regular", place?: string): Promise<{ id: string; channel: string; place?: string }> {
     if (format === "rich" && !this.replyFormat(house, pet, channel, place).rich) throw new HouseholdError("this channel does not support rich replies");
     return this.publish(house, pet, text, buttons, channel, undefined, undefined, format, place);
@@ -851,6 +890,13 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const config = configured?.channels.find((candidate) => channelKey(candidate) === key);
     // A channel that is closing (a reload took it away or replaced it) hears no more.
     if (!configured || !config || !this.channels.accepts(house, key, channel)) return this.events.info(`workspace ${house}: a ${message.kind} through channel ${key}, which is closing, was dropped`);
+    // Adapter interactions belong to their original author, never a replacement default bot.
+    if (message.kind === "text" && message.interaction) {
+      const source = message.replyTo && this.records.recordByRef(house, message.replyTo);
+      if (!source || source.sender.kind !== "pet" || source.sender.name !== source.pet || parsePlaceKey(source.place)?.channel !== key ||
+          !config.pets.includes(source.pet) || !configured.pets.some(p => p.name === source.pet)) return;
+      message = { ...message, place: source.place, relayed: true, external: { ...message.external, interaction: { source: "adapter", on: source.id } } };
+    }
     // Telegram General is not an agent destination, even for mentions, replies, edits or commands.
     if (message.kind === "text" && channel.ignoreInboxMessages) {
       const at = parsePlaceKey(message.place);
@@ -872,7 +918,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const sharedQuoted = shared && quoted && quoted.place === placeId && occupants.some(p => p.name === quoted.pet) ? quoted.pet : undefined;
     const topic = written?.channel === key && written.topic ? channel.listPlaces?.().find(p => p.id === placeId) : undefined;
     const pet = routedPet(config, configured.pets, topic ? {} : {
-      about: on?.pet ?? original?.pet ?? addressed ?? sharedQuoted,
+      about: (message.kind === "text" && message.interaction ? quoted?.pet : undefined) ?? on?.pet ?? original?.pet ?? addressed ?? sharedQuoted,
       thread: thread?.name,
       // The conversation of the line it quotes, when that line is in this channel.
       quoted: quoted && parsePlaceKey(quoted.place)?.channel === key ? quoted.pet : undefined,
@@ -885,10 +931,10 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const place = topic ?? (thread ? petPlace(thread, placeId!) : inbox);
     const spot = { channel, place };
     // Secrets are consumed before security-rejection records, journals, dialogs or agent delivery.
-    const trust = this.channels.trust(house, message.from.ref);
+    const trust = message.kind === "text" && message.interaction ? "automation" : this.channels.trust(house, message.from.ref);
     const incomingRef = message.ref;
     const rawEnvelope = message.kind === "text" ? { ...message, text: "" } : undefined;
-    if (!rawApproved && message.kind === "text" && this.secretRequests && await this.secretRequests.handle({
+    if (!rawApproved && message.kind === "text" && !message.interaction && this.secretRequests && await this.secretRequests.handle({
       house, pet: pet?.name, text: message.text, owner: trust === "owner", edited: message.edits !== undefined,
       relayed: !!message.relayed,
       sendRaw: async text => {
@@ -950,10 +996,12 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (message.kind === "unsupported") return this.noticeIn(house, pet.name, own, `${UNSUPPORTED_NAMES[message.what] ?? message.what} can't be passed on yet`);
     const { ref, edits, relayed, text, attachments } = message;
     // While a dialog of the pet waits, what its owner writes in the pet's place is the answer (a guest's is a message; files are never one).
-    if ((thread === pet || pet.chatPlace === place.id || this.currentTarget(house, pet.name).spot?.place.id === place.id || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && trust === "owner" && edits === undefined && !relayed && !attachments && (await this.dialogs.text(`${house}/${pet.name}`, text))) {
+    if ((thread === pet || pet.chatPlace === place.id || this.currentTarget(house, pet.name).spot?.place.id === place.id || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && !message.interaction && trust === "owner" && edits === undefined && !relayed && !attachments && (await this.dialogs.text(`${house}/${pet.name}`, text))) {
       return this.seen(house, channel, ref);
     }
-    const event: HeaderEvent = { kind: edit ? "edit" : "message", id: record.id, ...(relayed ? { relayed } : {}) };
+    const event: HeaderEvent = message.interaction && quoted
+      ? { kind: "interaction", id: record.id, on: { id: quoted.id, excerpt: quoted.excerpt }, relayed: true }
+      : { kind: edit ? "edit" : "message", id: record.id, ...(relayed ? { relayed } : {}) };
     const files = attachments ? { attachments } : {};
     this.delivery.send(house, pet.name, { text, origin: "chat", ref, ...(edits === undefined ? {} : { edits }), header: { event, ...envelope }, ...where, ...files });
   }

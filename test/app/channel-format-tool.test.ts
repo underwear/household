@@ -69,3 +69,26 @@ test("place_create uses the caller's identity and validates title and destinatio
   for(const args of [{title:5},{title:""},{title:"x",pet:"other"},{title:"x",place:5}]) expect((await call(args)).isError).toBe(true);
   expect(calls).toHaveLength(1);
 });
+
+test("channel tools expose schemas and pass authenticated identity; malformed calls and sideworkers are refused", async () => {
+  const calls: unknown[][] = [];
+  const routes = agentRoutes({ onPayload: async () => ({}) }, {
+    reply: async () => ({ id: "m1", channel: "c1" }), react: async () => ({ id: "m1", reaction: null }),
+    channelTools: (...args) => { calls.push(args); return []; },
+    channelTool: async (...args) => { calls.push(args.slice(0, 7)); return { id: "m7", channel: "c1", place: "chair@c1", text: "sent" }; },
+  }, { find: async () => ({ messages: [], more: false }) }, undefined, undefined, undefined, undefined, [], caller => caller.pet === "helper");
+  async function rpc(method: string, params: object = {}, pet = "chair") {
+    return await (await routes({ house: "work", pet }, new Request("http://house/mcp", {
+      method: "POST", body: JSON.stringify({ id: 1, method, params }),
+    }))).json() as any;
+  }
+  expect((await rpc("tools/list")).result.tools.map((t: any) => t.name)).toContain("channel_tools");
+  expect((await rpc("tools/list", {}, "helper")).result.tools.map((t: any) => t.name)).not.toContain("channel_tool");
+  await rpc("tools/call", { name: "channel_tools", arguments: { place: "chair@c1" } });
+  await rpc("tools/call", { name: "channel_tool", arguments: { name: "telegram_update_widget", arguments: { chat_data: "{}" }, place: "chair@c1", id: "m7" } });
+  expect(calls).toEqual([["work", "chair", "chair@c1"], ["work", "chair", "telegram_update_widget", { chat_data: "{}" }, "chair@c1", "m7", expect.any(AbortSignal)]]);
+  for (const args of [{ name: "x", arguments: [] }, { name: "x", arguments: {}, place: 4 }, { name: "x", arguments: {}, pet: "other" }]) {
+    expect((await rpc("tools/call", { name: "channel_tool", arguments: args })).result.isError).toBe(true);
+  }
+  expect(calls).toHaveLength(2);
+});

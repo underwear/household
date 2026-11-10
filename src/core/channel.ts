@@ -51,11 +51,12 @@ export type ReplyMode = "regular" | "rich";
  * `reaction`: the sender's reactions on message `on` changed (`on` is the ref the channel gave that message: the
  * person's first version of it, or what `post`/`notice` returned); reactions are named as shown (an emoji, or
  * e.g. `custom emoji`). The channel may not know the place of a reaction: Household does, from `on`.
+ * `interaction`: an adapter interaction with a bot post; requires `replyTo`. Routed only to its still-placed author.
  * `external`: the channel's facts that are context for the pet (shown in the header's `channel.meta`; no vendor
  * ids); `kept`: all of its facts, stored with the message for debugging, never shown.
  */
 export type InboundMessage = { ref: MessageRef; place?: string; from: Sender; external: External; kept?: External } & (
-  | { kind: "text"; text: string; edits?: MessageRef; relayed?: true; replyTo?: MessageRef | PostRef; attachments?: Attachment[] }
+  | { kind: "text"; text: string; edits?: MessageRef; relayed?: true; replyTo?: MessageRef | PostRef; interaction?: true; attachments?: Attachment[] }
   | { kind: "unsupported"; what: string }
   | { kind: "choice"; answersTo: PostRef; index: number; label: string }
   | { kind: "reaction"; on: MessageRef | PostRef; added: string[]; removed: string[] }
@@ -103,6 +104,18 @@ export interface Place {
   title: string;
 }
 
+/** Adapter-owned capability, scoped by the app to an authenticated bot's destination.
+ * Arguments never select vendor destinations. An optional target is resolved by the app from
+ * an owned Household message id. Adapters validate arguments before making API calls.
+ */
+export interface ChannelTool {
+  name: string;
+  description: string;
+  inputSchema: { type: "object"; properties: Record<string, unknown>; required?: string[]; additionalProperties: false };
+  target?: "own-post";
+  call(context: { place: Place; target?: PostRef; signal?: AbortSignal }, args: Record<string, unknown>): Promise<{ text: string; post?: PostRef }>;
+}
+
 /**
  * One chat of a house (a channel of its config), in Household's terms. Every pet placed in it has its own place
  * there (a thread, …); the inbox is where people write to the house as a whole (Telegram: General). Core owns the
@@ -110,6 +123,8 @@ export interface Place {
  * itself (one bot may serve several channels: that is the adapter's business).
  */
 export interface Channel {
+  /** Only capabilities supported by this particular channel instance. */
+  tools?(): ChannelTool[];
   /** What the channel calls its inbox (Telegram: General). */
   readonly inbox: string;
   /** User messages in the inbox are discarded before routing, journaling or commands. */
