@@ -208,7 +208,17 @@
 <p>The first start downloads the bot's VM image, so give it a minute. <code>house status</code> shows your bot as <code>running</code> when it is ready.</p>
 <p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.</p>
 <h2 id="4-say-hi">4. Say hi</h2>
+<p>For a shared group with a topic per bot, see <a href="../telegram-groups/">Telegram groups with topics</a>.</p>
 <p>Open your Telegram channel and write to your assistant bot. It answers in its own thread. 🤖</p>
+<p>For an ordinary private conversation without threads, add a channel in the admin with kind <strong>Telegram Bot DM</strong> (<code>telegram-dm</code>), your Telegram user id as the chat id, and a BotFather token. Threaded Mode is not required. Press <strong>Start</strong> in the bot's Telegram chat, and assign your assistant to the channel.</p>
+<p>All replies and files stay in that chat. If you assign several assistants, choose a default; address another by name (for example, <code>Chef, plan dinner</code>) or reply to one of its messages. Replies include the assistant's name. The Stop button and <code>/stop</code> always stop the channel's default assistant, even when replying to another assistant. The existing <strong>Telegram Bot DM (threaded)</strong> kind remains <code>telegram-private</code>. Connect a particular bot and chat in only one of these modes.</p>
+<p>Example channel entry:</p>
+<pre><code class="language-yaml">kind: telegram-dm
+token: YOUR_BOT_TOKEN
+chat: &quot;100200300&quot;
+pets: [sibling]
+</code></pre>
+<p>The adapter omits <code>message_thread_id</code> when sending to this channel; see the <a href="https://core.telegram.org/bots/api#sendmessage">Telegram Bot API</a>.</p>
 <p>Then open the admin:</p>
 <pre><code class="language-sh">house dashboard
 </code></pre>

@@ -43,3 +43,14 @@ test("a token shows as its bot: its id at once, its @username once Telegram told
   await Bun.sleep(100);
   expect(fieldsShown(checks, channel("1", TOKEN))).toEqual({ token: "@fake_bot" });
 });
+
+test("ordinary Telegram DM accepts a bot with Threaded Mode off", async () => {
+  const api = fakeTelegram(TOKEN);
+  api.botInfo.has_topics_enabled = false;
+  try {
+    const checks = channelChecks(api.url);
+    const at = { household: household(house("work", [])), house: "work" };
+    expect((await checkFields(knownChannelKinds(), checks, "telegram-dm", { token: TOKEN }, at)).own).toEqual({ token: TOKEN });
+    await expect(checkFields(knownChannelKinds(), checks, "telegram-private", { token: TOKEN }, at)).rejects.toThrow("threads off");
+  } finally { api.stop(); }
+});

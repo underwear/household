@@ -48,3 +48,12 @@ export const telegramGroup: ChannelKindSpec = {
   chat: { key: "chat", label: "Group chat id", placeholder: "-1001234567890", mono: true, hint: "A negative number, starting with -100.", help: { title: "Where do I find it?", steps: ["Open https://web.telegram.org/a in a browser and sign in.", "Open your group: the address now ends in #-100…", "Copy everything after #, the minus too, and paste it here."] } },
   fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather. Make the bot a group admin with Manage topics and Delete messages." }],
 };
+
+/** An ordinary private chat: all pets speak in the same conversation. */
+export const telegramDm: ChannelKindSpec = {
+  ...telegramPrivate,
+  kind: "telegram-dm",
+  label: "Telegram Bot DM",
+  description: "Your private chat with the workspace's bot, without threads. Reply to a bot's message or address it by name; otherwise the default bot answers.",
+  fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather. Threaded Mode is not required." }],
+};

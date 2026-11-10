@@ -688,3 +688,11 @@ test("Telegram forum groups persist negative supergroup ids and reject private/b
     await expect(config.addChannel("work", {kind:"telegram-group", token:"123456:fake-token",chat,pets:[]})).rejects.toThrow();
   }
 });
+
+test("ordinary Telegram DM persists and cannot duplicate a threaded connection to the same bot chat", async () => {
+  const { config } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {}\n");
+  await config.addChannel("work", { kind: "telegram-dm", token: "123456:fake-token", chat: "123", pets: ["sibling"] });
+  expect((await config.load()).houses[0]!.channels[0]).toMatchObject({ kind: "telegram-dm", chat: "123", pets: ["sibling"] });
+  await expect(config.addChannel("work", { kind: "telegram-private", token: "123456:fake-token", chat: "123", pets: [] })).rejects.toThrow("choose one private-chat mode");
+  await expect(config.addChannel("work", { kind: "telegram-dm", token: "123456:fake-token", chat: "-100123", pets: [] })).rejects.toThrow();
+});

@@ -114,6 +114,8 @@ export interface Channel {
   readonly inbox: string;
   /** User messages in the inbox are discarded before routing, journaling or commands. */
   readonly ignoreInboxMessages?: boolean;
+  /** Stop controls in a shared conversation target its configured default pet. */
+  readonly stopDefaultPet?: boolean;
   /** Adapter-discovered shared topics, persisted by the adapter; routed to the channel's default bot. */
   listPlaces?(): Place[];
   /** Optional capability: create a shared topic without assigning it to a particular bot. */

@@ -59,6 +59,22 @@ For a shared group with a topic per bot, see [Telegram groups with topics](../te
 
 Open your Telegram channel and write to your assistant bot. It answers in its own thread. 🤖
 
+For an ordinary private conversation without threads, add a channel in the admin with kind **Telegram Bot DM** (`telegram-dm`), your Telegram user id as the chat id, and a BotFather token. Threaded Mode is not required. Press **Start** in the bot's Telegram chat, and assign your assistant to the channel.
+
+All replies and files stay in that chat. If you assign several assistants, choose a default; address another by name (for example, `Chef, plan dinner`) or reply to one of its messages. Replies include the assistant's name. The Stop button and `/stop` always stop the channel's default assistant, even when replying to another assistant. The existing **Telegram Bot DM (threaded)** kind remains `telegram-private`. Connect a particular bot and chat in only one of these modes.
+
+Example channel entry:
+
+```yaml
+kind: telegram-dm
+token: YOUR_BOT_TOKEN
+chat: "100200300"
+pets: [sibling]
+```
+
+The adapter omits `message_thread_id` when sending to this channel; see the [Telegram Bot API](https://core.telegram.org/bots/api#sendmessage).
+
+
 Then open the admin:
 
 ```sh

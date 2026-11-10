@@ -3,7 +3,7 @@ import { tagFreeJson } from "../core/tags";
 import type { SecretRequests } from "./secret-requests";
 import { withFiles, type OutgoingAttachment, type Attachment } from "../core/attachment";
 import { DownloadRefused, type Channel, type Choices, type ReplyMode, type InboundMessage, type Place, type MessageRef, type SenderRef, type PostRef } from "../core/channel";
-import { inboxKey, channelKey, channelName, channelsOf, parsePlaceKey, petPlaceKey, type ChannelConfig } from "../core/channels";
+import { defaultPet, inboxKey, channelKey, channelName, channelsOf, parsePlaceKey, petPlaceKey, type ChannelConfig } from "../core/channels";
 import type { DialogAnswer, DialogQuestion } from "../core/dialog";
 import { HouseholdError } from "../core/errors";
 import { headAndTail } from "../core/excerpt";
@@ -934,13 +934,15 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     // `/stop` in the pet's own place (not relayed, not an edit): Household stops the pet; the pet never gets it.
     // Kept by its ref in no journal, so a channel replaying it stops nothing twice.
     if (message.kind === "text" && (topic || thread === pet || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && message.edits === undefined && !message.relayed && !message.attachments && STOP_COMMAND.test(message.text.trim())) {
+      const stopping = channel.stopDefaultPet ? configured.pets.find(candidate => candidate.name === defaultPet(config)) : pet;
+      if (!stopping) return;
       if (this.records.recordByRef(house, message.ref)) return;
       const sender: ChatSender = { kind: "person", ref: message.from.ref, name: message.from.name };
-      this.records.remember(house, { refs: [message.ref], place: place.id, pet: pet.name, journals: [], sender, text: message.text, excerpt: message.text });
+      this.records.remember(house, { refs: [message.ref], place: place.id, pet: stopping.name, journals: [], sender, text: message.text, excerpt: message.text });
       const at = { channel, place };
-      if (trust !== "owner") return this.noticeIn(house, pet.name, at, "Only the owner can stop it");
+      if (trust !== "owner") return this.noticeIn(house, stopping.name, at, "Only the owner can stop it");
       this.seen(house, channel, message.ref);
-      if ((await this.stopPet(house, pet.name)) === "idle") await this.noticeIn(house, pet.name, at, `${petTitle(pet)} is not doing anything right now`);
+      if ((await this.stopPet(house, stopping.name)) === "idle") await this.noticeIn(house, stopping.name, at, `${petTitle(stopping)} is not doing anything right now`);
       return;
     }
     const { record, edit } = this.remembered(house, pet.name, place, message, { ...(shown ? { shown } : {}), ...(where.facts ? { kept: where.facts } : {}) });
@@ -1094,7 +1096,10 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const live = this.live.owns(choice.answersTo);
     if (live?.house === house) {
       if (envelope.from.trust !== "owner") return OWNER_ONLY;
-      return live === this.live.turnOf(house, live.pet) ? STOP_TOASTS[await this.stopPet(house, live.pet)] : "Already finished";
+      if (live !== this.live.turnOf(house, live.pet)) return "Already finished";
+      const stopping = channel.stopDefaultPet ? defaultPet(config) : live.pet;
+      if (!stopping || !config.pets.includes(stopping)) return STOP_TOASTS.idle;
+      return STOP_TOASTS[await this.stopPet(house, stopping)];
     }
     const card = this.cards.get(choice.answersTo);
     // Household's own cards (a pet's dialogs) are its owner's to answer; a pet's own buttons are anyone's.

@@ -268,3 +268,98 @@ for (const kind of ["telegram-private", "telegram-group"] as const) test(kind + 
   expect(api.sent("sendMessage")).toHaveLength(0);
   for(const id of [100,101,102,103,104]) expect(records.recordByRef("work",`telegram.123456.${chatId}.${id}` as any)).toBeUndefined();
 });
+
+test("ordinary Telegram DM routes by default, name and reply without forwarding notices", async () => {
+  const records = new SqliteStore(":memory:"); stops.push(() => records.close());
+  const api = fakeTelegram(TOKEN); stops.push(api.stop);
+  const events = new EventLog(join(tempDir(), "events.jsonl"), () => {});
+  const drafts: { pet: string; draft: MessageDraft }[] = [];
+  const delivery = {
+    send: (_h: string, pet: string, draft: MessageDraft) => { drafts.push({ pet, draft }); return { activity: "idle" as const, queued: 1 }; },
+    answered: () => {}, interrupt: async () => ({ status: "idle" as const }), reject: () => true,
+  };
+  const chat = new Chat(delivery, openChannels({ state: records, events, telegramApi: api.url }), events, new Dialogs(events), records);
+  stops.push(() => chat.stop());
+  const house: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "sibling" }, { name: "chair" }],
+    people: { owners: [{ platform: "telegram", id: String(OLEG) }] },
+    channels: [{ kind: "telegram-dm", token: TOKEN, chat: String(OLEG), pets: ["sibling", "chair"], default: "sibling" }] };
+  await chat.setHouses([house]);
+  const base = { chat: { id: OLEG }, from: { id: OLEG, first_name: "Oleg" } };
+  api.push({ message: { ...base, message_id: 11, text: "Hello" } });
+  api.push({ message: { ...base, message_id: 12, text: "chair, help" } });
+  await waitFor(() => drafts.length === 2);
+  expect(drafts.map(item => item.pet)).toEqual(["sibling", "chair"]);
+  expect(drafts[0]!.draft.header?.channel.audience).toBe("private");
+  expect(drafts[0]!.draft.header?.from.trust).toBe("owner");
+  chat.onDelivery({ kind: "delivered", house: "work", pet: "chair", messages: [{ ...drafts[1]!.draft, id: 2, status: "delivered" }] });
+  await chat.reply("work", "chair", "Ready");
+  const reply = api.messages.find(message => String(message.text).endsWith(": Ready"))!;
+  expect(reply).toBeDefined();
+  api.push({ message: { ...base, message_id: 13, text: "More", reply_to_message: { ...base, message_id: reply.message_id } } });
+  await waitFor(() => drafts.length === 3);
+  expect(drafts[2]!.pet).toBe("chair");
+  expect(api.topics.size).toBe(0);
+  expect(api.messages).toHaveLength(1);
+  expect(api.messages.every(message => message.message_thread_id === undefined)).toBe(true);
+});
+
+test("ordinary and threaded Telegram modes cannot take the same bot chat", () => {
+  const records = new SqliteStore(":memory:"); stops.push(() => records.close());
+  const events = new EventLog(join(tempDir(), "events.jsonl"), () => {});
+  const open = openChannels({ state: records, events });
+  const common = { token: TOKEN, chat: String(OLEG), pets: [] };
+  const house: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [], people: { owners: [] },
+    channels: [{ ...common, kind: "telegram-private" }, { ...common, kind: "telegram-dm" }] };
+  expect(open([house]).get("work")!.get(`telegram-dm:${OLEG}`)!.problem).toContain("already connected");
+});
+
+test("ordinary DM Stop buttons and /stop target the default, including replies to another pet", async () => {
+  const records = new SqliteStore(":memory:"); stops.push(() => records.close());
+  const api = fakeTelegram(TOKEN); stops.push(api.stop);
+  const events = new EventLog(join(tempDir(), "events.jsonl"), () => {});
+  const drafts: MessageDraft[] = [];
+  const interrupted: string[] = [];
+  const delivery = {
+    send: (_h: string, _pet: string, draft: MessageDraft) => { drafts.push(draft); return { activity: "idle" as const, queued: 1 }; },
+    answered: () => {}, interrupt: async (_h: string, pet: string) => { interrupted.push(pet); return { status: "idle" as const }; }, reject: () => true,
+  };
+  const chat = new Chat(delivery, openChannels({ state: records, events, telegramApi: api.url }), events, new Dialogs(events), records);
+  stops.push(() => chat.stop());
+  const house: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "sibling" }, { name: "chair" }],
+    people: { owners: [{ platform: "telegram", id: String(OLEG) }] },
+    channels: [{ kind: "telegram-dm", token: TOKEN, chat: String(OLEG), pets: ["sibling", "chair"], default: "sibling" }] };
+  await chat.setHouses([house]);
+  expect(chat.canRemovePlaces("work", "chair")).toBe(false);
+  await expect(chat.removePlaces("work", "chair", "chair")).rejects.toThrow("cannot delete threads");
+  const base = { chat: { id: OLEG }, from: { id: OLEG, first_name: "Oleg" } };
+  api.push({ message: { ...base, message_id: 51, text: "chair, work" } });
+  await waitFor(() => drafts.length === 1);
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "chair", turn: "dm-turn", messages: [{ ...drafts[0]!, id: 1, status: "delivered" }] });
+  chat.onDelivery({ kind: "progress", house: "work", pet: "chair", event: { kind: "tool-started", tool: "Bash", summary: "Working", action: { kind: "run", says: "Working" }, turn: "dm-turn", call: "dm-call" } });
+  await waitFor(() => api.messages.some(m => m.reply_markup?.inline_keyboard?.[0]?.[0]?.text === "Stop"));
+  const status = api.messages.find(m => m.reply_markup?.inline_keyboard?.[0]?.[0]?.text === "Stop")!;
+  const press = (id: string, user: number) => api.push({ callback_query: { id, from: { id: user, first_name: "Person" },
+    message: { ...base, message_id: status.message_id, text: status.text, reply_markup: status.reply_markup }, data: "0" } });
+  press("guest-stop", 777);
+  await waitFor(() => api.sent("answerCallbackQuery").some(m => m.callback_query_id === "guest-stop"));
+  expect(interrupted).toEqual([]);
+  press("owner-stop", OLEG);
+  await waitFor(() => interrupted.length === 1);
+  expect(interrupted).toEqual(["sibling"]);
+  // Reloading the channel's default changes the button target without replacing its connection.
+  house.channels[0]!.default = "chair";
+  await chat.setHouses([house]);
+  press("new-default-stop", OLEG);
+  await waitFor(() => interrupted.length === 2);
+  expect(interrupted).toEqual(["sibling", "chair"]);
+  house.channels[0]!.default = "sibling";
+  await chat.setHouses([house]);
+  // A regular reply to chair must not redirect the stop command to chair.
+  await chat.reply("work", "chair", "Reply here");
+  const reply = api.messages.find(m => String(m.text).endsWith(": Reply here"))!;
+  const stopMessage = { ...base, message_id: 52, text: "/stop", reply_to_message: { ...base, message_id: reply.message_id } };
+  api.push({ message: stopMessage });
+  await waitFor(() => interrupted.length === 3);
+  expect(interrupted).toEqual(["sibling", "chair", "sibling"]);
+  expect(drafts).toHaveLength(1);
+});

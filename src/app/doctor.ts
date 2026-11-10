@@ -83,7 +83,7 @@ export async function doctor({ paths, config, agents, run, telegramApi, released
     for (const house of household.houses) {
       for (const channel of house.channels) {
         const platform = platformOf(knownChannelKinds(), channel.kind);
-        if (channel.kind !== "telegram-private" || !platform || house.people.owners.some((owner) => sameOwner(owner, { platform, id: channel.chat }))) continue;
+        if ((channel.kind !== "telegram-private" && channel.kind !== "telegram-dm") || !platform || house.people.owners.some((owner) => sameOwner(owner, { platform, id: channel.chat }))) continue;
         const text = `channel ${channelName(knownChannelKinds(), channel)} of house ${house.name}: its chat ${channel.chat} is not among the owners, so its person is a guest there (\`house owner add ${house.name} ${platform} ${channel.chat}\` if they are yours)`;
         findings.push({ ok: true, warning: true, text });
       }
@@ -91,7 +91,7 @@ export async function doctor({ paths, config, agents, run, telegramApi, released
     for (const { key, kind, pets: users } of keyUsers(pets)) findings.push({ ok: true, text: `key ${key} (${kind}): pets ${users.join(", ")}` });
     const bots = new Map<string, string>();
     for (const house of household.houses) {
-      for (const channel of house.channels) if ((channel.kind === "telegram-private" || channel.kind === "telegram-group") && !bots.has(channel.token)) bots.set(channel.token, `house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}`);
+      for (const channel of house.channels) if ((channel.kind === "telegram-private" || channel.kind === "telegram-dm" || channel.kind === "telegram-group") && !bots.has(channel.token)) bots.set(channel.token, `house ${house.name}, channel ${channelName(knownChannelKinds(), channel)}`);
     }
     for (const [token, where] of bots) findings.push(await checkBot(where, token, telegramApi, household.houses.some(house => house.channels.some(channel => channel.kind === "telegram-private" && channel.token === token))));
     for (const house of household.houses) for (const channel of house.channels.filter(channel => channel.kind === "slack-private")) {

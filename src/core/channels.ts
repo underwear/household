@@ -2,11 +2,10 @@ import type { House, Pet } from "./household";
 import { petTitle } from "./household";
 
 /**
- * The chats a house is in. A channel is one chat: a private chat with the house's bot now
- * (`telegram-private`, threads on) or a forum supergroup (`telegram-group`). Its pets are placed in it explicitly; each has its own place
- * there (a thread), and what is addressed to none of them (General) goes to the channel's default pet.
+ * The chats a house is in. Ordinary Telegram DMs share one conversation; threaded DMs and
+ * forum groups give pets dedicated topics. Unaddressed ordinary-DM messages go to the default pet.
  */
-export const CHANNEL_KINDS = ["telegram-private", "telegram-group", "slack-private"] as const;
+export const CHANNEL_KINDS = ["telegram-private", "telegram-dm", "telegram-group", "slack-private"] as const;
 export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 
 /**
@@ -205,11 +204,18 @@ export const petNames = (pet: Pet) => [...new Set([pet.name, petTitle(pet), ...(
 export function channelProblems(house: House): string[] {
   const problems: string[] = [];
   const seen = new Set<string>();
+  const privateChats = new Map<string, ChannelKind>();
   house.channels.forEach((channel, index) => {
     const at = `houses.${house.name}.channels[${index}]`;
     const key = channelKey(channel);
     if (seen.has(key)) problems.push(`${at}: the same chat as an earlier channel (${channel.kind}, chat ${channel.chat})`);
     seen.add(key);
+    if (channel.kind === "telegram-private" || channel.kind === "telegram-dm") {
+      const address = `${channel.token.split(":")[0]}/${channel.chat}`;
+      const previous = privateChats.get(address);
+      if (previous && previous !== channel.kind) problems.push(`${at}: this Telegram chat already uses ${previous}; choose one private-chat mode`);
+      privateChats.set(address, channel.kind);
+    }
     const listed = new Set<string>();
     for (const name of channel.pets) {
       if (!house.pets.some((pet) => pet.name === name)) problems.push(`${at}.pets: '${name}' is not a bot of workspace ${house.name}`);

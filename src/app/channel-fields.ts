@@ -15,7 +15,7 @@ export type ChannelChecks = ReadonlyMap<string, ReadonlyMap<string, FieldCheck>>
  */
 export function channelChecks(telegramApi?: string): ChannelChecks {
   const botToken = telegramBotToken(telegramApi);
-  return new Map([["telegram-private", new Map([["token", botToken]])], ["telegram-group", new Map([["token", telegramBotToken(telegramApi, Date.now, false)]])], ["slack-private", new Map([["token", slackTokenCheck()], ["appToken", slackAppTokenCheck]])]]);
+  return new Map([["telegram-dm", new Map([["token", telegramBotToken(telegramApi, Date.now, false)]])], ["telegram-private", new Map([["token", botToken]])], ["telegram-group", new Map([["token", telegramBotToken(telegramApi, Date.now, false)]])], ["slack-private", new Map([["token", slackTokenCheck()], ["appToken", slackAppTokenCheck]])]]);
 }
 
 const fieldOf = (channel: ChannelConfig, key: string) => (channel as unknown as Record<string, unknown>)[key];

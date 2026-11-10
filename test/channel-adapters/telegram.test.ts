@@ -1006,10 +1006,10 @@ test("a notice rewritten with a link has that one URL button and no choices", as
 test("a removed place's thread is deleted and forgotten: messages there are no one's, a new one is made if needed", async () => {
   const { api, state, received, open, listen, lines } = setup();
   const channel = listen(open());
-  expect(await channel.removePlace(sibling)).toBe(false); // no thread yet: nothing made to delete it
+  expect(await channel.removePlace!(sibling)).toBe(false); // no thread yet: nothing made to delete it
   expect(api.sent("deleteForumTopic")).toEqual([]);
   await channel.post(sibling, "hello");
-  expect(await channel.removePlace(sibling)).toBe(true);
+  expect(await channel.removePlace!(sibling)).toBe(true);
   expect(api.sent("deleteForumTopic")).toEqual([{ chat_id: OWNER, message_thread_id: 100 }]);
   expect(api.topics.has(`${OWNER}/100`)).toBe(false);
   expect(state.get(`telegram.123456.${OWNER}.thread.c1`)).toBe("");
@@ -1017,15 +1017,15 @@ test("a removed place's thread is deleted and forgotten: messages there are no o
   api.push({ message: fromOwner({ text: "late", message_thread_id: 100, is_topic_message: true }) });
   await waitFor(() => received.length === 1);
   expect(received[0]!.place).toBeUndefined();
-  expect(await channel.removePlace(sibling)).toBe(false);
+  expect(await channel.removePlace!(sibling)).toBe(false);
   // A thread Telegram no longer has counts as deleted; any other refusal is the caller's to hear.
   await channel.post(sibling, "again");
   expect(api.sent("createForumTopic")).toHaveLength(2);
   api.topics.delete(`${OWNER}/101`);
-  expect(await channel.removePlace(sibling)).toBe(true);
+  expect(await channel.removePlace!(sibling)).toBe(true);
   await channel.post(sibling, "third");
   api.fail("deleteForumTopic", 403, "Forbidden: not enough rights");
-  await expect(channel.removePlace(sibling)).rejects.toThrow("not enough rights");
+  await expect(channel.removePlace!(sibling)).rejects.toThrow("not enough rights");
   expect(state.get(`telegram.123456.${OWNER}.thread.c1`)).toBe("102");
 });
 
@@ -1118,7 +1118,7 @@ test("forum group topics coexist with private topics on one bot, route replies, 
   await waitFor(() => received.length === 1);
   expect(received[0]).toMatchObject({place:sibling.id, from:owner.from, text:"group reply"});
   await expect(group.post(sibling, "# title", undefined, "rich")).rejects.toThrow("not supported");
-  await group.removePlace(sibling);
+  await group.removePlace!(sibling);
   expect(api.topics.size).toBe(1);
   expect([...api.topics.keys()][0]).toStartWith(`${OWNER}/`);
 });
@@ -1159,7 +1159,7 @@ test("human forum topics are discovered, renamed and restored without creating o
   const reopened = new TelegramChannel(bot(),groupId,"forum","group");
   expect(reopened.listPlaces()).toEqual([{...place,title:"Renamed"}]);
   await reopened.ensurePlace(place);
-  expect(await reopened.removePlace(place)).toBe(false); // shared topic survives helper cleanup
+  expect(await reopened.removePlace!(place)).toBe(false); // shared topic survives helper cleanup
   expect(api.sent("createForumTopic")).toHaveLength(0);
   expect(api.sent("deleteForumTopic")).toHaveLength(0);
   await group.take({update_id:5,message:msg({message_thread_id:1,text:"General"})});
@@ -1180,4 +1180,36 @@ test("topic creation capability is optional; created and offline-discovered topi
   expect(reopened.listPlaces()).toHaveLength(2);
   expect(api.sent("createForumTopic")).toHaveLength(1);
   expect(await reopened.placeLink(created)).toBe("https://t.me/c/1234567890/100");
+});
+
+test("ordinary DM keeps replies, files, buttons and status in the chat without topic operations", async () => {
+  const { api, bot, listen, received } = setup();
+  const channel = new TelegramChannel(bot(), OWNER, "plain DM", "dm");
+  stops.push(() => channel.stop());
+  listen(channel);
+  expect(channel.ignoreInboxMessages).toBe(false);
+  expect(channel.inInbox(sibling)).toBe(true);
+  await channel.ensurePlace(sibling);
+  await channel.retitle({ ...sibling, title: "Renamed" });
+  expect(await channel.placeLink(sibling)).toBeUndefined();
+  expect(channel.removePlace).toBeUndefined();
+  expect(channel.stopDefaultPet).toBe(true);
+  const [post] = await channel.post(sibling, "<b>Hello</b>", [["Yes"]]);
+  expect(api.sent("sendMessage").at(-1)).toMatchObject({
+    text: "🐾 Sibling: Hello",
+    entities: [{ type: "bold", offset: "🐾 Sibling: ".length, length: 5 }],
+  });
+  await channel.editPost(sibling, post!, "<i>Updated</i>");
+  expect(api.sent("editMessageText").at(-1)).toMatchObject({ text: "🐾 Sibling: Updated" });
+  await channel.post(sibling, "# Report", undefined, "rich");
+  await channel.sendAttachment(sibling, { kind: "document", name: "hello.txt", bytes: new TextEncoder().encode("hello") });
+  await channel.typing(sibling, new AbortController().signal);
+  await channel.postStatus(sibling, { state: "working", line: "Working", stop: "Stop" });
+  api.push({ message: fromOwner({ text: "hello", reply_to_message: { message_id: Number(post!.split(".").at(-1)), chat: { id: OWNER } } }, 71) });
+  api.push({ callback_query: { id: "dm-choice", from: OLEG, message: { ...fromOwner({ text: "🐾 Sibling: Hello", reply_markup: { inline_keyboard: [[{ text: "Yes", callback_data: "0" }]] } }), message_id: Number(post!.split(".").at(-1)) }, data: "0" } });
+  await waitFor(() => received.length === 2);
+  expect(received[0]).toMatchObject({ kind: "text", text: "hello", replyTo: post });
+  expect(received[1]).toMatchObject({ kind: "choice", answersTo: post, label: "Yes" });
+  expect(api.calls.some(call => /ForumTopic/.test(call.method))).toBe(false);
+  expect(api.calls.every(call => call.params.message_thread_id === undefined)).toBe(true);
 });

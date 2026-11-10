@@ -189,6 +189,7 @@ const telegramPrivate = z.strictObject({
   pets: list(petName),
   default: petName.optional(),
 });
+const telegramDm = telegramPrivate.extend({ kind: z.literal("telegram-dm") });
 const telegramGroup = telegramPrivate.extend({
   kind: z.literal("telegram-group"),
   chat: z.union([z.string(), z.number().int().safe()]).transform(String).refine(value => /^-100[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)), "must be a Telegram supergroup id (-100…)"),
@@ -198,7 +199,7 @@ const slackPrivate = telegramPrivate.extend({
   chat: z.string().regex(/^T[A-Z0-9]+:D[A-Z0-9]+$/, "Slack private address must be T…:D… (workspace:DM)"),
   appToken: credential("a Socket Mode app token"),
 });
-const kinds = z.discriminatedUnion("kind", [telegramPrivate, telegramGroup, slackPrivate]);
+const kinds = z.discriminatedUnion("kind", [telegramPrivate, telegramDm, telegramGroup, slackPrivate]);
 const channel = kinds;
 
 const houseNames = z.array(name).min(1).optional();

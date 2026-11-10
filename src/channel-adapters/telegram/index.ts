@@ -12,7 +12,7 @@ import { renderStatus } from "./status";
 import { inboundMessage, messageIdOf, postRef, senderRef, type Parsed, type Update, type TelegramMessage } from "./updates";
 
 export { TelegramBot, type TelegramBotOptions, type TelegramState } from "./bot";
-export { isTelegramId, telegram, telegramPrivate, telegramGroup } from "./kind";
+export { isTelegramId, telegram, telegramPrivate, telegramDm, telegramGroup } from "./kind";
 export { getMe, isBotToken, isRefusedToken, telegramBotToken, type BotInfo } from "./token";
 export { firstPrivateContact, type Contact } from "./first-contact";
 
@@ -47,15 +47,18 @@ const NO_PREVIEW = { link_preview_options: { is_disabled: true } };
 const looksLikeNotice = (text: string) => /^[^\p{L}\p{N}]*(⚠|household)/iu.test(text);
 
 /**
- * A private bot chat in Threaded Mode or a forum supergroup: each pet's place
+ * A plain private bot chat, a private chat in Threaded Mode or a forum supergroup: each pet's place
  * has a thread named with its title, made by the bot the first time it is needed (it cannot be before the person
  * pressed Start), kept by the place's id, renamed when its title changes (the state keeps the last title Telegram
  * accepted); General is the inbox. The bot's poller (`TelegramBot`, shared by the
- * bot's channels) hands this chat's updates over. Pet HTML is decoded into native entities, cut to Telegram's limit.
+ * bot's channels) hands this chat's updates over. Plain DMs share one physical chat and prefix pet replies with their titles. Pet HTML is decoded into native entities, cut to Telegram's limit.
  */
 export class TelegramChannel implements Channel, BotChat {
-  readonly inbox = "General";
-  readonly ignoreInboxMessages = true;
+  get inbox(): string { return this.mode === "dm" ? "Chat" : "General"; }
+  get ignoreInboxMessages(): boolean { return this.mode !== "dm"; }
+  get stopDefaultPet(): boolean { return this.mode === "dm"; }
+  readonly removePlace?: (place: Place) => Promise<boolean>;
+  inInbox(place: Place): boolean { return this.mode === "dm" || place.kind === "house-inbox"; }
   readonly createPlace?: (title: string) => Promise<Place>;
   private onMessage?: (message: InboundMessage) => Promise<string | void>;
   /** Threads being created, so that posts at the same moment make one. */
@@ -81,8 +84,9 @@ export class TelegramChannel implements Channel, BotChat {
     readonly chat: number,
     /** For log lines, e.g. `house work DM`. */
     private readonly name: string,
-    private readonly mode: "private" | "group" = "private",
+    private readonly mode: "private" | "group" | "dm" = "private",
   ) {
+    if (mode !== "dm") this.removePlace = (place) => this.removeThread(place);
     this.prefix = `telegram.${bot.id}.${chat}`;
     if (mode === "group") this.createPlace = async title => {
       if (!title.trim() || title.trim().length > 128) throw new Error("Topic title must contain 1–128 characters");
@@ -152,7 +156,7 @@ export class TelegramChannel implements Channel, BotChat {
   post(place: Place, text: string, choices?: Choices, format: "regular" | "rich" = "regular"): Promise<PostRef[]> {
     if (format === "rich") return this.postRich(place, text, choices);
     const pieces = splitFormatted(telegramHtml(text), MAX_TEXT - place.title.length - 2).map(piece => {
-      if (!looksLikeNotice(piece.text)) return piece;
+      if (this.mode !== "dm" && !looksLikeNotice(piece.text)) return piece;
       const prefix = `${place.title}: `;
       return { text: prefix + piece.text, entities: piece.entities.map(entity => ({ ...entity, offset: entity.offset + prefix.length })) };
     });
@@ -181,7 +185,8 @@ export class TelegramChannel implements Channel, BotChat {
       shown = { text: markdown, rich: true };
     } else {
       const parsed = telegramHtml(text);
-      const prefix = looksLikeNotice(parsed.text) ? `${place.title}: ` : "";
+      if (!parsed.text.trim()) throw new Error("The edited text is empty");
+      const prefix = this.mode === "dm" || looksLikeNotice(parsed.text) ? `${place.title}: ` : "";
       const rendered = prefix + parsed.text;
       if (!rendered.trim()) throw new Error("The edited text is empty");
       if (rendered.length > MAX_TEXT) throw new Error("The edited message exceeds Telegram's 4096 character limit; send a new reply instead");
@@ -216,7 +221,7 @@ export class TelegramChannel implements Channel, BotChat {
     if (kind === "video" && !/\.(mp4|m4v|mov)$/i.test(name)) {
       throw new Error("Videos play in the chat as MP4 (H.264 + AAC); convert the video or send it as a document");
     }
-    const caption = attachment.caption && looksLikeNotice(attachment.caption) ? `${place.title}: ${attachment.caption}` : attachment.caption;
+    const caption = this.mode === "dm" ? `${place.title}: ${attachment.caption ?? ""}`.trimEnd() : attachment.caption && looksLikeNotice(attachment.caption) ? `${place.title}: ${attachment.caption}` : attachment.caption;
     if ((caption?.length ?? 0) > 1024) throw new Error("Telegram attachment captions must be at most 1024 characters");
     const where = await this.where(place);
     const form = new FormData();
@@ -373,13 +378,13 @@ export class TelegramChannel implements Channel, BotChat {
    * under another title (see `rename`); a thread made later gets it anyway.
    */
   retitle(place: Place): Promise<void> {
-    if (place.kind !== "pet-thread") return Promise.resolve();
+    if (this.mode === "dm" || place.kind !== "pet-thread") return Promise.resolve();
     this.wanted.set(place.id, place.title);
     return this.queueRename(place.id);
   }
 
   async ensurePlace(place: Place): Promise<void> {
-    if (place.kind === "house-inbox") return;
+    if (this.mode === "dm" || place.kind === "house-inbox") return;
     this.wanted.set(place.id, place.title);
     await this.thread(place);
   }
@@ -391,7 +396,7 @@ export class TelegramChannel implements Channel, BotChat {
    * `t.me/<bot>/<message>` goes to General, and `t.me/c/…` is refused for a private chat.
    */
   async placeLink(place: Place): Promise<string | undefined> {
-    if (place.kind === "house-inbox") return undefined;
+    if (this.mode === "dm" || place.kind === "house-inbox") return undefined;
     if (this.mode === "group") return `https://t.me/c/${String(this.chat).slice(4)}/${await this.thread(place)}`;
     const [thread, username] = await Promise.all([this.thread(place), this.bot.username()]);
     return username ? `https://t.me/${username}/${thread}` : undefined;
@@ -401,7 +406,7 @@ export class TelegramChannel implements Channel, BotChat {
    * deleteForumTopic (works in a private chat with topics), then the place's thread is forgotten: a place of the
    * same id later would get a new one. A thread Telegram no longer has counts as deleted.
    */
-  async removePlace(place: Place): Promise<boolean> {
+  private async removeThread(place: Place): Promise<boolean> {
     if (place.kind !== "pet-thread") return false;
     await this.creating.get(place.id)?.catch(() => {});
     const { state, log } = this.bot.options;
@@ -529,7 +534,7 @@ export class TelegramChannel implements Channel, BotChat {
 
   /** Where in the chat a place is: its thread, or General (no thread) for the inbox. */
   private async where(place: Place): Promise<{ message_thread_id?: number }> {
-    return place.kind === "house-inbox" ? {} : { message_thread_id: await this.thread(place) };
+    return this.mode === "dm" || place.kind === "house-inbox" ? {} : { message_thread_id: await this.thread(place) };
   }
 
   private thread(place: Place): Promise<number> {
@@ -620,7 +625,7 @@ export class TelegramChannel implements Channel, BotChat {
     let answer: string | void = undefined;
     try {
       this.discoverTopic(update.message ?? update.edited_message ?? update.callback_query?.message);
-      parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => state.get(this.keys.place(thread)) || undefined });
+      parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => this.mode === "dm" ? undefined : state.get(this.keys.place(thread)) || undefined });
       if (parsed && "skipped" in parsed) {
         answer = parsed.answer;
         log.info(`telegram ${name}: update ${update.update_id} skipped (${parsed.skipped})`);
