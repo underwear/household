@@ -28,10 +28,10 @@ and lets you talk to it from the messenger you already use.
 ## ✨ Why Household
 
 - 🔒 **Its own microVM.** Every bot runs in a separate sandbox, away from your machine and from the other bots.
-- 🌐 **Network on your terms.** A bot reaches only the hosts the workspace allows, and asks you when it needs one more.
+- 🧰 **Build your assistants on real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
+- 🌐 **Restricted network.** A bot reaches only the hosts the workspace allows, and asks you when it needs one more.
 - 🔑 **Secrets it never sees.** Each workspace owns its secrets, managed in its **Secrets** page. The bot holds only placeholders; Household puts the real keys into requests on their way out, to the hosts you chose.
 - 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find this movie on a torrent site" sends a scout onto untrusted sites without exposing the bot’s files or secrets.
-- 🧰 **Real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
 - 📬 **Wakes up on its own.** Mail, feeds and alerts trigger your bots.
 
 ### Supported harnesses and messengers
