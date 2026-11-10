@@ -2,16 +2,34 @@ import { codexModelOptions, acceptsCodexReasoningEffort } from "./models";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { codexPermissions } from "./modes";
 
 type Packet = { id?: string | number; method?: string; params?: any; result?: any; error?: { code: number; message: string } };
 type BridgeOptions = { command?: string[]; socket?: string; home?: string; env?: Record<string, string | undefined>; post?: (packet: Packet, signal?: AbortSignal) => Promise<any> };
 
+/**
+ * Where a failed bridge leaves its reason, next to its socket: the socket closes as the bridge stops, and the control
+ * script reads this instead, so the host's readiness check can say why the bot is down rather than nothing.
+ */
+export const failureFileFor = (socket: string) => join(dirname(socket), "household-codex.failure");
+
+/** Startup failures name their step and kind only; native messages can carry account metadata. */
+const OWN_STARTUP_ERRORS = ["Unexpected authentication mode", "Unsupported Codex reasoning effort for selected model", "Unexpected model/provider",
+  "Codex model discovery timed out", "Invalid model catalog", "Invalid model cursor", "Codex request timed out", "Codex process disconnected", "Codex unavailable"];
+function startupFailure(step: string, error: unknown): string {
+  const why = error instanceof CodexRequestError ? `Codex rejected the request (code ${error.code})`
+    : error instanceof Error && OWN_STARTUP_ERRORS.includes(error.message) ? error.message : "unexpected error";
+  return `Codex startup failed while ${step}: ${why}`;
+}
+
 /** Keep native error details private; only this precise local resume failure permits a new thread. */
 class CodexRequestError extends Error {
   readonly missingRollout: boolean;
+  readonly code: number;
   constructor(error: { code: number; message: string }) {
     super("Codex rejected the request");
+    this.code = Number.isInteger(error.code) ? error.code : 0;
     this.missingRollout = error.code === -32600 && /^no rollout found for thread id [a-zA-Z0-9-]+$/.test(error.message);
   }
 }
@@ -21,6 +39,7 @@ export async function runBridge(options: BridgeOptions = {}) {
   const env = options.env ?? process.env;
   const home = options.home ?? env.HOME ?? "/home/agent";
   const socket = options.socket ?? "/tmp/household-codex.sock";
+  const failureFile = failureFileFor(socket);
   const model = env.HOUSEHOLD_MODEL ?? "gpt-6.1-terra";
   const reasoningEffort = env.HOUSEHOLD_REASONING_EFFORT;
   if (reasoningEffort !== undefined && !acceptsCodexReasoningEffort(model, reasoningEffort)) throw new Error("Unsupported Codex reasoning effort");
@@ -32,6 +51,7 @@ export async function runBridge(options: BridgeOptions = {}) {
   if (!env.HOUSEHOLD_WORKSPACE) await mkdir(workspace, { recursive: true });
   await mkdir(codexHome, { recursive: true, mode: 0o700 });
   await rm(socket, { force: true });
+  await rm(failureFile, { force: true });
   const permissions = codexPermissions(env.HOUSEHOLD_PERMISSION_MODE);
   const config = { ...(reasoningEffort === undefined ? {} : { config: { model_reasoning_effort: reasoningEffort } }), model, modelProvider: "openai", cwd: workspace, ...permissions,
     developerInstructions: env.HOUSEHOLD_INSTRUCTIONS ?? "",
@@ -144,10 +164,14 @@ export async function runBridge(options: BridgeOptions = {}) {
     }
     if (["thread/compacted", "item/started", "item/completed", "turn/completed", "item/autoApprovalReview/started", "item/autoApprovalReview/completed"].includes(packet.method ?? "")) void emit(packet);
   });
+  // In order: a disconnect noticed mid-startup is overwritten by the startup step that it failed.
+  let recording = Promise.resolve();
+  const recordFailure = (reason: string) => recording = recording.then(() => writeFile(failureFile, JSON.stringify({ failure: reason }) + "\n", { mode: 0o600 })).catch(() => {});
   const failed = () => {
     markClosed();
     if (stopped) return;
     failure = "Codex process disconnected"; ready = false; closeDialogs();
+    void recordFailure(failure);
     for (const request of pending.values()) { clearTimeout(request.timer); request.reject(new Error(failure)); } pending.clear();
     void emit({ method: "household/failed", params: {} });
   };
@@ -241,19 +265,24 @@ export async function runBridge(options: BridgeOptions = {}) {
     await Promise.race([new Promise(resolve => child.exitCode !== null || child.signalCode !== null || !child.pid ? resolve(undefined) : child.once("close", resolve)), Bun.sleep(1000)]);
     if (child.pid && child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   };
+  let step = "starting Codex";
   try {
     await rpc("initialize", { clientInfo: { name: "household", title: "Household", version: "0.1.0" }, capabilities: { experimentalApi: true } });
     send({ method: "initialized", params: {} });
+    step = "signing in";
     await rpc("account/login/start", apiKey ? { type: "apiKey", apiKey: token } : { type: "chatgptAuthTokens", accessToken: token, chatgptAccountId: account });
+    step = "reading the account";
     const auth = await rpc("account/read", { refreshToken: false });
     if (auth.account?.type !== (apiKey ? "apiKey" : "chatgpt")) throw new Error("Unexpected authentication mode");
     if (reasoningEffort !== undefined) {
+      step = "checking the model's reasoning efforts";
       const selected = (await listModels()).find(option => option.id === model);
       if (selected?.supportedReasoningEfforts && !selected.supportedReasoningEfforts.some(option => option.reasoningEffort === reasoningEffort)) throw new Error("Unsupported Codex reasoning effort for selected model");
     }
     let previous = ""; try { previous = (await readFile(threadFile, "utf8")).trim(); } catch {}
     let result;
     if (previous) {
+      step = "resuming the saved conversation";
       try { result = await rpc("thread/resume", { ...config, threadId: previous, excludeTurns: true }); }
       catch (error) {
         // Codex persists a new thread only after its first turn. Restarting before that leaves a valid
@@ -262,18 +291,23 @@ export async function runBridge(options: BridgeOptions = {}) {
         previous = "";
       }
     }
-    if (!previous) result = await rpc("thread/start", config);
+    if (!previous) { step = "starting a new conversation"; result = await rpc("thread/start", config); }
     if (result.model !== model || result.thread.modelProvider !== "openai") throw new Error("Unexpected model/provider");
     threadId = result.thread.id;
+    step = "saving the conversation pointer";
     await writeFile(`${threadFile}.tmp`, threadId + "\n", { mode: 0o600 }); await rename(`${threadFile}.tmp`, threadFile);
     await emit({ method: "household/sessionStarted", params: { model, continues: !!previous } }); ready = true;
-  } catch { failure = "Codex startup failed (check authentication, gateway and MCP availability)"; await stop(); }
-  return { stop, socket, closed, get ready() { return ready; } };
+  } catch (error) {
+    failure = startupFailure(step, error);
+    await recordFailure(failure);
+    await stop();
+  }
+  return { stop, socket, closed, get ready() { return ready; }, get failure() { return failure; } };
 }
 
 if (import.meta.main) {
   const bridge = await runBridge();
-  if (!bridge.ready) { console.error("Codex startup failed; the bot stopped"); process.exit(1); }
+  if (!bridge.ready) { console.error(`${bridge.failure ?? "Codex startup failed"}; the bot stopped`); process.exit(1); }
   let shuttingDown = false;
   void bridge.closed.then(async () => { if (!shuttingDown) { await bridge.stop(); process.exit(1); } });
   const shutdown = () => { shuttingDown = true; void bridge.stop().then(() => process.exit(0)); };

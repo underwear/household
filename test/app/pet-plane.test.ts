@@ -207,6 +207,20 @@ test("a pet that never gets ready is reported with what the check saw", async ()
   ]);
 });
 
+test("an agent whose process exits is reported at once, with the reason it left behind", async () => {
+  const { runtime, plane } = setup(60_000);
+  let checks = 0;
+  // The first check finds nothing; by the next the agent has written why it stopped (the codex bridge's failure file).
+  runtime.output = () => checks++ === 0 ? "" : "Codex startup failed while resuming the saved conversation";
+  const { started } = await plane.reconcile([pets[0]!]);
+  runtime.containers.get("household.work.sibling")!.state = "exited";
+  const before = Date.now();
+  expect(await plane.awaitReady(started)).toEqual([
+    { house: "work", pet: "sibling", ready: false, exited: true, output: "Codex startup failed while resuming the saved conversation" },
+  ]);
+  expect(Date.now() - before).toBeLessThan(2000);
+});
+
 test("a ready pet in another permission mode than its own is reported with the agent's warning", async () => {
   const { plane } = setup();
   const { started } = await plane.reconcile([{ ...pets[0]!, mode: "careful" }]);

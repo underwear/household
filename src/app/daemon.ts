@@ -81,7 +81,7 @@ import { HostNetworkPlane } from "./host-network-plane";
 import { KeyAllowances } from "./key-allowances";
 import { runtimeServices } from "./runtime-services";
 import { NetworkRequests } from "./network-requests";
-import { PetPlane, type PetStatus } from "./pet-plane";
+import { PetPlane, type PetStart, type PetStatus } from "./pet-plane";
 import { REPO_ROOT, VERSION } from "./version";
 import { COMPILED, releaseShare } from "../infra/release";
 import { WebAuth } from "./web-auth";
@@ -440,9 +440,11 @@ export async function startDaemon(deps: DaemonDeps) {
       const name = `bot ${start.house}/${start.pet}`;
       if (start.ready) events.info(`${name} started`);
       if (start.warning) events.error(`${name}: ${start.warning}`);
-      else if (!start.ready) events.error(`${name} started but is not ready; it shows: ${compact(start.output ?? "")}`);
+      else if (!start.ready) events.error(`${name} ${notReady(start)}`);
       const title = lifecycleTitle(start.house, start.pet);
-      await chat.notice(start.house, start.pet, start.ready ? `${title} started.` : `${title}: the VM is up, but the agent is not responding. \`house pet attach\``);
+      await chat.notice(start.house, start.pet, start.ready ? `${title} started.` : start.exited
+        ? `${title}: the VM is up, but the agent stopped while starting${compact(start.output ?? "") ? ` (${compact(start.output!)})` : ""}. \`house bot restart ${start.house} ${start.pet}\``
+        : `${title}: the VM is up, but the agent is not responding. \`house bot attach ${start.house} ${start.pet}\``);
       const parent = sideworkers.worker(start.house, start.pet)?.parent;
       const setupResult = pets.environmentSetupResult(start.house, start.pet);
       if (start.ready && setupResult?.status === "failed" && setupResult.attempted !== false) {
@@ -740,6 +742,14 @@ export async function startDaemon(deps: DaemonDeps) {
 /** Multi-line output as one log-friendly line. */
 function compact(output: string): string {
   return output.split("\n").map((line) => line.trim()).filter(Boolean).join(" | ").slice(0, 400);
+}
+
+/** The log line's tail for a pet that did not get ready: what its check saw, never an empty "it shows:". */
+export function notReady(start: Pick<PetStart, "house" | "pet" | "output" | "exited">): string {
+  const shown = compact(start.output ?? "");
+  const restart = `\`house bot restart ${start.house} ${start.pet}\``;
+  if (start.exited) return `started, but its agent exited before it got ready${shown ? `: ${shown}` : " without saying why"}; ${restart} starts it again`;
+  return `started but is not ready; ${shown ? `it shows: ${shown}` : "its readiness check saw nothing"}`;
 }
 
 

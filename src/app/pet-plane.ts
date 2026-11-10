@@ -84,6 +84,8 @@ export interface PetStart {
   output?: string;
   /** What the agent's readiness check found amiss, though it is ready (another permission mode), for the log. */
   warning?: string;
+  /** The agent's process ended before it got ready: the VM is up, but nothing in it will answer. */
+  exited?: true;
 }
 
 export interface PetTransport {
@@ -402,13 +404,19 @@ export class PetPlane {
     return { spec, identity, launch };
   }
 
-  private async waitReady({ house, pet, agent, mode }: PlacedPet): Promise<{ ready: boolean; output?: string; warning?: string }> {
+  private async waitReady({ house, pet, agent, mode }: PlacedPet): Promise<Omit<PetStart, "house" | "pet">> {
     const exec = this.exec(house, pet);
     const deadline = Date.now() + this.readyTimeoutMs;
     for (;;) {
       const { ready, output, warning } = await agent.isReady(exec, mode);
       if (ready) return { ready, ...(warning ? { warning } : {}) };
       if (Date.now() > deadline || !this.waiting) return { ready, output };
+      // An agent whose process is over will not get ready: say so now, with what it left behind (read again, since
+      // it may have written its reason as it went), instead of polling it for the rest of the deadline.
+      if ((await this.runtime.container(petContainer(house, pet)).catch(() => undefined))?.state === "exited") {
+        const last = await agent.isReady(exec, mode).catch(() => ({ output: undefined }));
+        return { ready: false, exited: true, ...(last.output ?? output ? { output: last.output ?? output } : {}) };
+      }
       await Bun.sleep(500);
     }
   }

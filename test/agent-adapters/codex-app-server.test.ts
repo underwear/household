@@ -6,7 +6,7 @@ import { codexAppServer, PLACEHOLDER_API_KEY } from "../../src/agent-adapters/co
 import { codexAccountId, createPlaceholderJwt } from "../../src/agent-adapters/codex-app-server/auth";
 import { askOf, answerFor } from "../../src/agent-adapters/codex-app-server/dialogs";
 import { translatePacket } from "../../src/agent-adapters/codex-app-server/translate";
-import { runBridge } from "../../src/agent-adapters/codex-app-server/entrypoint";
+import { failureFileFor, runBridge } from "../../src/agent-adapters/codex-app-server/entrypoint";
 import { CODEX_MODES, codexPermissions } from "../../src/agent-adapters/codex-app-server/modes";
 import { agentOf } from "../../src/app/agents";
 
@@ -353,4 +353,37 @@ if(p.method==='thread/start')reply({model:p.params.model,thread:{id:'new-thread'
   expect(calls.includes("thread/start")).toBe(missing);
   expect((await Bun.file(join(root, ".household-codex-thread")).text()).trim()).toBe(missing ? "new-thread" : "old-thread");
   expect(packets.some(p => p.method === "household/sessionStarted" && p.params.continues === false)).toBe(missing);
+});
+
+test("a failed startup names its step, keeps native details private and leaves its reason for the status check", async () => {
+  const root = await mkdtemp(join(tmpdir(), "household-codex-failure-"));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const fake = join(root, "fake.mjs");
+  await writeFile(join(root, ".household-codex-thread"), "old-thread\n");
+  await writeFile(fake, `import {createInterface} from 'node:readline';
+const out=p=>process.stdout.write(JSON.stringify(p)+'\\n');
+createInterface({input:process.stdin}).on('line',line=>{const p=JSON.parse(line);const reply=result=>out({id:p.id,result});
+if(p.method==='initialize')reply({});
+if(p.method==='account/login/start')reply({});
+if(p.method==='account/read')reply({account:{type:'apiKey'}});
+if(p.method==='thread/resume')out({id:p.id,error:{code:-32603,message:'thread locked by account user@example.com'}});
+});`);
+  const bridge = await runBridge({ command: [process.execPath, fake], socket: join(root, "control.sock"), home: root,
+    env: { PATH: process.env.PATH, HOUSEHOLD_MODEL: "gpt-6.1-sol", HOUSEHOLD_CODEX_AUTH: "apiKey", HOUSEHOLD_CODEX_TOKEN: "placeholder", HOUSEHOLD_MCP_URL: "http://unused/mcp" },
+    post: async () => ({}),
+  });
+  cleanups.push(() => bridge.stop());
+  const reason = "Codex startup failed while resuming the saved conversation: Codex rejected the request (code -32603)";
+  expect(bridge.ready).toBe(false);
+  expect(bridge.failure).toBe(reason);
+  // The socket is gone with the bridge; the reason stays where the control script looks.
+  await expect(fetch("http://local/status", { unix: bridge.socket })).rejects.toThrow();
+  expect(await Bun.file(failureFileFor(bridge.socket)).json()).toEqual({ failure: reason });
+});
+
+test("a failed Codex bridge answers status with its reason instead of nothing", async () => {
+  const status = { ready: false, failure: "Codex startup failed while signing in: Codex request timed out" };
+  const exec = async () => ({ ok: true, output: JSON.stringify(status) });
+  expect(await codexAppServer.isReady(exec)).toEqual({ ready: false, output: status.failure });
+  expect(await codexAppServer.dialogVisible(exec)).toBe(true);
 });

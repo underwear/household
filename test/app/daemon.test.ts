@@ -2,7 +2,7 @@ import { telegramPrivate } from "../../src/channel-adapters/telegram/kind";
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { startDaemon, type ApiAnswer, type DashboardLink, type ReloadReport, type StatusReport } from "../../src/app/daemon";
+import { notReady, startDaemon, type ApiAnswer, type DashboardLink, type ReloadReport, type StatusReport } from "../../src/app/daemon";
 import { knownAgents } from "../../src/app/agents";
 import { openChannels } from "../../src/app/channels";
 import { ConfigStore } from "../../src/infra/config-store";
@@ -1026,4 +1026,13 @@ test("startup keeps management available for legacy overcommit with disabled pet
     const closed = await callControl<{status: number}>(paths.socket, "/api", {method: "DELETE", path: "/api/houses/work/sideworkers/sw-one"});
     expect(closed!.status).toBe(200);
   } finally { await daemon.stop(); }
+});
+
+test("a bot that did not get ready is logged with what it showed, never an empty \"it shows:\"", () => {
+  const pet = { house: "work", pet: "sibling" };
+  expect(notReady({ ...pet, output: "Trust this folder?\n\n  [y/n]" })).toBe("started but is not ready; it shows: Trust this folder? | [y/n]");
+  expect(notReady({ ...pet, output: "" })).toBe("started but is not ready; its readiness check saw nothing");
+  expect(notReady({ ...pet, exited: true, output: "Codex startup failed while signing in: Codex request timed out" }))
+    .toBe("started, but its agent exited before it got ready: Codex startup failed while signing in: Codex request timed out; `house bot restart work sibling` starts it again");
+  expect(notReady({ ...pet, exited: true })).toBe("started, but its agent exited before it got ready without saying why; `house bot restart work sibling` starts it again");
 });
