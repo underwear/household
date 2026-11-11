@@ -88,7 +88,7 @@ import { WebAuth } from "./web-auth";
 import { webRoutes, type ApiHandler } from "./web-routes";
 import { Onboarding } from "./onboarding";
 import { importCodex, localCodexLogin, startDeviceLogin } from "./codex-login";
-import { firstPrivateContact } from "../channel-adapters/telegram/first-contact";
+import { checkGroup, watchSetup } from "../channel-adapters/telegram/first-contact";
 import { readPetLog } from "./pet-logs";
 import { backUpBeforeMigrating, migrateHousehold } from "./migrations";
 
@@ -534,7 +534,8 @@ export async function startDaemon(deps: DaemonDeps) {
     localCodex: () => localCodexLogin(),
     importCodex: (name) => importCodex(paths, config, name),
     deviceLogin: (name) => startDeviceLogin(paths, config, name),
-    firstContact: (token, signal, timeoutMs) => firstPrivateContact(token, { apiBase: deps.telegramApi, signal, timeoutMs }),
+    watch: (token, options) => watchSetup(token, { ...options, apiBase: deps.telegramApi }),
+    checkGroup: (token, chat) => checkGroup(token, chat, deps.telegramApi),
     apply: applyConfig,
   });
   const auth = new WebAuth(deps.sessions);

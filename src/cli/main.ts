@@ -24,11 +24,9 @@ import { MORE_USAGE, runMore } from "./commands";
 import { connectCodex, importCodex, localCodexLogin } from "../app/codex-login";
 import { onboard } from "./onboard";
 import { resolveSlackDm } from "../channel-adapters/slack/setup";
-import { PetInstructions } from "../infra/pet-instructions";
-import { homesDirectory } from "../app/runtime-services";
 import { update } from "./update";
 import { consoleTerminal } from "./terminal";
-import { firstPrivateContact, getMe } from "../channel-adapters/telegram";
+import { checkGroup, getMe, watchSetup } from "../channel-adapters/telegram";
 import { hostCapacity } from "../infra/host";
 import { MICROSANDBOX_VERSION } from "../infra/microsandbox-runtime";
 import { CAPABILITY_USAGE, FEATURES_USAGE, SCOUT_USAGE, groupUsage, runScouts } from "./scouts";
@@ -137,15 +135,8 @@ async function startOnboarding(paths: Paths, config: ConfigStore): Promise<void>
       const found = await resolveSlackDm(checked.own.token!, member);
       return { ...checked, chat: found.chat, owner: found.owner };
     },
-    async addInstructions(house, pet, text) {
-      const configured = findHouse(await config.load(), house)?.pets.find((each) => each.name === pet);
-      const adapter = knownAgents().get(configured?.agent ?? DEFAULT_AGENT);
-      if (!adapter?.instructionsFile) throw new HouseholdError("its harness keeps no instructions file");
-      const store = new PetInstructions(homesDirectory(paths));
-      const file = await store.read(house, pet, adapter.instructionsFile, adapter.instructionOverrides);
-      await store.write(house, pet, adapter.instructionsFile, adapter.instructionOverrides ?? [], `${file.content.trimEnd()}\n\n${text}\n`, file.revision);
-    },
-    firstContact: (token) => firstPrivateContact(token, { apiBase: telegramApi }),
+    watch: (token, options) => watchSetup(token, { ...options, apiBase: telegramApi }),
+    checkGroup: (token, chat) => checkGroup(token, chat, telegramApi),
     codexLogin: (name) => connectCodex(paths, config, name),
     localCodex: () => localCodexLogin(),
     codexImport: async (name) => { await importCodex(paths, config, name); },

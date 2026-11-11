@@ -7,20 +7,18 @@ import { ChoiceList, StepperField, Switch, TextField } from "./fields";
 import { Cell, Cluster, FormGrid, List, ListRow, Page, Panel, Stack } from "./layout";
 import { Link } from "./link";
 import { petState } from "./bot-state";
-import { BOT_PRESETS, CHANNELS, KEY_METHODS, PROVIDERS, SLACK_MEMBER_STEPS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, guidePieces, presetInstructions, suggestedBudget, type BotPreset, type ChannelOption, type KeyMethod, type Provider } from "../../src/core/onboarding";
+import { CHANNELS, DEFAULT_BOT, KEY_METHODS, PROVIDERS, SLACK_MEMBER_STEPS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, defaultBotSize, guidePieces, suggestedBudget, type ChannelOption, type KeyMethod, type Provider } from "../../src/core/onboarding";
 
 /** The setup's steps, each with its own screens (listed under it in the stepper while it is the current one). */
 export const SETUP_STEPS = [
   { id: "model", label: "Model", subs: ["Provider", "Sign-in", "Connect"] },
   { id: "workspace", label: "Workspace", subs: [] },
-  { id: "channel", label: "Channel", subs: ["Messenger", "Setup", "Owner"] },
-  { id: "bot", label: "Bot", subs: ["Purpose", "Details"] },
+  { id: "channel", label: "Channel", subs: ["Messenger", "Setup", "Check"] },
   { id: "review", label: "Review", subs: [] },
 ] as const;
 type StepId = (typeof SETUP_STEPS)[number]["id"];
 
 const NAME = /^[a-z][a-z0-9-]{0,30}$/;
-const BOT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
 
 const freeName = (taken: string[], base: string) => {
   if (!taken.includes(base)) return base;
@@ -38,12 +36,12 @@ export interface ChannelDraft {
   label: string;
   /** A Telegram bot's @username. */
   bot?: string;
-  telegram?: { listen: string; owner: { id: string; name?: string }; group?: string };
+  /** The bot watched (`listen`), its owner, and for a group the group found (or typed, for a bot that could not be watched). */
+  telegram?: { listen: string; owner: { id: string; name?: string }; group?: { id: string; title: string } };
   slack?: { token: string; appToken: string; member: string; owner: string };
 }
-export interface BotDraft { preset: BotPreset; name: string; title: string; emoji: string; cpus: number; memoryMiB: number; scouts: boolean; sideworkers: boolean }
 /** Everything chosen so far; a channel of null was skipped. */
-export interface SetupDraft { key?: KeyDraft; workspace?: WorkspaceDraft; channel?: ChannelDraft | null; bot?: BotDraft }
+export interface SetupDraft { key?: KeyDraft; workspace?: WorkspaceDraft; channel?: ChannelDraft | null }
 
 export interface SetupProps {
   houses: WorkspaceView[];
@@ -51,7 +49,6 @@ export interface SetupProps {
   agents: { name: string }[];
   host: HostCapacity;
   refresh: () => Promise<void>;
-  notify: (text: string, warning?: boolean) => void;
   /** Where to start (tests). */
   initial?: SetupDraft;
 }
@@ -59,14 +56,14 @@ export interface SetupProps {
 /**
  * Household · Setup: from nothing to a bot answering in a messenger, as `house onboard` does, one choice at a
  * time: what to choose, then how to get what that choice needs, then the field for it. The steps only gather and
- * check (a bot's token, the owner's first message, a Slack DM); Review makes it all at once, with one reload. A
- * ChatGPT sign-in is the exception: it saves its key as it ends. The stepper shows what was chosen; a step done
- * opens again until it is all made.
+ * check (a bot's token, its owner and group, a Slack DM); Review makes it all at once, with setup's own bot and one
+ * reload. A ChatGPT sign-in is the exception: it saves its key as it ends. The stepper shows what was chosen; a step
+ * done opens again until it is all made.
  */
-export function SetupPage({ houses, keys, agents, host, refresh, notify, initial = {} }: SetupProps) {
+export function SetupPage({ houses, keys, agents, host, refresh, initial = {} }: SetupProps) {
   const [draft, setDraft] = useState<SetupDraft>(initial);
   const [made, setMade] = useState<{ house: WorkspaceView; channel?: ChannelDraft; applying: boolean }>();
-  const done: Record<StepId, boolean> = { model: !!draft.key, workspace: !!draft.workspace, channel: draft.channel !== undefined, bot: !!draft.bot, review: !!made };
+  const done: Record<StepId, boolean> = { model: !!draft.key, workspace: !!draft.workspace, channel: draft.channel !== undefined, review: !!made };
   const firstOpen = SETUP_STEPS.find((step) => !done[step.id])?.id ?? "review";
   const [at, setAt] = useState<{ step: StepId; sub: number }>({ step: firstOpen, sub: 0 });
 
@@ -74,7 +71,7 @@ export function SetupPage({ houses, keys, agents, host, refresh, notify, initial
   const choose = <K extends keyof SetupDraft>(from: StepId, key: K, value: SetupDraft[K]) => {
     const next = { ...draft, [key]: value };
     setDraft(next);
-    const now = { model: !!next.key, workspace: !!next.workspace, channel: next.channel !== undefined, bot: !!next.bot, review: false };
+    const now = { model: !!next.key, workspace: !!next.workspace, channel: next.channel !== undefined, review: false };
     const index = SETUP_STEPS.findIndex((step) => step.id === from);
     const open = SETUP_STEPS.slice(index + 1).find((step) => !now[step.id]) ?? SETUP_STEPS.at(-1)!;
     setAt({ step: open.id, sub: 0 });
@@ -84,7 +81,6 @@ export function SetupPage({ houses, keys, agents, host, refresh, notify, initial
     model: draft.key && `${providerLabel(draft.key.provider)} · ${draft.key.name}`,
     workspace: draft.workspace && `${draft.workspace.name} · ${draft.workspace.cpus} vCPU · ${gib(draft.workspace.memoryMiB)}`,
     channel: draft.channel === null ? "Skipped" : draft.channel ? [draft.channel.label, draft.channel.bot].filter(Boolean).join(" · ") : undefined,
-    bot: draft.bot && `${draft.bot.emoji} ${draft.bot.title || draft.bot.name}`,
     review: undefined,
   };
   // Once it is all made, nothing goes back; until then, any step chosen, and the first open one.
@@ -130,11 +126,7 @@ export function SetupPage({ houses, keys, agents, host, refresh, notify, initial
             <ChannelStep sub={at.sub} go={go} house={draft.workspace.name} onDone={(channel) => choose("channel", "channel", channel)} onSkip={() => choose("channel", "channel", null)} />
           )}
           {at.step === "channel" && !draft.workspace && <Missing step="Workspace" onOpen={() => setAt({ step: "workspace", sub: 0 })} />}
-          {at.step === "bot" && draft.workspace && draft.key && (
-            <BotStep sub={at.sub} go={go} workspace={draft.workspace} keyDraft={draft.key} agents={agents} chosen={draft.bot} onDone={(bot) => choose("bot", "bot", bot)} />
-          )}
-          {at.step === "bot" && !(draft.workspace && draft.key) && <Missing step={draft.key ? "Workspace" : "Model"} onOpen={() => setAt({ step: draft.key ? "workspace" : "model", sub: 0 })} />}
-          {at.step === "review" && !made && <ReviewStep draft={draft} open={(step) => setAt({ step, sub: 0 })} refresh={refresh} notify={notify}
+          {at.step === "review" && !made && <ReviewStep draft={draft} agents={agents} open={(step) => setAt({ step, sub: 0 })} refresh={refresh}
             onMade={(house, applying) => setMade({ house, applying, ...(draft.channel ? { channel: draft.channel } : {}) })} />}
           {at.step === "review" && made && <DoneStep house={houses.find((each) => each.name === made.house.name) ?? made.house} channel={made.channel} applying={made.applying} />}
         </div>
@@ -220,15 +212,15 @@ function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: 
           go(1);
         }}>Next</button>
       }>
-        <ChoiceList
-          label="Provider"
-          value={choice}
-          onChange={setChoice}
-          options={[
-            ...fitting.map((key) => ({ value: `key:${key.name}`, label: <>Use key <span className="id">{key.name}</span></>, description: `${providerLabel(key.provider)} · ${key.kind ?? "key"}${key.note ? ` · ${key.note}` : ""}` })),
-            ...PROVIDERS.map((each) => ({ value: each.id, label: fitting.length ? `Add ${each.label}` : each.label, description: each.description })),
-          ]}
-        />
+        {fitting.length > 0 && (
+          <ChoiceList label="Saved keys" value={choice} onChange={setChoice} options={fitting.map((key) => ({
+            value: `key:${key.name}`,
+            label: <span className="mono">{key.name}</span>,
+            description: `${providerLabel(key.provider)} · ${key.kind ?? "key"}${key.note ? ` · ${key.note}` : ""}`,
+          }))} />
+        )}
+        <ChoiceList label={fitting.length ? "Add a new key" : "Provider"} value={choice} onChange={setChoice}
+          options={PROVIDERS.map((each) => ({ value: each.id, label: each.label, description: each.description }))} />
       </Screen>
     );
   }
@@ -355,9 +347,8 @@ function WorkspaceStep({ houses, host, chosen, onDone }: { houses: WorkspaceView
 export function ChannelStep({ sub, go, house, onDone, onSkip }: { sub: number; go: (sub: number) => void; house: string; onDone: (channel: ChannelDraft) => void; onSkip: () => void }) {
   const [kind, setKind] = useState<ChannelOption["kind"]>(CHANNELS[0]!.kind);
   const option = CHANNELS.find((each) => each.kind === kind)!;
-  // What the Setup screen got, for the Owner screen.
+  // What the Setup screen got, for the Check screen.
   const [listen, setListen] = useState<BotListenView>();
-  const [group, setGroup] = useState("");
   const [slack, setSlack] = useState<{ token: string; appToken: string }>();
 
   if (sub === 0) {
@@ -374,79 +365,105 @@ export function ChannelStep({ sub, go, house, onDone, onSkip }: { sub: number; g
   if (sub === 1 || (kind === "slack-private" ? !slack : !listen)) {
     return kind === "slack-private"
       ? <SlackTokens option={option} back={() => go(0)} onDone={(tokens) => { setSlack(tokens); go(2); }} />
-      : <TelegramBot option={option} house={house} back={() => go(0)} onDone={(started, chat) => { setListen(started); setGroup(chat); go(2); }} />;
+      : <TelegramBot option={option} house={house} back={() => go(0)} onDone={(started) => { setListen(started); go(2); }} />;
   }
   return kind === "slack-private"
     ? <SlackOwner house={house} tokens={slack!} back={() => go(1)} onDone={(member, owner) => onDone({ kind, label: option.label, slack: { ...slack!, member, owner } })} />
-    : <TelegramOwner listen={listen!} group={kind === "telegram-group" ? group : undefined} back={() => go(1)}
-      onDone={(owner) => onDone({ kind, label: option.label, bot: listen!.bot, telegram: { listen: listen!.id, owner, ...(kind === "telegram-group" ? { group } : {}) } })} />;
+    : <TelegramCheck listen={listen!} back={() => go(1)}
+      onDone={(owner, group) => onDone({ kind, label: option.label, bot: listen!.bot, telegram: { listen: listen!.id, owner, ...(group ? { group } : {}) } })} />;
 }
 
-function TelegramBot({ option, house, back, onDone }: { option: ChannelOption; house: string; back: () => void; onDone: (listen: BotListenView, group: string) => void }) {
+function TelegramBot({ option, house, back, onDone }: { option: ChannelOption; house: string; back: () => void; onDone: (listen: BotListenView) => void }) {
   const [token, setToken] = useState("");
-  const [group, setGroup] = useState("");
   const action = useAction();
-  const isGroup = option.kind === "telegram-group";
-  const groupError = group && !TELEGRAM_GROUP_ID.test(group.trim()) ? "A negative number starting with -100." : undefined;
   return (
     <Screen title={option.label} back={back} primary={
-      <button className="btn primary" disabled={action.busy || !token.trim() || (isGroup && (!group.trim() || !!groupError))} onClick={() => action.run(async () => {
-        onDone(await api.listenBot(house, option.kind, token.trim()), group.trim());
-      })}>{action.busy ? "Checking…" : "Check the bot"}</button>
+      <button className="btn primary" disabled={action.busy || !token.trim()} onClick={() => action.run(async () => onDone(await api.listenBot(house, option.kind, token.trim())))}>
+        {action.busy ? "Checking…" : "Check the bot"}
+      </button>
     }>
       <Guide steps={option.steps} />
       <TextField label="Bot token" type="password" mono value={token} onChange={setToken} placeholder="123456789:AAH…" />
-      {isGroup && <TextField label="Group id" mono value={group} onChange={setGroup} placeholder="-1001234567890" error={groupError} />}
       {action.shown}
     </Screen>
   );
 }
 
-function TelegramOwner({ listen, group, back, onDone }: { listen: BotListenView; group?: string; back: () => void; onDone: (owner: { id: string; name?: string }) => void }) {
-  const [state, setState] = useState<BotListenStatus>({ status: "waiting" });
+/** A line of the check: done, or what is still to do. */
+function CheckLine({ ok, children }: { ok: boolean; children: ReactNode }) {
+  return <li className={ok ? "done" : undefined}><span className="setup-check-mark" aria-hidden>{ok ? <Check size={12} strokeWidth={2.5} /> : "…"}</span><span>{children}</span></li>;
+}
+
+/**
+ * The bot watched: its owner (the first to write to it in private) and, for a group, the group it is in, found by
+ * itself and checked (Topics on, the bot an admin that may manage topics and delete messages), each line ticked as
+ * it comes. A bot Household runs already, or a watch that ended, takes typed ids instead.
+ */
+function TelegramCheck({ listen, back, onDone }: { listen: BotListenView; back: () => void; onDone: (owner: { id: string; name?: string }, group?: { id: string; title: string }) => void }) {
+  const [state, setState] = useState<BotListenStatus>({ status: "waiting", needsGroup: false });
   const [manual, setManual] = useState("");
-  /** Why the wait is gone (Household restarted, or forgot it): only Back is left, to give the token again. */
+  const [manualGroup, setManualGroup] = useState("");
+  /** Why the watch is gone (Household restarted, or forgot it): only Back is left, to give the token again. */
   const [gone, setGone] = useState<string>();
   const action = useAction();
 
-  // The wait for the first message: asked about every two seconds while it waits.
+  // The watch: asked about every two seconds while it goes on.
   useEffect(() => {
     if (state.status !== "waiting" || gone) return;
-    const ask = () => void api.botListen(listen.id).then(
-      (found) => { if (found.status !== "waiting") setState(found); },
-      (error) => { if (error instanceof Error && error.message.startsWith("no such")) setGone(error.message); },
-    );
+    const ask = () => void api.botListen(listen.id).then(setState, (error) => { if (error instanceof Error && error.message.startsWith("no such")) setGone(error.message); });
     ask();
     const timer = setInterval(ask, 2000);
     return () => clearInterval(timer);
   }, [listen.id, state.status, gone]);
 
   const again = () => action.run(async () => setState(await api.listenAgain(listen.id)));
+  const recheck = () => action.run(async () => setState(await api.checkGroup(listen.id)));
+  const typed = state.status === "timeout" || state.status === "failed" || state.status === "manual";
+  const group = state.group;
+  const groupReady = !state.needsGroup || (!!group && group.problems.length === 0);
+  const ready = !!state.contact && groupReady;
+  const typedReady = TELEGRAM_USER_ID.test(manual.trim()) && (!state.needsGroup || groupReady || TELEGRAM_GROUP_ID.test(manualGroup.trim()));
+  const next = () => {
+    if (ready) return onDone({ id: state.contact!.id, name: state.contact!.name }, group && { id: group.id, title: group.title });
+    onDone({ id: manual.trim() }, group && groupReady ? { id: group.id, title: group.title } : state.needsGroup ? { id: manualGroup.trim(), title: manualGroup.trim() } : undefined);
+  };
 
   return (
-    <Screen title={`Tell ${listen.bot} who you are`} hint="You become the workspace's owner: your messages are trusted, and only you approve what bots ask for." back={back}
-      primary={gone ? undefined : state.status === "found"
-        ? <button className="btn primary" onClick={() => onDone({ id: state.contact.id, name: state.contact.name })}>Yes, that's me</button>
-        : state.status === "waiting" ? undefined
-        : <button className="btn primary" disabled={!TELEGRAM_USER_ID.test(manual.trim())} onClick={() => onDone({ id: manual.trim() })}>Next</button>}
-      extra={gone ? undefined : state.status === "found" ? <button className="btn" onClick={again}>No, wait for mine</button>
-        : state.status === "timeout" || state.status === "failed" ? <button className="btn" onClick={again}>Wait again</button> : undefined}
+    <Screen title={`Connect ${listen.bot}`} back={back}
+      primary={!gone && <button className="btn primary" disabled={!(ready || (typed && typedReady))} onClick={next}>Next</button>}
+      extra={!gone && state.contact && <button className="btn" onClick={again}>Not me</button>}
     >
       {gone && <p className="error" role="alert">{gone}</p>}
-      {!gone && state.status === "waiting" && (
-        <Stack gap={2}>
-          <p>Open <a className="text-link" href={listen.link} target="_blank" rel="noreferrer">{listen.link}</a> and send the bot any message{group ? " in a private chat, not in the group" : ""} (pressing <b>Start</b> works).</p>
-          <p className="hint">Waiting for your message…</p>
-        </Stack>
+      {!gone && (
+        <ol className="setup-check">
+          <CheckLine ok={!!state.contact}>
+            {state.contact
+              ? <>Owner: <b>{state.contact.name}</b>{state.contact.username ? ` (@${state.contact.username})` : ""}</>
+              : <>Open <a className="text-link" href={listen.link} target="_blank" rel="noreferrer">{listen.link}</a> and send the bot any message in a private chat (pressing <b>Start</b> works): you become the workspace's owner.</>}
+          </CheckLine>
+          {state.needsGroup && (
+            <CheckLine ok={groupReady}>
+              {!group && "Add the bot to your group as an admin, or write anything in the group: Household finds it."}
+              {group && group.problems.length === 0 && <>Group: <b>{group.title}</b></>}
+              {group && group.problems.length > 0 && (
+                <Stack gap={2}>
+                  <span>Group <b>{group.title}</b> still needs: {group.problems.join("; ")}.</span>
+                  <span><button type="button" className="btn small" disabled={action.busy} onClick={recheck}>Check again</button></span>
+                </Stack>
+              )}
+            </CheckLine>
+          )}
+        </ol>
       )}
-      {!gone && state.status === "found" && <p>Message from <b>{state.contact.name}</b>{state.contact.username ? ` (@${state.contact.username})` : ""}. Is that you?</p>}
-      {!gone && (state.status === "timeout" || state.status === "failed" || state.status === "manual") && (
+      {!gone && state.status === "waiting" && !ready && <p className="hint">Waiting…</p>}
+      {!gone && typed && !ready && (
         <Stack gap={3}>
           <p className="hint">
-            {state.status === "timeout" ? "No message came in time. " : state.status === "failed" ? `Household could not read the bot's messages (${state.error}). ` : "Household already runs this bot, so it cannot wait for your message here. "}
-            Enter your numeric Telegram id instead (<a className="text-link" href="https://t.me/userinfobot" target="_blank" rel="noreferrer">@userinfobot</a> tells it).
+            {state.status === "timeout" ? "Nothing came in time. " : state.status === "failed" ? `Household could not read the bot's messages (${state.error}). ` : "Household already runs this bot, so it cannot watch it here. "}
+            Enter the ids instead (<a className="text-link" href="https://t.me/userinfobot" target="_blank" rel="noreferrer">@userinfobot</a> tells yours){state.status !== "manual" && <>, or <button type="button" className="text-btn plain" onClick={again}>wait again</button></>}.
           </p>
-          <TextField label="Your Telegram id" mono inputMode="numeric" value={manual} onChange={setManual} placeholder="123456789" />
+          {!state.contact && <TextField label="Your Telegram id" mono inputMode="numeric" value={manual} onChange={setManual} placeholder="123456789" />}
+          {state.needsGroup && !groupReady && <TextField label="Group id" mono value={manualGroup} onChange={setManualGroup} placeholder="-1001234567890" hint="In Telegram Web, the part of the group's address after #." />}
         </Stack>
       )}
       {action.shown}
@@ -489,82 +506,41 @@ function SlackOwner({ house, tokens, back, onDone }: { house: string; tokens: { 
   );
 }
 
-// ── Bot: what it is for, then its details ───────────────────────────────────────────────────────────────────
-
-export function BotStep({ sub, go, workspace, keyDraft, agents, chosen, onDone }: { sub: number; go: (sub: number) => void; workspace: WorkspaceDraft; keyDraft: KeyDraft; agents: { name: string }[]; chosen?: BotDraft; onDone: (bot: BotDraft) => void }) {
-  const fit = (preset: BotPreset) => ({ cpus: Math.max(1, Math.min(preset.cpus, workspace.cpus)), memoryMiB: Math.max(512, Math.min(preset.memoryMiB, workspace.memoryMiB)) });
-  const fresh = (preset: BotPreset): BotDraft => ({ preset, name: preset.name, title: preset.title, emoji: preset.emoji, ...fit(preset), scouts: preset.scouts, sideworkers: preset.sideworkers });
-  const [bot, setBot] = useState<BotDraft>(() => chosen ?? fresh(BOT_PRESETS[0]!));
-  const set = (change: Partial<BotDraft>) => setBot((was) => ({ ...was, ...change }));
-  const harness = PROVIDERS.find((provider) => provider.id === keyDraft.provider)?.harness;
-  const agent = agents.find((each) => each.name === harness);
-  const nameError = bot.name && !BOT_NAME.test(bot.name) ? "Use a lowercase letter first, then a–z, 0–9, _ or -." : undefined;
-
-  if (sub === 0) {
-    return (
-      <Screen title="What is your first bot for?" hint={`It runs ${harness === "codex-app-server" ? "Codex" : "Claude Code"} in its own VM, with a home and memory that stay between sessions. Everything can be changed later.`}
-        primary={<button className="btn primary" onClick={() => go(1)}>Next</button>}>
-        <ChoiceList label="Purpose" value={bot.preset.id} onChange={(id) => setBot(fresh(BOT_PRESETS.find((each) => each.id === id)!))} options={BOT_PRESETS.map((each) => ({ value: each.id, label: `${each.emoji} ${each.label}`, description: each.description }))} />
-      </Screen>
-    );
-  }
-  return (
-    <Screen title={`${bot.preset.emoji} ${bot.preset.label}`} back={() => go(0)} primary={<button className="btn primary" disabled={!bot.name || !!nameError || !agent} onClick={() => onDone(bot)}>Next</button>}>
-      <FormGrid>
-        <TextField label="Display name" value={bot.title} onChange={(title) => set({ title })} maxLength={64} />
-        <TextField label="Emoji" value={bot.emoji} onChange={(emoji) => set({ emoji })} />
-      </FormGrid>
-      <TextField label="Name" mono value={bot.name} onChange={(name) => set({ name })} maxLength={31} error={nameError} hint="Its id: lowercase, no spaces." />
-      <Stack gap={2}>
-        <Switch label="Scouts" on={bot.scouts} onChange={(scouts) => set({ scouts })} />
-        <p className="hint">One-task helpers in their own VMs (a browser, media and dev tools). The bot calls one; you approve each run in the chat.</p>
-      </Stack>
-      <Stack gap={2}>
-        <Switch label="Sideworkers" on={bot.sideworkers} onChange={(sideworkers) => set({ sideworkers })} />
-        <p className="hint">Extra bots for longer work, that you can talk to in parallel. Your bot starts each in its own VM and gives it the CPU and memory the job needs, from what the workspace has free.</p>
-      </Stack>
-      <p className="hint">Reserves {bot.cpus} vCPU and {gib(bot.memoryMiB)} of the workspace's {workspace.cpus} vCPU and {gib(workspace.memoryMiB)}.</p>
-      {!agent && <p className="error">This Household has no harness for {keyDraft.provider} keys.</p>}
-    </Screen>
-  );
-}
-
 // ── Review: everything chosen, made at once ─────────────────────────────────────────────────────────────────
 
 /** The setup's choices as the one request that makes them; undefined while one is missing. */
 export function setupFields(draft: SetupDraft): SetupFields | undefined {
-  const { key, workspace, channel, bot } = draft;
-  if (!key || !workspace || channel === undefined || !bot) return undefined;
+  const { key, workspace, channel } = draft;
+  if (!key || !workspace || channel === undefined) return undefined;
   return {
     key: key.pasted ? { name: key.name, provider: key.provider, value: key.pasted, note: key.label } : key.name,
     workspace,
-    channel: channel?.telegram ? { telegram: { listen: channel.telegram.listen, owner: channel.telegram.owner.id, ...(channel.telegram.group ? { chat: channel.telegram.group } : {}) } }
+    channel: channel?.telegram ? { telegram: { listen: channel.telegram.listen, owner: channel.telegram.owner.id, ...(channel.telegram.group ? { chat: channel.telegram.group.id } : {}) } }
       : channel?.slack ? { slack: { token: channel.slack.token, appToken: channel.slack.appToken, member: channel.slack.member } }
       : null,
-    bot: { name: bot.name, title: bot.title || null, emoji: bot.emoji || null, cpus: bot.cpus, memoryMiB: bot.memoryMiB, role: presetInstructions(bot.preset, bot.title || bot.name) ?? null },
-    features: { scouts: bot.scouts, sideworkers: bot.sideworkers },
   };
 }
 
-export function ReviewStep({ draft, open, refresh, notify, onMade }: { draft: SetupDraft; open: (step: StepId) => void; refresh: () => Promise<void>; notify: SetupProps["notify"]; onMade: (house: WorkspaceView, applying: boolean) => void }) {
+export function ReviewStep({ draft, agents, open, refresh, onMade }: { draft: SetupDraft; agents: { name: string }[]; open: (step: StepId) => void; refresh: () => Promise<void>; onMade: (house: WorkspaceView, applying: boolean) => void }) {
   const action = useAction();
   const [slow, setSlow] = useState(false);
   const fields = setupFields(draft);
-  const { key, workspace, channel, bot } = draft;
-  const row = (step: StepId, title: string, value: ReactNode, detail?: ReactNode) => (
-    <ListRow key={step} actions={!action.busy && <button type="button" className="btn small" onClick={() => open(step)}>Change</button>}>
+  const { key, workspace, channel } = draft;
+  const harness = PROVIDERS.find((provider) => provider.id === key?.provider)?.harness;
+  const size = workspace && defaultBotSize(workspace);
+  const row = (step: StepId | undefined, title: string, value: ReactNode, detail?: ReactNode) => (
+    <ListRow key={title} actions={step && !action.busy ? <button type="button" className="btn small" onClick={() => open(step)}>Change</button> : undefined}>
       <Cell><span className="strong">{title}</span></Cell>
       <Cell><span className="cell-lines"><span>{value}</span>{detail && <span className="hint">{detail}</span>}</span></Cell>
     </ListRow>
   );
-  const owner = channel?.telegram ? `owner ${channel.telegram.owner.name ?? channel.telegram.owner.id}` : channel?.slack ? `owner ${channel.slack.owner}` : undefined;
+  const owner = channel?.telegram ? [`owner ${channel.telegram.owner.name ?? channel.telegram.owner.id}`, channel.telegram.group && `group ${channel.telegram.group.title}`].filter(Boolean).join(" · ") : channel?.slack ? `owner ${channel.slack.owner}` : undefined;
   return (
     <Screen title="Ready to set it all up" hint="Nothing is made yet. One press makes all of it; if anything fails, nothing is left half made."
-      primary={<button className="btn primary" disabled={!fields || action.busy} onClick={() => action.run(async () => {
+      primary={<button className="btn primary" disabled={!fields || action.busy || !agents.some((each) => each.name === harness)} onClick={() => action.run(async () => {
         const timer = setTimeout(() => setSlow(true), 4000);
         try {
           const made = await api.setUp(fields!);
-          for (const warning of made.warnings) notify(warning, true);
           await refresh();
           onMade(made.house!, !!made.applying);
         } finally {
@@ -577,7 +553,7 @@ export function ReviewStep({ draft, open, refresh, notify, onMade }: { draft: Se
         {row("model", "Model", key ? `${providerLabel(key.provider)} · key ${key.name}` : "—", key?.pasted ? "pasted here; saved with the rest" : undefined)}
         {row("workspace", "Workspace", workspace ? workspace.name : "—", workspace && `${workspace.cpus} vCPU · ${gib(workspace.memoryMiB)}`)}
         {row("channel", "Channel", channel === null ? "None yet" : channel ? [channel.label, channel.bot].filter(Boolean).join(" · ") : "—", owner)}
-        {row("bot", "Bot", bot ? `${bot.emoji} ${bot.title || bot.name}` : "—", bot && `${bot.preset.label} · ${bot.cpus} vCPU · ${gib(bot.memoryMiB)}${bot.scouts ? " · scouts" : ""}${bot.sideworkers ? " · sideworkers" : ""}`)}
+        {row(undefined, "Bot", `🤖 ${DEFAULT_BOT.title}`, size && `${harness === "codex-app-server" ? "Codex" : "Claude Code"} · ${size.cpus} vCPU · ${gib(size.memoryMiB)}`)}
       </List>
       {slow && <p className="hint">Still setting up: Household applies changes one at a time, and a bot that is starting holds them for a moment.</p>}
       {action.shown}

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { Contact } from "../channel-adapters/telegram/first-contact";
+import type { Contact, FoundGroup } from "../channel-adapters/telegram/first-contact";
 import { HouseholdError } from "../core/errors";
 import { NotFoundError } from "../infra/config-store";
 import type { DeviceLogin, LocalCodexLogin } from "./codex-login";
 
 /** How long the web's setup keeps a sign-in or a wait for a first message it is no longer asked about. */
 const KEPT_MS = 20 * 60_000;
-/** How long a bot waits for its first message (the person may need to install Telegram first). */
+/** How long a new bot is watched for its owner and its group (the person may need to install Telegram first). */
 const LISTEN_MS = 10 * 60_000;
 
 export interface OnboardingDeps {
@@ -16,16 +16,29 @@ export interface OnboardingDeps {
   importCodex?: (name: string) => Promise<unknown>;
   /** Household's own ChatGPT sign-in for key `name`, by a device code. */
   deviceLogin?: (name: string) => Promise<DeviceLogin>;
-  /** The first person who writes to the bot from now on; undefined when nobody has in time. */
-  firstContact: (token: string, signal: AbortSignal, timeoutMs: number) => Promise<Contact | undefined>;
+  /** Watches a new bot for its owner (the first to write in private) and, with `group`, its group (telegram/first-contact.ts). */
+  watch: (token: string, options: { group: boolean; signal: AbortSignal; timeoutMs: number; onContact: (contact: Contact) => void; onGroup: (group: FoundGroup) => void }) => Promise<"done" | "timeout">;
+  /** What a group the bot is in still needs. */
+  checkGroup: (token: string, chat: string) => Promise<FoundGroup>;
   /** The config changed (a key was saved): the daemon's reload. */
   apply: () => Promise<unknown>;
   now?: () => number;
 }
 
 export type LoginStatus = { status: "waiting" } | { status: "done"; key: string } | { status: "failed"; error: string };
-/** `manual`: the bot is one Household runs already, so its messages are the daemon's: the person types their id. */
-export type ListenStatus = { status: "waiting" } | { status: "found"; contact: Contact } | { status: "timeout" } | { status: "manual" } | { status: "failed"; error: string };
+/**
+ * A new bot's watch: `waiting` while it lacks its owner (or, for a group, a group with nothing missing); `ready`
+ * once it has them; `timeout`; `failed`; `manual`: the bot is one Household runs already, so its messages are the
+ * daemon's, and the person types their id. What was found so far comes along either way.
+ */
+export interface ListenStatus {
+  status: "waiting" | "ready" | "timeout" | "manual" | "failed";
+  /** Whether the channel is a group, so a group is looked for too. */
+  needsGroup: boolean;
+  contact?: Contact;
+  group?: FoundGroup;
+  error?: string;
+}
 
 interface Login { key: string; state: LoginStatus; cancel: () => void; at: number }
 interface Listen { token: string; house: string; kind: string; bot: string; state: ListenStatus; abort: AbortController; at: number }
@@ -99,20 +112,33 @@ export class Onboarding {
     this.sweep();
     for (const [id, other] of this.listens) if (other.token === token) this.stop(id); // one wait per bot
     const id = randomUUID();
-    const entry: Listen = { token, house, kind, bot, state: { status: poll ? "waiting" : "manual" }, abort: new AbortController(), at: this.now() };
+    const entry: Listen = { token, house, kind, bot, state: { status: poll ? "waiting" : "manual", needsGroup: kind === "telegram-group" }, abort: new AbortController(), at: this.now() };
     this.listens.set(id, entry);
     if (poll) this.wait(entry);
     return id;
   }
 
-  /** The same wait again (the one who wrote was someone else, or it timed out). */
+  /** The same watch again, for another owner (the one who wrote was someone else, or it timed out); a group found stays. */
   relisten(id: string): void {
     const entry = this.listening(id);
     if (entry.state.status === "manual") return;
     entry.abort.abort();
     entry.abort = new AbortController();
-    entry.state = { status: "waiting" };
+    const { group, needsGroup } = entry.state;
+    entry.state = { status: "waiting", needsGroup, ...(group ? { group } : {}) };
     this.wait(entry);
+  }
+
+  /** The group found, asked about again (its settings changed without the bot being told): ready once it has all. */
+  async recheck(id: string): Promise<void> {
+    const entry = this.listening(id);
+    const group = entry.state.group;
+    if (!group) return;
+    entry.state.group = await this.deps.checkGroup(entry.token, group.id);
+    if (entry.state.contact && entry.state.group.problems.length === 0 && entry.state.status !== "manual") {
+      entry.abort.abort();
+      entry.state.status = "ready";
+    }
   }
 
   status(id: string): ListenStatus & { bot: string } {
@@ -121,10 +147,10 @@ export class Onboarding {
     return { ...entry.state, bot: entry.bot };
   }
 
-  /** The wait's bot, for its channel: its token, workspace and kind. */
-  bot(id: string): { token: string; house: string; kind: string; bot: string } {
-    const { token, house, kind, bot } = this.listening(id);
-    return { token, house, kind, bot };
+  /** The wait's bot, for its channel: its token, workspace and kind, and the group found for it. */
+  bot(id: string): { token: string; house: string; kind: string; bot: string; group?: FoundGroup } {
+    const { token, house, kind, bot, state } = this.listening(id);
+    return { token, house, kind, bot, ...(state.group ? { group: state.group } : {}) };
   }
 
   /** The bot's channel is made: the wait ends, and its token is forgotten here. */
@@ -152,9 +178,14 @@ export class Onboarding {
 
   private wait(entry: Listen): void {
     const { signal } = entry.abort;
-    this.deps.firstContact(entry.token, signal, LISTEN_MS).then(
-      (contact) => { if (!signal.aborted) entry.state = contact ? { status: "found", contact } : { status: "timeout" }; },
-      (error) => { if (!signal.aborted) entry.state = { status: "failed", error: (error as Error).message }; },
+    const state = entry.state;
+    this.deps.watch(entry.token, {
+      group: state.needsGroup, signal, timeoutMs: LISTEN_MS,
+      onContact: (contact) => { if (!signal.aborted) state.contact = contact; },
+      onGroup: (group) => { if (!signal.aborted) state.group = group; },
+    }).then(
+      (end) => { if (!signal.aborted) state.status = end === "done" ? "ready" : "timeout"; },
+      (error) => { if (!signal.aborted) Object.assign(state, { status: "failed", error: (error as Error).message }); },
     );
   }
 

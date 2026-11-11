@@ -75,10 +75,8 @@ export interface SetupFields {
   /** A key there is, by name, or one pasted on the page. */
   key: string | { name: string; provider: string; value: string; note?: string | null };
   workspace: { name: string; cpus: number; memoryMiB: number };
-  /** A Telegram bot waited on (`listen`), its owner and a group's id; or a Slack app and its owner's member ID; null: none yet. */
+  /** A Telegram bot watched (`listen`) and its owner (a group's id only when it could not be watched); or a Slack app and its owner's member ID; null: none yet. */
   channel: { telegram: { listen: string; owner: string; chat?: string } } | { slack: { token: string; appToken: string; member: string } } | null;
-  bot: { name: string; title: string | null; emoji: string | null; cpus: number; memoryMiB: number; role: string | null };
-  features: { scouts: boolean; sideworkers: boolean };
 }
 
 /** A key as the forms send it: `note` null for none. */
@@ -247,5 +245,7 @@ export const api = {
   /** A Slack app's tokens checked and its owner's DM with it found, for workspace `house` (not made yet). */
   findSlackDm: (house: string, token: string, appToken: string, member: string) => call<{ chat: string; owner: string; url: string }>("POST", "/api/onboarding/slack", { house, token, appToken, member }),
   /** Everything the setup gathered, made at once. */
-  setUp: (setup: SetupFields) => call<WriteView & { warnings: string[] }>("POST", "/api/onboarding/setup", setup),
+  setUp: (setup: SetupFields) => call<WriteView>("POST", "/api/onboarding/setup", setup),
+  /** The bot's group asked about again, after its settings changed. */
+  checkGroup: (id: string) => call<BotListenStatus & { bot: string }>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/check`),
 };

@@ -41,7 +41,7 @@ import { requestDomain, requestPort, type NetworkRequests } from "./network-requ
 import { clearedCookie, cookieValue, sessionCookie, sessionCookieName, type WebAuth } from "./web-auth";
 import type { AgentView, BotListenView, DeviceLoginView, HouseView, KeysView, MeView, OnboardingView, WriteView } from "./web-views";
 import type { Onboarding } from "./onboarding";
-import { PROVIDERS as SETUP_PROVIDERS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID } from "../core/onboarding";
+import { DEFAULT_BOT, SETUP_FEATURES, PROVIDERS as SETUP_PROVIDERS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, defaultBotSize } from "../core/onboarding";
 import { assertName } from "../core/names";
 import type { AlsoChannel } from "../infra/config-store";
 import type { Allowance } from "../core/allowance";
@@ -132,8 +132,8 @@ const ONBOARDING_KINDS = ["telegram-private", "telegram-dm", "telegram-group"];
 const botBody = z.strictObject({ house: z.string(), kind: z.string(), token: z.string() });
 const slackBody = z.strictObject({ house: z.string(), token: z.string(), appToken: z.string(), member: z.string() });
 // What the setup page gathered, made at once: a key (one there is, or a pasted one), a new workspace and its budget,
-// its channel (a Telegram bot waited on, with its owner and, for a group, its id; or a Slack app and its owner's
-// member ID), its first bot and the workspace's helpers.
+// and its channel (a Telegram bot watched, with its owner and, for a group, the group found; or a Slack app and its
+// owner's member ID). The bot is setup's own (DEFAULT_BOT).
 const setupBody = z.strictObject({
   key: z.union([z.string(), z.strictObject({ name: z.string(), provider: z.string(), value: z.string(), note: z.string().nullish() })]),
   workspace: z.strictObject({ name: z.string(), cpus: petCpuSchema, memoryMiB: petMemorySchema }),
@@ -141,8 +141,6 @@ const setupBody = z.strictObject({
     z.strictObject({ telegram: z.strictObject({ listen: z.string(), owner: z.string(), chat: z.string().nullish() }) }),
     z.strictObject({ slack: z.strictObject({ token: z.string(), appToken: z.string(), member: z.string() }) }),
   ]).nullish(),
-  bot: z.strictObject({ name: z.string(), title: z.string().nullish(), emoji: z.string().nullish(), cpus: petCpuSchema, memoryMiB: petMemorySchema, role: z.string().max(20_000).nullish() }),
-  features: z.strictObject({ scouts: z.boolean(), sideworkers: z.boolean() }),
 });
 const ownerBody = z.strictObject({ platform: z.string(), id: z.string(), note: z.string().nullish() });
 const ownerNoteBody = z.strictObject({ note: z.string().nullable() });
@@ -369,12 +367,12 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
   };
 
   /**
-   * The setup page's choices, made at once: everything is checked first (names, budget, the bot's token or the
-   * Slack app, the key), then written one piece after another and reloaded once. A write that fails takes back
-   * the pieces before it (the workspace, with its channel and bot; a pasted key), so nothing half made is left.
-   * The bot's role goes into its instructions last: when that fails, the rest stays and the answer says so.
+   * The setup page's choices, made at once: everything is checked first (names, budget, the bot's token and group
+   * or the Slack app, the key), then written one piece after another (the workspace's helpers as they come) and
+   * reloaded once. A write that fails takes back the pieces before it (the workspace, with its channel and bot; a
+   * pasted key), so nothing half made is left.
    */
-  const setUp = async (body: z.infer<typeof setupBody>): Promise<[WriteView & { warnings: string[] }, number]> => {
+  const setUp = async (body: z.infer<typeof setupBody>): Promise<[WriteView, number]> => {
     const household = await config.load();
     const house = body.workspace.name.trim();
     assertName("house", house);
@@ -382,9 +380,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     const budget = { cpus: body.workspace.cpus, memoryMiB: body.workspace.memoryMiB };
     const beyond = beyondHost(budget, host);
     if (beyond.length) throw new HouseholdError(beyond.join("; "));
-    if (body.bot.cpus > budget.cpus || body.bot.memoryMiB > budget.memoryMiB) throw new HouseholdError("the bot needs more than the workspace's budget: give the workspace more, or the bot less");
-    const pet = body.bot.name.trim();
-    if (!PET_NAME_PATTERN.test(pet)) throw new HouseholdError(`'${pet}' is not a bot name: a lowercase letter first, then a–z, 0–9, _ or -`);
+    const pet = DEFAULT_BOT.name;
     const newKey = typeof body.key === "string" ? undefined : body.key;
     const keyName = typeof body.key === "string" ? body.key : body.key.name.trim();
     const provider = newKey?.provider ?? household.keys.find((key) => key.name === keyName)?.provider;
@@ -396,12 +392,15 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     let channel: { fields: { kind: string; chat: string } & Record<string, string>; also: AlsoChannel[]; owner: { platform: string; id: string }; listen?: string } | undefined;
     if (body.channel && "telegram" in body.channel) {
       const { listen, owner, chat } = body.channel.telegram;
-      const { token, kind } = onboarding().bot(listen);
+      const { token, kind, group: found } = onboarding().bot(listen);
       if (!TELEGRAM_USER_ID.test(owner.trim())) throw new HouseholdError("a Telegram id is a number, like 123456789 (@userinfobot tells it)");
       const group = kind === "telegram-group";
-      if (group && !TELEGRAM_GROUP_ID.test(chat?.trim() ?? "")) throw new HouseholdError("a group's id is a negative number starting with -100, like -1001234567890");
+      // A group's id is the one found for the bot, checked; typed only for a bot Household runs already (not watched).
+      const groupId = found?.id ?? chat?.trim() ?? "";
+      if (group && found?.problems.length) throw new HouseholdError(`the group ${found.title} is not ready: ${found.problems.join("; ")}`);
+      if (group && !TELEGRAM_GROUP_ID.test(groupId)) throw new HouseholdError("the bot's group was not found yet: add the bot to it, or write anything there");
       const { own, also } = await checkFields(deps.channelKinds, deps.checks, kind, { token }, { household, house });
-      channel = { fields: { kind, ...own, chat: group ? chat!.trim() : owner.trim() }, also, owner: { platform: "telegram", id: owner.trim() }, listen };
+      channel = { fields: { kind, ...own, chat: group ? groupId : owner.trim() }, also, owner: { platform: "telegram", id: owner.trim() }, listen };
     } else if (body.channel && "slack" in body.channel) {
       const { token, appToken, member } = body.channel.slack;
       const { own, also } = await checkFields(deps.channelKinds, deps.checks, "slack-private", { token, appToken }, { household, house });
@@ -420,28 +419,19 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       houseMade = true;
       await config.setWorkspaceResources(house, budget);
       if (channel) await config.addChannel(house, channel.fields, channel.also, channel.owner);
-      await config.addPet(house, pet, { agent, key: keyName, cpus: body.bot.cpus, memoryMiB: body.bot.memoryMiB, lifecycle: DEFAULT_LIFECYCLE, ...(body.bot.title?.trim() ? { title: body.bot.title.trim() } : {}), ...(body.bot.emoji?.trim() ? { emoji: body.bot.emoji.trim() } : {}) }, channel ? [channel.fields.chat] : []);
+      await config.addPet(house, pet, { agent, key: keyName, title: DEFAULT_BOT.title, ...defaultBotSize(budget), lifecycle: DEFAULT_LIFECYCLE }, channel ? [channel.fields.chat] : []);
+      // Setup's helpers on (scouts going on seed the workspace's General scout).
       const made = findHouse(await config.load(), house)!;
-      after = await config.setHouseFeatures(house, { features: { ...houseFeatures(made), ...body.features }, preview: previewSettings(made) });
+      after = await config.setHouseFeatures(house, { features: { ...houseFeatures(made), ...SETUP_FEATURES }, preview: previewSettings(made) });
     } catch (error) {
       if (houseMade) await config.deleteHouse(house).catch(() => undefined);
       if (keyAdded) await config.removeKey(keyName).catch(() => undefined);
       throw error;
     }
     if (channel?.listen) onboarding().finish(channel.listen);
-    const warnings: string[] = [];
-    if (body.bot.role?.trim()) {
-      try {
-        const { store, adapter } = await instructionTarget(house, pet);
-        const file = await store.read(house, pet, adapter.instructionsFile!, adapter.instructionOverrides);
-        await store.write(house, pet, adapter.instructionsFile!, adapter.instructionOverrides ?? [], `${file.content.trimEnd()}\n\n${body.bot.role.trim()}\n`, file.revision);
-      } catch (error) {
-        warnings.push(`${pet}'s role was not added to its instructions (${(error as Error).message}): add it on its Instructions tab`);
-      }
-    }
     events.info(`web: workspace ${house} set up: key ${keyName}, ${channel ? `a ${channel.fields.kind} channel, ` : ""}bot ${pet}`);
     const state = await applied();
-    return [{ house: await viewOf(after, house), ...state, warnings }, 201];
+    return [{ house: await viewOf(after, house), ...state }, 201];
   };
   const routes: Route[] = [
     ["GET", /^\/api\/onboarding$/, async () => json({ localCodex: deps.onboarding?.localCodex() ?? null } satisfies OnboardingView)],
@@ -481,6 +471,11 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     ["GET", /^\/api\/onboarding\/telegram\/([^/]+)$/, async ({ params: [id] }) => json(onboarding().status(id!))],
     ["POST", /^\/api\/onboarding\/telegram\/([^/]+)\/again$/, async ({ params: [id] }) => {
       onboarding().relisten(id!);
+      return json(onboarding().status(id!));
+    }],
+    // The bot's group asked about again, after its settings changed.
+    ["POST", /^\/api\/onboarding\/telegram\/([^/]+)\/check$/, async ({ params: [id] }) => {
+      await onboarding().recheck(id!);
       return json(onboarding().status(id!));
     }],
     // A Slack app's tokens checked, and its owner's DM with it found: nothing is written yet.

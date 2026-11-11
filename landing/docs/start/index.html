@@ -195,7 +195,7 @@
 <p>It asks, one step at a time, and shows for each choice how to get what it needs:</p>
 <ol>
 <li>
-<p><strong>Model</strong> — Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (<code>claude setup-token</code> makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.</p>
+<p><strong>Model</strong> — a key you saved before, or a new one: Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (<code>claude setup-token</code> makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.</p>
 </li>
 <li>
 <p><strong>Workspace</strong> — a name for your bots' home, and how much of the machine's CPU and memory it may use.</p>
@@ -208,19 +208,11 @@
 <li><strong>Telegram, one plain chat</strong>;</li>
 <li><strong>Slack DM</strong>.</li>
 </ul>
-<p>You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. You can skip this step and add a channel later.</p>
-</li>
-<li>
-<p><strong>Bot</strong> — what it is for (personal assistant, developer, researcher, or blank), its name and its CPU and memory. Its purpose adds a role to its instructions.</p>
-</li>
-<li>
-<p><strong>Scouts</strong> — on or off.</p>
-</li>
-<li>
-<p><strong>Sideworkers</strong> — on or off. You can change both later in the admin.</p>
+<p>You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. For a group, Household finds it by itself once the bot is in it, and checks it has Topics on and the bot is an admin that may manage topics and delete messages. You can skip this step and add a channel later.</p>
 </li>
 </ol>
-<p>You can run <code>house onboard</code> again any time. The web admin has the same setup at <strong>/setup</strong>: it opens by itself while there is no workspace yet.</p>
+<p>Then it makes the workspace's bot, an assistant with scouts on. Change its model, size and instructions later in the admin.</p>
+<p>You can run <code>house onboard</code> again any time. The web admin has the same setup at <strong>/setup</strong>: it opens by itself while there is no workspace yet, and makes everything at once at its last step.</p>
 <h2 id="3-start">3. Start</h2>
 <pre><code class="language-sh">house start
 </code></pre>

@@ -83,10 +83,13 @@ export async function confirm(terminal: Terminal, question: string, fallback = t
   }
 }
 
-/** One of numbered options; Enter takes the first. */
-export async function choose<T extends string>(terminal: Terminal, question: string, options: { value: T; label: string }[]): Promise<T> {
+/** One of numbered options, numbered on across the sections their `heading`s start; Enter takes the first. */
+export async function choose<T extends string>(terminal: Terminal, question: string, options: { value: T; label: string; heading?: string }[]): Promise<T> {
   terminal.say(question);
-  options.forEach(({ label }, index) => terminal.say(`  ${bold(String(index + 1))}) ${label}`));
+  options.forEach(({ label, heading }, index) => {
+    if (heading) terminal.say(dim(heading));
+    terminal.say(`  ${bold(String(index + 1))}) ${label}`);
+  });
   for (;;) {
     const answer = await terminal.ask(`${dim("[1]")} `);
     const index = answer ? Number(answer) - 1 : 0;

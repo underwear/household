@@ -34,7 +34,7 @@ house onboard
 
 It asks, one step at a time, and shows for each choice how to get what it needs:
 
-1. **Model** — Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (`claude setup-token` makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.
+1. **Model** — a key you saved before, or a new one: Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (`claude setup-token` makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.
 2. **Workspace** — a name for your bots' home, and how much of the machine's CPU and memory it may use.
 3. **Channel** — where you talk to your bots:
    - **Telegram group with topics** (recommended): a topic per bot in a group of yours;
@@ -42,12 +42,11 @@ It asks, one step at a time, and shows for each choice how to get what it needs:
    - **Telegram, one plain chat**;
    - **Slack DM**.
 
-   You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. You can skip this step and add a channel later.
-4. **Bot** — what it is for (personal assistant, developer, researcher, or blank), its name and its CPU and memory. Its purpose adds a role to its instructions.
-5. **Scouts** — on or off.
-6. **Sideworkers** — on or off. You can change both later in the admin.
+   You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. For a group, Household finds it by itself once the bot is in it, and checks it has Topics on and the bot is an admin that may manage topics and delete messages. You can skip this step and add a channel later.
 
-You can run `house onboard` again any time. The web admin has the same setup at **/setup**: it opens by itself while there is no workspace yet.
+Then it makes the workspace's bot, an assistant with scouts on. Change its model, size and instructions later in the admin.
+
+You can run `house onboard` again any time. The web admin has the same setup at **/setup**: it opens by itself while there is no workspace yet, and makes everything at once at its last step.
 
 ## 3. Start
 

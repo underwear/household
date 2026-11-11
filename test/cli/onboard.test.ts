@@ -22,8 +22,9 @@ function scripted(script: string[]) {
     if (answers.length === 0) throw new Error(`no answer scripted for: ${question}\n--- said:\n${said.join("\n")}`);
     return answers.shift()!;
   };
-  const terminal: Terminal = { say: (text = "") => { said.push(text); }, ask: next, secret: next };
-  return { terminal, said: () => said.join("\n"), asked, left: () => answers.length };
+  const answered = async (question: string) => { const answer = await next(question); said.push("<answer>"); return answer; };
+  const terminal: Terminal = { say: (text = "") => { said.push(text); }, ask: answered, secret: answered };
+  return { terminal, said: () => said.filter((text) => text !== "<answer>").join("\n"), saidLines: () => [...said], asked, left: () => answers.length };
 }
 
 function setup(overrides: Partial<OnboardDeps> = {}) {
@@ -40,9 +41,13 @@ function setup(overrides: Partial<OnboardDeps> = {}) {
       if (!/^U[A-Z0-9]+$/.test(member)) throw new Error("Copy your member ID from your Slack profile");
       return { own: tokens, also: [], chat: "T0123456789:D0123456789", owner: `T0123456789:${member}` };
     },
-    addInstructions: async (house, pet, text) => { calls.push(`role ${house}/${pet}: ${text.split("\n")[2]}`); },
+    async watch(_token, { group, onContact, onGroup }) {
+      onContact({ id: "777", name: "Igor", username: "igor" });
+      if (group) onGroup({ id: GROUP, title: "Home", problems: [] });
+      return "done";
+    },
+    checkGroup: async (_token, chat) => ({ id: chat, title: "Home", problems: [] }),
     botName: async (token) => BOTS[token],
-    firstContact: async () => ({ id: "777", name: "Igor", username: "igor" }),
     codexLogin: async (name) => { calls.push(`codex ${name}`); await config.addKey(name, { provider: "openai", value: "sk-codex-test" }); },
     localCodex: () => undefined,
     codexImport: async (name) => { calls.push(`import ${name}`); await config.addKey(name, { provider: "openai", value: "codex-chatgpt:local" }); },
@@ -65,22 +70,20 @@ function setup(overrides: Partial<OnboardDeps> = {}) {
   return { config, calls, run, house };
 }
 
-/** The group the first run connects. */
+/** The group the bot is found in. */
 const GROUP = "-1001234567890";
 /**
  * The first run with Enter everywhere, not starting the daemon: Claude by subscription, workspace home with its
- * suggested budget, a Telegram group (recommended, the first offered), a personal assistant.
+ * suggested budget, a Telegram group (recommended, the first offered) found by watching the bot; then the bot.
  */
 const FIRST = [
   "", "", "sk-ant-oat01-onboard-test", // Claude, its subscription, the token
   "", "", "",                          // home, 4 vCPU, 8 GiB (half of the 8 / 16 GiB machine)
-  "", TOKEN, GROUP, "",                // a group: the bot, its id, "that's me"
-  "", "", "", "", "",                  // a personal assistant: name, title, cpus, memory
-  "", "",                              // scouts (on), sideworkers (off): the assistant's defaults
+  "", TOKEN, "",                       // a group: the bot; Igor wrote, "that's me"; the group was found
   "n",
 ];
 
-test("Enter all the way: a Claude key, a workspace with a budget, a group and its owner, an assistant with its role", async () => {
+test("Enter all the way: a Claude key, a workspace with a budget, a group found by itself with its owner, and the workspace's bot", async () => {
   const { config, calls, run, house } = setup();
   const io = await run([...FIRST.slice(0, -1), ""]);
   expect((await config.load()).keys).toMatchObject([{ name: "claude", provider: "anthropic", value: "sk-ant-oat01-onboard-test", note: "Claude subscription" }]);
@@ -88,21 +91,26 @@ test("Enter all the way: a Claude key, a workspace with a budget, a group and it
   expect(home.resources).toEqual({ cpus: 4, memoryMiB: 8192 });
   expect(home.people.owners).toMatchObject([{ platform: "telegram", id: "777" }]);
   expect(home.channels).toMatchObject([{ kind: "telegram-group", chat: GROUP, token: TOKEN, pets: ["assistant"] }]);
-  expect(home.pets).toMatchObject([{ name: "assistant", title: "Assistant", emoji: "🤖", agent: "claude-code-tmux", key: "claude", cpus: 2, memoryMiB: 4096 }]);
-  expect(houseFeatures(home)).toMatchObject({ scouts: true, sideworkers: false });
-  expect(home.scouts?.length).toBeGreaterThan(0); // the General scout, seeded when scouts first go on
-  expect(calls).toEqual(["role home/assistant: You are Assistant, your owner's personal assistant. Help with everyday questions, writing, planning, reminders and quick research.", "start"]);
+  expect(home.pets).toMatchObject([{ name: "assistant", title: "Assistant", agent: "claude-code-tmux", key: "claude", cpus: 2, memoryMiB: 1024 }]);
+  expect(houseFeatures(home)).toMatchObject({ scouts: true, sideworkers: true });
+  expect(home.scouts?.length).toBeGreaterThan(0); // the General scout, seeded as the features are written
+  expect(calls).toEqual(["start"]);
   const said = io.said();
+  expect(said).toContain("1/3  Model");
+  expect(said).not.toContain("4/");
+  expect(said).not.toContain("Saved keys"); // none yet
   expect(said).toContain("Telegram group with topics [recommended]");
   expect(said).toContain("Telegram, a thread per bot [beta]");
   expect(said).toContain("1. In Telegram, open @BotFather (https://t.me/BotFather), send /newbot");
-  expect(said).toContain("in a private chat, not in the group");
+  expect(said).toContain("✓ message from Igor (@igor)");
+  expect(said).toContain("✓ group Home is ready.");
   expect(said).toContain("Added: key claude, workspace home, @house_bot with owner Igor, bot assistant");
   expect(said).toContain("write in your Telegram group: each bot has its own topic there.");
-  expect(said).toContain("claude plugin install household@household");
+  // Every answer is followed by a blank line: no wall of text.
+  expect(io.saidLines().filter((text, index, all) => all[index - 1] === "<answer>" && text !== "")).toEqual([]);
 });
 
-test("wrong answers are said and asked again; Codex signs in; a plain chat; a blank bot; a running daemon is told, not started", async () => {
+test("wrong answers are said and asked again; Codex signs in; a plain chat; a running daemon is told, not started", async () => {
   const { calls, run, house } = setup({ daemonUp: async () => true });
   const io = await run([
     "2", "",                     // ChatGPT / OpenAI, with ChatGPT
@@ -110,58 +118,47 @@ test("wrong answers are said and asked again; Codex signs in; a plain chat; a bl
     "0", "1", "0.3", "0.5",      // its budget: outside, then inside the bounds
     "3", "123:nope", TOKEN,      // one plain chat; the token refused, then good
     "n", "abc", "555",           // not me; a typed id, wrong then right
-    "4", "helper", "Helper", "", "", // a blank bot: its size is what is free
-    "n", "n",                    // scouts, sideworkers off
   ]);
   const lab = await house("lab");
   expect(lab.resources).toEqual({ cpus: 1, memoryMiB: 512 });
-  expect(lab.channels).toMatchObject([{ kind: "telegram-dm", chat: "555", pets: ["helper"] }]);
-  expect(lab.pets).toMatchObject([{ name: "helper", agent: "codex-app-server", key: "chatgpt", cpus: 1, memoryMiB: 512 }]);
+  expect(lab.channels).toMatchObject([{ kind: "telegram-dm", chat: "555", pets: ["assistant"] }]);
+  expect(lab.pets).toMatchObject([{ name: "assistant", agent: "codex-app-server", key: "chatgpt", cpus: 1, memoryMiB: 512 }]); // as much as the budget allows
   expect(lab.people.owners).toMatchObject([{ id: "555" }]);
-  expect(houseFeatures(lab)).toMatchObject({ scouts: false, sideworkers: false });
-  expect(calls).toEqual(["codex chatgpt", "notify"]); // a blank bot has no role to add
+  expect(calls).toEqual(["codex chatgpt", "notify"]);
   expect(io.said()).toContain("Telegram does not know this bot token");
   expect(io.said()).toContain("a whole number from 1 to 8");
   expect(io.said()).toContain("write to @house_bot in Telegram.");
 });
 
-test("run again with Enter: what there is is shown, picked and kept; nothing is added", async () => {
-  const { config, run, house } = setup();
+test("run again with Enter: saved keys apart from new ones; what there is is picked and kept; nothing is added", async () => {
+  const { config, run } = setup();
   await run(FIRST);
   const before = await config.load();
-  // use claude, workspace home, keep the channel, keep the bots, keep scouts on, keep sideworkers off, no start
-  const io = await run(["", "", "", "", "", "", "n"]);
-  expect(io.said()).toContain("You have Household set up already");
-  expect(io.said()).toContain("workspace home: @house_bot, assistant");
-  expect(io.said()).toContain("Kept as it was: key claude, workspace home, @house_bot, bots assistant");
-  expect(io.said()).not.toContain("Added:");
+  const io = await run(["", "", "", "n"]); // the saved claude key, workspace home, keep the channel, no start
+  const said = io.said();
+  expect(said).toContain("You have Household set up already");
+  expect(said).toContain("workspace home: @house_bot, assistant");
+  expect(said.indexOf("Saved keys")).toBeGreaterThan(-1);
+  expect(said.indexOf("Saved keys")).toBeLessThan(said.indexOf("Add a new key"));
+  expect(said).toContain("Kept as it was: key claude, workspace home, @house_bot, bots assistant");
+  expect(said).not.toContain("Added:");
   expect(await config.load()).toEqual(before);
-  expect(houseFeatures(await house())).toMatchObject({ scouts: true, sideworkers: false });
 });
 
-test("run again to extend: an Anthropic API key, a second bot in the same channel, scouts turned off", async () => {
+test("run again with a new key: an Anthropic API key, with its guide; the bot stays as it is", async () => {
   const { config, run, house } = setup();
   await run(FIRST);
-  const io = await run([
-    "2", "2", "sk-ant-api03-second", // add Claude, by an API key
-    "", "",                          // home, keep the channel
-    "2", "", "", "", "", "",         // add a bot: an assistant, assistant-2, its title, cpus, memory
-    "n", "",                         // scouts off; sideworkers as the assistant has them (off)
-    "n",
-  ]);
+  const io = await run(["2", "2", "sk-ant-api03-second", "", "", "n"]); // add Claude, by an API key; home; keep the channel
   expect(io.said()).toContain("API keys in the Claude Console (https://platform.claude.com/settings/keys)");
   expect((await config.load()).keys.map((key) => key.name)).toEqual(["claude", "anthropic"]);
-  const home = await house();
-  expect(home.pets.map((pet) => [pet.name, pet.key])).toEqual([["assistant", "claude"], ["assistant-2", "anthropic"]]);
-  expect(home.channels[0]!.pets).toEqual(["assistant", "assistant-2"]);
-  expect(houseFeatures(home)).toMatchObject({ scouts: false, sideworkers: false });
-  expect(io.said()).toContain("Added: key anthropic, bot assistant-2");
+  expect((await house()).pets.map((pet) => [pet.name, pet.key])).toEqual([["assistant", "claude"]]);
+  expect(io.said()).toContain("Added: key anthropic.");
 });
 
 test("another bot in the same chat: the token changes, owners and pets stay", async () => {
   const { run, house } = setup();
   await run(FIRST);
-  const io = await run(["", "", "2", "bad", OTHER, "", "", "", "n"]);
+  const io = await run(["", "", "2", "bad", OTHER, "n"]);
   const home = await house();
   expect(home.channels).toMatchObject([{ chat: GROUP, token: OTHER, pets: ["assistant"] }]);
   expect(home.people.owners).toMatchObject([{ id: "777" }]);
@@ -172,26 +169,46 @@ test("another bot in the same chat: the token changes, owners and pets stay", as
 test("a new workspace next to one there is: its own name, budget, channel and bot", async () => {
   const { config, run } = setup();
   await run(FIRST);
-  await run(["", "2", "home", "", "", "", "", OTHER, "-1009876543210", "", "", "", "", "", "", "", "", "n"]); // home is taken: the offered name
+  await run(["", "2", "home", "", "", "", "", OTHER, "", "n"]); // home is taken: the offered name
   const houses = (await config.load()).houses;
   expect(houses.map((house) => house.name)).toEqual(["home", "home-2"]);
-  expect(houses[1]).toMatchObject({ resources: { cpus: 4, memoryMiB: 8192 }, channels: [{ token: OTHER, chat: "-1009876543210" }], pets: [{ name: "assistant", key: "claude" }] });
+  expect(houses[1]).toMatchObject({ resources: { cpus: 4, memoryMiB: 8192 }, channels: [{ token: OTHER, chat: GROUP }], pets: [{ name: "assistant", key: "claude" }] });
 });
 
-test("a group's id is checked; nobody writes to the bot, or it cannot be listened to: the owner's id is asked for", async () => {
-  for (const firstContact of [async () => undefined, async () => { throw new Error("getUpdates: 409 Conflict"); }]) {
-    const { run, house } = setup({ firstContact });
-    const io = await run([...FIRST.slice(0, 8), "12345", GROUP, "999", ...FIRST.slice(10)]);
+test("nothing found by watching, or the watch fails: the ids are asked for, and the group is checked until it is ready", async () => {
+  for (const watch of [async () => "timeout" as const, async () => { throw new Error("getUpdates: 409 Conflict"); }]) {
+    let checks = 0;
+    const checkGroup = async (_token: string, chat: string) => ({ id: chat, title: "Home", problems: checks++ === 0 ? ["turn on Topics in the group's settings"] : [] });
+    const { run, house } = setup({ watch, checkGroup });
+    const io = await run([...FIRST.slice(0, 8), "999", "12345", GROUP, "", "n"]); // the owner's id; the group's, wrong then right; Enter to check again
     expect((await house()).people.owners).toMatchObject([{ id: "999" }]);
     expect((await house()).channels).toMatchObject([{ chat: GROUP }]);
     expect(io.said()).toContain("a negative number starting with -100");
-    expect(io.asked.some((question) => question.includes("numeric Telegram id"))).toBe(true);
+    expect(io.said()).toContain("! group Home still needs: turn on Topics in the group's settings");
+    expect(io.said()).toContain("✓ group Home is ready.");
+    expect(checks).toBe(2);
   }
+});
+
+test("a group found with something missing: said as it is found, and checked again until it is ready", async () => {
+  let fixed = false;
+  const { run, house } = setup({
+    async watch(_token, { onContact, onGroup }) {
+      onGroup({ id: GROUP, title: "Home", problems: ["make the bot an administrator of the group, with Manage topics and Delete messages"] });
+      onContact({ id: "777", name: "Igor" });
+      return "timeout";
+    },
+    checkGroup: async (_token, chat) => { const problems = fixed ? [] : ["give the bot the Delete messages right"]; fixed = true; return { id: chat, title: "Home", problems }; },
+  });
+  const io = await run([...FIRST.slice(0, 9), "", "", "n"]); // that's me; Enter to check again, twice
+  expect((await house()).channels).toMatchObject([{ kind: "telegram-group", chat: GROUP }]);
+  expect(io.said()).toContain("! group Home still needs: make the bot an administrator");
+  expect(io.said()).toContain("! group Home still needs: give the bot the Delete messages right");
 });
 
 test("Slack: the app's two tokens, then the member ID finds the DM; the member becomes the owner", async () => {
   const { run, house } = setup();
-  const io = await run([...FIRST.slice(0, 6), "4", "xoxb-not-it", `xoxb-${"1".repeat(24)}`, `xapp-${"2".repeat(24)}`, "me", "U0123456789", ...FIRST.slice(10, -1), ""]); // and start: where to write is said
+  const io = await run([...FIRST.slice(0, 6), "4", "xoxb-not-it", `xoxb-${"1".repeat(24)}`, `xapp-${"2".repeat(24)}`, "me", "U0123456789", ""]); // and start: where to write is said
   const home = await house();
   expect(home.channels).toMatchObject([{ kind: "slack-private", chat: "T0123456789:D0123456789", pets: ["assistant"] }]);
   expect(home.people.owners).toMatchObject([{ platform: "slack", id: "T0123456789:U0123456789" }]);
@@ -202,7 +219,7 @@ test("Slack: the app's two tokens, then the member ID finds the DM; the member b
 
 test("the channel can wait: the bot joins none, and the summary says so", async () => {
   const { run, house } = setup();
-  const io = await run([...FIRST.slice(0, 6), "5", ...FIRST.slice(10)]);
+  const io = await run([...FIRST.slice(0, 6), "5", "n"]);
   const home = await house();
   expect(home.channels).toEqual([]);
   expect(home.pets).toMatchObject([{ name: "assistant" }]);
@@ -230,13 +247,13 @@ test("Claude Code here: the wizard offers claude setup-token, then takes the tok
   expect((await config.load()).keys).toMatchObject([{ name: "claude", value: "sk-ant-oat01-made-here" }]);
 });
 
-test("a bot Household runs already is not listened to (the daemon reads it): the owner's id is asked for", async () => {
-  let listened = 0;
-  const { run, house } = setup({ firstContact: async () => { listened++; return { id: "777", name: "Igor" }; } });
+test("a bot Household runs already is not watched (the daemon reads it): the owner's id is asked for", async () => {
+  let watched = 0;
+  const { run, house } = setup({ async watch(_token, { group, onContact, onGroup }) { watched++; onContact({ id: "777", name: "Igor" }); if (group) onGroup({ id: GROUP, title: "Home", problems: [] }); return "done"; } });
   await run(FIRST);
   // home's bot again, now as a plain chat with someone else: another channel of the same workspace
-  await run(["", "", "3", "3", TOKEN, "888", "", "", "", "n"]);
-  expect(listened).toBe(1);
+  await run(["", "", "3", "3", TOKEN, "888", "n"]);
+  expect(watched).toBe(1);
   const home = await house();
   expect(home.channels.map((channel) => `${channel.kind}:${channel.chat}`)).toEqual([`telegram-group:${GROUP}`, "telegram-dm:888"]);
   expect(home.people.owners.map((owner) => owner.id)).toEqual(["777", "888"]);

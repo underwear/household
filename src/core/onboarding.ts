@@ -1,7 +1,9 @@
+import { DEFAULT_PET_CPUS, DEFAULT_PET_MEMORY_MIB } from "./resources";
+
 /**
  * What setup offers, the same in the web admin (/setup) and `house onboard`: the ways to give Household a model (a
- * provider, then how to sign in), the channels to talk through, and ready setups for a first bot, each with the
- * steps to get what it needs. A step is a line of words with a little markup each front end draws its own way:
+ * provider, then how to sign in) and the channels to talk through, each with the steps to get what it needs, and
+ * the bot it makes. A step is a line of words with a little markup each front end draws its own way:
  * `code`, **bold** and [text](https://…).
  */
 
@@ -112,8 +114,7 @@ export const CHANNELS: ChannelOption[] = [
       BOTFATHER,
       "Create a group (or open yours) and turn on **Topics** in its settings.",
       "Add your bot to the group and make it an admin with **Manage topics** and **Delete messages**.",
-      "Find the group's id: open [Telegram Web](https://web.telegram.org/a), open the group, and copy everything after `#` in the address (`-100…`).",
-      "Paste the token and the id here.",
+      "Paste the token here: Household finds the group by itself and checks it.",
     ],
   },
   {
@@ -154,70 +155,13 @@ export const TELEGRAM_GROUP_ID = /^-100\d{5,16}$/;
 /** A Telegram user's id. */
 export const TELEGRAM_USER_ID = /^[1-9]\d{0,15}$/;
 
-/** A ready setup for a first bot: its names, its share of the workspace, the helpers it gets, and its role. */
-export interface BotPreset {
-  id: string;
-  label: string;
-  description: string;
-  name: string;
-  title: string;
-  emoji: string;
-  cpus: number;
-  memoryMiB: number;
-  scouts: boolean;
-  sideworkers: boolean;
-  /** What it is for, added to its instructions; none for a blank bot. */
-  role?: string;
-}
+/** The helpers setup turns on in a new workspace, as its bot's first tools (sideworkers are on by default anyway). */
+export const SETUP_FEATURES = { scouts: true } as const;
 
-export const BOT_PRESETS: BotPreset[] = [
-  {
-    id: "assistant",
-    label: "Personal assistant",
-    description: "Everyday help: questions, notes, reminders, planning, quick research. Scouts on, so it can browse with your approval.",
-    name: "assistant", title: "Assistant", emoji: "🤖",
-    cpus: 2, memoryMiB: 4096, scouts: true, sideworkers: false,
-    role: `You are {title}, your owner's personal assistant. Help with everyday questions, writing, planning, reminders and quick research.
-- Answer briefly and to the point; ask when a request is ambiguous.
-- Keep what you learn about your owner's preferences in your memory, and use it.
-- Use scheduled tasks for reminders and recurring checks.
-- When you need the web, a browser or other tools you lack, use a scout.`,
-  },
-  {
-    id: "developer",
-    label: "Developer",
-    description: "Writes and runs code in its VM: projects, scripts, tests, reviews. More CPU and memory; sideworkers on for parallel work.",
-    name: "dev", title: "Dev", emoji: "🧑‍💻",
-    cpus: 4, memoryMiB: 8192, scouts: true, sideworkers: true,
-    role: `You are {title}, a software engineer working for your owner in your own VM.
-- Keep projects under ~/work, each in its own git repository; commit small, well-described steps.
-- Run the code and its tests before saying something works; show what you ran.
-- For long, separate pieces of work, start a sideworker and keep your owner posted.
-- Ask before anything destructive or outward-facing (pushing, publishing, deleting data).`,
-  },
-  {
-    id: "researcher",
-    label: "Researcher",
-    description: "Digs into a topic and reports back with sources. Uses scouts for the browser.",
-    name: "researcher", title: "Researcher", emoji: "🔎",
-    cpus: 2, memoryMiB: 4096, scouts: true, sideworkers: false,
-    role: `You are {title}, a research assistant.
-- Find, compare and summarize information; always give your sources.
-- Separate what the sources say from your own conclusions, and say how sure you are.
-- Use a scout with a browser for the web; keep notes of long investigations in ~/work.`,
-  },
-  {
-    id: "blank",
-    label: "Blank",
-    description: "Household's defaults, no role: you write its instructions yourself.",
-    name: "bot", title: "Bot", emoji: "🤖",
-    cpus: 2, memoryMiB: 2048, scouts: false, sideworkers: false,
-  },
-];
-
-/** The preset's role as a section of a bot's instructions, under its display name; undefined for none. */
-export function presetInstructions(preset: BotPreset, title: string): string | undefined {
-  return preset.role ? `## Your role\n\n${preset.role.replaceAll("{title}", title)}` : undefined;
+/** The bot setup makes in a new workspace: an assistant, of the default size as far as the budget allows. */
+export const DEFAULT_BOT = { name: "assistant", title: "Assistant" };
+export function defaultBotSize(budget: { cpus: number; memoryMiB: number }): { cpus: number; memoryMiB: number } {
+  return { cpus: Math.max(1, Math.min(DEFAULT_PET_CPUS, budget.cpus)), memoryMiB: Math.max(512, Math.min(DEFAULT_PET_MEMORY_MIB, budget.memoryMiB)) };
 }
 
 /** A guide line's pieces: words, `code`, **bold** and [text](url) links, in order. */
