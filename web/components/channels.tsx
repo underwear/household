@@ -171,7 +171,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
               label="Kind"
               value={choice}
               onChange={setChoice}
-              options={kinds.map((each) => ({ value: each.kind, label: each.label, description: each.description, icon: <PlatformIcon platforms={platforms} platform={each.platform} small /> }))}
+              options={kinds.map((each) => ({ value: each.kind, label: each.kind === "telegram-private" ? <span className="cluster gap-2">{each.label}<span className="tag busy">Beta</span></span> : each.label, description: each.description, icon: <PlatformIcon platforms={platforms} platform={each.platform} small /> }))}
             />
           ),
         }}
@@ -200,6 +200,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
           }),
         children: (
           <>
+            {spec.kind === "telegram-private" && <p className="hint"><span className="tag busy">Beta</span>{" "}Threaded Mode is in beta. Topic behavior may vary between Telegram clients.</p>}
             {spec.fields
               .filter((field) => field.wide)
               .map((field) => (

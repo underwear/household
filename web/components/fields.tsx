@@ -157,7 +157,7 @@ export function SelectField({ label, hideLabel, hint, error, value, onChange, op
 
 export interface ChoiceOption {
   value: string;
-  label: string;
+  label: ReactNode;
   /** A line on what it is. */
   description?: string;
   /** Its mark, before it. */
