@@ -70,6 +70,17 @@ export interface BotFields {
   lifecycle?: BotLifecycle | null;
 }
 
+/** What the setup page gathered, as it sends it to be made at once. */
+export interface SetupFields {
+  /** A key there is, by name, or one pasted on the page. */
+  key: string | { name: string; provider: string; value: string; note?: string | null };
+  workspace: { name: string; cpus: number; memoryMiB: number };
+  /** A Telegram bot waited on (`listen`), its owner and a group's id; or a Slack app and its owner's member ID; null: none yet. */
+  channel: { telegram: { listen: string; owner: string; chat?: string } } | { slack: { token: string; appToken: string; member: string } } | null;
+  bot: { name: string; title: string | null; emoji: string | null; cpus: number; memoryMiB: number; role: string | null };
+  features: { scouts: boolean; sideworkers: boolean };
+}
+
 /** A key as the forms send it: `note` null for none. */
 export interface KeyFields {
   provider: string;
@@ -233,6 +244,8 @@ export const api = {
   listenBot: (house: string, kind: string, token: string) => call<BotListenView>("POST", "/api/onboarding/telegram", { house, kind, token }),
   botListen: (id: string) => call<BotListenStatus & { bot: string }>("GET", `/api/onboarding/telegram/${encodeURIComponent(id)}`),
   listenAgain: (id: string) => call<BotListenStatus & { bot: string }>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/again`),
-  /** `chat`: a group's id; a private chat's is the owner's. */
-  finishBot: (id: string, owner: string, chat?: string) => call<WriteView>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/finish`, { owner, ...(chat ? { chat } : {}) }),
+  /** A Slack app's tokens checked and its owner's DM with it found, for workspace `house` (not made yet). */
+  findSlackDm: (house: string, token: string, appToken: string, member: string) => call<{ chat: string; owner: string; url: string }>("POST", "/api/onboarding/slack", { house, token, appToken, member }),
+  /** Everything the setup gathered, made at once. */
+  setUp: (setup: SetupFields) => call<WriteView & { warnings: string[] }>("POST", "/api/onboarding/setup", setup),
 };

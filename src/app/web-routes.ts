@@ -41,6 +41,9 @@ import { requestDomain, requestPort, type NetworkRequests } from "./network-requ
 import { clearedCookie, cookieValue, sessionCookie, sessionCookieName, type WebAuth } from "./web-auth";
 import type { AgentView, BotListenView, DeviceLoginView, HouseView, KeysView, MeView, OnboardingView, WriteView } from "./web-views";
 import type { Onboarding } from "./onboarding";
+import { PROVIDERS as SETUP_PROVIDERS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID } from "../core/onboarding";
+import { assertName } from "../core/names";
+import type { AlsoChannel } from "../infra/config-store";
 import type { Allowance } from "../core/allowance";
 import { LOG_KINDS, readLog, type LogKind } from "./household-log";
 import { isPetLogSource, PET_LOG_SOURCES, type PetLogSource, type PetLogView } from "./pet-logs";
@@ -96,6 +99,8 @@ export interface WebRoutesDeps {
   petLog?: (house: string, pet: string, source: PetLogSource, read: { lines?: number; after?: string }) => Promise<PetLogView | undefined>;
   /** The machine's CPUs and memory, what the forms weigh a pet's against; this one's when not given. */
   host?: HostCapacity;
+  /** How long a write waits for its reload before it answers that it is still applying (default 5 s). */
+  applyWaitMs?: number;
   /** The setup's sign-ins and waits for a bot's first message. */
   onboarding?: Onboarding;
 }
@@ -123,9 +128,22 @@ const nameBody = z.strictObject({ name: z.string() });
 const hostBody = z.strictObject({ host: z.string() });
 const hostsBody = z.strictObject({ hosts: z.array(z.string()).min(1).max(50) });
 const ONBOARDING_KINDS = ["telegram-private", "telegram-dm", "telegram-group"];
+// `house`: the workspace the bot is for: a new one's name, not made yet (a bot serves one workspace).
 const botBody = z.strictObject({ house: z.string(), kind: z.string(), token: z.string() });
-// `chat`: a group's id (-100…); a private chat's is its owner's.
-const finishBody = z.strictObject({ owner: z.string(), chat: z.string().nullish() });
+const slackBody = z.strictObject({ house: z.string(), token: z.string(), appToken: z.string(), member: z.string() });
+// What the setup page gathered, made at once: a key (one there is, or a pasted one), a new workspace and its budget,
+// its channel (a Telegram bot waited on, with its owner and, for a group, its id; or a Slack app and its owner's
+// member ID), its first bot and the workspace's helpers.
+const setupBody = z.strictObject({
+  key: z.union([z.string(), z.strictObject({ name: z.string(), provider: z.string(), value: z.string(), note: z.string().nullish() })]),
+  workspace: z.strictObject({ name: z.string(), cpus: petCpuSchema, memoryMiB: petMemorySchema }),
+  channel: z.union([
+    z.strictObject({ telegram: z.strictObject({ listen: z.string(), owner: z.string(), chat: z.string().nullish() }) }),
+    z.strictObject({ slack: z.strictObject({ token: z.string(), appToken: z.string(), member: z.string() }) }),
+  ]).nullish(),
+  bot: z.strictObject({ name: z.string(), title: z.string().nullish(), emoji: z.string().nullish(), cpus: petCpuSchema, memoryMiB: petMemorySchema, role: z.string().max(20_000).nullish() }),
+  features: z.strictObject({ scouts: z.boolean(), sideworkers: z.boolean() }),
+});
 const ownerBody = z.strictObject({ platform: z.string(), id: z.string(), note: z.string().nullish() });
 const ownerNoteBody = z.strictObject({ note: z.string().nullable() });
 // A field left out stays as it is; null (or "") removes it. The config's own rules check the values.
@@ -275,37 +293,42 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     return house && houseView(house, await deps.petStates(), household.keys);
   };
 
+  /**
+   * A write's reload, waited for a few seconds: reloads run one at a time, and one that starts a bot waits until it
+   * is up (minutes, for a first image), so a page would hang on it. Past the wait, "applying": the reload goes on,
+   * and a failure of it is the daemon log's (it logs it). A failure within the wait is NotApplied.
+   */
+  const applied = async (apply: () => Promise<unknown> = deps.apply): Promise<{ applying?: true }> => {
+    const run = apply().then(() => ({}), () => { throw new NotApplied(); });
+    run.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waited = new Promise<{ applying: true }>((resolve) => { timer = setTimeout(() => resolve({ applying: true }), deps.applyWaitMs ?? 5000); });
+    try {
+      return await Promise.race([run, waited]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   /** After a write to the keys: the reload, and the keys as written. */
   const keysWritten = async (household: Household, what: string, status = 200): Promise<Response> => {
     events.info(`web: key ${what}`);
-    try {
-      await deps.apply();
-    } catch {
-      throw new NotApplied();
-    }
-    return json({ keys: keyViews(deps.agents, household, deps.allowances) } satisfies KeysView, status);
+    const state = await applied();
+    return json({ keys: keyViews(deps.agents, household, deps.allowances), ...state } satisfies KeysView, status);
   };
 
   /** After a write to the secrets: the reload, and the secrets as written (never their values in the log). */
   const secretsWritten = async (household: Household, houseName: string, what: string, status = 200): Promise<Response> => {
     events.info(`web: secret ${what}`);
-    try {
-      await (deps.applySecrets ?? deps.apply)();
-    } catch {
-      throw new NotApplied();
-    }
+    await applied(deps.applySecrets ?? deps.apply);
     return json({ secrets: secretViews(household.houses.find(house => house.name === houseName)!) }, status);
   };
 
   /** After a write: the reload, and the answer with the house as written (none for a delete). */
   const written = async (household: Household, name: string, what: string, status = 200): Promise<Response> => {
     events.info(`web: workspace ${name} ${what}`);
-    try {
-      await deps.apply();
-    } catch {
-      throw new NotApplied();
-    }
-    return json({ house: await viewOf(household, name) } satisfies WriteView, status);
+    const state = await applied();
+    return json({ house: await viewOf(household, name), ...state } satisfies WriteView, status);
   };
   /** A route under one house's path, e.g. `at("/pets/([^/]+)")`. */
   const at = (path: string) => new RegExp(`^/api/houses/([^/]+)${path}$`);
@@ -344,6 +367,82 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     if (!deps.onboarding) throw new HouseholdError("setup is not available here: run house onboard");
     return deps.onboarding;
   };
+
+  /**
+   * The setup page's choices, made at once: everything is checked first (names, budget, the bot's token or the
+   * Slack app, the key), then written one piece after another and reloaded once. A write that fails takes back
+   * the pieces before it (the workspace, with its channel and bot; a pasted key), so nothing half made is left.
+   * The bot's role goes into its instructions last: when that fails, the rest stays and the answer says so.
+   */
+  const setUp = async (body: z.infer<typeof setupBody>): Promise<[WriteView & { warnings: string[] }, number]> => {
+    const household = await config.load();
+    const house = body.workspace.name.trim();
+    assertName("house", house);
+    if (findHouse(household, house)) throw new HouseholdError(`workspace '${house}' exists already`);
+    const budget = { cpus: body.workspace.cpus, memoryMiB: body.workspace.memoryMiB };
+    const beyond = beyondHost(budget, host);
+    if (beyond.length) throw new HouseholdError(beyond.join("; "));
+    if (body.bot.cpus > budget.cpus || body.bot.memoryMiB > budget.memoryMiB) throw new HouseholdError("the bot needs more than the workspace's budget: give the workspace more, or the bot less");
+    const pet = body.bot.name.trim();
+    if (!PET_NAME_PATTERN.test(pet)) throw new HouseholdError(`'${pet}' is not a bot name: a lowercase letter first, then a–z, 0–9, _ or -`);
+    const newKey = typeof body.key === "string" ? undefined : body.key;
+    const keyName = typeof body.key === "string" ? body.key : body.key.name.trim();
+    const provider = newKey?.provider ?? household.keys.find((key) => key.name === keyName)?.provider;
+    if (!newKey && !provider) throw new NotFoundError(`no key '${keyName}'`);
+    if (newKey && household.keys.some((key) => key.name === keyName)) throw new HouseholdError(`key '${keyName}' exists already`);
+    const agent = SETUP_PROVIDERS.find((each) => each.id === provider)?.harness;
+    if (!agent) throw new HouseholdError(`setup runs Claude or OpenAI keys, not ${provider}`);
+    // The channel, checked with its service before anything is written.
+    let channel: { fields: { kind: string; chat: string } & Record<string, string>; also: AlsoChannel[]; owner: { platform: string; id: string }; listen?: string } | undefined;
+    if (body.channel && "telegram" in body.channel) {
+      const { listen, owner, chat } = body.channel.telegram;
+      const { token, kind } = onboarding().bot(listen);
+      if (!TELEGRAM_USER_ID.test(owner.trim())) throw new HouseholdError("a Telegram id is a number, like 123456789 (@userinfobot tells it)");
+      const group = kind === "telegram-group";
+      if (group && !TELEGRAM_GROUP_ID.test(chat?.trim() ?? "")) throw new HouseholdError("a group's id is a negative number starting with -100, like -1001234567890");
+      const { own, also } = await checkFields(deps.channelKinds, deps.checks, kind, { token }, { household, house });
+      channel = { fields: { kind, ...own, chat: group ? chat!.trim() : owner.trim() }, also, owner: { platform: "telegram", id: owner.trim() }, listen };
+    } else if (body.channel && "slack" in body.channel) {
+      const { token, appToken, member } = body.channel.slack;
+      const { own, also } = await checkFields(deps.channelKinds, deps.checks, "slack-private", { token, appToken }, { household, house });
+      const found = await resolveSlackDm(own.token!, member);
+      channel = { fields: { kind: "slack-private", ...own, chat: found.chat }, also, owner: { platform: "slack", id: found.owner } };
+    }
+    let keyAdded = false;
+    let houseMade = false;
+    let after: Household;
+    try {
+      if (newKey) {
+        await config.addKey(keyName, { provider: newKey.provider, value: newKey.value.trim(), note: newKey.note ?? null });
+        keyAdded = true;
+      }
+      await config.createHouse(house);
+      houseMade = true;
+      await config.setWorkspaceResources(house, budget);
+      if (channel) await config.addChannel(house, channel.fields, channel.also, channel.owner);
+      await config.addPet(house, pet, { agent, key: keyName, cpus: body.bot.cpus, memoryMiB: body.bot.memoryMiB, lifecycle: DEFAULT_LIFECYCLE, ...(body.bot.title?.trim() ? { title: body.bot.title.trim() } : {}), ...(body.bot.emoji?.trim() ? { emoji: body.bot.emoji.trim() } : {}) }, channel ? [channel.fields.chat] : []);
+      const made = findHouse(await config.load(), house)!;
+      after = await config.setHouseFeatures(house, { features: { ...houseFeatures(made), ...body.features }, preview: previewSettings(made) });
+    } catch (error) {
+      if (houseMade) await config.deleteHouse(house).catch(() => undefined);
+      if (keyAdded) await config.removeKey(keyName).catch(() => undefined);
+      throw error;
+    }
+    if (channel?.listen) onboarding().finish(channel.listen);
+    const warnings: string[] = [];
+    if (body.bot.role?.trim()) {
+      try {
+        const { store, adapter } = await instructionTarget(house, pet);
+        const file = await store.read(house, pet, adapter.instructionsFile!, adapter.instructionOverrides);
+        await store.write(house, pet, adapter.instructionsFile!, adapter.instructionOverrides ?? [], `${file.content.trimEnd()}\n\n${body.bot.role.trim()}\n`, file.revision);
+      } catch (error) {
+        warnings.push(`${pet}'s role was not added to its instructions (${(error as Error).message}): add it on its Instructions tab`);
+      }
+    }
+    events.info(`web: workspace ${house} set up: key ${keyName}, ${channel ? `a ${channel.fields.kind} channel, ` : ""}bot ${pet}`);
+    const state = await applied();
+    return [{ house: await viewOf(after, house), ...state, warnings }, 201];
+  };
   const routes: Route[] = [
     ["GET", /^\/api\/onboarding$/, async () => json({ localCodex: deps.onboarding?.localCodex() ?? null } satisfies OnboardingView)],
     ["POST", /^\/api\/onboarding\/codex\/import$/, async ({ request }) => {
@@ -366,7 +465,6 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const { house, kind, token } = await bodyOf(request, botBody);
       if (!ONBOARDING_KINDS.includes(kind)) throw new HouseholdError(`setup connects ${ONBOARDING_KINDS.join(" or ")}, not ${kind}`);
       const household = await config.load();
-      if (!findHouse(household, house)) throw new NotFoundError(`unknown workspace '${house}'`);
       const { own } = await checkFields(deps.channelKinds, deps.checks, kind, { token }, { household, house });
       const check = deps.checks.get(kind)?.get("token");
       const value = own.token!;
@@ -385,21 +483,13 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       onboarding().relisten(id!);
       return json(onboarding().status(id!));
     }],
-    // The person is who wrote (or who typed their id): the workspace's owner, and the channel's chat with them.
-    ["POST", /^\/api\/onboarding\/telegram\/([^/]+)\/finish$/, async ({ request, params: [id] }) => {
-      const body = await bodyOf(request, finishBody);
-      const owner = body.owner.trim();
-      if (!/^[1-9]\d{0,15}$/.test(owner)) throw new HouseholdError("a Telegram id is a number, like 123456789 (@userinfobot tells it)");
-      const { token, house, kind, bot } = onboarding().bot(id!);
-      const group = kind === "telegram-group";
-      const chat = group ? body.chat?.trim() ?? "" : owner;
-      if (group && !/^-100\d{5,16}$/.test(chat)) throw new HouseholdError("a group's id is a negative number starting with -100, like -1001234567890");
-      const household = await config.load();
-      const { own, also } = await checkFields(deps.channelKinds, deps.checks, kind, { token }, { household, house });
-      const after = await config.addChannel(house, { kind, chat, ...own }, also, { platform: "telegram", id: owner });
-      onboarding().finish(id!);
-      return written(after, house, `is in a ${kind} chat ${chat} with ${bot}, owner telegram ${owner}`, 201);
+    // A Slack app's tokens checked, and its owner's DM with it found: nothing is written yet.
+    ["POST", /^\/api\/onboarding\/slack$/, async ({ request }) => {
+      const { house, token, appToken, member } = await bodyOf(request, slackBody);
+      const { own } = await checkFields(deps.channelKinds, deps.checks, "slack-private", { token, appToken }, { household: await config.load(), house });
+      return json(await resolveSlackDm(own.token!, member));
     }],
+    ["POST", /^\/api\/onboarding\/setup$/, async ({ request }) => json(...await setUp(await bodyOf(request, setupBody)))],
     ["PUT", at("/features"), async ({ request, params: [house] }) => {
       const settings = await bodyOf(request, houseFeatureSettingsSchema);
       return written(await config.setHouseFeatures(house!, settings), house!, "house features changed");
@@ -437,7 +527,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     ["PUT", /^\/api\/timezone$/, async ({ request }) => {
       const { timezone } = await bodyOf(request,z.strictObject({timezone:z.string().max(100).refine(validTimezone,"Expected an IANA timezone")}));
       await config.setTimezone(timezone);
-      try { await deps.apply(); } catch { throw new NotApplied(); }
+      await applied();
       events.info(`web: Household timezone changed to ${timezone}`);
       return json({timezone});
     }],

@@ -57,9 +57,7 @@ export function WorkspacesTable({ houses, platforms }: { houses: WorkspaceView[]
             <Stack gap={2}>
               <span className="strong ellipsis">{house.name}</span>
               {ownBots(house.pets).length === 0 ? (
-                <span className="hint">
-                  no bots · <Link href={`/setup?workspace=${encodeURIComponent(house.name)}`} className="text-link">set up</Link>
-                </span>
+                <span className="hint">no bots</span>
               ) : (
                 <Cluster gap={2}>
                 {ownBots(house.pets).map((pet) => {

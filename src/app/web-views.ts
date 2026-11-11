@@ -78,6 +78,8 @@ export interface KeyView {
 /** A write to the keys' answer: the keys after it. */
 export interface KeysView {
   keys: KeyView[];
+  /** Saved, but Household is still applying it (a bot starting holds every reload); it goes on by itself. */
+  applying?: true;
 }
 
 /** An owner's secret as the web UI shows it (its value too, as the keys'). */
@@ -185,6 +187,8 @@ export interface HouseView {
 /** A write's answer: the house after it (not for a delete). */
 export interface WriteView {
   house?: HouseView;
+  /** Saved, but Household is still applying it (a bot starting holds every reload); it goes on by itself. */
+  applying?: true;
 }
 
 /** What the web's setup may offer: a copy of this machine's Codex login, if it has one. */

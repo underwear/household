@@ -116,7 +116,7 @@ export function App() {
       >
         {route.page === "workspaces" && <WorkspacesPage houses={houses} platforms={me.platforms} onNewWorkspace={() => setCreating(true)} />}
         {route.page === "setup" && (
-          <SetupPage key={path + location.search} houses={houses} keys={keys} agents={me.agents} host={me.host} resume={new URLSearchParams(location.search).get("workspace") ?? undefined} refresh={refresh} notify={notify} />
+          <SetupPage key={path + location.search} houses={houses} keys={keys} agents={me.agents} host={me.host} refresh={refresh} notify={notify} />
         )}
         {route.page === "settings" && (
           <Page title="Settings">

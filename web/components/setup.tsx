@@ -1,16 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { gib, type HostCapacity } from "../../src/core/resources";
-import { houseFeatures, previewSettings } from "../../src/core/house-features";
-import { api, type BotListenStatus, type BotListenView, type DeviceLoginView, type HarnessView, type KeyView, type OnboardingView, type WorkspaceView } from "../api";
+import { api, type BotListenStatus, type BotListenView, type DeviceLoginView, type KeyView, type OnboardingView, type SetupFields, type WorkspaceView } from "../api";
 import { botPath, navigate, workspacePath } from "../router";
 import { ChoiceList, StepperField, Switch, TextField } from "./fields";
-import { Cluster, FormGrid, Page, Panel, Stack } from "./layout";
+import { Cell, Cluster, FormGrid, List, ListRow, Page, Panel, Stack } from "./layout";
 import { Link } from "./link";
 import { petState } from "./bot-state";
-import { BOT_PRESETS, CHANNELS, KEY_METHODS, PROVIDERS, SLACK_MEMBER_STEPS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, guidePieces, presetInstructions, suggestedBudget, type ChannelOption, type KeyMethod, type Provider } from "../../src/core/onboarding";
-
-type Notify = (text: string, warning?: boolean) => void;
+import { BOT_PRESETS, CHANNELS, KEY_METHODS, PROVIDERS, SLACK_MEMBER_STEPS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, guidePieces, presetInstructions, suggestedBudget, type BotPreset, type ChannelOption, type KeyMethod, type Provider } from "../../src/core/onboarding";
 
 /** The setup's steps, each with its own screens (listed under it in the stepper while it is the current one). */
 export const SETUP_STEPS = [
@@ -18,7 +15,7 @@ export const SETUP_STEPS = [
   { id: "workspace", label: "Workspace", subs: [] },
   { id: "channel", label: "Channel", subs: ["Messenger", "Setup", "Owner"] },
   { id: "bot", label: "Bot", subs: ["Purpose", "Details"] },
-  { id: "hi", label: "Say hi", subs: [] },
+  { id: "review", label: "Review", subs: [] },
 ] as const;
 type StepId = (typeof SETUP_STEPS)[number]["id"];
 
@@ -32,57 +29,66 @@ const freeName = (taken: string[], base: string) => {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const providerLabel = (provider: string) => PROVIDERS.find((each) => each.id === provider)?.label ?? provider;
 
-/** A channel the setup made, for the stepper and the last step; null: the step was skipped. */
-interface Connected { kind: string; label: string; bot?: string }
+/** The key chosen: one there is (or one a sign-in just saved), or one pasted here, saved with the rest. */
+export interface KeyDraft { name: string; provider: Provider; label: string; pasted?: string }
+export interface WorkspaceDraft { name: string; cpus: number; memoryMiB: number }
+/** The channel chosen, checked with its service: a Telegram bot waited on and its owner, or a Slack app and its owner. */
+export interface ChannelDraft {
+  kind: ChannelOption["kind"];
+  label: string;
+  /** A Telegram bot's @username. */
+  bot?: string;
+  telegram?: { listen: string; owner: { id: string; name?: string }; group?: string };
+  slack?: { token: string; appToken: string; member: string; owner: string };
+}
+export interface BotDraft { preset: BotPreset; name: string; title: string; emoji: string; cpus: number; memoryMiB: number; scouts: boolean; sideworkers: boolean }
+/** Everything chosen so far; a channel of null was skipped. */
+export interface SetupDraft { key?: KeyDraft; workspace?: WorkspaceDraft; channel?: ChannelDraft | null; bot?: BotDraft }
 
 export interface SetupProps {
   houses: WorkspaceView[];
   keys: KeyView[];
-  agents: HarnessView[];
+  agents: { name: string }[];
   host: HostCapacity;
-  /** A workspace to go on with (`/setup?workspace=…`): from the first step it lacks. */
-  resume?: string;
   refresh: () => Promise<void>;
-  notify: Notify;
+  notify: (text: string, warning?: boolean) => void;
+  /** Where to start (tests). */
+  initial?: SetupDraft;
 }
 
 /**
  * Household · Setup: from nothing to a bot answering in a messenger, as `house onboard` does, one choice at a
- * time: what to choose, then how to get what that choice needs, then the field for it. The stepper on the left
- * shows every step with what was chosen; one done can be opened again. Each step writes as it ends (a key, a
- * workspace and its budget, a channel and its owner, a bot), so leaving halfway keeps what is done.
+ * time: what to choose, then how to get what that choice needs, then the field for it. The steps only gather and
+ * check (a bot's token, the owner's first message, a Slack DM); Review makes it all at once, with one reload. A
+ * ChatGPT sign-in is the exception: it saves its key as it ends. The stepper shows what was chosen; a step done
+ * opens again until it is all made.
  */
-export function SetupPage({ houses, keys, agents, host, resume, refresh, notify }: SetupProps) {
-  const resumed = houses.find((house) => house.name === resume);
-  const [key, setKey] = useState<KeyView | undefined>(() => (resumed ? keys.find((each) => resumed.pets.some((pet) => pet.key === each.name)) ?? keys[0] : undefined));
-  const [house, setHouse] = useState<string | undefined>(resumed?.name);
-  const [channel, setChannel] = useState<Connected | null | undefined>(() => {
-    const found = resumed?.channels[0];
-    return found ? { kind: found.kind, label: CHANNELS.find((each) => each.kind === found.kind)?.label ?? found.label, bot: found.shown?.token ?? undefined } : undefined;
-  });
-  const [bot, setBot] = useState<string | undefined>(() => resumed?.pets.find((pet) => !pet.sideworker)?.name);
-  const done: Record<StepId, boolean> = { model: !!key, workspace: !!house, channel: channel !== undefined, bot: !!bot, hi: false };
-  const firstOpen = SETUP_STEPS.find((step) => !done[step.id])!.id;
+export function SetupPage({ houses, keys, agents, host, refresh, notify, initial = {} }: SetupProps) {
+  const [draft, setDraft] = useState<SetupDraft>(initial);
+  const [made, setMade] = useState<{ house: WorkspaceView; channel?: ChannelDraft; applying: boolean }>();
+  const done: Record<StepId, boolean> = { model: !!draft.key, workspace: !!draft.workspace, channel: draft.channel !== undefined, bot: !!draft.bot, review: !!made };
+  const firstOpen = SETUP_STEPS.find((step) => !done[step.id])?.id ?? "review";
   const [at, setAt] = useState<{ step: StepId; sub: number }>({ step: firstOpen, sub: 0 });
-  const current = houses.find((each) => each.name === house);
 
-  /** A step is done: on to the first one still open after it. */
-  const next = (from: StepId) => {
-    const now = { ...done, [from]: true };
+  /** A choice made: kept, and on to the first step still open after it. */
+  const choose = <K extends keyof SetupDraft>(from: StepId, key: K, value: SetupDraft[K]) => {
+    const next = { ...draft, [key]: value };
+    setDraft(next);
+    const now = { model: !!next.key, workspace: !!next.workspace, channel: next.channel !== undefined, bot: !!next.bot, review: false };
     const index = SETUP_STEPS.findIndex((step) => step.id === from);
     const open = SETUP_STEPS.slice(index + 1).find((step) => !now[step.id]) ?? SETUP_STEPS.at(-1)!;
     setAt({ step: open.id, sub: 0 });
   };
   const go = (sub: number) => setAt({ step: at.step, sub });
   const summary: Record<StepId, string | undefined> = {
-    model: key && `${providerLabel(key.provider)} · ${key.name}`,
-    workspace: current && `${current.name}${current.resources ? ` · ${current.resources.total.cpus} vCPU · ${gib(current.resources.total.memoryMiB)}` : ""}`,
-    channel: channel === null ? "Skipped" : channel ? [channel.label, channel.bot].filter(Boolean).join(" · ") : undefined,
-    bot: current?.pets.find((pet) => pet.name === bot)?.display ?? bot,
-    hi: undefined,
+    model: draft.key && `${providerLabel(draft.key.provider)} · ${draft.key.name}`,
+    workspace: draft.workspace && `${draft.workspace.name} · ${draft.workspace.cpus} vCPU · ${gib(draft.workspace.memoryMiB)}`,
+    channel: draft.channel === null ? "Skipped" : draft.channel ? [draft.channel.label, draft.channel.bot].filter(Boolean).join(" · ") : undefined,
+    bot: draft.bot && `${draft.bot.emoji} ${draft.bot.title || draft.bot.name}`,
+    review: undefined,
   };
-  // A step done may be opened again, but not the key once a bot runs on it: that is the bot's page's.
-  const reachable = (step: StepId) => step === firstOpen || (done[step] && !(step === "model" && done.bot));
+  // Once it is all made, nothing goes back; until then, any step chosen, and the first open one.
+  const reachable = (step: StepId) => !made && (step === firstOpen || done[step]);
 
   return (
     <Page title="Set up Household">
@@ -93,7 +99,7 @@ export function SetupPage({ houses, keys, agents, host, resume, refresh, notify 
               const state = step.id === at.step ? "current" : done[step.id] ? "done" : "todo";
               const head = (
                 <>
-                  <span className="setup-mark" aria-hidden>{state === "done" ? <Check size={12} strokeWidth={2.5} /> : index + 1}</span>
+                  <span className="setup-mark" aria-hidden>{state === "done" || (state === "current" && made) ? <Check size={12} strokeWidth={2.5} /> : index + 1}</span>
                   <span className="setup-name">{step.label}</span>
                 </>
               );
@@ -118,18 +124,19 @@ export function SetupPage({ houses, keys, agents, host, resume, refresh, notify 
           </ol>
         </nav>
         <div className="setup-body">
-          {at.step === "model" && <ModelStep sub={at.sub} go={go} keys={keys} refresh={refresh} onDone={(chosen) => { setKey(chosen); next("model"); }} />}
-          {at.step === "workspace" && (current
-            ? <Created house={current} onNext={() => next("workspace")} />
-            : <WorkspaceStep houses={houses} host={host} refresh={refresh} onDone={(name) => { setHouse(name); next("workspace"); }} />)}
-          {at.step === "channel" && house && (
-            <ChannelStep sub={at.sub} go={go} house={house} refresh={refresh}
-              onDone={(made) => { setChannel(made); next("channel"); }} onSkip={() => { setChannel((was) => was ?? null); next("channel"); }} />
+          {at.step === "model" && <ModelStep sub={at.sub} go={go} keys={keys} refresh={refresh} onDone={(key) => choose("model", "key", key)} />}
+          {at.step === "workspace" && <WorkspaceStep houses={houses} host={host} chosen={draft.workspace} onDone={(workspace) => choose("workspace", "workspace", workspace)} />}
+          {at.step === "channel" && draft.workspace && (
+            <ChannelStep sub={at.sub} go={go} house={draft.workspace.name} onDone={(channel) => choose("channel", "channel", channel)} onSkip={() => choose("channel", "channel", null)} />
           )}
-          {at.step === "bot" && current && key && (
-            <BotStep sub={at.sub} go={go} house={current} keyView={key} agents={agents} refresh={refresh} notify={notify} onDone={(name) => { setBot(name); next("bot"); }} />
+          {at.step === "channel" && !draft.workspace && <Missing step="Workspace" onOpen={() => setAt({ step: "workspace", sub: 0 })} />}
+          {at.step === "bot" && draft.workspace && draft.key && (
+            <BotStep sub={at.sub} go={go} workspace={draft.workspace} keyDraft={draft.key} agents={agents} chosen={draft.bot} onDone={(bot) => choose("bot", "bot", bot)} />
           )}
-          {at.step === "hi" && current && bot && <DoneStep house={current} bot={bot} channel={channel ?? undefined} />}
+          {at.step === "bot" && !(draft.workspace && draft.key) && <Missing step={draft.key ? "Workspace" : "Model"} onOpen={() => setAt({ step: draft.key ? "workspace" : "model", sub: 0 })} />}
+          {at.step === "review" && !made && <ReviewStep draft={draft} open={(step) => setAt({ step, sub: 0 })} refresh={refresh} notify={notify}
+            onMade={(house, applying) => setMade({ house, applying, ...(draft.channel ? { channel: draft.channel } : {}) })} />}
+          {at.step === "review" && made && <DoneStep house={houses.find((each) => each.name === made.house.name) ?? made.house} channel={made.channel} applying={made.applying} />}
         </div>
       </div>
     </Page>
@@ -155,6 +162,11 @@ function Screen({ title, hint, back, primary, extra, children }: { title: string
       </Stack>
     </Panel>
   );
+}
+
+/** A step that needs an earlier one first. */
+function Missing({ step, onOpen }: { step: string; onOpen: () => void }) {
+  return <Screen title={`Choose the ${step.toLowerCase()} first`} primary={<button className="btn primary" onClick={onOpen}>{step}</button>} />;
 }
 
 /** What to do, in order: the catalog's lines, their `code`, **bold** and links drawn. */
@@ -187,7 +199,7 @@ function useAction() {
 
 // ── Model: a provider, how to sign in, then what that needs ─────────────────────────────────────────────────
 
-function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: number) => void; keys: KeyView[]; refresh: () => Promise<void>; onDone: (key: KeyView) => void }) {
+function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: number) => void; keys: KeyView[]; refresh: () => Promise<void>; onDone: (key: KeyDraft) => void }) {
   const fitting = keys.filter((key) => PROVIDERS.some((provider) => provider.id === key.provider));
   const [choice, setChoice] = useState(fitting[0] ? `key:${fitting[0].name}` : PROVIDERS[0]!.id);
   const [info, setInfo] = useState<OnboardingView>();
@@ -203,7 +215,7 @@ function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: 
       <Screen title="Which model will your bots use?" hint="Bots never see the key: Household's gateway adds it to their requests." primary={
         <button className="btn primary" onClick={() => {
           const known = fitting.find((key) => `key:${key.name}` === choice);
-          if (known) return onDone(known);
+          if (known) return onDone({ name: known.name, provider: known.provider as Provider, label: known.kind ?? "key" });
           setMethodId(undefined);
           go(1);
         }}>Next</button>
@@ -234,20 +246,13 @@ function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: 
   return <KeyConnect key={method.id} method={method} keys={keys} back={() => go(1)} refresh={refresh} onDone={onDone} />;
 }
 
-function KeyConnect({ method, keys, back, refresh, onDone }: { method: KeyMethod; keys: KeyView[]; back: () => void; refresh: () => Promise<void>; onDone: (key: KeyView) => void }) {
+function KeyConnect({ method, keys, back, refresh, onDone }: { method: KeyMethod; keys: KeyView[]; back: () => void; refresh: () => Promise<void>; onDone: (key: KeyDraft) => void }) {
   const [value, setValue] = useState("");
   const [login, setLogin] = useState<DeviceLoginView>();
   const action = useAction();
   const name = freeName(keys.map((key) => key.name), method.name);
   const { input } = method;
-
-  const saved = async (keyName: string) => {
-    const fresh = await api.keys();
-    await refresh();
-    const key = fresh.find((each) => each.name === keyName);
-    if (!key) throw new Error(`key ${keyName} was not saved`);
-    onDone(key);
-  };
+  const draft = (pasted?: string): KeyDraft => ({ name, provider: method.provider, label: method.label, ...(pasted ? { pasted } : {}) });
 
   // A ChatGPT sign-in under way: asked about every two seconds until it ends. One Household no longer knows (it
   // restarted) is said, and the screen starts over; leaving the screen cancels one still running.
@@ -262,7 +267,7 @@ function KeyConnect({ method, keys, back, refresh, onDone }: { method: KeyMethod
         clearInterval(timer);
         setLogin(undefined);
         if (state.status === "failed") action.fail(state.error);
-        else void action.run(() => saved(state.key));
+        else void action.run(async () => { await refresh(); onDone(draft()); });
       }, (error) => {
         if (stopped || !(error instanceof Error) || !error.message.startsWith("no such")) return;
         over = true;
@@ -281,20 +286,20 @@ function KeyConnect({ method, keys, back, refresh, onDone }: { method: KeyMethod
   const connect = () => action.run(async () => {
     if (input.kind === "local") {
       await api.importCodex(name);
-      return saved(name);
+      await refresh();
+      return onDone(draft());
     }
     if (input.kind === "device") return setLogin(await api.startChatgptLogin(name));
     const token = value.trim();
     if (!token.startsWith(input.prefix)) throw new Error(input.wrong);
-    await api.addKey(name, { provider: method.provider, value: token, note: method.label, houses: null });
-    await saved(name);
+    onDone(draft(token));
   });
-  const label = input.kind === "device" ? "Sign in with ChatGPT" : input.kind === "local" ? "Use this login" : "Connect";
+  const label = input.kind === "device" ? "Sign in with ChatGPT" : input.kind === "local" ? "Use this login" : "Next";
 
   return (
     <Screen
       title={method.label}
-      hint={<>Saved as key <span className="id">{name}</span>. Manage keys later in Settings.</>}
+      hint={input.kind === "paste" ? <>Saved as key <span className="id">{name}</span> when you set it all up. Manage keys later in Settings.</> : <>Saved as key <span className="id">{name}</span> as soon as you are signed in.</>}
       back={login ? undefined : back}
       primary={login
         ? <button className="btn" onClick={() => setLogin(undefined)}>Cancel sign-in</button>
@@ -316,24 +321,18 @@ function KeyConnect({ method, keys, back, refresh, onDone }: { method: KeyMethod
 
 // ── Workspace ───────────────────────────────────────────────────────────────────────────────────────────────
 
-function WorkspaceStep({ houses, host, refresh, onDone }: { houses: WorkspaceView[]; host: HostCapacity; refresh: () => Promise<void>; onDone: (house: string) => void }) {
-  const [name, setName] = useState(() => freeName(houses.map((house) => house.name), "home"));
+function WorkspaceStep({ houses, host, chosen, onDone }: { houses: WorkspaceView[]; host: HostCapacity; chosen?: WorkspaceDraft; onDone: (workspace: WorkspaceDraft) => void }) {
+  const [name, setName] = useState(() => chosen?.name ?? freeName(houses.map((house) => house.name), "home"));
   const taken = houses.reduce((sum, house) => ({ cpus: sum.cpus + (house.resources?.total.cpus ?? 0), memoryMiB: sum.memoryMiB + (house.resources?.total.memoryMiB ?? 0) }), { cpus: 0, memoryMiB: 0 });
-  const [cpus, setCpus] = useState(() => String(suggestedBudget(host).cpus));
-  const [memory, setMemory] = useState(() => String(suggestedBudget(host).memoryMiB / 1024));
-  const action = useAction();
+  const [cpus, setCpus] = useState(() => String(chosen?.cpus ?? suggestedBudget(host).cpus));
+  const [memory, setMemory] = useState(() => String((chosen?.memoryMiB ?? suggestedBudget(host).memoryMiB) / 1024));
   const nameError = name && !NAME.test(name) ? "Use a lowercase letter first, then a–z, 0–9 or -." : houses.some((house) => house.name === name) ? `${name} exists already.` : undefined;
   const over = Number(cpus) + taken.cpus > host.cpus || Number(memory) * 1024 + taken.memoryMiB > host.memoryMiB;
   return (
     <Screen
-      title="Create a workspace"
+      title="Name your workspace"
       hint="A workspace is a trust zone: its own bots, network allowlist, secrets, channels and owners."
-      primary={<button className="btn primary" disabled={action.busy || !name || !!nameError} onClick={() => action.run(async () => {
-        await api.createWorkspace(name);
-        await api.setWorkspaceResources(name, { cpus: Number(cpus), memoryMiB: Number(memory) * 1024 });
-        await refresh();
-        onDone(name);
-      })}>{action.busy ? "Creating…" : "Create workspace"}</button>}
+      primary={<button className="btn primary" disabled={!name || !!nameError} onClick={() => onDone({ name, cpus: Number(cpus), memoryMiB: Number(memory) * 1024 })}>Next</button>}
     >
       <TextField label="Name" mono value={name} onChange={setName} maxLength={31} hint="Lowercase letters, digits and dashes." error={nameError} />
       <Stack gap={3}>
@@ -347,22 +346,13 @@ function WorkspaceStep({ houses, host, refresh, onDone }: { houses: WorkspaceVie
         </FormGrid>
         {over && <p className="hint">With your other workspaces this is more than the machine has: they will compete for it.</p>}
       </Stack>
-      {action.shown}
     </Screen>
-  );
-}
-
-/** The workspace, opened again once made: it stays as it is here; its budget is the Resources page's. */
-function Created({ house, onNext }: { house: WorkspaceView; onNext: () => void }) {
-  return (
-    <Screen title={`Workspace ${house.name}`} hint="Created. Change its budget on its Resources page." primary={<button className="btn primary" onClick={onNext}>Next</button>}
-      extra={<Link className="btn" href={workspacePath(house.name, "resources")}>Resources</Link>} />
   );
 }
 
 // ── Channel: a messenger, what it needs, then who owns it ───────────────────────────────────────────────────
 
-function ChannelStep({ sub, go, house, refresh, onDone, onSkip }: { sub: number; go: (sub: number) => void; house: string; refresh: () => Promise<void>; onDone: (made: Connected) => void; onSkip: () => void }) {
+export function ChannelStep({ sub, go, house, onDone, onSkip }: { sub: number; go: (sub: number) => void; house: string; onDone: (channel: ChannelDraft) => void; onSkip: () => void }) {
   const [kind, setKind] = useState<ChannelOption["kind"]>(CHANNELS[0]!.kind);
   const option = CHANNELS.find((each) => each.kind === kind)!;
   // What the Setup screen got, for the Owner screen.
@@ -387,8 +377,9 @@ function ChannelStep({ sub, go, house, refresh, onDone, onSkip }: { sub: number;
       : <TelegramBot option={option} house={house} back={() => go(0)} onDone={(started, chat) => { setListen(started); setGroup(chat); go(2); }} />;
   }
   return kind === "slack-private"
-    ? <SlackOwner house={house} tokens={slack!} back={() => go(1)} refresh={refresh} onDone={() => onDone({ kind, label: option.label })} />
-    : <TelegramOwner listen={listen!} group={kind === "telegram-group" ? group : undefined} back={() => go(1)} refresh={refresh} onDone={() => onDone({ kind, label: option.label, bot: listen!.bot })} />;
+    ? <SlackOwner house={house} tokens={slack!} back={() => go(1)} onDone={(member, owner) => onDone({ kind, label: option.label, slack: { ...slack!, member, owner } })} />
+    : <TelegramOwner listen={listen!} group={kind === "telegram-group" ? group : undefined} back={() => go(1)}
+      onDone={(owner) => onDone({ kind, label: option.label, bot: listen!.bot, telegram: { listen: listen!.id, owner, ...(kind === "telegram-group" ? { group } : {}) } })} />;
 }
 
 function TelegramBot({ option, house, back, onDone }: { option: ChannelOption; house: string; back: () => void; onDone: (listen: BotListenView, group: string) => void }) {
@@ -411,7 +402,7 @@ function TelegramBot({ option, house, back, onDone }: { option: ChannelOption; h
   );
 }
 
-function TelegramOwner({ listen, group, back, refresh, onDone }: { listen: BotListenView; group?: string; back: () => void; refresh: () => Promise<void>; onDone: () => void }) {
+function TelegramOwner({ listen, group, back, onDone }: { listen: BotListenView; group?: string; back: () => void; onDone: (owner: { id: string; name?: string }) => void }) {
   const [state, setState] = useState<BotListenStatus>({ status: "waiting" });
   const [manual, setManual] = useState("");
   /** Why the wait is gone (Household restarted, or forgot it): only Back is left, to give the token again. */
@@ -430,19 +421,14 @@ function TelegramOwner({ listen, group, back, refresh, onDone }: { listen: BotLi
     return () => clearInterval(timer);
   }, [listen.id, state.status, gone]);
 
-  const finish = (owner: string) => action.run(async () => {
-    await api.finishBot(listen.id, owner, group);
-    await refresh();
-    onDone();
-  });
   const again = () => action.run(async () => setState(await api.listenAgain(listen.id)));
 
   return (
     <Screen title={`Tell ${listen.bot} who you are`} hint="You become the workspace's owner: your messages are trusted, and only you approve what bots ask for." back={back}
       primary={gone ? undefined : state.status === "found"
-        ? <button className="btn primary" disabled={action.busy} onClick={() => finish(state.contact.id)}>{action.busy ? "Saving…" : "Yes, that's me"}</button>
+        ? <button className="btn primary" onClick={() => onDone({ id: state.contact.id, name: state.contact.name })}>Yes, that's me</button>
         : state.status === "waiting" ? undefined
-        : <button className="btn primary" disabled={action.busy || !TELEGRAM_USER_ID.test(manual.trim())} onClick={() => finish(manual.trim())}>{action.busy ? "Saving…" : "Save"}</button>}
+        : <button className="btn primary" disabled={!TELEGRAM_USER_ID.test(manual.trim())} onClick={() => onDone({ id: manual.trim() })}>Next</button>}
       extra={gone ? undefined : state.status === "found" ? <button className="btn" onClick={again}>No, wait for mine</button>
         : state.status === "timeout" || state.status === "failed" ? <button className="btn" onClick={again}>Wait again</button> : undefined}
     >
@@ -453,8 +439,8 @@ function TelegramOwner({ listen, group, back, refresh, onDone }: { listen: BotLi
           <p className="hint">Waiting for your message…</p>
         </Stack>
       )}
-      {state.status === "found" && <p>Message from <b>{state.contact.name}</b>{state.contact.username ? ` (@${state.contact.username})` : ""}. Is that you?</p>}
-      {(state.status === "timeout" || state.status === "failed" || state.status === "manual") && (
+      {!gone && state.status === "found" && <p>Message from <b>{state.contact.name}</b>{state.contact.username ? ` (@${state.contact.username})` : ""}. Is that you?</p>}
+      {!gone && (state.status === "timeout" || state.status === "failed" || state.status === "manual") && (
         <Stack gap={3}>
           <p className="hint">
             {state.status === "timeout" ? "No message came in time. " : state.status === "failed" ? `Household could not read the bot's messages (${state.error}). ` : "Household already runs this bot, so it cannot wait for your message here. "}
@@ -486,17 +472,15 @@ function SlackTokens({ option, back, onDone }: { option: ChannelOption; back: ()
   );
 }
 
-function SlackOwner({ house, tokens, back, refresh, onDone }: { house: string; tokens: { token: string; appToken: string }; back: () => void; refresh: () => Promise<void>; onDone: () => void }) {
+function SlackOwner({ house, tokens, back, onDone }: { house: string; tokens: { token: string; appToken: string }; back: () => void; onDone: (member: string, owner: string) => void }) {
   const [member, setMember] = useState("");
   const action = useAction();
   return (
     <Screen title="Your Slack account" hint="You become the workspace's owner. Household finds your DM with the app; nothing is sent." back={back} primary={
       <button className="btn primary" disabled={action.busy || !member.trim()} onClick={() => action.run(async () => {
-        const found = await api.resolveSlack(house, tokens.token, tokens.appToken, member.trim());
-        await api.addChannel(house, "slack-private", { chat: found.chat, slackMember: member.trim(), own: tokens, name: null, note: null, pets: [], default: null });
-        await refresh();
-        onDone();
-      })}>{action.busy ? "Connecting…" : "Connect Slack"}</button>
+        const found = await api.findSlackDm(house, tokens.token, tokens.appToken, member.trim());
+        onDone(member.trim(), found.owner);
+      })}>{action.busy ? "Finding your DM…" : "Next"}</button>
     }>
       <Guide steps={SLACK_MEMBER_STEPS} />
       <TextField label="Member ID" mono value={member} onChange={setMember} placeholder="U0123456789" />
@@ -507,95 +491,112 @@ function SlackOwner({ house, tokens, back, refresh, onDone }: { house: string; t
 
 // ── Bot: what it is for, then its details ───────────────────────────────────────────────────────────────────
 
-function BotStep({ sub, go, house, keyView, agents, refresh, notify, onDone }: { sub: number; go: (sub: number) => void; house: WorkspaceView; keyView: KeyView; agents: HarnessView[]; refresh: () => Promise<void>; notify: Notify; onDone: (bot: string) => void }) {
-  const [presetId, setPresetId] = useState(BOT_PRESETS[0]!.id);
-  const preset = BOT_PRESETS.find((each) => each.id === presetId)!;
-  const taken = house.pets.map((pet) => pet.name);
-  const [name, setName] = useState(() => freeName(taken, preset.name));
-  const [title, setTitle] = useState(preset.title);
-  const [emoji, setEmoji] = useState(preset.emoji);
-  const [scouts, setScouts] = useState(preset.scouts);
-  const [sideworkers, setSideworkers] = useState(preset.sideworkers);
-  const available = house.resources?.available ?? { cpus: preset.cpus, memoryMiB: preset.memoryMiB };
-  const resources = { cpus: Math.max(1, Math.min(preset.cpus, available.cpus)), memoryMiB: Math.max(512, Math.min(preset.memoryMiB, available.memoryMiB)) };
-  const action = useAction();
-  const agent = agents.find((each) => each.name === PROVIDERS.find((provider) => provider.id === keyView.provider)?.harness);
-  const channels = house.channels.map((channel) => channel.chat);
-  const nameError = name && !BOT_NAME.test(name) ? "Use a lowercase letter first, then a–z, 0–9, _ or -." : taken.includes(name) ? `${name} is in the workspace already.` : undefined;
-  const choose = (id: string) => {
-    const next = BOT_PRESETS.find((each) => each.id === id)!;
-    setPresetId(id);
-    setName(freeName(taken, next.name));
-    setTitle(next.title);
-    setEmoji(next.emoji);
-    setScouts(next.scouts);
-    setSideworkers(next.sideworkers);
-  };
+export function BotStep({ sub, go, workspace, keyDraft, agents, chosen, onDone }: { sub: number; go: (sub: number) => void; workspace: WorkspaceDraft; keyDraft: KeyDraft; agents: { name: string }[]; chosen?: BotDraft; onDone: (bot: BotDraft) => void }) {
+  const fit = (preset: BotPreset) => ({ cpus: Math.max(1, Math.min(preset.cpus, workspace.cpus)), memoryMiB: Math.max(512, Math.min(preset.memoryMiB, workspace.memoryMiB)) });
+  const fresh = (preset: BotPreset): BotDraft => ({ preset, name: preset.name, title: preset.title, emoji: preset.emoji, ...fit(preset), scouts: preset.scouts, sideworkers: preset.sideworkers });
+  const [bot, setBot] = useState<BotDraft>(() => chosen ?? fresh(BOT_PRESETS[0]!));
+  const set = (change: Partial<BotDraft>) => setBot((was) => ({ ...was, ...change }));
+  const harness = PROVIDERS.find((provider) => provider.id === keyDraft.provider)?.harness;
+  const agent = agents.find((each) => each.name === harness);
+  const nameError = bot.name && !BOT_NAME.test(bot.name) ? "Use a lowercase letter first, then a–z, 0–9, _ or -." : undefined;
 
   if (sub === 0) {
     return (
-      <Screen title="What is your first bot for?" hint={`It runs ${agent?.name === "codex-app-server" ? "Codex" : "Claude Code"} in its own VM, with a home and memory that stay between sessions. Everything can be changed later.`}
+      <Screen title="What is your first bot for?" hint={`It runs ${harness === "codex-app-server" ? "Codex" : "Claude Code"} in its own VM, with a home and memory that stay between sessions. Everything can be changed later.`}
         primary={<button className="btn primary" onClick={() => go(1)}>Next</button>}>
-        <ChoiceList label="Purpose" value={presetId} onChange={choose} options={BOT_PRESETS.map((each) => ({ value: each.id, label: `${each.emoji} ${each.label}`, description: each.description }))} />
+        <ChoiceList label="Purpose" value={bot.preset.id} onChange={(id) => setBot(fresh(BOT_PRESETS.find((each) => each.id === id)!))} options={BOT_PRESETS.map((each) => ({ value: each.id, label: `${each.emoji} ${each.label}`, description: each.description }))} />
       </Screen>
     );
   }
   return (
-    <Screen title={`${preset.emoji} ${preset.label}`} back={() => go(0)} primary={
-      <button className="btn primary" disabled={action.busy || !name || !!nameError || !agent} onClick={() => action.run(async () => {
-        await api.addBot(house.name, name, {
-          title: title.trim() || null, emoji: emoji.trim() || null, aliases: [],
-          agent: agent!.name, model: agent!.defaultModel, mode: agent!.defaultMode, key: keyView.name, ...resources,
-        }, channels);
-        await api.setWorkspaceFeatures(house.name, { features: { ...houseFeatures(house), scouts, sideworkers }, preview: previewSettings(house) });
-        const role = presetInstructions(preset, title.trim() || name);
-        if (role) {
-          try {
-            const file = await api.instructions(house.name, name);
-            await api.saveInstructions(house.name, name, `${file.content.trimEnd()}\n\n${role}\n`, file.revision);
-          } catch (error) {
-            notify(`${name} was created, but its instructions were not set: ${message(error)}`, true);
-          }
-        }
-        await refresh();
-        onDone(name);
-      })}>{action.busy ? "Creating…" : "Create bot"}</button>
-    }>
+    <Screen title={`${bot.preset.emoji} ${bot.preset.label}`} back={() => go(0)} primary={<button className="btn primary" disabled={!bot.name || !!nameError || !agent} onClick={() => onDone(bot)}>Next</button>}>
       <FormGrid>
-        <TextField label="Display name" value={title} onChange={setTitle} maxLength={64} />
-        <TextField label="Emoji" value={emoji} onChange={setEmoji} />
+        <TextField label="Display name" value={bot.title} onChange={(title) => set({ title })} maxLength={64} />
+        <TextField label="Emoji" value={bot.emoji} onChange={(emoji) => set({ emoji })} />
       </FormGrid>
-      <TextField label="Name" mono value={name} onChange={setName} maxLength={31} error={nameError} hint="Its id: lowercase, no spaces." />
+      <TextField label="Name" mono value={bot.name} onChange={(name) => set({ name })} maxLength={31} error={nameError} hint="Its id: lowercase, no spaces." />
       <Stack gap={2}>
-        <Switch label="Scouts" on={scouts} onChange={setScouts} />
+        <Switch label="Scouts" on={bot.scouts} onChange={(scouts) => set({ scouts })} />
         <p className="hint">One-task helpers in their own VMs (a browser, media and dev tools). The bot calls one; you approve each run in the chat.</p>
       </Stack>
       <Stack gap={2}>
-        <Switch label="Sideworkers" on={sideworkers} onChange={setSideworkers} />
+        <Switch label="Sideworkers" on={bot.sideworkers} onChange={(sideworkers) => set({ sideworkers })} />
         <p className="hint">Extra bots for longer work, that you can talk to in parallel. Your bot starts each in its own VM and gives it the CPU and memory the job needs, from what the workspace has free.</p>
       </Stack>
-      <p className="hint">
-        Reserves {resources.cpus} vCPU and {gib(resources.memoryMiB)} of the workspace's budget; runs on key <span className="id">{keyView.name}</span>.
-        {channels.length === 0 ? " It joins no channel yet: add one on the workspace's Channels page." : ""}
-      </p>
-      {!agent && <p className="error">This Household has no harness for {keyView.provider} keys.</p>}
+      <p className="hint">Reserves {bot.cpus} vCPU and {gib(bot.memoryMiB)} of the workspace's {workspace.cpus} vCPU and {gib(workspace.memoryMiB)}.</p>
+      {!agent && <p className="error">This Household has no harness for {keyDraft.provider} keys.</p>}
+    </Screen>
+  );
+}
+
+// ── Review: everything chosen, made at once ─────────────────────────────────────────────────────────────────
+
+/** The setup's choices as the one request that makes them; undefined while one is missing. */
+export function setupFields(draft: SetupDraft): SetupFields | undefined {
+  const { key, workspace, channel, bot } = draft;
+  if (!key || !workspace || channel === undefined || !bot) return undefined;
+  return {
+    key: key.pasted ? { name: key.name, provider: key.provider, value: key.pasted, note: key.label } : key.name,
+    workspace,
+    channel: channel?.telegram ? { telegram: { listen: channel.telegram.listen, owner: channel.telegram.owner.id, ...(channel.telegram.group ? { chat: channel.telegram.group } : {}) } }
+      : channel?.slack ? { slack: { token: channel.slack.token, appToken: channel.slack.appToken, member: channel.slack.member } }
+      : null,
+    bot: { name: bot.name, title: bot.title || null, emoji: bot.emoji || null, cpus: bot.cpus, memoryMiB: bot.memoryMiB, role: presetInstructions(bot.preset, bot.title || bot.name) ?? null },
+    features: { scouts: bot.scouts, sideworkers: bot.sideworkers },
+  };
+}
+
+export function ReviewStep({ draft, open, refresh, notify, onMade }: { draft: SetupDraft; open: (step: StepId) => void; refresh: () => Promise<void>; notify: SetupProps["notify"]; onMade: (house: WorkspaceView, applying: boolean) => void }) {
+  const action = useAction();
+  const [slow, setSlow] = useState(false);
+  const fields = setupFields(draft);
+  const { key, workspace, channel, bot } = draft;
+  const row = (step: StepId, title: string, value: ReactNode, detail?: ReactNode) => (
+    <ListRow key={step} actions={!action.busy && <button type="button" className="btn small" onClick={() => open(step)}>Change</button>}>
+      <Cell><span className="strong">{title}</span></Cell>
+      <Cell><span className="cell-lines"><span>{value}</span>{detail && <span className="hint">{detail}</span>}</span></Cell>
+    </ListRow>
+  );
+  const owner = channel?.telegram ? `owner ${channel.telegram.owner.name ?? channel.telegram.owner.id}` : channel?.slack ? `owner ${channel.slack.owner}` : undefined;
+  return (
+    <Screen title="Ready to set it all up" hint="Nothing is made yet. One press makes all of it; if anything fails, nothing is left half made."
+      primary={<button className="btn primary" disabled={!fields || action.busy} onClick={() => action.run(async () => {
+        const timer = setTimeout(() => setSlow(true), 4000);
+        try {
+          const made = await api.setUp(fields!);
+          for (const warning of made.warnings) notify(warning, true);
+          await refresh();
+          onMade(made.house!, !!made.applying);
+        } finally {
+          clearTimeout(timer);
+          setSlow(false);
+        }
+      })}>{action.busy ? "Setting up…" : "Set it all up"}</button>}
+    >
+      <List columns="minmax(0, 0.5fr) minmax(0, 1.5fr) auto">
+        {row("model", "Model", key ? `${providerLabel(key.provider)} · key ${key.name}` : "—", key?.pasted ? "pasted here; saved with the rest" : undefined)}
+        {row("workspace", "Workspace", workspace ? workspace.name : "—", workspace && `${workspace.cpus} vCPU · ${gib(workspace.memoryMiB)}`)}
+        {row("channel", "Channel", channel === null ? "None yet" : channel ? [channel.label, channel.bot].filter(Boolean).join(" · ") : "—", owner)}
+        {row("bot", "Bot", bot ? `${bot.emoji} ${bot.title || bot.name}` : "—", bot && `${bot.preset.label} · ${bot.cpus} vCPU · ${gib(bot.memoryMiB)}${bot.scouts ? " · scouts" : ""}${bot.sideworkers ? " · sideworkers" : ""}`)}
+      </List>
+      {slow && <p className="hint">Still setting up: Household applies changes one at a time, and a bot that is starting holds them for a moment.</p>}
       {action.shown}
     </Screen>
   );
 }
 
-// ── Say hi ──────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Done ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function DoneStep({ house, bot, channel }: { house: WorkspaceView; bot: string; channel?: Connected }) {
-  const pet = house.pets.find((each) => each.name === bot);
+function DoneStep({ house, channel, applying }: { house: WorkspaceView; channel?: ChannelDraft; applying: boolean }) {
+  const pet = house.pets.find((each) => !each.sideworker);
   const state = pet ? petState(pet.state) : undefined;
   const group = channel?.kind === "telegram-group";
   const link = !group && channel?.bot?.startsWith("@") ? `https://t.me/${channel.bot.slice(1)}` : undefined;
   const where = channel?.kind === "telegram-private" ? ". It answers in its own thread." : ".";
   return (
-    <Screen title={`${pet?.display ?? bot} is ready`} hint="The first start downloads the bot's VM image: give it a minute or two."
+    <Screen title={`${pet?.display ?? "Your bot"} is ready`} hint={applying ? "Household is still applying it: the bot starts in a minute or two (its first start downloads its VM image)." : "The first start downloads the bot's VM image: give it a minute or two."}
       primary={<button className="btn primary" onClick={() => navigate(workspacePath(house.name))}>Open workspace</button>}
-      extra={<Link className="btn" href={botPath(house.name, bot)}>Bot settings</Link>}
+      extra={pet && <Link className="btn" href={botPath(house.name, pet.name)}>Bot settings</Link>}
     >
       {state && <p className="setup-state"><span className={`dot ${state.tone}`} aria-hidden />{state.label}</p>}
       {link && <p>Now write to it: open <a className="text-link" href={link} target="_blank" rel="noreferrer">{link}</a>{where}</p>}

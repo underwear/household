@@ -62,6 +62,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
   const logged: string[] = [];
   const added: string[] = [];
   let applyError: Error | undefined;
+  let applyHold: Promise<void> | undefined;
   let statesError: Error | undefined;
   const store = new ConfigStore(configFile, configCheck(knownAgents(), HOST));
   const inboxPosts: string[] = [];
@@ -95,6 +96,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
       checks: channelChecks(telegram.url),
       apply: async () => {
         applied.push("reload");
+        await applyHold;
         houseInboxes.setHouses((await store.load()).houses);
         if (applyError) throw applyError;
       },
@@ -107,6 +109,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
       version: "0.1.0",
       events: new EventLog(join(dir, "events.jsonl"), (line) => logged.push(line)),
       host: HOST,
+      applyWaitMs: 200,
       onboarding: onboarding?.(store, telegram.url),
     }),
   });
@@ -135,6 +138,8 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
     auth, origin, name, call, signIn, text, applied, logged, cookie, configFile, store, telegram, dir, added,
     problems, inboxPosts, inboxPets, houseInboxes,
     failApply: (error: Error) => (applyError = error),
+    /** Reloads wait for `hold` (a bot starting, say). */
+    holdApply: (hold: Promise<void>) => (applyHold = hold),
     failStates: (error: Error) => (statesError = error),
   };
 }
@@ -1142,48 +1147,6 @@ const onboardingOf = (deviceLogin?: ConstructorParameters<typeof Onboarding>[0][
   ...(deviceLogin ? { deviceLogin } : {}),
 });
 
-test("setup: a new bot's first private message makes its writer the owner and the channel's chat, in one write", async () => {
-  const { call, signIn, store, telegram, text } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
-  await signIn();
-  expect((await call("POST", "/api/houses", { name: "lab" })).status).toBe(201);
-  expect((await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "slack-private", token: OTHER_BOT })).status).toBe(400);
-  const started = await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "telegram-private", token: ` ${OTHER_BOT} ` });
-  expect(started.status).toBe(201);
-  const listen = await started.json() as { id: string; bot: string; link: string };
-  expect(listen).toMatchObject({ bot: "@fake_bot", link: "https://t.me/fake_bot" });
-  expect(JSON.stringify(listen)).not.toContain(OTHER_BOT); // the token stays in the daemon
-  // What came before the wait is passed over: Ann writes once it listens.
-  for (let i = 0; i < 100 && telegram.sent("getUpdates").length < 2; i++) await Bun.sleep(10);
-  telegram.push({ message: { message_id: 1, chat: { id: 555, type: "private" }, from: { id: 555, first_name: "Ann", username: "ann" }, text: "/start" } } as never, OTHER_BOT);
-  let state: { status: string; contact?: unknown } = { status: "waiting" };
-  for (let i = 0; i < 100 && state.status === "waiting"; i++) {
-    await Bun.sleep(20);
-    state = await (await call("GET", `/api/onboarding/telegram/${listen.id}`)).json() as typeof state;
-  }
-  expect(state).toMatchObject({ status: "found", contact: { id: "555", name: "Ann", username: "ann" } });
-  expect((await call("POST", `/api/onboarding/telegram/${listen.id}/finish`, { owner: "ann" })).status).toBe(400);
-  const finished = await call("POST", `/api/onboarding/telegram/${listen.id}/finish`, { owner: "555" });
-  expect(finished.status).toBe(201);
-  expect((await finished.json() as WriteView).house).toMatchObject({ owners: [{ platform: "telegram", id: "555" }], channels: [{ kind: "telegram-private", chat: "555", pets: [] }] });
-  expect(findLab(await store.load())).toMatchObject({ channels: [{ kind: "telegram-private", chat: "555", token: OTHER_BOT }] });
-  expect(await text()).toContain("lab:");
-  // Done: the wait is gone.
-  expect((await call("GET", `/api/onboarding/telegram/${listen.id}`)).status).toBe(404);
-});
-
-test("setup: a bot Household runs already is not listened to (its updates are the daemon's): the person types their id", async () => {
-  const { call, signIn, telegram } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
-  await signIn();
-  const started = await call("POST", "/api/onboarding/telegram", { house: "work", kind: "telegram-dm", token: BOT });
-  expect(started.status).toBe(201);
-  const { id } = await started.json() as { id: string };
-  expect(await (await call("GET", `/api/onboarding/telegram/${id}`)).json()).toMatchObject({ status: "manual" });
-  expect(telegram.sent("getUpdates")).toHaveLength(0);
-  const finished = await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "777" });
-  expect(finished.status).toBe(201);
-  expect((await finished.json() as WriteView).house!.channels.map((channel) => `${channel.kind}:${channel.chat}`)).toEqual(["telegram-private:100200300", "telegram-dm:777"]);
-});
-
 test("setup: a ChatGPT sign-in gives the page its link and code, and the key once it is done; without the means, a 400", async () => {
   let finish!: () => void;
   const login = { url: "https://auth.example/codex/device", code: "ABCD-12345", done: new Promise<void>((resolve) => { finish = resolve; }), cancel: () => {} };
@@ -1207,14 +1170,92 @@ test("setup: a ChatGPT sign-in gives the page its link and code, and the key onc
 
 const findLab = (household: { houses: { name: string }[] }) => household.houses.find((house) => house.name === "lab");
 
-test("setup: a group with topics is the channel's chat, and its owner is who wrote to the bot in private", async () => {
-  const { call, signIn } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
+/** What the setup page sends for a new workspace `lab`: the claude key, an assistant, and `channel`. */
+const setupOf = (channel: unknown, more: Record<string, unknown> = {}) => ({
+  key: "claude",
+  workspace: { name: "lab", cpus: 2, memoryMiB: 2048 },
+  channel,
+  bot: { name: "assistant", title: "Assistant", emoji: "🤖", cpus: 1, memoryMiB: 1024, role: "## Your role\n\nHelp." },
+  features: { scouts: false, sideworkers: true },
+  ...more,
+});
+
+test("setup: the steps only check; one request makes the workspace, its channel and owner (the first to write privately), and its bot", async () => {
+  const { call, signIn, store, telegram, applied } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
   await signIn();
-  expect((await call("POST", "/api/houses", { name: "lab" })).status).toBe(201);
-  const { id } = await (await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "telegram-group", token: OTHER_BOT })).json() as { id: string };
-  expect((await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "555" })).status).toBe(400); // no group id
-  expect((await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "555", chat: "12345" })).status).toBe(400);
-  const finished = await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "555", chat: "-1001234567890" });
-  expect(finished.status).toBe(201);
-  expect((await finished.json() as WriteView).house).toMatchObject({ owners: [{ platform: "telegram", id: "555" }], channels: [{ kind: "telegram-group", chat: "-1001234567890" }] });
+  expect((await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "slack-private", token: OTHER_BOT })).status).toBe(400);
+  const started = await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "telegram-group", token: ` ${OTHER_BOT} ` });
+  expect(started.status).toBe(201);
+  const listen = await started.json() as { id: string; bot: string; link: string };
+  expect(listen).toMatchObject({ bot: "@fake_bot", link: "https://t.me/fake_bot" });
+  expect(JSON.stringify(listen)).not.toContain(OTHER_BOT); // the token stays in the daemon
+  // What came before the wait is passed over: Ann writes once it listens.
+  for (let i = 0; i < 100 && telegram.sent("getUpdates").length < 2; i++) await Bun.sleep(10);
+  telegram.push({ message: { message_id: 1, chat: { id: 555, type: "private" }, from: { id: 555, first_name: "Ann", username: "ann" }, text: "/start" } } as never, OTHER_BOT);
+  let state: { status: string; contact?: unknown } = { status: "waiting" };
+  for (let i = 0; i < 100 && state.status === "waiting"; i++) {
+    await Bun.sleep(20);
+    state = await (await call("GET", `/api/onboarding/telegram/${listen.id}`)).json() as typeof state;
+  }
+  expect(state).toMatchObject({ status: "found", contact: { id: "555", name: "Ann", username: "ann" } });
+  expect((await store.load()).houses.map((house) => house.name)).toEqual(["work"]); // nothing made yet
+  expect(applied).toEqual([]);
+
+  // Wrong answers are refused before anything is written.
+  for (const bad of [setupOf({ telegram: { listen: listen.id, owner: "ann", chat: "-1001234567890" } }), setupOf({ telegram: { listen: listen.id, owner: "555", chat: "12345" } }), setupOf(null, { workspace: { name: "work", cpus: 2, memoryMiB: 2048 } }), setupOf(null, { bot: { name: "assistant", cpus: 4, memoryMiB: 1024 } }), setupOf(null, { key: "missing" })]) {
+    expect((await call("POST", "/api/onboarding/setup", bad)).status).toBeGreaterThanOrEqual(400);
+  }
+  expect((await store.load()).houses.map((house) => house.name)).toEqual(["work"]);
+
+  const made = await call("POST", "/api/onboarding/setup", setupOf({ telegram: { listen: listen.id, owner: "555", chat: "-1001234567890" } }));
+  expect(made.status).toBe(201);
+  const view = await made.json() as WriteView & { warnings: string[] };
+  expect(view.house).toMatchObject({ name: "lab", owners: [{ platform: "telegram", id: "555" }], channels: [{ kind: "telegram-group", chat: "-1001234567890", pets: ["assistant"] }], pets: [{ name: "assistant", title: "Assistant", key: "claude" }], features: { scouts: false, sideworkers: true } });
+  expect(view.warnings).toEqual([]);
+  expect(applied).toEqual(["reload"]); // one reload for all of it
+  const lab = (await store.load()).houses.find((house) => house.name === "lab")!;
+  expect(lab).toMatchObject({ resources: { cpus: 2, memoryMiB: 2048 }, channels: [{ token: OTHER_BOT }], pets: [{ cpus: 1, memoryMiB: 1024 }] });
+  expect((await call("GET", "/api/houses/lab/pets/assistant/instructions").then((r) => r.json()) as { content: string }).content).toEndWith("## Your role\n\nHelp.\n");
+  expect((await call("GET", `/api/onboarding/telegram/${listen.id}`)).status).toBe(404); // the wait is over
+});
+
+test("setup: a pasted key is saved with the rest; a write that fails takes back the workspace and the key", async () => {
+  const { call, signIn, store } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
+  await signIn();
+  const pasted = { name: "anthropic", provider: "anthropic", value: "sk-ant-api03-pasted" };
+  const failing = await call("POST", "/api/onboarding/setup", setupOf(null, { key: pasted, bot: { name: "assistant", emoji: "not an emoji", cpus: 1, memoryMiB: 1024 } }));
+  expect(failing.status).toBe(400);
+  const after = await store.load();
+  expect(after.houses.map((house) => house.name)).toEqual(["work"]);
+  expect(after.keys.map((key) => key.name)).toEqual(["claude"]);
+  const made = await call("POST", "/api/onboarding/setup", setupOf(null, { key: pasted }));
+  expect(made.status).toBe(201);
+  expect((await made.json() as WriteView).house).toMatchObject({ channels: [], pets: [{ name: "assistant", key: "anthropic", agent: "claude-code-tmux" }] });
+  expect((await store.load()).keys.map((key) => key.name)).toEqual(["claude", "anthropic"]);
+});
+
+test("setup: a bot Household runs already is not listened to (its updates are the daemon's)", async () => {
+  const { call, signIn, telegram, store } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
+  await signIn();
+  const started = await call("POST", "/api/onboarding/telegram", { house: "work", kind: "telegram-dm", token: BOT });
+  expect(started.status).toBe(201);
+  const { id } = await started.json() as { id: string };
+  expect(await (await call("GET", `/api/onboarding/telegram/${id}`)).json()).toMatchObject({ status: "manual" });
+  expect(telegram.sent("getUpdates")).toHaveLength(0);
+  // ...and a new workspace cannot take it (a bot serves one workspace): refused, and nothing is left half made.
+  const other = await (await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "telegram-dm", token: BOT })).json() as { id: string };
+  expect((await call("POST", "/api/onboarding/setup", setupOf({ telegram: { listen: other.id, owner: "777" } }))).status).toBe(400);
+  expect((await store.load()).houses.map((house) => house.name)).toEqual(["work"]);
+});
+
+test("a write answers once its reload is done, or after a short wait that it is still applying (a bot starting holds reloads)", async () => {
+  const env = setup();
+  await env.signIn();
+  expect(await (await env.call("POST", "/api/houses", { name: "quick" })).json()).not.toHaveProperty("applying");
+  let release!: () => void;
+  env.holdApply(new Promise<void>((resolve) => { release = resolve; }));
+  const answer = await env.call("POST", "/api/houses", { name: "slow" });
+  expect(answer.status).toBe(201);
+  expect(await answer.json()).toMatchObject({ applying: true, house: { name: "slow" } });
+  release();
 });

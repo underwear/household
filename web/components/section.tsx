@@ -12,12 +12,14 @@ export interface SectionProps {
 }
 
 /**
- * Runs a write; resolves to the daemon's warning when it saved the change but could not apply it (a done write,
- * not a failed one), undefined when all went well. Any other failure throws (nothing was saved).
+ * Runs a write; resolves to the daemon's warning when it saved the change but could not apply it, or is still
+ * applying it (a done write, not a failed one), undefined when all went well. Any other failure throws (nothing was saved).
  */
 export async function written(write: Promise<unknown>): Promise<string | undefined> {
   try {
-    await write;
+    const answer = await write;
+    // Saved; the reload is still going (a bot starting holds it): not a failure, but not done yet either.
+    if (answer && typeof answer === "object" && "applying" in answer && answer.applying) return "Saved. Household is still applying it (a bot is starting): give it a minute.";
     return undefined;
   } catch (error) {
     if (error instanceof NotApplied) return error.message;
