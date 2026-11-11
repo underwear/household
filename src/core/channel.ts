@@ -102,6 +102,8 @@ export interface Place {
   id: string;
   kind: PlaceKind;
   title: string;
+  /** Temporary helpers keep their sender title, even when sharing the sole bot's place. */
+  forceAttribution?: boolean;
 }
 
 /** Adapter-owned capability, scoped by the app to an authenticated bot's destination.

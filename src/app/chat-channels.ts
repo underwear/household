@@ -231,7 +231,7 @@ export class ChatChannels {
   placeOf(pet: Pet, key: string): Place {
     const shared = parsePlaceKey(pet.chatPlace);
     return shared?.channel === key
-      ? { id: pet.chatPlace!, kind: shared.topic ? "topic" : shared.pet ? "pet-thread" : "house-inbox", title: petPlace(pet, "").title }
+      ? { ...petPlace(pet, pet.chatPlace!), kind: shared.topic ? "topic" : shared.pet ? "pet-thread" : "house-inbox" }
       : petPlace(pet, petPlaceKey(pet.name, key));
   }
 

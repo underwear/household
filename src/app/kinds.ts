@@ -11,7 +11,7 @@ export type { ChannelKinds };
 export type Platforms = ReadonlyMap<Platform, PlatformSpec>;
 
 /** The kinds of channel this build knows, as their adapters describe them. A new kind is one more entry here (and a branch in `openChannels`). */
-const KINDS: ChannelKindSpec[] = [telegramPrivate, telegramDm, telegramGroup, slackPrivate];
+const KINDS: ChannelKindSpec[] = [telegramDm, telegramGroup, slackPrivate, telegramPrivate];
 /** Their platforms' descriptions (what an owner's id is), one per platform, from the platform's adapter package. */
 const PLATFORM_SPECS: PlatformSpec[] = [telegram, slack];
 

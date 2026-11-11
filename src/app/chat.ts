@@ -539,7 +539,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       throw new HouseholdError(`${none}; the reply was not sent`);
     }
     const open = spot.channel;
-    const where = { ...spot.place, title: petPlace(found, "").title };
+    const where = { ...spot.place, ...petPlace(found, spot.place.id), kind: spot.place.kind };
     if (!open) {
       const config = this.channels.house(house)?.channels.find((candidate) => channelKey(candidate) === spot.key);
       throw new HouseholdError(`channel ${config ? channelName(knownChannelKinds(), config) : spot.key} of workspace ${house} is not open (see the daemon's log); the reply was not sent`);
@@ -850,7 +850,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     // internal reminders delivered to ordinary pets and scheduled tasks remain silent.
     const internalWork = (found.sideworker || found.scout) && messages.some(message => message.origin === "internal");
     const spot = at ? this.currentTarget(house, pet).spot : internalWork ? this.currentTarget(house, pet).spot : undefined;
-    this.live.start(house, pet, turn, spot?.channel ? { channel: spot.channel, place: { ...spot.place, title: petPlace(found, "").title } } : undefined);
+    this.live.start(house, pet, turn, spot?.channel ? { channel: spot.channel, place: { ...spot.place, ...petPlace(found, spot.place.id), kind: spot.place.kind } } : undefined);
   }
 
   /**

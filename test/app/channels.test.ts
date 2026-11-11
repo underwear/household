@@ -4,8 +4,8 @@ import { openChannels } from "../../src/app/channels";
 import { Chat } from "../../src/app/chat";
 import { Dialogs } from "../../src/app/dialogs";
 import type { SenderRef } from "../../src/core/channel";
-import type { ChannelConfig } from "../../src/core/channels";
-import type { House } from "../../src/core/household";
+import { channelKey, petPlaceKey, type ChannelConfig } from "../../src/core/channels";
+import { petPlace, type House, type Pet } from "../../src/core/household";
 import type { MessageDraft } from "../../src/core/message";
 import { EventLog } from "../../src/infra/event-log";
 import { SqliteStore } from "../../src/infra/sqlite-store";
@@ -301,6 +301,62 @@ test("ordinary Telegram DM routes by default, name and reply without forwarding 
   expect(api.topics.size).toBe(0);
   expect(api.messages).toHaveLength(1);
   expect(api.messages.every(message => message.message_thread_id === undefined)).toBe(true);
+});
+
+test("a solo bot's response to an inbound DM stays unprefixed through the turn's inbox destination", async () => {
+  const records = new SqliteStore(":memory:"); stops.push(() => records.close());
+  const api = fakeTelegram(TOKEN); stops.push(api.stop);
+  const events = new EventLog(join(tempDir(), "events.jsonl"), () => {});
+  const drafts: MessageDraft[] = [];
+  const chat = new Chat({
+    send: (_house, _pet, draft) => { drafts.push(draft); return { activity: "idle" as const, queued: 1 }; },
+    answered: () => {}, interrupt: async () => ({ status: "idle" as const }), reject: () => true,
+  }, openChannels({ state: records, events, telegramApi: api.url }), events, new Dialogs(events), records);
+  stops.push(() => chat.stop());
+  await chat.setHouses([{ name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "sibling" }], people: { owners: [] },
+    channels: [{ kind: "telegram-dm", token: TOKEN, chat: String(OLEG), pets: ["sibling"] }] }]);
+  api.push({ message: { chat: { id: OLEG }, from: { id: OLEG, first_name: "Oleg" }, message_id: 11, text: "Hello" } });
+  await waitFor(() => drafts.length === 1);
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "solo-turn", messages: [{ ...drafts[0]!, id: 1, status: "delivered" }] });
+  await chat.reply("work", "sibling", "Ready");
+  expect(api.messages.at(-1)!.text).toBe("Ready");
+});
+
+test("DM attribution follows primary bot placement on reload and helpers keep their titles", async () => {
+  const records = new SqliteStore(":memory:"); stops.push(() => records.close());
+  const api = fakeTelegram(TOKEN); stops.push(api.stop);
+  const events = new EventLog(join(tempDir(), "events.jsonl"), () => {});
+  const open = openChannels({ state: records, events, telegramApi: api.url });
+  const config: ChannelConfig = { kind: "telegram-dm", token: TOKEN, chat: String(OLEG), pets: ["sibling"] };
+  const key = channelKey(config);
+  const primary: Pet = { name: "sibling" };
+  const house: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [primary], people: { owners: [] }, channels: [config] };
+  const channel = open([house]).get("work")!.get(key)!.channel!;
+  stops.push(() => channel.stop());
+  const place = petPlace(primary, petPlaceKey(primary.name, key));
+  await channel.post(place, "Solo");
+  expect(api.messages.at(-1)!.text).toBe("Solo");
+  const helpers: Pet[] = [
+    { name: "worker", sideworker: { parent: primary.name, cwd: "/tmp" } },
+    { name: "scout", scout: { parent: primary.name, definition: "research", homePath: "/tmp/scout", instructions: "", network: { kind: "allowlist", allow: [] } } },
+  ];
+  house.pets.push(...helpers);
+  config.pets.push(...helpers.map(pet => pet.name));
+  expect(open([house]).get("work")!.get(key)!.channel).toBe(channel);
+  await channel.post(place, "Still solo");
+  expect(api.messages.at(-1)!.text).toBe("Still solo");
+  for (const helper of helpers) {
+    await channel.post(petPlace(helper, place.id), "Help");
+    expect(api.messages.at(-1)!.text).toBe(`${petPlace(helper, place.id).title}: Help`);
+  }
+  house.pets.push({ name: "chair" }); config.pets.push("chair");
+  expect(open([house]).get("work")!.get(key)!.channel).toBe(channel);
+  await channel.post(place, "Two bots");
+  expect(api.messages.at(-1)!.text).toBe(`${place.title}: Two bots`);
+  config.pets = config.pets.filter(name => name !== "chair");
+  open([house]);
+  await channel.post(place, "Solo again");
+  expect(api.messages.at(-1)!.text).toBe("Solo again");
 });
 
 test("ordinary and threaded Telegram modes cannot take the same bot chat", () => {

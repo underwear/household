@@ -52,7 +52,8 @@ const looksLikeNotice = (text: string) => /^[^\p{L}\p{N}]*(⚠|household)/iu.tes
  * has a thread named with its title, made by the bot the first time it is needed (it cannot be before the person
  * pressed Start), kept by the place's id, renamed when its title changes (the state keeps the last title Telegram
  * accepted); General is the inbox. The bot's poller (`TelegramBot`, shared by the
- * bot's channels) hands this chat's updates over. Plain DMs share one physical chat and prefix pet replies with their titles. Pet HTML is decoded into native entities, cut to Telegram's limit.
+ * bot's channels) hands this chat's updates over. Plain DMs share one physical chat and attribute replies when
+ * multiple bots talk there; temporary helpers always keep their titles. Pet HTML is decoded into native entities, cut to Telegram's limit.
  */
 export class TelegramChannel implements Channel, BotChat {
   get inbox(): string { return this.mode === "dm" ? "Chat" : "General"; }
@@ -77,6 +78,15 @@ export class TelegramChannel implements Channel, BotChat {
   private readonly shown = new Map<number, Shown>();
   /** Names this bot's chat: in state keys and message refs (message ids are per chat). */
   private readonly prefix: string;
+  private soloPlace?: string;
+
+  /** Refreshed on every config reload, including when the channel connection is reused. */
+  setSoloPlace(id?: string): void { this.soloPlace = id; }
+
+  private attributeDm(place: Place): boolean {
+    const solo = this.soloPlace !== undefined && (place.id === this.soloPlace || place.kind === "house-inbox");
+    return this.mode === "dm" && (place.forceAttribution === true || !solo);
+  }
   private readonly keys: { creation: (place: string) => string; thread: (place: string) => string; title: (place: string) => string; place: (thread: number) => string };
 
   constructor(
@@ -193,7 +203,7 @@ export class TelegramChannel implements Channel, BotChat {
   post(place: Place, text: string, choices?: Choices, format: "regular" | "rich" = "regular"): Promise<PostRef[]> {
     if (format === "rich") return this.postRich(place, text, choices);
     const pieces = splitFormatted(telegramHtml(text), MAX_TEXT - place.title.length - 2).map(piece => {
-      if (this.mode !== "dm" && !looksLikeNotice(piece.text)) return piece;
+      if (!this.attributeDm(place) && !looksLikeNotice(piece.text)) return piece;
       const prefix = `${place.title}: `;
       return { text: prefix + piece.text, entities: piece.entities.map(entity => ({ ...entity, offset: entity.offset + prefix.length })) };
     });
@@ -202,7 +212,7 @@ export class TelegramChannel implements Channel, BotChat {
 
   private async postRich(place: Place, text: string, choices?: Choices): Promise<PostRef[]> {
     if (this.mode === "group") throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
-    const markdown = richMarkdown(place, text);
+    const markdown = richMarkdown(place, text, this.mode !== "dm" || this.attributeDm(place));
     const where = await this.where(place);
     const sent = await this.sendPiece({ chat_id: this.chat, ...where, rich_message: { markdown }, ...(choices ? { reply_markup: keyboard(choices) } : {}) }, "sendRichMessage");
     if (choices) this.remember(sent.message_id, { text: markdown, rich: true });
@@ -217,13 +227,13 @@ export class TelegramChannel implements Channel, BotChat {
     let shown: Shown;
     if (format === "rich") {
       if (this.mode === "group") throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
-      const markdown = richMarkdown(place, text);
+      const markdown = richMarkdown(place, text, this.mode !== "dm" || this.attributeDm(place));
       content = { rich_message: { markdown } };
       shown = { text: markdown, rich: true };
     } else {
       const parsed = telegramHtml(text);
       if (!parsed.text.trim()) throw new Error("The edited text is empty");
-      const prefix = this.mode === "dm" || looksLikeNotice(parsed.text) ? `${place.title}: ` : "";
+      const prefix = this.attributeDm(place) || looksLikeNotice(parsed.text) ? `${place.title}: ` : "";
       const rendered = prefix + parsed.text;
       if (!rendered.trim()) throw new Error("The edited text is empty");
       if (rendered.length > MAX_TEXT) throw new Error("The edited message exceeds Telegram's 4096 character limit; send a new reply instead");
@@ -258,7 +268,7 @@ export class TelegramChannel implements Channel, BotChat {
     if (kind === "video" && !/\.(mp4|m4v|mov)$/i.test(name)) {
       throw new Error("Videos play in the chat as MP4 (H.264 + AAC); convert the video or send it as a document");
     }
-    const caption = this.mode === "dm" ? `${place.title}: ${attachment.caption ?? ""}`.trimEnd() : attachment.caption && looksLikeNotice(attachment.caption) ? `${place.title}: ${attachment.caption}` : attachment.caption;
+    const caption = this.attributeDm(place) ? `${place.title}: ${attachment.caption ?? ""}`.trimEnd() : attachment.caption && looksLikeNotice(attachment.caption) ? `${place.title}: ${attachment.caption}` : attachment.caption;
     if ((caption?.length ?? 0) > 1024) throw new Error("Telegram attachment captions must be at most 1024 characters");
     const where = await this.where(place);
     const form = new FormData();
@@ -716,10 +726,10 @@ function statusMessage(view: StatusView): object {
 }
 
 /** Attribution avoids parsing rich Markdown just to distinguish pet reports from Household notices. */
-function richMarkdown(place: Place, text: string): string {
+function richMarkdown(place: Place, text: string, attribute = true): string {
   if (!text.trim()) throw new Error("The rich message text is empty");
   const title = place.title.replace(/[\\`*_{}[\]()<>#+.!|~-]/g, "\\$&");
-  const markdown = `**${title}**\n\n${text}`;
+  const markdown = attribute || looksLikeNotice(text) ? `**${title}**\n\n${text}` : text;
   if ([...markdown].length > 32768) throw new Error("The rich message exceeds Telegram's 32768 character limit including its bot title");
   return markdown;
 }

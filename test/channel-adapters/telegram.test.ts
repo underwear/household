@@ -1182,6 +1182,46 @@ test("topic creation capability is optional; created and offline-discovered topi
   expect(await reopened.placeLink(created)).toBe("https://t.me/c/1234567890/100");
 });
 
+test("a solo DM omits attribution for text, edits, rich replies and files but always identifies helpers and notice-like text", async () => {
+  const { api, bot } = setup();
+  const channel = new TelegramChannel(bot(), OWNER, "solo DM", "dm");
+  stops.push(() => channel.stop());
+  channel.setSoloPlace(sibling.id);
+  const [post] = await channel.post(sibling, "<b>Hello</b>");
+  expect(api.sent("sendMessage").at(-1)).toMatchObject({ text: "Hello", entities: [{ type: "bold", offset: 0, length: 5 }] });
+  await channel.editPost(sibling, post!, "<i>Updated</i>");
+  expect(api.sent("editMessageText").at(-1)).toMatchObject({ text: "Updated", entities: [{ type: "italic", offset: 0, length: 7 }] });
+  const [rich] = await channel.post(sibling, "# Report", undefined, "rich");
+  expect(api.sent("sendRichMessage").at(-1)!.rich_message.markdown).toBe("# Report");
+  await channel.editPost(sibling, rich!, "# Updated", undefined, "rich");
+  expect(api.sent("editMessageText").at(-1)!.rich_message.markdown).toBe("# Updated");
+  await channel.sendAttachment(sibling, { kind: "document", name: "hello.txt", bytes: new TextEncoder().encode("hello"), caption: "File" });
+  expect(api.sent("sendDocument").at(-1)!.caption).toBe("File");
+  // A helper can share the parent's exact place and title, but must still be attributed.
+  const helper = { ...sibling, forceAttribution: true };
+  await channel.post(helper, "<b>Helping</b>");
+  expect(api.sent("sendMessage").at(-1)!.text).toBe(`${sibling.title}: Helping`);
+  await channel.editPost(helper, post!, "Helping again");
+  expect(api.sent("editMessageText").at(-1)!.text).toBe(`${sibling.title}: Helping again`);
+  await channel.post(helper, "# Help", undefined, "rich");
+  expect(api.sent("sendRichMessage").at(-1)!.rich_message.markdown).toBe(`**${sibling.title}**\n\n# Help`);
+  await channel.sendAttachment(helper, { kind: "document", name: "hello.txt", bytes: new TextEncoder().encode("hello") });
+  expect(api.sent("sendDocument").at(-1)!.caption).toBe(`${sibling.title}:`);
+  await channel.post(sibling, "<b>🏠 Household:</b> report");
+  expect(api.sent("sendMessage").at(-1)!.text).toBe(`${sibling.title}: 🏠 Household: report`);
+  await channel.post(sibling, "# 🏠 Household: report", undefined, "rich");
+  expect(api.sent("sendRichMessage").at(-1)!.rich_message.markdown).toStartWith(`**${sibling.title}**`);
+  for (const text of ["# Household: report", "⚠️ Permission denied", "🏠 **Household:** report"]) {
+    await channel.post(sibling, text, undefined, "rich");
+    expect(api.sent("sendRichMessage").at(-1)!.rich_message.markdown).toBe(`**${sibling.title}**\n\n${text}`);
+    await channel.editPost(sibling, rich!, text, undefined, "rich");
+    expect(api.sent("editMessageText").at(-1)!.rich_message.markdown).toBe(`**${sibling.title}**\n\n${text}`);
+  }
+  channel.setSoloPlace(undefined);
+  await channel.post(sibling, "Two bots now");
+  expect(api.sent("sendMessage").at(-1)!.text).toBe(`${sibling.title}: Two bots now`);
+});
+
 test("ordinary DM keeps replies, files, buttons and status in the chat without topic operations", async () => {
   const { api, bot, listen, received } = setup();
   const channel = new TelegramChannel(bot(), OWNER, "plain DM", "dm");

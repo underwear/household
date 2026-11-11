@@ -122,7 +122,7 @@ export const petTitle = (pet: Pet) => pet.title ?? pet.name.charAt(0).toUpperCas
 export const petDisplay = (pet: Pet) => `${pet.emoji ?? DEFAULT_PET_EMOJI} ${petTitle(pet)}`;
 
 /** The pet's place in a channel, titled as people see the pet, under Household's id for it. */
-export const petPlace = (pet: Pet, id: string): Place => ({ id, kind: "pet-thread", title: petDisplay(pet) });
+export const petPlace = (pet: Pet, id: string): Place => ({ id, kind: "pet-thread", title: petDisplay(pet), ...(pet.sideworker || pet.scout ? { forceAttribution: true } : {}) });
 
 /**
  * How far Household trusts a sender, from the config alone: one of the house's owners, as a channel of the house
