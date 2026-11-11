@@ -20,17 +20,15 @@ test("a Telegram user id: digits up to 2^53 − 1, compared as written", () => {
   for (const bad of ["0", "01", "-1", "1.5", "@oleg", "9007199254740992", "123456789012345678901"]) expect(isTelegramId(bad)).toBe(false);
 });
 
-test("owners: each one's platform check, and an owner on every platform the house has channels on", () => {
+test("owners: validate assigned identities, while channels do not require an owner", () => {
   const platforms = knownPlatforms();
-  const kinds = knownChannelKinds();
-  expect(ownerProblems(kinds, platforms, [house([{ platform: "telegram", id: "100200300" }])])).toEqual([]);
-  expect(ownerProblems(kinds, platforms, [house([{ platform: "telegram", id: "@oleg" }])])).toEqual([
+  expect(ownerProblems(platforms, [house([{ platform: "telegram", id: "100200300" }])])).toEqual([]);
+  expect(ownerProblems(platforms, [house([{ platform: "telegram", id: "@oleg" }])])).toEqual([
     "houses.work.people.owners.telegram: '@oleg' is not a Telegram user id (A number; @userinfobot tells yours.)",
   ]);
-  expect(ownerProblems(kinds, platforms, [house([])])).toEqual([
-    "houses.work.people.owners: a house with telegram channels needs an owner on telegram (`house owner add work telegram <id>`), or everyone who writes there is a guest",
-  ]);
-  expect(ownerProblems(kinds, platforms, [house([], [])])).toEqual([]); // no channels: no owner needed
+  expect(ownerProblems(platforms, [house([])])).toEqual([]);
+  expect(ownerProblems(platforms, [house([{ platform: "slack", id: "TTEST:UOWNER" }])])).toEqual([]); // owner on another platform
+  expect(ownerProblems(platforms, [house([], [])])).toEqual([]);
 });
 
 test("pets given more than the host has: a line per pet and resource, the defaults counted for unset values", () => {

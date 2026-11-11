@@ -320,7 +320,6 @@ test("invalid input is a 400 with the reason, an unknown house or a bad URI a 40
     ["POST", "/api/houses/work/pets", { name: "chair", key: "nope" }, 400, "bot work/chair: unknown key 'nope' (one of: claude)"],
     ["POST", "/api/houses/work/pets", { name: "chair" }, 400, "bot work/chair: no key: name the key it runs on (key:; one of: claude)"], // always named
     ["POST", "/api/houses/work/channels", { kind: "telegram-private", token: BOT, chat: "abc" }, 400, "must be a Telegram chat id"],
-    ["DELETE", "/api/houses/work/owners/telegram/100200300", undefined, 400, "a house with telegram channels needs an owner on telegram"],
     ["POST", "/api/houses/work/owners", { platform: "telegram", id: " " }, 400, "is not a person's id"],
     ["POST", "/api/houses/work/owners", { platform: "telegram", id: "@oleg" }, 400, "'@oleg' is not a Telegram user id (A number; @userinfobot tells yours.)"], // the platform's check
     ["POST", "/api/houses/work/owners", { platform: "telegram", id: "9007199254740992" }, 400, "is not a Telegram user id"], // past 2^53 - 1
@@ -378,6 +377,27 @@ test("error bodies carry no absolute paths; an unexpected failure is a generic 5
   expect(internal.status).toBe(500);
   expect(await internal.json()).toEqual({ error: "internal error: see the daemon's log" });
   expect(broken.logged.some((line) => line.includes("web: GET /api/houses failed: docker ps failed in /Users/me/secret-place"))).toBe(true);
+});
+
+test("a channel can be created before assigning bots and owners, and the last owner can be removed", async () => {
+  const { call, signIn, store, applied } = setup();
+  await signIn();
+  expect((await call("POST", "/api/houses", { name: "lab" })).status).toBe(201);
+  const added = await call("POST", "/api/houses/lab/channels", { kind: "telegram-dm", token: OTHER_BOT, chat: "555", pets: [] });
+  expect(added.status).toBe(201);
+  expect((await added.json() as WriteView).house).toMatchObject({ owners: [], channels: [{ chat: "555", pets: [] }] });
+
+  expect((await call("POST", "/api/houses/lab/pets", { name: "helper", key: "claude" })).status).toBe(201);
+  const assigned = await call("PATCH", "/api/houses/lab/channels/555", { pets: ["helper"] });
+  expect(assigned.status).toBe(200);
+  expect((await assigned.json() as WriteView).house).toMatchObject({ owners: [], channels: [{ chat: "555", pets: ["helper"] }] });
+
+  expect((await call("POST", "/api/houses/lab/owners", { platform: "telegram", id: "555" })).status).toBe(201);
+  const removed = await call("DELETE", "/api/houses/lab/owners/telegram/555");
+  expect(removed.status).toBe(200);
+  expect((await removed.json() as WriteView).house).toMatchObject({ owners: [], channels: [{ chat: "555", pets: ["helper"] }] });
+  expect((await store.load()).houses.find((house) => house.name === "lab")).toMatchObject({ people: { owners: [] }, channels: [{ chat: "555", pets: ["helper"] }] });
+  expect(applied).toHaveLength(6);
 });
 
 test("channels, owners and pets: added, changed and removed in household.yaml (comments kept), each reloaded; a pet removed leaves its channels", async () => {

@@ -200,6 +200,9 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
           }),
         children: (
           <>
+            {!house.owners.some((owner) => owner.platform === spec.platform) && (
+              <p className="hint">You can add an owner later under Owners. Until then, everyone on this platform is a guest.</p>
+            )}
             {spec.kind === "telegram-private" && <p className="hint"><span className="tag busy">Beta</span>{" "}Threaded Mode is in beta. Topic behavior may vary between Telegram clients.</p>}
             {spec.fields
               .filter((field) => field.wide)
@@ -253,6 +256,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
               onToggle={toggle}
               empty="The workspace has no bots yet."
             />
+            <p className="hint">Bots are optional. You can assign them later by editing this channel.</p>
             {chosen.length > 1 && (
               <SelectField
                 label="Default"

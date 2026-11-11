@@ -72,9 +72,10 @@ test("each problem is said in plain words: no docker or openssl, a config others
   expect((await check()).some((finding) => !finding.ok && finding.text.includes("bot work/sibling: unknown key 'claude' (the Household has none: add one under keys:)"))).toBe(true);
 });
 
-test("a private chat whose person is not among the house's owners is a warning, not a failure", async () => {
+test("a private chat without owners is a warning, not a config or reload failure", async () => {
   const { config, check } = await setup(healthy);
   await house(config, GOOD, "2");
+  await config.removeOwner("work", "telegram", "1");
   const findings = await check();
   expect(findings.filter((finding) => finding.warning)).toEqual([
     { ok: true, warning: true, text: "channel Telegram Bot DM (threaded) of house work: its chat 2 is not among the owners, so its person is a guest there (`house owner add work telegram 2` if they are yours)" },

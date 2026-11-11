@@ -26,7 +26,7 @@ export function OwnersSection({ house, ask, save, platforms, noteMax }: SectionP
             + Add owner
           </button>
         }
-        empty="No owners."
+        empty="No owners. You can add channels now and add owners later. Until then, everyone is a guest."
         items={house.owners.map((owner) => ({
           key: `${owner.platform}/${owner.id}`,
           lead: <PlatformIcon platforms={platforms} platform={owner.platform} />,

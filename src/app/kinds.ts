@@ -1,6 +1,6 @@
 import { slack, slackPrivate } from "../channel-adapters/slack";
 import { telegram, telegramPrivate, telegramDm, telegramGroup } from "../channel-adapters/telegram";
-import { platformOf, type ChannelKinds, type ChannelKindSpec, type Platform, type PlatformSpec } from "../core/channels";
+import type { ChannelKinds, ChannelKindSpec, Platform, PlatformSpec } from "../core/channels";
 import { HouseholdError } from "../core/errors";
 import type { House, Household, Owner } from "../core/household";
 import { beyondHost, petResources, type HostCapacity } from "../core/resources";
@@ -38,25 +38,14 @@ export function ownerProblem(platforms: Platforms, { platform, id }: Owner): str
   return undefined;
 }
 
-/**
- * What is wrong with the houses' owners, one line each: an owner that is not one of their platform's (`ownerProblem`),
- * and a platform the house has channels on but no owner (everyone who writes there would be a guest).
- */
-export function ownerProblems(kinds: ChannelKinds, platforms: Platforms, houses: House[]): string[] {
-  return houses.flatMap((house) => {
-    const wrong = house.people.owners.flatMap((owner) => {
+/** Invalid owner identities, one line each. Channels and owners can be configured independently. */
+export function ownerProblems(platforms: Platforms, houses: House[]): string[] {
+  return houses.flatMap((house) =>
+    house.people.owners.flatMap((owner) => {
       const problem = ownerProblem(platforms, owner);
       return problem === undefined ? [] : [`houses.${house.name}.people.owners.${owner.platform}: ${problem}`];
-    });
-    const on = new Set(house.channels.flatMap((channel) => platformOf(kinds, channel.kind) ?? []));
-    const missing = [...on].filter((platform) => !house.people.owners.some((owner) => owner.platform === platform));
-    return [
-      ...wrong,
-      ...missing.map(
-        (platform) => `houses.${house.name}.people.owners: a house with ${platform} channels needs an owner on ${platform} (\`house owner add ${house.name} ${platform} <id>\`), or everyone who writes there is a guest`,
-      ),
-    ];
-  });
+    }),
+  );
 }
 
 /** A pet given more than `host` has, one line per resource: its VM could not start there. */
@@ -67,11 +56,11 @@ export const hostProblems = (host: HostCapacity, houses: House[]) =>
 export const configCheck = (agents: Agents, host: HostCapacity = hostCapacity()) => (household: Household) => [
   ...agentCheck(agents)(household),
   ...hostProblems(host, household.houses),
-  ...ownerProblems(knownChannelKinds(), knownPlatforms(), household.houses),
+  ...ownerProblems(knownPlatforms(), household.houses),
 ];
 
 /** Refuses houses whose owners are wrong (before a reload touches anything), all at once. */
 export function assertOwners(houses: House[]): void {
-  const problems = ownerProblems(knownChannelKinds(), knownPlatforms(), houses);
+  const problems = ownerProblems(knownPlatforms(), houses);
   if (problems.length > 0) throw new HouseholdError(problems.join("\n"));
 }
