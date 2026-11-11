@@ -92,7 +92,7 @@ test("unsafe names and existing API keys fail before credential paths or login a
 });
 
 test("this machine's Codex login is copied into Household's own store, private, with whose it is", async () => {
-  const { importCodex, localCodexLogin } = await import("../../src/cli/codex-login");
+  const { importCodex, localCodexLogin } = await import("../../src/app/codex-login");
   const { paths } = setupLogin();
   const config = new ConfigStore(paths.configFile);
   const codexHome = tempDir();
@@ -108,7 +108,7 @@ test("this machine's Codex login is copied into Household's own store, private, 
 });
 
 test("an ended Codex login that cannot be refreshed is not kept", async () => {
-  const { importCodex, localCodexLogin } = await import("../../src/cli/codex-login");
+  const { importCodex, localCodexLogin } = await import("../../src/app/codex-login");
   const { paths } = setupLogin();
   const config = new ConfigStore(paths.configFile);
   const codexHome = tempDir();

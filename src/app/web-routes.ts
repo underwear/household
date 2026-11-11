@@ -7,7 +7,7 @@ import { houseFeatures, previewSettings, houseFeatureSettingsSchema } from "../c
 import { sideworkerProfileProblems } from "./agents";
 import { sideworkerProfilesSchema } from "../infra/config-schema";
 import type { Sideworkers } from "./sideworkers";
-import { workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, DEFAULT_SIDEWORKER_LIMITS, sideworkerLimitsSchema, beyondHost } from "../core/resources";
+import { workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, beyondHost } from "../core/resources";
 import { petCpuSchema, petMemorySchema, petResources, type HostCapacity } from "../core/resources";
 import { hostCapacity } from "../infra/host";
 import type { Monitoring } from "./monitoring";
@@ -39,7 +39,8 @@ import { ownerProblem, type ChannelKinds, type Platforms } from "./kinds";
 import type { PetStatus } from "./pet-plane";
 import { requestDomain, requestPort, type NetworkRequests } from "./network-requests";
 import { clearedCookie, cookieValue, sessionCookie, sessionCookieName, type WebAuth } from "./web-auth";
-import type { AgentView, HouseView, KeysView, MeView, WriteView } from "./web-views";
+import type { AgentView, BotListenView, DeviceLoginView, HouseView, KeysView, MeView, OnboardingView, WriteView } from "./web-views";
+import type { Onboarding } from "./onboarding";
 import type { Allowance } from "../core/allowance";
 import { LOG_KINDS, readLog, type LogKind } from "./household-log";
 import { isPetLogSource, PET_LOG_SOURCES, type PetLogSource, type PetLogView } from "./pet-logs";
@@ -95,6 +96,8 @@ export interface WebRoutesDeps {
   petLog?: (house: string, pet: string, source: PetLogSource, read: { lines?: number; after?: string }) => Promise<PetLogView | undefined>;
   /** The machine's CPUs and memory, what the forms weigh a pet's against; this one's when not given. */
   host?: HostCapacity;
+  /** The setup's sign-ins and waits for a bot's first message. */
+  onboarding?: Onboarding;
 }
 
 /** The web routes, and the same API without a browser session for the daemon's own control socket (the CLI). */
@@ -119,6 +122,10 @@ type Route = [method: string, pattern: RegExp, handle: (call: Call) => Promise<R
 const nameBody = z.strictObject({ name: z.string() });
 const hostBody = z.strictObject({ host: z.string() });
 const hostsBody = z.strictObject({ hosts: z.array(z.string()).min(1).max(50) });
+const ONBOARDING_KINDS = ["telegram-private", "telegram-dm", "telegram-group"];
+const botBody = z.strictObject({ house: z.string(), kind: z.string(), token: z.string() });
+// `chat`: a group's id (-100…); a private chat's is its owner's.
+const finishBody = z.strictObject({ owner: z.string(), chat: z.string().nullish() });
 const ownerBody = z.strictObject({ platform: z.string(), id: z.string(), note: z.string().nullish() });
 const ownerNoteBody = z.strictObject({ note: z.string().nullable() });
 // A field left out stays as it is; null (or "") removes it. The config's own rules check the values.
@@ -213,7 +220,6 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       features: houseFeatures(house),
       preview: previewSettings(house),
       resources: workspaceBudget(house, deps.resourceAllocations?.(house.name)),
-      sideworkerLimits: house.sideworkerLimits ?? DEFAULT_SIDEWORKER_LIMITS,
       sideworkerProfiles: house.sideworkerProfiles ?? [],
       allow: [
         ...own.map((host) => ({ host: formatAllowEntry(host), byAgent: false, ...(host.reach ? { granted: true } : {}) })),
@@ -334,7 +340,66 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     return { files: deps.petSkills.at(house, configured.sideworker?.parent ?? pet, target), path: `${cwd}/${directory}` };
   };
   const fileBody = z.strictObject({ path: z.string(), content: z.string(), revision: z.string().nullable() });
+  const onboarding = () => {
+    if (!deps.onboarding) throw new HouseholdError("setup is not available here: run house onboard");
+    return deps.onboarding;
+  };
   const routes: Route[] = [
+    ["GET", /^\/api\/onboarding$/, async () => json({ localCodex: deps.onboarding?.localCodex() ?? null } satisfies OnboardingView)],
+    ["POST", /^\/api\/onboarding\/codex\/import$/, async ({ request }) => {
+      const { name } = await bodyOf(request, nameBody);
+      await onboarding().importCodex(name);
+      events.info(`web: key ${name} added (a copy of this machine's Codex login)`);
+      return json({ keys: keyViews(deps.agents, await config.load(), deps.allowances) } satisfies KeysView, 201);
+    }],
+    ["POST", /^\/api\/onboarding\/codex\/login$/, async ({ request }) => {
+      const { name } = await bodyOf(request, nameBody);
+      return json(await onboarding().startLogin(name) satisfies DeviceLoginView, 201);
+    }],
+    ["GET", /^\/api\/onboarding\/codex\/login\/([^/]+)$/, async ({ params: [id] }) => json(onboarding().login(id!))],
+    ["DELETE", /^\/api\/onboarding\/codex\/login\/([^/]+)$/, async ({ params: [id] }) => {
+      onboarding().cancelLogin(id!);
+      return json({});
+    }],
+    // A bot token for a new channel: checked as a channel's (its Threaded Mode too, for threads), then its first message is waited for.
+    ["POST", /^\/api\/onboarding\/telegram$/, async ({ request }) => {
+      const { house, kind, token } = await bodyOf(request, botBody);
+      if (!ONBOARDING_KINDS.includes(kind)) throw new HouseholdError(`setup connects ${ONBOARDING_KINDS.join(" or ")}, not ${kind}`);
+      const household = await config.load();
+      if (!findHouse(household, house)) throw new NotFoundError(`unknown workspace '${house}'`);
+      const { own } = await checkFields(deps.channelKinds, deps.checks, kind, { token }, { household, house });
+      const check = deps.checks.get(kind)?.get("token");
+      const value = own.token!;
+      const bot = check?.describe(value) ?? "your bot";
+      // A bot Household runs already: its updates are the daemon's, so nobody is listened for here.
+      const identity = check?.identityOf(value);
+      const running = identity !== undefined && household.houses.some((each) => each.channels.some((channel) => {
+        const theirs = (channel as unknown as Record<string, unknown>).token;
+        return typeof theirs === "string" && check?.identityOf(theirs) === identity;
+      }));
+      const id = onboarding().listen(value, house, kind, bot, !running);
+      return json({ id, bot, link: `https://t.me/${bot.replace(/^@/, "")}` } satisfies BotListenView, 201);
+    }],
+    ["GET", /^\/api\/onboarding\/telegram\/([^/]+)$/, async ({ params: [id] }) => json(onboarding().status(id!))],
+    ["POST", /^\/api\/onboarding\/telegram\/([^/]+)\/again$/, async ({ params: [id] }) => {
+      onboarding().relisten(id!);
+      return json(onboarding().status(id!));
+    }],
+    // The person is who wrote (or who typed their id): the workspace's owner, and the channel's chat with them.
+    ["POST", /^\/api\/onboarding\/telegram\/([^/]+)\/finish$/, async ({ request, params: [id] }) => {
+      const body = await bodyOf(request, finishBody);
+      const owner = body.owner.trim();
+      if (!/^[1-9]\d{0,15}$/.test(owner)) throw new HouseholdError("a Telegram id is a number, like 123456789 (@userinfobot tells it)");
+      const { token, house, kind, bot } = onboarding().bot(id!);
+      const group = kind === "telegram-group";
+      const chat = group ? body.chat?.trim() ?? "" : owner;
+      if (group && !/^-100\d{5,16}$/.test(chat)) throw new HouseholdError("a group's id is a negative number starting with -100, like -1001234567890");
+      const household = await config.load();
+      const { own, also } = await checkFields(deps.channelKinds, deps.checks, kind, { token }, { household, house });
+      const after = await config.addChannel(house, { kind, chat, ...own }, also, { platform: "telegram", id: owner });
+      onboarding().finish(id!);
+      return written(after, house, `is in a ${kind} chat ${chat} with ${bot}, owner telegram ${owner}`, 201);
+    }],
     ["PUT", at("/features"), async ({ request, params: [house] }) => {
       const settings = await bodyOf(request, houseFeatureSettingsSchema);
       return written(await config.setHouseFeatures(house!, settings), house!, "house features changed");
@@ -367,12 +432,6 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const problems = beyondHost(resources, host);
       if (problems.length) throw new HouseholdError(problems.join("; "));
       return written(await config.setWorkspaceResources(name!, resources), name!, "workspace resource budget changed");
-    }],
-    ["PUT", at("/sideworker-limits"), async ({ request, params: [house] }) => {
-      const limits = await bodyOf(request, sideworkerLimitsSchema);
-      const problems = beyondHost(limits, host);
-      if (problems.length) throw new HouseholdError(problems.join("; "));
-      return written(await config.setSideworkerLimits(house!, limits), house!, "sideworker limits changed");
     }],
     ["GET", /^\/api\/timezone$/, async () => json({ timezone: householdTimezone((await config.load()).timezone) })],
     ["PUT", /^\/api\/timezone$/, async ({ request }) => {
@@ -514,7 +573,9 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const destination = slackMember === undefined ? undefined : await resolveSlackDm(kept.token!, slackMember);
       if (destination && destination.chat !== chat) throw new HouseholdError("Slack destination changed. Go back and find your DM again.");
       const channel = { kind, chat, ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }) };
-      return written(await config.addChannel(name!, channel, also, destination ? { platform: "slack", id: destination.owner } : undefined), name!, `is in a ${kind} chat`, 201);
+      const after = await config.addChannel(name!, channel, also, destination ? { platform: "slack", id: destination.owner } : undefined);
+      if (kept.token) deps.onboarding?.release(kept.token); // a setup's wait on this bot would take the daemon's updates
+      return written(after, name!, `is in a ${kind} chat`, 201);
     }],
     ["PATCH", at("/channels/([^/]+)"), async ({ request, params: [name, chat] }) => {
       const { chat: _, name: shown, note, pets, default: first, ...own } = await bodyOf(request, channelBody);
@@ -528,6 +589,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const { own: kept, also } = await checkFields(deps.channelKinds, deps.checks, known.kind, own, { household, house: name!, chat: known.chat });
       const fields = { ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }) };
       const after = await config.updateChannel(name!, chat!.trim(), fields, also);
+      if (kept.token) deps.onboarding?.release(kept.token);
       if (also.length > 0) events.info(`web: workspace ${name}: its bot's new token also went to its channels of chat ${also.map((other) => other.chat).join(", ")}`);
       return written(after, name!, `changed its channel of chat ${chat}`);
     }],

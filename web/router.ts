@@ -12,7 +12,7 @@ export type ScoutTab = (typeof SCOUT_TABS)[number];
 
 
 /** The screens so far: the workspaces, Household settings (keys, …), a page of one workspace, or a path that stands for another. */
-export type Route = { page: "workspaces" } | { page: "settings" } | { page: "workspace"; name: string; tab: WorkspaceTab } | { page: "bot"; workspace: string; bot: string; tab: BotTab } | { page: "scout"; workspace: string; scout: string; tab: ScoutTab } | { page: "capability"; workspace: string; capability: string } | { page: "redirect"; to: string } | { page: "missing" };
+export type Route = { page: "workspaces" } | { page: "settings" } | { page: "setup" } | { page: "workspace"; name: string; tab: WorkspaceTab } | { page: "bot"; workspace: string; bot: string; tab: BotTab } | { page: "scout"; workspace: string; scout: string; tab: ScoutTab } | { page: "capability"; workspace: string; capability: string } | { page: "redirect"; to: string } | { page: "missing" };
 
 /**
  * The pages by path pattern, first match wins; `:name` is one path segment (URI-decoded). A new screen is a line
@@ -22,6 +22,7 @@ type RouteEntry = [pattern: string, route: (params: Record<string, string>) => R
 const ROUTES: RouteEntry[] = [
   ["/", () => ({ page: "workspaces" })],
   ["/settings", () => ({ page: "settings" })],
+  ["/setup", () => ({ page: "setup" })],
   ["/logs", () => ({ page: "redirect", to: "/" })],
   ["/keys", () => ({ page: "redirect", to: "/settings" })],
   ["/workspaces/:workspace/logs", ({ workspace }) => ({ page: "redirect", to: workspacePath(workspace!, "bots") })],

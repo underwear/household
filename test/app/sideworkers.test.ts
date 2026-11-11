@@ -14,7 +14,7 @@ function fixture(overrides: Partial<SideworkerDeps> = {}) {
   const store = new SqliteStore(":memory:");
   const config: Household = { daemon: {}, keys: [{name:"openai",provider:"openai",value:"sk-household-fake-key"},{name:"claude",provider:"anthropic",value:"sk-ant-api03-fake-key"}], houses: [{ name: "home", resources: { cpus: 16, memoryMiB: 16384 }, network: { kind: "allowlist", allow: [] }, people: { owners: [] },
     pets: [{ name: "parent", agent: "codex-app-server", model: "gpt-6.1-terra", mode: "auto", key:"openai", environment: { setup: "echo setup" } }, { name: "other" }],
-    channels: [{ kind: "telegram-private", token: "dummy", chat: "1", pets: ["parent"] }], sideworkerLimits: { maxWorkers: 2, cpus: 3, memoryMiB: 2048 } }] };
+    channels: [{ kind: "telegram-private", token: "dummy", chat: "1", pets: ["parent"] }] }] };
   const sent: { house: string; pet: string; text: string }[] = [], logs: string[] = [];
   let reloads = 0, now = 100, idle = true;
   const deps: SideworkerDeps = { store, agents: knownAgents(), configured: async () => config, reload: async () => { reloads++; }, resolveDirectory: async (_h, _p, cwd) => cwd, ready: async () => true, dispatch: async (_caller, pet, text) => { sent.push({ house: "home", pet, text }); },
@@ -23,7 +23,7 @@ function fixture(overrides: Partial<SideworkerDeps> = {}) {
   return { workers, config, store, sent, deps, logs, reloads: () => reloads, advance: (ms: number) => { now += ms; }, idle: (value: boolean) => { idle = value; } };
 }
 const parent = { house: "home", pet: "parent" };
-const task = { cwd: "/home/agent/projects/test", task: "Please review the code", name: "sw-review" };
+const task = { cwd: "/home/agent/projects/test", task: "Please review the code", name: "sw-review", cpus: 3, memoryMiB: 2048 };
 
 test("workers preserve parent launch settings, share channels without changing default, and restore after daemon restart", async () => {
   const f = fixture();
@@ -35,7 +35,6 @@ test("workers preserve parent launch settings, share channels without changing d
   expect(expanded.houses[0]!.channels[0]).toMatchObject({ pets: ["parent", "sw-review"], default: "parent" });
   expect(f.config.houses[0]!.pets).toHaveLength(2);
   expect(new Sideworkers(f.deps).list("home")).toEqual([worker]);
-  f.config.houses[0]!.sideworkerLimits!.memoryMiB = 4096;
   expect(f.workers.expanded(f.config).houses[0]!.pets[2]!.memoryMiB).toBe(2048);
   f.store.close();
 });
@@ -371,7 +370,6 @@ test("Claude connectors are captured from the parent, including profile launches
   house.pets[0]!.settings = {};
   const restored = new Sideworkers(f.deps).expanded(f.config);
   expect(restored.houses[0]!.pets.slice(2).map(pet => pet.settings)).toEqual([{ claudeAiConnectors: "true" }, { claudeAiConnectors: "true" }]);
-  house.sideworkerLimits!.maxWorkers = 3;
   house.pets[0]!.settings = { claudeAiConnectors: "true" };
   await f.workers.spawn(parent, { ...task, name: "sw-codex", profile: "codex" });
   expect(f.workers.expanded(f.config).houses[0]!.pets.at(-1)!.settings).toBeUndefined();
@@ -381,7 +379,9 @@ test("Claude connectors are captured from the parent, including profile launches
 test("bot-selected VM sizes share the pool with scouts; failed cleanup retains allocation", async () => {
   const f = fixture({ otherAllocations: () => [{ name: "scout-one", kind: "scout", cpus: 2, memoryMiB: 2048 }] });
   f.config.houses[0]!.resources = { cpus: 8, memoryMiB: 8192 };
-  f.config.houses[0]!.sideworkerLimits!.maxWorkers = 0; // obsolete, not admission control
+  const { cpus: _cpus, memoryMiB: _memory, ...unsized } = task;
+  await expect(f.workers.spawn(parent, unsized)).rejects.toThrow("Choose cpus and memoryMiB");
+  await expect(f.workers.spawn(parent, { ...unsized, cpus: 1 })).rejects.toThrow("workspace_resources");
   const worker = await f.workers.spawn(parent, { ...task, cpus: 1, memoryMiB: 512 });
   expect(worker).toMatchObject({ cpus: 1, memoryMiB: 512 });
   expect(await f.workers.resources(parent)).toMatchObject({ available: { cpus: 1, memoryMiB: 3584 } });

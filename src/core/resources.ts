@@ -43,13 +43,6 @@ export function allocatedTotal(pets: CountedPet[], editing?: CountedPet): PetRes
     .reduce((sum, each) => ({ cpus: sum.cpus + each.cpus, memoryMiB: sum.memoryMiB + each.memoryMiB }), { cpus: 0, memoryMiB: 0 });
 }
 
-/** Default helper VM size. Legacy counts are accepted on read and discarded. */
-export const sideworkerLimitsSchema = z.strictObject({
-  maxWorkers: z.number().int().min(0).max(64).optional(),
-  cpus: petCpuSchema,
-  memoryMiB: petMemorySchema,
-}).transform(({ maxWorkers: _legacy, ...resources }) => resources);
-export const DEFAULT_SIDEWORKER_LIMITS = { cpus: 2, memoryMiB: 1024 };
 
 export const workspaceResourcesSchema = z.strictObject({ cpus: petCpuSchema, memoryMiB: petMemorySchema });
 export const DEFAULT_WORKSPACE_RESOURCES: PetResources = { cpus: 8, memoryMiB: 8192 };

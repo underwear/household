@@ -82,6 +82,8 @@ const REACTIONS_PER_MINUTE = 20;
 
 /** Posts with choices Household follows, and posts already resolved, are kept up to this many each. */
 const MAX_CARDS = 1000;
+/** How often one person is told, at most, that a message where no bot reads goes to nobody. */
+const MISDIRECTED_EVERY_MS = 60 * 60 * 1000;
 /** A reply's buttons: at most this many rows of this many, each label one line of this many characters. */
 export const BUTTONS = { rows: 4, perRow: 4, labelChars: 64 };
 
@@ -191,6 +193,8 @@ export class Chat {
   private readonly noted = new Set<string>();
   /** Places of pets gone from their channel that were told so this run, by `house/id`. */
   private readonly told = new Set<string>();
+  /** When a person was last told that their message where no bot reads goes to nobody, by `house/channel/sender`. */
+  private readonly misdirectedAt = new Map<string, number>();
   private readonly budgets = new Map<string, TokenBucket>();
   /**
    * Household's cards this run follows (a press goes to whoever posted it). A press on one from an earlier run is
@@ -900,7 +904,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     // Telegram General is not an agent destination, even for mentions, replies, edits or commands.
     if (message.kind === "text" && channel.ignoreInboxMessages) {
       const at = parsePlaceKey(message.place);
-      if (!at?.pet && !at?.topic) return;
+      if (!at?.pet && !at?.topic) return this.misdirected(house, key, channel, config, configured, message);
     }
     // A reaction is where the message it is on was, and for whom (the channel may not know); an edit is for whom the message it changes was.
     const on = message.kind === "reaction" ? this.records.recordByRef(house, message.on) : undefined;
@@ -924,7 +928,9 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       quoted: quoted && parsePlaceKey(quoted.place)?.channel === key ? quoted.pet : undefined,
       text: message.kind === "text" && !message.relayed ? message.text : undefined,
     });
-    if (topic && (!pet || !this.channels.canUseTopics(house, pet.name, key))) return;
+    if (topic && (!pet || !this.channels.canUseTopics(house, pet.name, key))) {
+      return message.kind === "text" && !message.interaction ? this.misdirected(house, key, channel, config, configured, message) : undefined;
+    }
     if (rawApproved && pet?.name !== rawApproved) throw new Error("Recipient changed");
     const inbox = this.channels.inbox(key, channel);
     // Written in no pet's place (General): the inbox.
@@ -1004,6 +1010,33 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       : { kind: edit ? "edit" : "message", id: record.id, ...(relayed ? { relayed } : {}) };
     const files = attachments ? { attachments } : {};
     this.delivery.send(house, pet.name, { text, origin: "chat", ref, ...(edits === undefined ? {} : { edits }), header: { event, ...envelope }, ...where, ...files });
+  }
+
+  /**
+   * A person's message where no bot reads (Telegram: General, or a topic that is no bot's): it goes to nobody, and
+   * Household says so under it, naming the bots' own places (linked when they exist: none is made for it). Once an
+   * hour per person and channel, never for edits or relays; in a group, where people talk to each other, to its
+   * owners only.
+   */
+  private async misdirected(house: string, key: string, channel: Channel, config: ChannelConfig, configured: House, message: InboundMessage & { kind: "text" }): Promise<void> {
+    if (!channel.answer || message.edits !== undefined || message.relayed) return;
+    if (config.kind === "telegram-group" && this.channels.trust(house, message.from.ref) !== "owner") return;
+    const name = `${house}/${key}/${message.from.ref}`;
+    const last = this.misdirectedAt.get(name);
+    if (last !== undefined && Date.now() - last < MISDIRECTED_EVERY_MS) return;
+    keep(this.misdirectedAt, name, () => this.misdirectedAt.set(name, Date.now()));
+    const bots = configured.pets.filter((pet) => config.pets.includes(pet.name) && pet.enabled !== false && !pet.scout && !pet.sideworker && !pet.chatPlace);
+    const places = await Promise.all(bots.map(async (pet) => {
+      const place = petPlace(pet, petPlaceKey(pet.name, key));
+      const link = await channel.placeLink?.(place, { create: false }).catch(() => undefined);
+      return link ? `${place.title}: ${link}` : place.title;
+    }));
+    const where = places.length === 0 ? "No bot is in this chat yet." : `Write in a bot's own thread instead:\n${places.map((line) => `• ${line}`).join("\n")}`;
+    try {
+      await channel.answer(message, `No bot reads messages here, so nobody will get this one. ${where}`);
+    } catch (error) {
+      this.events.error(`workspace ${house}: a hint under a message in ${channel.inbox} was not posted: ${(error as Error).message}`);
+    }
   }
 
   /**

@@ -86,6 +86,9 @@ import { REPO_ROOT, VERSION } from "./version";
 import { COMPILED, releaseShare } from "../infra/release";
 import { WebAuth } from "./web-auth";
 import { webRoutes, type ApiHandler } from "./web-routes";
+import { Onboarding } from "./onboarding";
+import { importCodex, localCodexLogin, startDeviceLogin } from "./codex-login";
+import { firstPrivateContact } from "../channel-adapters/telegram/first-contact";
 import { readPetLog } from "./pet-logs";
 import { backUpBeforeMigrating, migrateHousehold } from "./migrations";
 
@@ -107,6 +110,8 @@ export interface DaemonDeps {
   openChannels: OpenChannels;
   /** What checks the channel kinds' fields a form gives (a bot token: its shape, with Telegram). */
   channelChecks: ChannelChecks;
+  /** The Telegram Bot API the web's setup asks (a fake one in tests); Telegram's when not given. */
+  telegramApi?: string;
   /** The web UI's signed-in browsers. */
   sessions: SessionStore;
   /** The web UI's files, built at the start. A failure leaves the UI off, nothing else. */
@@ -525,6 +530,13 @@ export async function startDaemon(deps: DaemonDeps) {
       throw error;
     }
   };
+  const onboarding = new Onboarding({
+    localCodex: () => localCodexLogin(),
+    importCodex: (name) => importCodex(paths, config, name),
+    deviceLogin: (name) => startDeviceLogin(paths, config, name),
+    firstContact: (token, signal, timeoutMs) => firstPrivateContact(token, { apiBase: deps.telegramApi, signal, timeoutMs }),
+    apply: applyConfig,
+  });
   const auth = new WebAuth(deps.sessions);
   let web: ReturnType<typeof serveWeb> | undefined;
   /** Why the web UI is off. */
@@ -557,6 +569,7 @@ export async function startDaemon(deps: DaemonDeps) {
     let assets: WebAssets;
     try {
       const handle = webRoutes({
+        onboarding,
         resourceAllocations: house => [...sideworkers.allocations(house), ...scouts.allocations(house), ...pets.resourceAllocations(house)],
         connectorRoutes: async request => await googleRoutes(request) ?? await slackRoutes(request),
         scoutRoutes: scoutRoutes({config,storage:scoutStorage,scouts,capabilities,tests:capabilityTests,apply:applyConfig,applySecrets,
@@ -682,6 +695,7 @@ export async function startDaemon(deps: DaemonDeps) {
     subscriptionKeys.stop();
     await network.stop();
     await chat.stop();
+    onboarding.stopAll();
     await agentApi?.stop();
     await web?.stop();
     await control.stop();
@@ -804,6 +818,7 @@ export async function runDaemon(paths: Paths, services: () => DaemonServices = (
       history,
       openChannels: openChannels({ state: store, events, telegramApi }),
       channelChecks: channelChecks(telegramApi),
+      telegramApi,
       sessions: store,
       webAssets: () => (COMPILED ? readWebBundle(join(releaseShare(), "web")) : buildWebBundle(WEB_ENTRY)),
     });

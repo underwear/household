@@ -207,6 +207,8 @@ house start
 <h2 id="just-the-config">Just the config</h2>
 <p><code>household.yaml</code> is a plain file in <code>~/.config/household/</code>. You can keep a copy, edit it by hand and run <code>house reload</code> to apply it. It alone does not carry chat history, memory or the bots' files: for those, use <code>house export</code>.</p>
 <p>When a new version has to migrate the config or the database, Household copies both aside first, as it starts. <code>house migrate backups</code> lists those copies; <code>house migrate restore &lt;name&gt;</code> puts one back.</p>
+<p>Config migration 4 moves the old top-level <code>secrets</code> into <code>houses.&lt;name&gt;.secrets</code>. Shared secrets become independent copies in each existing recipient workspace; restricted secrets stay only in their named workspaces. New workspaces inherit none. If a destination is missing or already has the same secret name, migration stops without overwriting it.</p>
+<p>Manage these credentials in the workspace’s <strong>Secrets</strong> menu. CLI commands now include the workspace, for example <code>house secret add work github --host api.github.com --env GITHUB_TOKEN</code> (the value is read from stdin). Before editing an old configuration, restart Household to run migrations with a backup, or stop it and run <code>house migrate apply</code>.</p>
 </article>
 
     <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#back-up">Back up</a></li><li><a href="#restore">Restore</a></li><li><a href="#move-to-another-machine">Move to another machine</a></li><li><a href="#just-the-config">Just the config</a></li></ul></nav>

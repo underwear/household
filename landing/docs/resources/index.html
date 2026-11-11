@@ -173,7 +173,7 @@
     <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="./" aria-current="page">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Operating</p><h1>Workspace resources</h1>
-<p>Each workspace has one CPU/RAM budget. It has its own page, <strong>Workspace → Resources</strong>: a bar per resource shows the total, what bots reserve, what scouts and sideworkers hold and what is free; <strong>Who holds what</strong> lists each bot, scout and sideworker with its VM size and state, refreshed every five seconds. <strong>Change capacity…</strong> sets the total. The workspace's Overview shows what is free.</p>
+<p>Each workspace has one CPU/RAM budget. It has its own page, <strong>Workspace → Resources</strong>: a bar per resource shows the total, what bots reserve, what scouts and sideworkers hold and what is free; <strong>In use</strong> lists each bot, scout and sideworker with its VM size and state, refreshed every five seconds. <strong>Change capacity…</strong> sets the total. The workspace's Overview shows what is free.</p>
 <p>Set a pet's CPU/RAM on its <strong>Resources</strong> tab, or when creating it. This reserves that capacity even while the pet is paused, asleep or restarting. Deleting the pet releases its reservation after VM cleanup. Reducing its size stages the change for its next boot: the budget keeps the larger running VM maxima until restart or stop, including across daemon restarts. The allocation list marks this as resize pending. The form previews how much remains for helpers.</p>
 <p>Scouts and sideworkers share the remainder. There is no maximum count. A bot calls <code>workspace_resources</code>, inspects the allocations, and chooses <code>cpus</code> and <code>memoryMiB</code> when spawning a helper. Requests that exceed either available CPU or RAM are refused with the available amounts. The bot can choose a smaller VM, wait, or close a finished helper. Allocation limits are distinct from actual CPU/RAM utilization: an idle helper still reserves its full VM size.</p>
 <pre><code class="language-yaml">houses:
@@ -190,10 +190,7 @@
     features:
       scouts: true
       sideworkers: true
-    # Optional default sizes, used only when the caller omits a size.
-    sideworkerLimits:
-      cpus: 2
-      memoryMiB: 1024
+    # Optional default scout size, used only when the caller omits one.
     scoutLimits:
       cpus: 2
       memoryMiB: 2048
@@ -201,7 +198,7 @@
 </code></pre>
 <p>CPU is an integer from 1 to 1024. RAM is specified in MiB, at least 512, in increments of 128; the UI shows GiB. New workspaces default to 8 vCPU / 8 GiB. Set a total appropriate for the host and any other workspaces: budgets are per workspace, not a global host scheduler. The UI/API rejects totals larger than the host.</p>
 <p>Pending scout approvals and capability install tests also reserve capacity. Failed or closing helpers retain their reservation until cleanup succeeds. No running VM is automatically resized to make room. CLI edits while the daemon runs use the same API and live allocation checks. Reload also refuses changes that increase an overcommit. UI/API changes cannot reduce the budget or increase pet reservations beyond available capacity. If YAML is edited externally while helpers are running, an overallocated workspace blocks further launches until helpers close or the budget is increased; running work is not automatically evicted.</p>
-<p>On upgrade, the YAML migration writes an explicit budget: 8 vCPU / 8 GiB, or more where pets need it, leaving room for one helper of the workspace's default sideworker size beside the pets (no room is added when both helper counts were zero). It removes <code>maxScouts</code> / <code>maxWorkers</code> and retains the default VM sizes. A legacy count of zero becomes a disabled feature. Review the budget after upgrading if several helpers ran at once. Unmigrated files without <code>resources</code> use the same fallback. Old count fields are accepted for compatibility and discarded when parsed; use feature flags to turn helpers off.</p>
+<p>On upgrade, the YAML migration writes an explicit budget: 8 vCPU / 8 GiB, or more where pets need it, leaving room for one helper of the workspace's default sideworker size beside the pets (no room is added when both helper counts were zero). It removes <code>maxScouts</code> / <code>maxWorkers</code> and retains the default scout size. Sideworkers have no default size: the bot that starts one always chooses its CPU and memory, and a later migration removes the old <code>sideworkerLimits</code>. A legacy count of zero becomes a disabled feature. Review the budget after upgrading if several helpers ran at once. Unmigrated files without <code>resources</code> use the same fallback. Old count fields are accepted for compatibility and discarded when parsed; use feature flags to turn helpers off.</p>
 </article>
 
     <nav class="toc" aria-hidden="true"></nav>

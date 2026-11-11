@@ -23,6 +23,8 @@ import { EventLog } from "../../src/infra/event-log";
 import { SqliteStore } from "../../src/infra/sqlite-store";
 import { serveWeb, type WebAssets } from "../../src/infra/web-server";
 import { fakeTelegram } from "../fake-telegram";
+import { Onboarding } from "../../src/app/onboarding";
+import { firstPrivateContact } from "../../src/channel-adapters/telegram/first-contact";
 import { tempDir } from "../helpers";
 
 const encode = (text: string) => new TextEncoder().encode(text);
@@ -49,7 +51,7 @@ const CONFIG =
   `# my household\nkeys:\n  claude: {provider: anthropic, value: ${KEY}}\nhouses:\n  work: # the rich house\n    network:\n      allow: [github.com] # keep me\n    pets:\n      sibling:\n        key: claude\n` +
   `    people: {owners: {telegram: [100200300]}}\n    channels:\n      - {kind: telegram-private, name: DM, token: "${BOT}", chat: 100200300, pets: [sibling]}\n`;
 
-function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests"], modelCatalog?: WebRoutesDeps["modelCatalog"], environment?: (store: ConfigStore) => PetEnvironment, terminalSnapshot?: WebRoutesDeps["terminalSnapshot"], crons?: Crons, memory?: PetMemory, monitoring?: WebRoutesDeps["monitoring"], sideworkers?: WebRoutesDeps["sideworkers"]) {
+function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests"], modelCatalog?: WebRoutesDeps["modelCatalog"], environment?: (store: ConfigStore) => PetEnvironment, terminalSnapshot?: WebRoutesDeps["terminalSnapshot"], crons?: Crons, memory?: PetMemory, monitoring?: WebRoutesDeps["monitoring"], sideworkers?: WebRoutesDeps["sideworkers"], onboarding?: (store: ConfigStore, telegramApi: string) => Onboarding) {
   const dir = tempDir();
   const telegram = fakeTelegram(BOT, BOT_NEW, OTHER_BOT);
   servers.push({ stop: async () => telegram.stop() });
@@ -105,6 +107,7 @@ function setup(config = CONFIG, networkRequests?: WebRoutesDeps["networkRequests
       version: "0.1.0",
       events: new EventLog(join(dir, "events.jsonl"), (line) => logged.push(line)),
       host: HOST,
+      onboarding: onboarding?.(store, telegram.url),
     }),
   });
   servers.push(server);
@@ -234,7 +237,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
     name: "work",
     features: { preview: false, sideworkers: true, scouts: false },
     preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" },
-    resources: expect.any(Object), sideworkerLimits: { cpus: 2, memoryMiB: 1024 },
+    resources: expect.any(Object),
     sideworkerProfiles: [],
     allow: [
       { host: "github.com", byAgent: false },
@@ -261,7 +264,7 @@ test("create a house, add and remove hosts, delete it: in household.yaml with it
   await signIn();
   const created = await call("POST", "/api/houses", { name: "lab" });
   expect(created.status).toBe(201);
-  expect(await created.json()).toEqual({ house: { name: "lab", features: { preview: false, sideworkers: true, scouts: false }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" }, resources: expect.any(Object), sideworkerLimits: { cpus: 2, memoryMiB: 1024 }, sideworkerProfiles: [], allow: [], owners: [], channels: [], pets: [] } } satisfies WriteView);
+  expect(await created.json()).toEqual({ house: { name: "lab", features: { preview: false, sideworkers: true, scouts: false }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" }, resources: expect.any(Object), sideworkerProfiles: [], allow: [], owners: [], channels: [], pets: [] } } satisfies WriteView);
   expect(applied).toEqual(["reload"]);
 
   const added = await call("POST", "/api/houses/work/allow", { host: "db.internal:5432" });
@@ -947,17 +950,11 @@ test("a pet's personal skills are in work/.agents/skills whatever its agent, apa
 });
 
 
-test("sideworker size defaults save, discard obsolete counts, and reject invalid host allocation", async () => {
-  const { call, signIn, store } = setup();
+test("sideworkers have no workspace default size: the old endpoint is gone, and the view has none", async () => {
+  const { call, signIn } = setup();
   await signIn();
-  const path = "/api/houses/work/sideworker-limits";
-  expect((await call("PUT", path, { maxWorkers: 0, cpus: 1, memoryMiB: 512 })).status).toBe(200);
-  expect((await store.load()).houses[0]!.sideworkerLimits).toEqual({ cpus: 1, memoryMiB: 512 });
-  for (const limits of [{ maxWorkers: -1, cpus: 1, memoryMiB: 512 }, { maxWorkers: 2, cpus: 9, memoryMiB: 1024 }, { maxWorkers: 2, cpus: 1, memoryMiB: 256 }, { maxWorkers: 2, cpus: 1, memoryMiB: 32768 }]) {
-    expect((await call("PUT", path, limits)).status).toBe(400);
-  }
-  expect((await store.load()).houses[0]!.sideworkerLimits?.maxWorkers).toBeUndefined();
-  expect((await call("PUT", "/api/houses/missing/sideworker-limits", { maxWorkers: 1, cpus: 1, memoryMiB: 1024 })).status).toBe(404);
+  expect((await call("PUT", "/api/houses/work/sideworker-limits", { cpus: 1, memoryMiB: 512 })).status).toBe(404);
+  expect(await (await call("GET", "/api/houses/work")).json()).not.toHaveProperty("sideworkerLimits");
 });
 
 test("worker views are readable without becoming configured pets and their skills edit the parent project", async () => {
@@ -1136,4 +1133,88 @@ test("workspace resources API reports reservations and validates edits against p
   expect((await call("PUT", path, { cpus: 1, memoryMiB: 4096 })).status).toBe(400);
   expect((await call("PUT", path, { cpus: HOST.cpus + 1, memoryMiB: 4096 })).status).toBe(400);
   expect((await call("GET", "/api/houses/missing/resources")).status).toBe(404);
+});
+
+/** The setup's Telegram waits, read from the fake Bot API; sign-ins as `deviceLogin` gives them. */
+const onboardingOf = (deviceLogin?: ConstructorParameters<typeof Onboarding>[0]["deviceLogin"]) => (store: ConfigStore, telegramApi: string) => new Onboarding({
+  firstContact: (token, signal, timeoutMs) => firstPrivateContact(token, { apiBase: telegramApi, signal, timeoutMs }),
+  apply: async () => { await store.load(); },
+  ...(deviceLogin ? { deviceLogin } : {}),
+});
+
+test("setup: a new bot's first private message makes its writer the owner and the channel's chat, in one write", async () => {
+  const { call, signIn, store, telegram, text } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
+  await signIn();
+  expect((await call("POST", "/api/houses", { name: "lab" })).status).toBe(201);
+  expect((await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "slack-private", token: OTHER_BOT })).status).toBe(400);
+  const started = await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "telegram-private", token: ` ${OTHER_BOT} ` });
+  expect(started.status).toBe(201);
+  const listen = await started.json() as { id: string; bot: string; link: string };
+  expect(listen).toMatchObject({ bot: "@fake_bot", link: "https://t.me/fake_bot" });
+  expect(JSON.stringify(listen)).not.toContain(OTHER_BOT); // the token stays in the daemon
+  // What came before the wait is passed over: Ann writes once it listens.
+  for (let i = 0; i < 100 && telegram.sent("getUpdates").length < 2; i++) await Bun.sleep(10);
+  telegram.push({ message: { message_id: 1, chat: { id: 555, type: "private" }, from: { id: 555, first_name: "Ann", username: "ann" }, text: "/start" } } as never, OTHER_BOT);
+  let state: { status: string; contact?: unknown } = { status: "waiting" };
+  for (let i = 0; i < 100 && state.status === "waiting"; i++) {
+    await Bun.sleep(20);
+    state = await (await call("GET", `/api/onboarding/telegram/${listen.id}`)).json() as typeof state;
+  }
+  expect(state).toMatchObject({ status: "found", contact: { id: "555", name: "Ann", username: "ann" } });
+  expect((await call("POST", `/api/onboarding/telegram/${listen.id}/finish`, { owner: "ann" })).status).toBe(400);
+  const finished = await call("POST", `/api/onboarding/telegram/${listen.id}/finish`, { owner: "555" });
+  expect(finished.status).toBe(201);
+  expect((await finished.json() as WriteView).house).toMatchObject({ owners: [{ platform: "telegram", id: "555" }], channels: [{ kind: "telegram-private", chat: "555", pets: [] }] });
+  expect(findLab(await store.load())).toMatchObject({ channels: [{ kind: "telegram-private", chat: "555", token: OTHER_BOT }] });
+  expect(await text()).toContain("lab:");
+  // Done: the wait is gone.
+  expect((await call("GET", `/api/onboarding/telegram/${listen.id}`)).status).toBe(404);
+});
+
+test("setup: a bot Household runs already is not listened to (its updates are the daemon's): the person types their id", async () => {
+  const { call, signIn, telegram } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
+  await signIn();
+  const started = await call("POST", "/api/onboarding/telegram", { house: "work", kind: "telegram-dm", token: BOT });
+  expect(started.status).toBe(201);
+  const { id } = await started.json() as { id: string };
+  expect(await (await call("GET", `/api/onboarding/telegram/${id}`)).json()).toMatchObject({ status: "manual" });
+  expect(telegram.sent("getUpdates")).toHaveLength(0);
+  const finished = await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "777" });
+  expect(finished.status).toBe(201);
+  expect((await finished.json() as WriteView).house!.channels.map((channel) => `${channel.kind}:${channel.chat}`)).toEqual(["telegram-private:100200300", "telegram-dm:777"]);
+});
+
+test("setup: a ChatGPT sign-in gives the page its link and code, and the key once it is done; without the means, a 400", async () => {
+  let finish!: () => void;
+  const login = { url: "https://auth.example/codex/device", code: "ABCD-12345", done: new Promise<void>((resolve) => { finish = resolve; }), cancel: () => {} };
+  const { call, signIn } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf(async () => login));
+  await signIn();
+  const started = await call("POST", "/api/onboarding/codex/login", { name: "chatgpt" });
+  expect(started.status).toBe(201);
+  const { id, url, code } = await started.json() as { id: string; url: string; code: string };
+  expect({ url, code }).toEqual({ url: login.url, code: login.code });
+  expect(await (await call("GET", `/api/onboarding/codex/login/${id}`)).json()).toEqual({ status: "waiting" });
+  finish();
+  await Bun.sleep(10);
+  expect(await (await call("GET", `/api/onboarding/codex/login/${id}`)).json()).toEqual({ status: "done", key: "chatgpt" });
+  expect((await call("POST", "/api/onboarding/codex/import", { name: "codex" })).status).toBe(400);
+
+  const bare = setup();
+  await bare.signIn();
+  expect(await (await bare.call("GET", "/api/onboarding")).json()).toEqual({ localCodex: null });
+  expect((await bare.call("POST", "/api/onboarding/codex/login", { name: "chatgpt" })).status).toBe(400);
+});
+
+const findLab = (household: { houses: { name: string }[] }) => household.houses.find((house) => house.name === "lab");
+
+test("setup: a group with topics is the channel's chat, and its owner is who wrote to the bot in private", async () => {
+  const { call, signIn } = setup(CONFIG, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, onboardingOf());
+  await signIn();
+  expect((await call("POST", "/api/houses", { name: "lab" })).status).toBe(201);
+  const { id } = await (await call("POST", "/api/onboarding/telegram", { house: "lab", kind: "telegram-group", token: OTHER_BOT })).json() as { id: string };
+  expect((await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "555" })).status).toBe(400); // no group id
+  expect((await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "555", chat: "12345" })).status).toBe(400);
+  const finished = await call("POST", `/api/onboarding/telegram/${id}/finish`, { owner: "555", chat: "-1001234567890" });
+  expect(finished.status).toBe(201);
+  expect((await finished.json() as WriteView).house).toMatchObject({ owners: [{ platform: "telegram", id: "555" }], channels: [{ kind: "telegram-group", chat: "-1001234567890" }] });
 });

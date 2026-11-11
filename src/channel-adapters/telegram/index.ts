@@ -302,6 +302,21 @@ export class TelegramChannel implements Channel, BotChat {
     return this.send(place, pieces, { quoteOffset: prefix.length });
   }
 
+  async answer(message: InboundMessage, text: string): Promise<PostRef[]> {
+    const id = messageIdOf(this.prefix, message.ref);
+    if (id === undefined) return [];
+    const thread = this.mode === "dm" ? undefined : message.kept?.thread;
+    const sent = await this.sendPiece({
+      chat_id: this.chat,
+      ...(typeof thread === "number" ? { message_thread_id: thread } : {}),
+      text: `${NOTICE} ${text}`,
+      entities: [{ type: "bold", offset: 0, length: NOTICE.length }],
+      reply_parameters: { message_id: id, allow_sending_without_reply: true },
+      ...NO_PREVIEW,
+    });
+    return [postRef(this.prefix, sent.message_id)];
+  }
+
   notice(place: Place, text: string, choices?: Choices, format: "plain" | "html" = "plain"): Promise<PostRef[]> {
     if (format === "html") {
       const pieces = splitFormatted(telegramHtml(`<b>${CARD_HEADING}</b>\n\n${text}`), MAX_TEXT);
@@ -442,8 +457,10 @@ export class TelegramChannel implements Channel, BotChat {
    * `?thread=`, `tg://resolve?…&post=…&thread=…`) opens the thread but says the message is not found,
    * `t.me/<bot>/<message>` goes to General, and `t.me/c/…` is refused for a private chat.
    */
-  async placeLink(place: Place): Promise<string | undefined> {
+  async placeLink(place: Place, { create = true }: { create?: boolean } = {}): Promise<string | undefined> {
     if (this.mode === "dm" || place.kind === "house-inbox") return undefined;
+    // Asked not to make one: only a thread there is already.
+    if (!create && !this.bot.options.state.get(this.keys.thread(place.id))) return undefined;
     if (this.mode === "group") return `https://t.me/c/${String(this.chat).slice(4)}/${await this.thread(place)}`;
     const [thread, username] = await Promise.all([this.thread(place), this.bot.username()]);
     return username ? `https://t.me/${username}/${thread}` : undefined;

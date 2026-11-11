@@ -193,7 +193,7 @@
 <h2 id="set-up">Set up</h2>
 <ul>
 <li><strong>Workspace → Settings → Sideworkers</strong> turns them on. Off pauses the running ones.</li>
-<li><strong>Workspace → Sideworkers</strong> lists what runs now, by bot. Its settings set the default CPU and memory for a new VM. Bots can choose a different size for each launch.</li>
+<li><strong>Workspace → Sideworkers</strong> lists what runs now, by bot. The bot that starts a worker chooses its VM's CPU and memory for the job, from what the workspace has free.</li>
 <li><strong>Profiles</strong> are the harness setups a bot may start a worker on, besides its own: a harness, key, model and effort. Add one when you want work done by another model.</li>
 </ul>
 <p>Each worker reserves its VM maximum from the shared workspace CPU/RAM budget. Configure the total in <strong>Workspace → Settings → Workspace capacity</strong>; pets reserve their own share and scouts and sideworkers share the rest. There is no worker count limit. See <a href="../resources/">Workspace resources</a>.</p>

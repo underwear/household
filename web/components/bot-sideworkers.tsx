@@ -7,8 +7,6 @@ import { useDialog, type DialogSpec } from "./dialog";
 import { Link } from "./link";
 import { Cell, List, ListRow, Section } from "./layout";
 import { ownBots, petState } from "./bot-state";
-import { FreeLink } from "./workspace-resources";
-import { gib, petResources } from "../../src/core/resources";
 
 /** Closing a sideworker: its work stops now and its VM goes; what it wrote in the shared files stays. */
 export const closeWorkerDialog = (house: string, worker: Pick<BotView, "name" | "title">, closed: () => Promise<void>): DialogSpec => ({
@@ -60,16 +58,15 @@ export function WorkspaceSideworkers({ house, refresh }: { house: WorkspaceView;
   };
   const retry = (worker: SideworkerRecord) => dialog.open({ ...closeWorkerDialog(house.name, { name: worker.name, title: worker.name }, reload), title: `Retry closing ${worker.name}?`, confirmLabel: "Retry close" });
   return (
-    <Section title="Running" hint={<>{active} running{house.resources && <> · <FreeLink house={house} /> for more, shared with scouts</>}.</>}>
+    <Section title="Running" hint={`${active} running. Each bot sizes the VMs of the workers it starts.`}>
       {error && <p className="error" role="alert">{error}</p>}
       <List
-        columns="minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 1.4fr) auto auto"
-        head={workers.length + closing.length > 0 ? ["Sideworker", "Started by", "Working directory", "Resources"] : undefined}
+        columns="minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 1.4fr) auto"
+        head={workers.length + closing.length > 0 ? ["Sideworker", "Started by", "Working directory"] : undefined}
         empty="None running. A bot starts one when it wants a hand with a task."
       >
         {workers.map((worker) => {
           const state = petState(worker.state);
-          const resources = petResources(worker);
           return (
             <ListRow key={worker.name} actions={<button type="button" className="btn small" onClick={() => dialog.open(closeWorkerDialog(house.name, worker, reload))}>Close…</button>}>
               <Cell>
@@ -86,7 +83,6 @@ export function WorkspaceSideworkers({ house, refresh }: { house: WorkspaceView;
                   {worker.sideworker!.branch && <span className="hint ellipsis">{worker.sideworker!.branch}</span>}
                 </span>
               </Cell>
-              <Cell label="Resources"><span className="muted">{resources.cpus} vCPU · {gib(resources.memoryMiB)}</span></Cell>
             </ListRow>
           );
         })}
@@ -97,7 +93,7 @@ export function WorkspaceSideworkers({ house, refresh }: { house: WorkspaceView;
   );
 }
 
-/** A worker being closed whose VM has not gone yet: no page to open, but it holds its share of the limit until it goes. */
+/** A worker being closed whose VM has not gone yet: no page to open, but it holds its share of the budget until it goes. */
 export function PendingSideworkerRow({ worker, parent, onRetry }: { worker: SideworkerRecord; /** The cell of the bot that started it. */ parent: ReactNode; onRetry: () => void }) {
   return (
     <ListRow actions={<button type="button" className="btn small" onClick={onRetry}>Retry close</button>}>
@@ -105,12 +101,11 @@ export function PendingSideworkerRow({ worker, parent, onRetry }: { worker: Side
         <span className="avatar" aria-hidden>⛏️</span>
         <span className="cell-lines">
           <span className="strong ellipsis">{worker.name}</span>
-          <span className="hint" title="Its VM is not gone yet: it still counts toward the limit."><span className="dot danger" /> Cleanup pending</span>
+          <span className="hint" title="Its VM is not gone yet: it still holds its share of the workspace's budget."><span className="dot danger" /> Cleanup pending</span>
         </span>
       </Cell>
       {parent}
       <Cell mono label="Working directory"><span className="ellipsis" title={worker.cwd}>{worker.cwd}</span></Cell>
-      <Cell label="Resources"><span className="muted">{worker.cpus} vCPU · {gib(worker.memoryMiB)}</span></Cell>
     </ListRow>
   );
 }

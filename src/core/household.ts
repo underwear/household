@@ -78,7 +78,6 @@ export interface SideworkerProfile {
   mode?: string;
 }
 
-export interface SideworkerLimits { maxWorkers?: number; cpus: number; memoryMiB: number }
 
 export interface House {
   /** Credentials owned by this house. Names are unique only within it. */
@@ -92,7 +91,6 @@ export interface House {
   scoutAgent?: ScoutAgent;
   features?: Partial<HouseFeatures>;
   preview?: PreviewSettings;
-  sideworkerLimits?: SideworkerLimits;
   sideworkerProfiles?: SideworkerProfile[];
   name: string;
   network: NetworkPolicy;

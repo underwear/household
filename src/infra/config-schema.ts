@@ -2,7 +2,7 @@ import { Document } from "yaml";
 import { migrateHouseSecrets } from "./config-migrations";
 import { houseInboxesSchema, telegramInboxProblems } from "../core/house-inboxes";
 import { houseFeaturesSchema, previewSettingsSchema } from "../core/house-features";
-import { workspaceResourcesSchema, workspaceBudget, petCpuSchema, petMemorySchema, sideworkerLimitsSchema } from "../core/resources";
+import { workspaceResourcesSchema, workspaceBudget, petCpuSchema, petMemorySchema } from "../core/resources";
 import { validTimezone } from "../core/timezone";
 import { z } from "zod";
 import { botProblems, channelProblems, PLATFORMS, type Platform } from "../core/channels";
@@ -310,7 +310,8 @@ const house = z.strictObject({
   defaultScout: z.unknown().optional(),
   features: houseFeaturesSchema.optional(),
   preview: previewSettingsSchema.optional(),
-  sideworkerLimits: sideworkerLimitsSchema.optional(),
+  /** Legacy: sideworkers' default VM size. Bots size each one now; dropped on load, and migration 6 removes it. */
+  sideworkerLimits: z.unknown().optional(),
   sideworkerProfiles: sideworkerProfilesSchema.optional(),
   network: z.strictObject({ allow: list(endpoint), granted: list(granted) }),
   pets: map(pet, petName),
@@ -349,7 +350,6 @@ export function parseHousehold(raw: unknown, source: string): Household {
       ...(value.scoutAgent ? { scoutAgent: value.scoutAgent } : {}),
       ...(value.features ? { features: value.features } : {}),
       ...(value.preview ? { preview: value.preview } : {}),
-      ...(value.sideworkerLimits ? { sideworkerLimits: value.sideworkerLimits } : {}),
       ...(value.sideworkerProfiles ? { sideworkerProfiles: value.sideworkerProfiles } : {}),
       network: { kind: "allowlist", allow: [...value.network.allow, ...value.network.granted] },
       pets: Object.entries(value.pets).map(([petName, { enabled, cpus, memoryMiB, environment, lifecycle, agent, model, reasoningEffort, mode, settings: own, key: keyName, title, emoji: mark, aliases }]) => ({

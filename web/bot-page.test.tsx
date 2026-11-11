@@ -120,13 +120,13 @@ test("sideworker detail identifies its parent and offers only readable runtime t
 });
 
 
-test("a worker awaiting cleanup stays visible with a retry action and resource allocation", () => {
+test("a worker awaiting cleanup stays visible with a retry action, without its VM size", () => {
   const html = renderToStaticMarkup(<PendingSideworkerRow worker={{ house: "work", name: "sw-retry", parent: "owl", cwd: "/home/agent/work", cpus: 2, memoryMiB: 1024, createdAt: 1, closing: true }} parent={null} onRetry={() => {}} />);
   expect(html).toContain("sw-retry");
   expect(html).toContain("Cleanup pending");
-  expect(html).toContain("it still counts toward the limit");
+  expect(html).toContain("it still holds its share of the workspace&#x27;s budget");
   expect(html).toContain("Retry close");
-  expect(html).toContain("2 vCPU · 1 GiB");
+  expect(html).not.toContain("vCPU");
   expect(html).not.toContain('href=');
 });
 

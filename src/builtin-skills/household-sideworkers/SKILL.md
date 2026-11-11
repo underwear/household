@@ -17,12 +17,12 @@ can watch and talk to it. It has no scheduled tasks and cannot start sideworkers
   `AGENTS.md`. See below.
 - Work another model does better: see `sideworker_profiles`.
 
-Do the work yourself when it is a few steps. Each worker reserves CPU/RAM from a shared workspace budget. Call `workspace_resources` before spawning: inspect total capacity, pet reservations, all helper allocations and available capacity. Choose `cpus` and `memoryMiB` for the job; these are VM maxima, not current utilization. Close finished helpers to release capacity. There is no count limit.
+Do the work yourself when it is a few steps. Each worker reserves CPU/RAM from a shared workspace budget. Call `workspace_resources` before spawning: inspect total capacity, pet reservations, all helper allocations and available capacity. Always choose `cpus` and `memoryMiB` for the job (there is no default size); these are VM maxima, not current utilization. Close finished helpers to release capacity. There is no count limit.
 
 ## Start
 
 1. `sideworker_profiles` lists the profiles your human allowed. Omit `profile` to run on your own settings.
-2. `sideworker_spawn({cwd, task, cpus?, memoryMiB?, name?, profile?, worktree?})`. `cwd` is a directory in your home.
+2. `sideworker_spawn({cwd, task, cpus, memoryMiB, name?, profile?, worktree?})`. `cwd` is a directory in your home.
    - In a git repository the worker gets **its own worktree** by default: `<repo>/.worktrees/<name>` on branch
      `sideworker/<name>` from your HEAD. Your uncommitted changes are not in it: commit what it needs first.
    - `worktree: false` shares your live directory. Then you both edit the same files: agree who touches what.

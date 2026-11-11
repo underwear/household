@@ -192,16 +192,35 @@
 <h2 id="2-onboard">2. Onboard</h2>
 <pre><code class="language-sh">house onboard
 </code></pre>
-<p>It asks, one step at a time:</p>
+<p>It asks, one step at a time, and shows for each choice how to get what it needs:</p>
 <ol>
-<li><strong>Harness and its key</strong> — Claude Code or Codex; paste a Claude token (<code>claude setup-token</code> makes one) or an API key, or use the ChatGPT login of the Codex on this machine.</li>
-<li><strong>Workspace</strong> — a name for your bots' home.</li>
-<li><strong>Telegram</strong> — create a bot with <a href="https://t.me/BotFather">@BotFather</a>, turn on <strong>Threaded Mode</strong> in its Mini App (Bot Settings → Threads Settings), press <strong>Start</strong> in a chat with your bot, and paste its token. You become the workspace's owner.</li>
-<li><strong>Bot</strong> — its name and display name.</li>
-<li><strong>Scouts</strong> — on or off.</li>
-<li><strong>Sideworkers</strong> — on or off. You can change both later in the admin.</li>
+<li>
+<p><strong>Model</strong> — Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (<code>claude setup-token</code> makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.</p>
+</li>
+<li>
+<p><strong>Workspace</strong> — a name for your bots' home, and how much of the machine's CPU and memory it may use.</p>
+</li>
+<li>
+<p><strong>Channel</strong> — where you talk to your bots:</p>
+<ul>
+<li><strong>Telegram group with topics</strong> (recommended): a topic per bot in a group of yours;</li>
+<li><strong>Telegram, a thread per bot</strong> (beta: Telegram's bot Threaded Mode);</li>
+<li><strong>Telegram, one plain chat</strong>;</li>
+<li><strong>Slack DM</strong>.</li>
+</ul>
+<p>You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. You can skip this step and add a channel later.</p>
+</li>
+<li>
+<p><strong>Bot</strong> — what it is for (personal assistant, developer, researcher, or blank), its name and its CPU and memory. Its purpose adds a role to its instructions.</p>
+</li>
+<li>
+<p><strong>Scouts</strong> — on or off.</p>
+</li>
+<li>
+<p><strong>Sideworkers</strong> — on or off. You can change both later in the admin.</p>
+</li>
 </ol>
-<p>You can run <code>house onboard</code> again any time.</p>
+<p>You can run <code>house onboard</code> again any time. The web admin has the same setup at <strong>/setup</strong>: it opens by itself while there is no workspace yet.</p>
 <h2 id="3-start">3. Start</h2>
 <pre><code class="language-sh">house start
 </code></pre>
@@ -209,7 +228,7 @@
 <p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.</p>
 <h2 id="4-say-hi">4. Say hi</h2>
 <p>For a shared group with a topic per bot, see <a href="../telegram-groups/">Telegram groups with topics</a>.</p>
-<p>Open your Telegram channel and write to your assistant bot. It answers in its own thread. 🤖</p>
+<p>Write to your bot where you connected it: in a Telegram group, in its own topic; in a private chat with threads, in its own thread; in a plain chat or a Slack DM, right there. 🤖</p>
 <p>For an ordinary private conversation without threads, add a channel in the admin with kind <strong>Telegram Bot DM</strong> (<code>telegram-dm</code>), your Telegram user id as the chat id, and a BotFather token. Threaded Mode is not required. Press <strong>Start</strong> in the bot's Telegram chat, and assign your assistant to the channel.</p>
 <p>All replies and files stay in that chat. If you assign several assistants, choose a default; address another by name (for example, <code>Chef, plan dinner</code>) or reply to one of its messages. Replies include the assistant's name. The Stop button and <code>/stop</code> always stop the channel's default assistant, even when replying to another assistant. The existing <strong>Telegram Bot DM (threaded)</strong> kind remains <code>telegram-private</code>. Connect a particular bot and chat in only one of these modes.</p>
 <p>Example channel entry:</p>

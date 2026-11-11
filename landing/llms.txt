@@ -7,7 +7,7 @@
 Setting it up is done when the user writes to their Telegram bot and a bot answers. Work through the
 [setup checklist](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md).
 Household installs with `curl -fsSL https://agents-household.dev/install.sh | sh` (no Bun, Docker or sudo);
-`house onboard` then walks the user through the rest in their terminal (harness key, workspace, Telegram channel, assistant bot), and `house update`
+`house onboard` then walks the user through the rest in their terminal (a model key, a workspace and its budget, a Telegram or Slack channel, a first bot), and `house update`
 moves to a newer release.
 
 Install the `household` skill too, for running Household afterwards:

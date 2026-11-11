@@ -6,6 +6,7 @@ import { api, SignedOut, whenSignedOut, type WorkspaceView, type KeyView, type M
 import { useDialog } from "./components/dialog";
 import { WorkspacePage } from "./components/workspace";
 import { WorkspacesPage, NewWorkspaceDialog } from "./components/workspaces";
+import { SetupPage } from "./components/setup";
 import { KeysSection } from "./components/keys";
 import { Cluster, Page } from "./components/layout";
 import { Link } from "./components/link";
@@ -63,6 +64,13 @@ export function App() {
 
   const hideToast = useCallback(() => setToast(undefined), []);
 
+  // Nothing set up yet: the guided setup instead of an empty list.
+  useEffect(() => {
+    if (route.page !== "workspaces" || houses?.length !== 0 || sessionStorage.getItem("household.setup-offered")) return;
+    sessionStorage.setItem("household.setup-offered", "1"); // once: «Workspaces» from the setup stays there
+    redirect("/setup");
+  }, [route.page, houses?.length]);
+
   if (route.page === "redirect") return null; // replaced at once (the effect above): nothing for that frame
   if (me === null) return <SignIn host={location.host} failed={new URLSearchParams(location.search).has("signin")} />;
   if (me === undefined || houses === undefined) return problem ? (
@@ -107,6 +115,9 @@ export function App() {
         onNewWorkspace={() => setCreating(true)}
       >
         {route.page === "workspaces" && <WorkspacesPage houses={houses} platforms={me.platforms} onNewWorkspace={() => setCreating(true)} />}
+        {route.page === "setup" && (
+          <SetupPage key={path + location.search} houses={houses} keys={keys} agents={me.agents} host={me.host} resume={new URLSearchParams(location.search).get("workspace") ?? undefined} refresh={refresh} notify={notify} />
+        )}
         {route.page === "settings" && (
           <Page title="Settings">
             <TimezoneSettings />

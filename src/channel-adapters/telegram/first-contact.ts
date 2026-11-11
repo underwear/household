@@ -22,6 +22,8 @@ export async function firstPrivateContact(token: string, { apiBase, timeoutMs = 
   const deadline = Date.now() + timeoutMs;
   const pending = await api.call<Update[]>("getUpdates", { offset: -1, timeout: 0 }, { signal });
   let offset = pending.length ? pending.at(-1)!.update_id + 1 : 0;
+  // After a long poll the network dropped, a pause that doubles up to 30 s: no busy loop while Telegram is unreachable.
+  let pauseMs = 1000;
   while (Date.now() < deadline && !signal?.aborted) {
     const wait = Math.max(0, Math.min(25, Math.floor((deadline - Date.now()) / 1000)));
     let updates: Update[];
@@ -29,9 +31,12 @@ export async function firstPrivateContact(token: string, { apiBase, timeoutMs = 
       updates = await api.call<Update[]>("getUpdates", { offset, timeout: wait, allowed_updates: ["message"] }, { timeoutMs: (wait + 10) * 1000, signal });
     } catch (error) {
       if (signal?.aborted) return undefined;
-      if (error instanceof TelegramError && error.code === 0) continue; // a long poll the network dropped
-      throw error;
+      if (!(error instanceof TelegramError && error.code === 0)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pauseMs, Math.max(0, deadline - Date.now()))));
+      pauseMs = Math.min(pauseMs * 2, 30_000);
+      continue;
     }
+    pauseMs = 1000;
     for (const update of updates) {
       offset = update.update_id + 1;
       const from = update.message?.from;

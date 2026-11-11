@@ -2,7 +2,7 @@ import type { HouseFeatures, PreviewSettings } from "../core/house-features";
 // The JSON the web UI gets from the daemon's API: types only, so web/ can import them without bundling any code.
 import type { AgentModel } from "../core/agent";
 import type { ChannelKindSpec, PlatformSpec } from "../core/channels";
-import type { Owner, SideworkerLimits, SideworkerProfile } from "../core/household";
+import type { Owner, SideworkerProfile } from "../core/household";
 import type { Provider } from "../core/keys";
 import type { AgentSetting } from "../core/agent";
 import type { Allowance } from "../core/allowance";
@@ -170,7 +170,6 @@ export interface HouseView {
   resources?: import("../core/resources").WorkspaceBudget;
   features?: HouseFeatures;
   preview?: PreviewSettings;
-  sideworkerLimits?: SideworkerLimits;
   sideworkerProfiles?: SideworkerProfile[];
   name: string;
   /** The allowlist, then the hosts its pets' agents add. */
@@ -187,3 +186,25 @@ export interface HouseView {
 export interface WriteView {
   house?: HouseView;
 }
+
+/** What the web's setup may offer: a copy of this machine's Codex login, if it has one. */
+export interface OnboardingView {
+  localCodex: { email: string | null; plan: string | null } | null;
+}
+
+/** A ChatGPT sign-in started for the web: where to go and the code to enter there. */
+export interface DeviceLoginView {
+  id: string;
+  url: string;
+  code: string;
+}
+
+/** A Telegram bot checked for the setup, and the wait for its first message (by `id`). */
+export interface BotListenView {
+  id: string;
+  bot: string;
+  /** Opens the chat with the bot. */
+  link: string;
+}
+
+export type { LoginStatus as DeviceLoginStatus, ListenStatus as BotListenStatus } from "./onboarding";

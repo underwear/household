@@ -22,7 +22,7 @@ test("budget edits cannot consume active helper reservations and preserve YAML c
   await store.setWorkspaceResources("work", { cpus: 6, memoryMiB: 4096 });
   expect(await Bun.file(path).text()).toContain("# Keep this comment");
 });
-test("migration drops counts, preserves zero-count off switches, persists a budget and VM defaults", async () => {
+test("migration drops counts, preserves zero-count off switches, persists a budget; sideworkers' default size goes too", async () => {
   const path = join(tempDir(), "household.yaml");
   await Bun.write(path, stringify({ version: 3, houses: { work: { network: { allow: [] }, pets: { sibling: { cpus: 12, memoryMiB: 16384 } }, scoutLimits: { maxScouts: 0, cpus: 1 }, sideworkerLimits: { maxWorkers: 0, cpus: 2, memoryMiB: 1024 } } } }));
   const store = new ConfigStore(path); await store.migrate();
@@ -30,7 +30,15 @@ test("migration drops counts, preserves zero-count off switches, persists a budg
   expect(raw.resources).toEqual({ cpus: 12, memoryMiB: 16384 });
   expect(raw.features).toEqual({ scouts: false, sideworkers: false });
   expect(raw.scoutLimits).toEqual({ cpus: 1 });
-  expect(raw.sideworkerLimits).toEqual({ cpus: 2, memoryMiB: 1024 });
+  expect(raw.sideworkerLimits).toBeUndefined(); // bots size each sideworker (migration 6)
+  expect(parse(await Bun.file(path).text()).version).toBe(6);
+});
+
+test("an unmigrated config with sideworkers' old default size still loads, without it", async () => {
+  const path = join(tempDir(), "household.yaml");
+  await Bun.write(path, stringify({ version: 5, houses: { work: { network: { allow: [] }, pets: {}, sideworkerLimits: { cpus: 2, memoryMiB: 1024 } } } }));
+  const house = (await new ConfigStore(path).load()).houses[0]!;
+  expect(house).not.toHaveProperty("sideworkerLimits");
 });
 
 test("migration leaves room for one helper beside pets that fill the default budget", async () => {

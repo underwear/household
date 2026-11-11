@@ -242,7 +242,7 @@ test("a human-created topic is a place for the default bot and replies and live 
   expect(chat.places("work","chair").some(p=>p.id===place.id)).toBe(true);
 });
 
-for (const kind of ["telegram-private", "telegram-group"] as const) test(kind + " ignores General before delivery and journaling", async () => {
+for (const kind of ["telegram-private", "telegram-group"] as const) test(kind + " ignores General before delivery and journaling, and says so once", async () => {
   const records = new SqliteStore(":memory:"); stops.push(()=>records.close());
   const api = fakeTelegram(TOKEN); stops.push(api.stop);
   const events = new EventLog(join(tempDir(),"events.jsonl"),()=>{});
@@ -265,8 +265,30 @@ for (const kind of ["telegram-private", "telegram-group"] as const) test(kind + 
   await waitFor(()=>drafts.length===1);
   expect(drafts[0]!.text).toBe("allowed");
   expect(interrupts).toBe(0);
-  expect(api.sent("sendMessage")).toHaveLength(0);
+  // Nobody gets them; the person is told so once (not for every message), under the first, with the bots' threads.
+  await waitFor(()=>api.sent("sendMessage").length===1);
+  const hint=api.sent("sendMessage")[0] as any;
+  expect(hint.reply_parameters.message_id).toBe(100);
+  expect(hint.message_thread_id).toBeUndefined();
+  expect(hint.text).toContain("nobody will get this one");
+  expect(hint.text).toContain("Sibling");
   for(const id of [100,101,102,103,104]) expect(records.recordByRef("work",`telegram.123456.${chatId}.${id}` as any)).toBeUndefined();
+  if(kind==="telegram-group"){
+    // In a group, people talk to each other in General: a guest is not answered, and no topic is made for it.
+    const topics=api.sent("createForumTopic").length;
+    api.push({message:{chat:{id:chatId},from:{id:777,first_name:"Guest"},message_id:107,text:"hi all"}});
+    await Bun.sleep(300);
+    expect(api.sent("sendMessage")).toHaveLength(1);
+    expect(api.sent("createForumTopic")).toHaveLength(topics);
+    return;
+  }
+  // Someone else, in a thread of the chat that is no bot's (one the person made, an off-topic): told in that thread.
+  api.push({message:{chat:{id:chatId},from:{id:777,first_name:"Guest"},message_id:106,is_topic_message:true,message_thread_id:77,text:"anyone?"}});
+  await waitFor(()=>api.sent("sendMessage").length===2);
+  const offTopic=api.sent("sendMessage")[1] as any;
+  expect(offTopic.message_thread_id).toBe(77);
+  expect(offTopic.reply_parameters.message_id).toBe(106);
+  expect(drafts).toHaveLength(1);
 });
 
 test("ordinary Telegram DM routes by default, name and reply without forwarding notices", async () => {

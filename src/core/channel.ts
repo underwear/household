@@ -158,6 +158,11 @@ export interface Channel {
   sendAttachment?(place: Place, attachment: OutgoingAttachment, signal?: AbortSignal): Promise<PostRef>;
   /** A heading followed by a native quotation; channels without it use ordinary text. */
   quote?(place: Place, heading: string, body: string): Promise<PostRef[]>;
+  /**
+   * A notice from Household itself as a reply to a person's message, where that message was written (Telegram: its
+   * thread, General or any other topic), for a message that is no place's.
+   */
+  answer?(message: InboundMessage, text: string): Promise<PostRef[]>;
   /** A notice from Household itself, in a place; it looks like nothing a pet can post. Choices as for `post`. */
   notice(place: Place, text: string, choices?: Choices, format?: "plain" | "html"): Promise<PostRef[]>;
   /**
@@ -210,9 +215,10 @@ export interface Channel {
   ensurePlace?(place: Place): Promise<void>;
   /**
    * An address that opens the place in the channel's own apps (Telegram: `https://t.me/<bot>/<thread>`), made
-   * first if it is not there yet; undefined when the channel has none for it (the inbox, no bot username).
+   * first if it is not there yet (with `create: false`, undefined instead); undefined when the channel has none for
+   * it (the inbox, no bot username).
    */
-  placeLink?(place: Place): Promise<string | undefined>;
+  placeLink?(place: Place, options?: { create?: boolean }): Promise<string | undefined>;
   /**
    * The place goes, with every message in it, for good (Telegram: its thread is deleted). False when it never was
    * (no thread made for it, or gone already). Throws when the channel refused.

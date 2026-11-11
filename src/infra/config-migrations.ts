@@ -1,7 +1,7 @@
 import { isMap, isScalar, isSeq, visit, type Document, type YAMLMap } from "yaml";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
 import { HouseholdError } from "../core/errors";
-import { DEFAULT_SIDEWORKER_LIMITS, DEFAULT_WORKSPACE_RESOURCES, workspaceBudget } from "../core/resources";
+import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget } from "../core/resources";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -24,7 +24,17 @@ export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 3, store: "config", name: "the browser and dev capabilities install Node.js 22", change: migrateNodeInstalls },
   { id: 4, store: "config", name: "secrets belong to individual houses", change: migrateHouseSecrets },
   { id: 5, store: "config", name: "workspace CPU/RAM budgets replace helper count limits", change: migrateResourceBudgets },
+  { id: 6, store: "config", name: "sideworkers' default VM size is dropped: bots size each one", change: (doc) => { for (const house of houseNames(doc)) doc.deleteIn(["houses", house, "sideworkerLimits"]); } },
 ];
+
+/** The houses the config names. */
+function houseNames(doc: Document): string[] {
+  const houses = doc.getIn(["houses"]);
+  return isMap(houses) ? houses.items.flatMap(pair => isScalar(pair.key) ? [String(pair.key.value)] : []) : [];
+}
+
+/** A sideworker's VM size when the config set none, as earlier Households had it (migration 5 still needs it). */
+const LEGACY_SIDEWORKER_SIZE = { cpus: 2, memoryMiB: 1024 };
 
 /** The config version this Household writes: a config with a newer one is from a newer Household, and not read. */
 export const CONFIG_VERSION = Math.max(0, ...CONFIG_MIGRATIONS.map((migration) => migration.id));
@@ -138,7 +148,7 @@ function migrateResourceBudgets(doc: Document): void {
       // Room for one helper of the workspace's own size beside its pets, unless both helpers were off (zero counts):
       // pets alone filling the default would otherwise refuse every scout and sideworker they ran before.
       const helpersOn = raw.scoutLimits?.maxScouts !== 0 || raw.sideworkerLimits?.maxWorkers !== 0;
-      const helper = helpersOn ? { cpus: raw.sideworkerLimits?.cpus ?? DEFAULT_SIDEWORKER_LIMITS.cpus, memoryMiB: raw.sideworkerLimits?.memoryMiB ?? DEFAULT_SIDEWORKER_LIMITS.memoryMiB } : { cpus: 0, memoryMiB: 0 };
+      const helper = helpersOn ? { cpus: raw.sideworkerLimits?.cpus ?? LEGACY_SIDEWORKER_SIZE.cpus, memoryMiB: raw.sideworkerLimits?.memoryMiB ?? LEGACY_SIDEWORKER_SIZE.memoryMiB } : { cpus: 0, memoryMiB: 0 };
       setIn(doc, [...path, "resources"], doc.createNode({
         cpus: Math.max(DEFAULT_WORKSPACE_RESOURCES.cpus, reserved.cpus + helper.cpus),
         memoryMiB: Math.max(DEFAULT_WORKSPACE_RESOURCES.memoryMiB, reserved.memoryMiB + helper.memoryMiB),

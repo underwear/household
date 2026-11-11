@@ -29,6 +29,7 @@ and lets you talk to it from the messenger you already use.
 
 - 🔒 **Its own microVM.** Every bot runs in a separate sandbox, away from your machine and from the other bots.
 - 🧰 **Build your assistants on real harnesses.** Each bot is a real Claude Code or Codex, so anything they can do, your bot can do.
+- 💬 **Assistants in your messenger.** Chat with your bots in Telegram or Slack, from any device, like with anyone else.
 - 🌐 **Restricted network.** A bot reaches only the hosts the workspace allows, and asks you when it needs one more.
 - 🔑 **Secrets it never sees.** Each workspace owns its secrets, managed in its **Secrets** page. The bot holds only placeholders; Household puts the real keys into requests on their way out, to the hosts you chose.
 - 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find this movie on a torrent site" sends a scout onto untrusted sites without exposing the bot’s files or secrets.
@@ -55,7 +56,7 @@ Read https://agents-household.dev/llms.txt and help me set up Household on my ma
 
 ```sh
 curl -fsSL https://agents-household.dev/install.sh | sh
-house onboard   # a key, a workspace, its Telegram channel, an assistant bot — step by step
+house onboard   # a model key, a workspace, a Telegram or Slack channel, a first bot — step by step
 house start
 ```
 

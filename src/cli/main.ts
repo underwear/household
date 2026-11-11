@@ -21,8 +21,11 @@ import { callControl } from "../infra/control-socket";
 import { openInBrowser, runCommand } from "../infra/process";
 import { resolvePaths, type Paths } from "../infra/paths";
 import { MORE_USAGE, runMore } from "./commands";
-import { connectCodex, importCodex, localCodexLogin } from "./codex-login";
+import { connectCodex, importCodex, localCodexLogin } from "../app/codex-login";
 import { onboard } from "./onboard";
+import { resolveSlackDm } from "../channel-adapters/slack/setup";
+import { PetInstructions } from "../infra/pet-instructions";
+import { homesDirectory } from "../app/runtime-services";
 import { update } from "./update";
 import { consoleTerminal } from "./terminal";
 import { firstPrivateContact, getMe } from "../channel-adapters/telegram";
@@ -123,12 +126,25 @@ async function startOnboarding(paths: Paths, config: ConfigStore): Promise<void>
   const telegramApi = process.env.HOUSEHOLD_TELEGRAM_API;
   await onboard({
     terminal: consoleTerminal(), config, capacity: hostCapacity(),
-    async checkBot(token, household, house, chat) {
-      const checked = await checkFields(knownChannelKinds(), channelChecks(telegramApi), "telegram-private", { token }, { household, house, ...(chat ? { chat } : {}) });
+    async checkBot(token, household, house, kind, chat) {
+      const checked = await checkFields(knownChannelKinds(), channelChecks(telegramApi), kind, { token }, { household, house, ...(chat ? { chat } : {}) });
       const me = await getMe(checked.own.token ?? token, telegramApi);
       return { ...checked, bot: `@${me.username}` };
     },
     botName: async (token) => `@${(await getMe(token, telegramApi, 3000)).username}`,
+    async checkSlack(tokens, member, household, house) {
+      const checked = await checkFields(knownChannelKinds(), channelChecks(telegramApi), "slack-private", tokens, { household, house });
+      const found = await resolveSlackDm(checked.own.token!, member);
+      return { ...checked, chat: found.chat, owner: found.owner };
+    },
+    async addInstructions(house, pet, text) {
+      const configured = findHouse(await config.load(), house)?.pets.find((each) => each.name === pet);
+      const adapter = knownAgents().get(configured?.agent ?? DEFAULT_AGENT);
+      if (!adapter?.instructionsFile) throw new HouseholdError("its harness keeps no instructions file");
+      const store = new PetInstructions(homesDirectory(paths));
+      const file = await store.read(house, pet, adapter.instructionsFile, adapter.instructionOverrides);
+      await store.write(house, pet, adapter.instructionsFile, adapter.instructionOverrides ?? [], `${file.content.trimEnd()}\n\n${text}\n`, file.revision);
+    },
     firstContact: (token) => firstPrivateContact(token, { apiBase: telegramApi }),
     codexLogin: (name) => connectCodex(paths, config, name),
     localCodex: () => localCodexLogin(),

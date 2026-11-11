@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { codexAuthEnvironment, readLocalCodexAuth, refreshLocalCodexAuth, type LocalCodexAuth } from "../agent-adapters/codex-app-server/host-auth";
 import { hostCodex } from "../agent-adapters/codex-app-server/host-codex";
 import { parseSubscriptionMarker, SUBSCRIPTION_PREFIX } from "../agent-adapters/codex-app-server/auth";
-import { assertAuthDestination, dedicatedAuthRoot } from "../app/codex-auth-backup";
+import { assertAuthDestination, dedicatedAuthRoot } from "./codex-auth-backup";
 import { HouseholdError } from "../core/errors";
 import { assertName } from "../core/names";
 import type { ConfigStore } from "../infra/config-store";
@@ -113,4 +113,70 @@ export async function importCodex(paths: Paths, config: ConfigStore, name: strin
   }
   await saveSubscription(config, name, file, auth, note ?? `ChatGPT login copied from this machine's Codex${source.email ? ` (${source.email})` : ""}`, existing);
   return source;
+}
+
+/** A ChatGPT sign-in under way for the web: where to sign in and the code to enter, and its end. */
+export interface DeviceLogin {
+  url: string;
+  code: string;
+  /** Resolves once the key is saved; rejects when the sign-in did not finish. */
+  done: Promise<void>;
+  cancel(): void;
+}
+
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
+
+/** Where Codex's device sign-in says to go, and its one-time code, from what it printed so far. */
+export function deviceLoginPrompt(output: string): { url: string; code: string } | undefined {
+  const text = output.replace(ANSI, "");
+  // The device page's address, not any other link Codex might print first.
+  const urls = text.match(/https:\/\/\S+/g) ?? [];
+  const url = urls.find((each) => each.includes("device")) ?? urls[0];
+  const code = /\b[A-Z0-9]{4,}-[A-Z0-9]{4,}\b/.exec(text)?.[0];
+  return url && code ? { url, code } : undefined;
+}
+
+/**
+ * Subscription `name` signed in as `connectCodex` does, for a browser: Household's own Codex starts a device
+ * sign-in, and what it prints (a link and a code) is handed back instead of shown in a terminal. Resolves once both
+ * are known; `done` says how the sign-in ended (after 15 minutes Codex gives up by itself).
+ */
+export async function startDeviceLogin(paths: Paths, config: ConfigStore, name: string, note?: string): Promise<DeviceLogin> {
+  const { existing, home, file } = await dedicatedHome(paths, config, name);
+  let child: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>;
+  try {
+    child = Bun.spawn([hostCodex(), "-c", 'forced_login_method="chatgpt"', "-c", 'cli_auth_credentials_store="file"', "login", "--device-auth"], {
+      cwd: home, env: codexAuthEnvironment(home), stdin: "ignore", stdout: "pipe", stderr: "pipe",
+    });
+  } catch {
+    throw new HouseholdError("could not start Household's Codex: reinstall Household, then try again");
+  }
+  let output = "";
+  const read = async (stream: ReadableStream<Uint8Array>, found: () => void) => {
+    const decoder = new TextDecoder();
+    for await (const chunk of stream) {
+      output += decoder.decode(chunk, { stream: true });
+      if (deviceLoginPrompt(output)) found();
+    }
+  };
+  const prompt = await new Promise<{ url: string; code: string }>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => { if (settled) return; settled = true; child.kill("SIGTERM"); reject(new HouseholdError("Codex did not start a sign-in in 30 seconds")); }, 30_000);
+    const found = () => { if (settled) return; settled = true; clearTimeout(timer); resolve(deviceLoginPrompt(output)!); };
+    void Promise.all([read(child.stdout, found), read(child.stderr, found)]).then(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const last = output.replace(ANSI, "").trim().split("\n").at(-1);
+      reject(new HouseholdError(`Codex did not start a sign-in${last ? `: ${last}` : ""}`));
+    });
+  });
+  const done = (async () => {
+    if (await child.exited !== 0) throw new HouseholdError("the ChatGPT sign-in did not finish; no key was saved");
+    const auth = await readLocalCodexAuth(undefined, { home });
+    await saveSubscription(config, name, file, auth, note ?? "Household ChatGPT subscription", existing);
+  })();
+  done.catch(() => undefined);
+  return { ...prompt, done, cancel: () => child.kill("SIGTERM") };
 }

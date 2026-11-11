@@ -1,6 +1,6 @@
 # Installing Household
 
-Done when the user writes to their Telegram bot and a bot answers. `house doctor` checks most of the way there.
+Done when the user writes to their bot in their messenger and it answers. `house doctor` checks most of the way there.
 
 ## Checklist
 
@@ -23,12 +23,16 @@ doing them (it needs a real terminal, it asks questions).
 6. **A bot**: `house bot add my-workspace assistant --key <key> --title Assistant`
    (`--harness codex-app-server` for Codex).
 7. **Scouts on**: `house features my-workspace scouts=on`.
-8. **A Telegram bot** for the workspace:
-   - the user creates it with @BotFather and turns on **Threaded Mode** in BotFather's Mini App (Bot Settings →
-     Threads Settings), with users not allowed to create threads; Household refuses a bot without threads;
+8. **A channel** for the workspace. Recommended: a **Telegram group with topics**:
+   - the user creates a bot with @BotFather, makes a group with **Topics** on, and adds the bot as an admin
+     with Manage topics and Delete messages; the group's id (`-100…`) is after `#` in its Telegram Web address;
    - the user presses Start in a private chat with the bot;
    - `house owner add my-workspace telegram <their numeric user id>` (e.g. from @userinfobot);
-   - `house channel add my-workspace --kind telegram-private --chat <user id> --bots assistant` (token on stdin).
+   - `house channel add my-workspace --kind telegram-group --chat <group id> --bots assistant` (token on stdin).
+
+   Other kinds, the same way: `telegram-private` (the bot's own threads: Telegram's Threaded Mode, still beta,
+   turned on in BotFather's Mini App → Bot Settings → Threads Settings; the chat is the user's id),
+   `telegram-dm` (one plain chat; the chat is the user's id) or a Slack DM (see docs/slack.md).
 9. **Running for good**: `house start` as a launchd / systemd user service that restarts on failure and whose
    `PATH` finds `openssl` and `python3`. Only one daemon at a time.
 10. **Check**: `house doctor` all ✓, `house status` shows the bot `running` (the first start downloads its image).

@@ -21,10 +21,7 @@ houses:
     features:
       scouts: true
       sideworkers: true
-    # Optional default sizes, used only when the caller omits a size.
-    sideworkerLimits:
-      cpus: 2
-      memoryMiB: 1024
+    # Optional default scout size, used only when the caller omits one.
     scoutLimits:
       cpus: 2
       memoryMiB: 2048
@@ -35,4 +32,4 @@ CPU is an integer from 1 to 1024. RAM is specified in MiB, at least 512, in incr
 
 Pending scout approvals and capability install tests also reserve capacity. Failed or closing helpers retain their reservation until cleanup succeeds. No running VM is automatically resized to make room. CLI edits while the daemon runs use the same API and live allocation checks. Reload also refuses changes that increase an overcommit. UI/API changes cannot reduce the budget or increase pet reservations beyond available capacity. If YAML is edited externally while helpers are running, an overallocated workspace blocks further launches until helpers close or the budget is increased; running work is not automatically evicted.
 
-On upgrade, the YAML migration writes an explicit budget: 8 vCPU / 8 GiB, or more where pets need it, leaving room for one helper of the workspace's default sideworker size beside the pets (no room is added when both helper counts were zero). It removes `maxScouts` / `maxWorkers` and retains the default VM sizes. A legacy count of zero becomes a disabled feature. Review the budget after upgrading if several helpers ran at once. Unmigrated files without `resources` use the same fallback. Old count fields are accepted for compatibility and discarded when parsed; use feature flags to turn helpers off.
+On upgrade, the YAML migration writes an explicit budget: 8 vCPU / 8 GiB, or more where pets need it, leaving room for one helper of the workspace's default sideworker size beside the pets (no room is added when both helper counts were zero). It removes `maxScouts` / `maxWorkers` and retains the default scout size. Sideworkers have no default size: the bot that starts one always chooses its CPU and memory, and a later migration removes the old `sideworkerLimits`. A legacy count of zero becomes a disabled feature. Review the budget after upgrading if several helpers ran at once. Unmigrated files without `resources` use the same fallback. Old count fields are accepted for compatibility and discarded when parsed; use feature flags to turn helpers off.

@@ -2,8 +2,8 @@ import { houseInboxSchema, type HouseInbox } from "../core/house-inboxes";
 import type { CapabilityDefinition, ScoutAgent, ScoutDefinition, ScoutLimits } from "../core/scouts";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT } from "../builtin-capabilities";
 import { houseFeatureSettingsSchema, type HouseFeatures, type PreviewSettings } from "../core/house-features";
-import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, type PetResources, sideworkerLimitsSchema } from "../core/resources";
-import type { SideworkerLimits, SideworkerProfile } from "../core/household";
+import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, type PetResources } from "../core/resources";
+import type { SideworkerProfile } from "../core/household";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
@@ -188,14 +188,6 @@ export class ConfigStore {
     return this.edit((doc, household) => {
       knownHouse(household, name);
       setIn(doc, ["houses", name, "resources"], doc.createNode(value));
-    });
-  }
-
-  async setSideworkerLimits(name: string, limits: SideworkerLimits): Promise<Household> {
-    const value = sideworkerLimitsSchema.parse(limits);
-    return this.edit((doc, household) => {
-      knownHouse(household, name);
-      setIn(doc, ["houses", name, "sideworkerLimits"], doc.createNode(value));
     });
   }
 

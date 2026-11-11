@@ -26,9 +26,14 @@ export function WorkspacesPage({ houses, platforms, onNewWorkspace }: { houses: 
     <Page
       title="Workspaces"
       actions={
-        <button className="btn primary" onClick={onNewWorkspace}>
-          + New workspace
-        </button>
+        <Cluster gap={2}>
+          <Link href="/setup" className="btn primary">
+            Guided setup
+          </Link>
+          <button className="btn" onClick={onNewWorkspace}>
+            + New workspace
+          </button>
+        </Cluster>
       }
     >
       <WorkspacesTable houses={houses} platforms={platforms} />
@@ -52,7 +57,9 @@ export function WorkspacesTable({ houses, platforms }: { houses: WorkspaceView[]
             <Stack gap={2}>
               <span className="strong ellipsis">{house.name}</span>
               {ownBots(house.pets).length === 0 ? (
-                <span className="hint">no bots</span>
+                <span className="hint">
+                  no bots · <Link href={`/setup?workspace=${encodeURIComponent(house.name)}`} className="text-link">set up</Link>
+                </span>
               ) : (
                 <Cluster gap={2}>
                 {ownBots(house.pets).map((pet) => {

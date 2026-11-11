@@ -475,3 +475,40 @@ textarea.control.inbox-pointers { min-height: 6em; }
   .resource-meter .resource-bar { grid-column: 1 / -1; grid-row: 2; }
   .resource-legend { padding-left: 0; }
 }
+
+/* Setup (/setup): a stepper on the left (each step, what was chosen, the current step's screens), the screen on the right. */
+.setup { display: grid; grid-template-columns: 220px minmax(0, 720px); gap: var(--space-7); align-items: start; }
+.setup-stepper { position: sticky; top: var(--space-5); }
+.setup-stepper > ol { display: flex; flex-direction: column; gap: var(--space-5); margin: 0; padding: 0; list-style: none; }
+.setup-step { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: var(--space-3); row-gap: var(--space-1); }
+.setup-head { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+button.setup-head { cursor: pointer; }
+button.setup-head:hover .setup-name { color: var(--ink); }
+.setup-mark { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); color: var(--faint); font: 600 var(--text-xs)/1 var(--font-sans); }
+.setup-name { font: 500 var(--text-base)/1.3 var(--font-sans); color: var(--faint); }
+.setup-step.done .setup-mark { border-color: transparent; background: var(--sel); color: var(--idle); }
+.setup-step.done .setup-name { color: var(--muted); }
+.setup-step.current .setup-mark { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+.setup-step.current .setup-name { color: var(--ink); }
+.setup-summary { grid-column: 2; font: 400 var(--text-sm)/1.35 var(--font-sans); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setup-subs { grid-column: 2; display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-1) 0 0; padding: 0 0 0 var(--space-4); list-style: none; border-left: 1px solid var(--line); }
+.setup-sub { padding: 0; border: 0; background: none; font: 400 var(--text-md)/1.6 var(--font-sans); color: var(--faint); text-align: left; }
+.setup-subs .done .setup-sub { color: var(--muted); cursor: pointer; }
+.setup-subs .done .setup-sub:hover { color: var(--ink); }
+.setup-subs .current .setup-sub { color: var(--ink); font-weight: 500; }
+.setup-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding-top: var(--space-2); }
+.setup-option { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.setup-code { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-5); border: 1px dashed var(--line); border-radius: var(--radius-md); }
+.setup-code-value { font: 600 var(--text-2xl)/1 var(--font-mono); letter-spacing: 0.08em; color: var(--ink); }
+.setup-state { display: flex; align-items: center; gap: var(--space-2); }
+
+@media (width < 1024px) {
+  .setup { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .setup-stepper { position: static; }
+  /* Steps in a row, their names only; the current one's screens show as its heading does. */
+  .setup-stepper > ol { flex-direction: row; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+  .setup-step { display: flex; }
+  .setup-head { display: inline-flex; align-items: center; gap: var(--space-2); }
+  .setup-step:not(.current) .setup-name { display: none; }
+  .setup-summary, .setup-subs { display: none; }
+}

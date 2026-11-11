@@ -32,16 +32,22 @@ house doctor
 house onboard
 ```
 
-It asks, one step at a time:
+It asks, one step at a time, and shows for each choice how to get what it needs:
 
-1. **Harness and its key** — Claude Code or Codex; paste a Claude token (`claude setup-token` makes one) or an API key, or use the ChatGPT login of the Codex on this machine.
-2. **Workspace** — a name for your bots' home.
-3. **Telegram** — create a bot with [@BotFather](https://t.me/BotFather), turn on **Threaded Mode** in its Mini App (Bot Settings → Threads Settings), press **Start** in a chat with your bot, and paste its token. You become the workspace's owner.
-4. **Bot** — its name and display name.
+1. **Model** — Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (`claude setup-token` makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.
+2. **Workspace** — a name for your bots' home, and how much of the machine's CPU and memory it may use.
+3. **Channel** — where you talk to your bots:
+   - **Telegram group with topics** (recommended): a topic per bot in a group of yours;
+   - **Telegram, a thread per bot** (beta: Telegram's bot Threaded Mode);
+   - **Telegram, one plain chat**;
+   - **Slack DM**.
+
+   You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. You can skip this step and add a channel later.
+4. **Bot** — what it is for (personal assistant, developer, researcher, or blank), its name and its CPU and memory. Its purpose adds a role to its instructions.
 5. **Scouts** — on or off.
 6. **Sideworkers** — on or off. You can change both later in the admin.
 
-You can run `house onboard` again any time.
+You can run `house onboard` again any time. The web admin has the same setup at **/setup**: it opens by itself while there is no workspace yet.
 
 ## 3. Start
 
@@ -57,7 +63,7 @@ To keep Household running after you close the terminal, run `house start` as a s
 
 For a shared group with a topic per bot, see [Telegram groups with topics](../telegram-groups/).
 
-Open your Telegram channel and write to your assistant bot. It answers in its own thread. 🤖
+Write to your bot where you connected it: in a Telegram group, in its own topic; in a private chat with threads, in its own thread; in a plain chat or a Slack DM, right there. 🤖
 
 For an ordinary private conversation without threads, add a channel in the admin with kind **Telegram Bot DM** (`telegram-dm`), your Telegram user id as the chat id, and a BotFather token. Threaded Mode is not required. Press **Start** in the bot's Telegram chat, and assign your assistant to the channel.
 

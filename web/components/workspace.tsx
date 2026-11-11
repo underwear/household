@@ -10,7 +10,6 @@ import { WorkspaceFeatureSettings, PreviewReachSettings } from "./workspace-feat
 import { WorkspacePreviews } from "./bot-previews";
 import { WorkspaceSideworkers } from "./bot-sideworkers";
 import { SideworkerProfiles } from "./sideworker-profiles";
-import { SideworkerSettings } from "./sideworker-settings";
 import { SkillsPage } from "./skills";
 import { NETWORK_PRESETS, type NetworkPreset } from "../../src/core/network-presets";
 import { useEffect, useState } from "react";
@@ -70,12 +69,11 @@ export function WorkspacePage({ house, tab, known, keys, capacity, refresh, noti
       )}
       {tab === "sideworkers" && (
         <Page title="Sideworkers">
-          {/* Off: only the line saying so; workers, profiles and limits come back with the switch. */}
+          {/* Off: only the line saying so; workers and profiles come back with the switch. */}
           {houseFeatures(house).sideworkers ? (
             <>
               <WorkspaceSideworkers house={house} refresh={refresh} />
               <SideworkerProfiles house={house} agents={known.agents} keys={keys} refresh={refresh} notify={notify} />
-              <SideworkerSettings key={JSON.stringify(house.sideworkerLimits)} house={house} host={capacity.host} refresh={refresh} notify={notify} />
             </>
           ) : (
             <FeatureOff house={house.name} text="Running sideworkers are paused, and bots cannot start new ones." />

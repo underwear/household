@@ -8,7 +8,7 @@ export interface PreviewView { id: string; house: string; pet: string; port: num
 import type { HouseFeatures as WorkspaceFeatures, PreviewSettings } from "../src/core/house-features";
 import type { PetLifecycle as BotLifecycle } from "../src/core/lifecycle";
 import type { SideworkerRecord } from "../src/app/sideworkers";
-import type { SideworkerLimits, SideworkerProfile } from "../src/core/household";
+import type { SideworkerProfile } from "../src/core/household";
 import type { MetricSample, MetricsView } from "../src/core/metrics";
 import type { LogKind, LogLine, LogPage } from "../src/app/household-log";
 import type { PetLogSource as BotLogSource, PetLogView as BotLogView } from "../src/app/pet-logs";
@@ -25,6 +25,8 @@ import type { EnvironmentView } from "../src/app/environment";
 import type { EnvironmentSetupResult } from "../src/infra/environment-setup";
 export type { EnvironmentView };
 // The web UI's only way to the daemon: its JSON API. The types are the server's (type-only: nothing of it is bundled).
+import type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView, OnboardingView } from "../src/app/web-views";
+export type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView, OnboardingView };
 import type { AgentModelsView as HarnessModelsView, AgentView as HarnessView, AllowView, ChannelKindView, ChannelView, HouseView as WorkspaceView, KeysView, KeyView, MeView, OwnerView, PetView as BotView, PlatformView, SecretView, WriteView } from "../src/app/web-views";
 
 export type { HarnessModelsView, HarnessView, AllowView, ChannelKindView, ChannelView, WorkspaceView, KeysView, KeyView, MeView, OwnerView, BotView, PlatformView, SecretView, WriteView };
@@ -132,7 +134,6 @@ export const api = {
   setSideworkerProfiles: (house: string, profiles: SideworkerProfile[]) => call<WriteView>("PUT", `${housePath(house)}/sideworker-profiles`, { profiles }),
   resources: (house: string) => call<import("../src/core/resources").WorkspaceBudget>("GET", `${housePath(house)}/resources`),
   setWorkspaceResources: (house: string, value: import("../src/core/resources").PetResources) => call<WriteView>("PUT", `${housePath(house)}/resources`, value),
-  setSideworkerLimits: (house: string, limits: SideworkerLimits) => call<WriteView>("PUT", `${housePath(house)}/sideworker-limits`, limits),
   instructions: (house: string, pet: string) => call<InstructionFile>("GET", `${under(house, "pets", pet)}/instructions`),
   saveInstructions: (house: string, pet: string, content: string, revision: string) => call<InstructionFile>("PUT", `${under(house, "pets", pet)}/instructions`, {content, revision}),
   timezone: () => call<{timezone:string}>("GET", "/api/timezone"),
@@ -223,4 +224,15 @@ export const api = {
   updateSecret: (house: string, name: string, secret: Partial<SecretFields>) => call<{ secrets: SecretView[] }>("PATCH", `/api/houses/${encodeURIComponent(house)}/secrets/${encodeURIComponent(name)}`, secret),
   removeSecret: (house: string, name: string) => call<{ secrets: SecretView[] }>("DELETE", `/api/houses/${encodeURIComponent(house)}/secrets/${encodeURIComponent(name)}`),
   signOut: () => call<void>("POST", "/api/logout"),
+  // The guided setup (/setup): what it may offer, a ChatGPT sign-in, a Telegram bot and the wait for its first message.
+  onboarding: () => call<OnboardingView>("GET", "/api/onboarding"),
+  importCodex: (name: string) => call<KeysView>("POST", "/api/onboarding/codex/import", { name }),
+  startChatgptLogin: (name: string) => call<DeviceLoginView>("POST", "/api/onboarding/codex/login", { name }),
+  chatgptLogin: (id: string) => call<DeviceLoginStatus>("GET", `/api/onboarding/codex/login/${encodeURIComponent(id)}`),
+  cancelChatgptLogin: (id: string) => call<void>("DELETE", `/api/onboarding/codex/login/${encodeURIComponent(id)}`),
+  listenBot: (house: string, kind: string, token: string) => call<BotListenView>("POST", "/api/onboarding/telegram", { house, kind, token }),
+  botListen: (id: string) => call<BotListenStatus & { bot: string }>("GET", `/api/onboarding/telegram/${encodeURIComponent(id)}`),
+  listenAgain: (id: string) => call<BotListenStatus & { bot: string }>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/again`),
+  /** `chat`: a group's id; a private chat's is the owner's. */
+  finishBot: (id: string, owner: string, chat?: string) => call<WriteView>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/finish`, { owner, ...(chat ? { chat } : {}) }),
 };
