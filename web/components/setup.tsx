@@ -555,6 +555,7 @@ export function ReviewStep({ draft, agents, open, refresh, onMade }: { draft: Se
         {row("channel", "Channel", channel === null ? "None yet" : channel ? [channel.label, channel.bot].filter(Boolean).join(" · ") : "—", owner)}
         {row(undefined, "Bot", `🤖 ${DEFAULT_BOT.title}`, size && `${harness === "codex-app-server" ? "Codex" : "Claude Code"} · ${size.cpus} vCPU · ${gib(size.memoryMiB)}`)}
       </List>
+      {action.busy && <p className="setup-state"><span className="dot busy" aria-hidden />Got everything. Setting it up, please wait…</p>}
       {slow && <p className="hint">Still setting up: Household applies changes one at a time, and a bot that is starting holds them for a moment.</p>}
       {action.shown}
     </Screen>

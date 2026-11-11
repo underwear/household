@@ -23,7 +23,20 @@ function scripted(script: string[]) {
     return answers.shift()!;
   };
   const answered = async (question: string) => { const answer = await next(question); said.push("<answer>"); return answer; };
-  const terminal: Terminal = { say: (text = "") => { said.push(text); }, ask: answered, secret: answered };
+  // A question that can be taken back (a wait): taken back before it is answered when the wait ends at once;
+  // "<wait>" leaves it unanswered until then.
+  const ask = async (question: string, signal?: AbortSignal) => {
+    if (!signal) return answered(question);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (signal.aborted) return "";
+    if (answers[0] === "<wait>") {
+      answers.shift();
+      await new Promise((resolve) => signal.aborted ? resolve(undefined) : signal.addEventListener("abort", resolve, { once: true }));
+      return "";
+    }
+    return answered(question);
+  };
+  const terminal: Terminal = { say: (text = "") => { said.push(text); }, ask, secret: answered };
   return { terminal, said: () => said.filter((text) => text !== "<answer>").join("\n"), saidLines: () => [...said], asked, left: () => answers.length };
 }
 
@@ -104,6 +117,7 @@ test("Enter all the way: a Claude key, a workspace with a budget, a group found 
   expect(said).toContain("1. In Telegram, open @BotFather (https://t.me/BotFather), send /newbot");
   expect(said).toContain("✓ message from Igor (@igor)");
   expect(said).toContain("✓ group Home is ready.");
+  expect(said.indexOf("✓ Got everything. Setting it up, please wait…")).toBeGreaterThan(said.indexOf("✓ group Home is ready."));
   expect(said).toContain("Added: key claude, workspace home, @house_bot with owner Igor, bot assistant");
   expect(said).toContain("write in your Telegram group: each bot has its own topic there.");
   // Every answer is followed by a blank line: no wall of text.
@@ -259,18 +273,16 @@ test("a bot Household runs already is not watched (the daemon reads it): the own
   expect(home.people.owners.map((owner) => owner.id)).toEqual(["777", "888"]);
 });
 
-test("the owner wrote and the group is not found: what to do next is said, and Enter stops waiting to type the group's id", async () => {
-  let aborted = false;
+test("while it waits, Enter says again what it is waiting for; once the wait ends, the ids missing are asked for", async () => {
   const { run, house } = setup({
-    watch: (_token, { signal, onContact }) => {
+    watch: (_token, { onContact }) => {
       onContact({ id: "777", name: "Igor" });
-      return new Promise((resolve) => signal.addEventListener("abort", () => { aborted = true; resolve("timeout"); }));
+      return new Promise((resolve) => setTimeout(() => resolve("timeout"), 30));
     },
   });
-  const io = await run([...FIRST.slice(0, 8), "", "", GROUP, "n"]); // Enter: stop waiting; that's me; the group's id
-  expect(aborted).toBe(true);
-  expect(io.said()).toContain("Now the group: Add @house_bot to your group as an admin (Manage topics, Delete messages); if it is in the group already, send /start@house_bot there.");
-  expect(io.asked.some((question) => question.includes("press Enter to type its id instead"))).toBe(true);
+  const io = await run([...FIRST.slice(0, 8), "", "<wait>", "", GROUP, "n"]); // Enter while it waits; then it ends: that's me; the group's id
+  expect(io.said()).toContain("Waiting for the group: Add @house_bot to your group as an admin (Manage topics, Delete messages); if it is in the group already, send /start@house_bot there.");
+  expect(io.said()).not.toContain("Waiting for your private message"); // Igor wrote already
   expect((await house()).channels).toMatchObject([{ kind: "telegram-group", chat: GROUP }]);
 });
 

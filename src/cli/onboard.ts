@@ -103,6 +103,7 @@ export async function onboard(given: OnboardDeps): Promise<void> {
   t.say(dim("Where you talk to your bots. More channels can be added later in the admin."));
   const channel = await channelOf(deps, house, outcome);
 
+  t.say(`${green("✓")} Got everything. Setting it up, please wait…`);
   const pet = await botOf(deps, house, provider, key, channel?.chat, outcome);
   if (created) {
     // Setup's helpers on (scouts going on seed the workspace's General scout).
@@ -331,34 +332,32 @@ async function telegram(deps: OnboardDeps, house: string, chosen: ChannelOption,
     const groupHow = `Add ${bot} to your group as an admin (Manage topics, Delete messages); if it is in the group already, send ${bold(`/start@${bot.slice(1)}`)} there.`;
     t.say(`Now open ${bold(`https://t.me/${bot.slice(1)}`)} and send the bot any message in a private chat (Start works): you become the workspace's owner.`);
     if (needsGroup) t.say(`Household finds the group by itself: ${groupHow}`);
-    t.say(dim("Waiting up to 3 minutes…"));
     const said = new Set<string>();
     const stop = new AbortController();
-    let owner!: () => void;
-    const ownerFound = new Promise<void>((resolve) => { owner = resolve; });
     const watching = deps.watch(token, {
       group: needsGroup,
       signal: stop.signal,
-      onContact: (found) => { contact = found; t.say(`${green("✓")} message from ${found.name}${found.username ? ` (@${found.username})` : ""}`); owner(); },
+      onContact: (found) => { contact = found; t.say(`${green("✓")} message from ${found.name}${found.username ? ` (@${found.username})` : ""}`); },
       onGroup: (found) => {
         group = found;
         const text = found.problems.length ? `${yellow("!")} group ${found.title} still needs: ${found.problems.join("; ")}` : `${green("✓")} group ${found.title}`;
         if (!said.has(text)) { said.add(text); t.say(text); }
       },
-    }).catch((error) => { t.say(yellow(`  could not watch the bot (${(error as Error).message})`)); return "timeout" as const; });
-    const ended = await Promise.race([watching, ownerFound.then(() => undefined)]);
-    // The owner is here and the group is not ready (yet): what to do is said, and Enter stops waiting for it.
-    if (ended === undefined && needsGroup && !(group && group.problems.length === 0)) {
-      t.say(group ? `Now fix what the group needs (said above): Household notices once the bot is an admin.` : `Now the group: ${groupHow}`);
-      const done = new AbortController();
-      const typed = t.ask(dim(group ? "Waiting for the group… (press Enter to check it now) " : "Waiting for the group… (press Enter to type its id instead) "), done.signal);
-      await Promise.race([watching, typed.then(() => stop.abort())]);
-      done.abort();
-      await typed;
+    }).catch((error) => { t.say(yellow(`  could not watch the bot (${(error as Error).message})`)); return "timeout" as const; })
+      .finally(() => stop.abort());
+    // While it waits (up to 3 minutes), Enter says again what it is waiting for; the watch's end takes the question back.
+    const left = () => [
+      ...(contact ? [] : [`your private message to ${bot}: open ${bold(`https://t.me/${bot.slice(1)}`)} and send it anything (Start works)`]),
+      ...(!needsGroup || (group && group.problems.length === 0) ? [] : group
+        ? [`the group ${group.title}, which still needs: ${group.problems.join("; ")}`]
+        : [`the group: ${groupHow}`]),
+    ];
+    while (!stop.signal.aborted) {
+      await t.ask(`${dim("Waiting up to 3 minutes…")}\n`, stop.signal);
+      if (stop.signal.aborted) break;
+      for (const each of left()) t.say(`Waiting for ${each}`);
     }
     await watching;
-    stop.abort();
-    t.say();
   }
   if (contact && !(await confirm(t, `Is ${contact.name} you?`))) contact = undefined;
   const id = contact?.id ?? await until(t, () => t.ask(`Your numeric Telegram id ${dim("(@userinfobot tells it)")}: `), (value) => {
