@@ -3,8 +3,8 @@ import { createInterface } from "node:readline/promises";
 /** A conversation on the terminal: what `house onboard` says and asks. Faked in tests. */
 export interface Terminal {
   say(text?: string): void;
-  /** A line typed by the user, trimmed. */
-  ask(question: string): Promise<string>;
+  /** A line typed by the user, trimmed; "" when `signal` aborts it first (the question is withdrawn). */
+  ask(question: string, signal?: AbortSignal): Promise<string>;
   /** A line typed without echo (a key, a token). */
   secret(question: string): Promise<string>;
 }
@@ -16,16 +16,21 @@ export const bold = paint(BOLD), dim = paint(DIM), green = paint(GREEN), yellow 
 
 /** The real terminal: cooked-mode lines, so the terminal edits them; secrets with echo off. */
 export function consoleTerminal(): Terminal {
-  const line = async (question: string) => {
+  const line = async (question: string, signal?: AbortSignal) => {
+    if (signal?.aborted) return "";
     const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
     process.stdout.write(question);
+    let withdrawn = false;
+    const withdraw = () => { withdrawn = true; process.stdout.write("\n"); rl.close(); };
+    signal?.addEventListener("abort", withdraw, { once: true });
     try {
       const answer = await new Promise<string>((resolve, reject) => {
         rl.once("line", resolve);
-        rl.once("close", () => reject(new Error("input closed")));
+        rl.once("close", () => (withdrawn ? resolve("") : reject(new Error("input closed"))));
       });
       return answer.trim();
     } finally {
+      signal?.removeEventListener("abort", withdraw);
       rl.close();
     }
   };

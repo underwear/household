@@ -443,7 +443,7 @@ function TelegramCheck({ listen, back, onDone }: { listen: BotListenView; back: 
           </CheckLine>
           {state.needsGroup && (
             <CheckLine ok={groupReady}>
-              {!group && "Add the bot to your group as an admin, or write anything in the group: Household finds it."}
+              {!group && <>Add the bot to your group as an admin (Manage topics, Delete messages); if it is in the group already, send <code>/start@{listen.bot.replace(/^@/, "")}</code> there. Household finds it by itself.</>}
               {group && group.problems.length === 0 && <>Group: <b>{group.title}</b></>}
               {group && group.problems.length > 0 && (
                 <Stack gap={2}>

@@ -19,8 +19,8 @@ export interface OnboardDeps {
   checkSlack(tokens: { token: string; appToken: string }, member: string, household: Household, house: string): Promise<{ own: Record<string, string>; also: AlsoChannel[]; chat: string; owner: string }>;
   /** A configured bot's @username, when Telegram tells. */
   botName(token: string): Promise<string | undefined>;
-  /** Watches a new bot for its owner (the first to write in private) and, with `group`, its group, for a few minutes. */
-  watch(token: string, options: { group: boolean; onContact: (contact: Contact) => void; onGroup: (group: FoundGroup) => void }): Promise<"done" | "timeout">;
+  /** Watches a new bot for its owner (the first to write in private) and, with `group`, its group, for a few minutes (or until `signal` aborts). */
+  watch(token: string, options: { group: boolean; signal: AbortSignal; onContact: (contact: Contact) => void; onGroup: (group: FoundGroup) => void }): Promise<"done" | "timeout">;
   /** What a group the bot is in still needs. */
   checkGroup(token: string, chat: string): Promise<FoundGroup>;
   /** Household's own ChatGPT sign-in, saved as key `name`. */
@@ -58,7 +58,7 @@ const option = (label: string, description: string, marks: string[] = []) => `${
 function spaced(t: Terminal): Terminal {
   return {
     say: (text) => t.say(text),
-    ask: async (question) => { const answer = await t.ask(question); t.say(); return answer; },
+    ask: async (question, signal) => { const answer = await t.ask(question, signal); t.say(); return answer; },
     secret: async (question) => { const answer = await t.secret(question); t.say(); return answer; },
   };
 }
@@ -328,23 +328,36 @@ async function telegram(deps: OnboardDeps, house: string, chosen: ChannelOption,
   if (running) {
     t.say(dim(`Household already runs ${bot}, so it cannot watch it here.`));
   } else {
+    const groupHow = `Add ${bot} to your group as an admin (Manage topics, Delete messages); if it is in the group already, send ${bold(`/start@${bot.slice(1)}`)} there.`;
     t.say(`Now open ${bold(`https://t.me/${bot.slice(1)}`)} and send the bot any message in a private chat (Start works): you become the workspace's owner.`);
-    if (needsGroup) t.say("Household finds the group by itself once the bot is in it: if it was added already, write anything in the group.");
+    if (needsGroup) t.say(`Household finds the group by itself: ${groupHow}`);
     t.say(dim("Waiting up to 3 minutes…"));
     const said = new Set<string>();
-    try {
-      await deps.watch(token, {
-        group: needsGroup,
-        onContact: (found) => { contact = found; t.say(`${green("✓")} message from ${found.name}${found.username ? ` (@${found.username})` : ""}`); },
-        onGroup: (found) => {
-          group = found;
-          const text = found.problems.length ? `${yellow("!")} group ${found.title} still needs: ${found.problems.join("; ")}` : `${green("✓")} group ${found.title}`;
-          if (!said.has(text)) { said.add(text); t.say(text); }
-        },
-      });
-    } catch (error) {
-      t.say(yellow(`  could not watch the bot (${(error as Error).message})`));
+    const stop = new AbortController();
+    let owner!: () => void;
+    const ownerFound = new Promise<void>((resolve) => { owner = resolve; });
+    const watching = deps.watch(token, {
+      group: needsGroup,
+      signal: stop.signal,
+      onContact: (found) => { contact = found; t.say(`${green("✓")} message from ${found.name}${found.username ? ` (@${found.username})` : ""}`); owner(); },
+      onGroup: (found) => {
+        group = found;
+        const text = found.problems.length ? `${yellow("!")} group ${found.title} still needs: ${found.problems.join("; ")}` : `${green("✓")} group ${found.title}`;
+        if (!said.has(text)) { said.add(text); t.say(text); }
+      },
+    }).catch((error) => { t.say(yellow(`  could not watch the bot (${(error as Error).message})`)); return "timeout" as const; });
+    const ended = await Promise.race([watching, ownerFound.then(() => undefined)]);
+    // The owner is here and the group is not ready (yet): what to do is said, and Enter stops waiting for it.
+    if (ended === undefined && needsGroup && !(group && group.problems.length === 0)) {
+      t.say(group ? `Now fix what the group needs (said above): Household notices once the bot is an admin.` : `Now the group: ${groupHow}`);
+      const done = new AbortController();
+      const typed = t.ask(dim(group ? "Waiting for the group… (press Enter to check it now) " : "Waiting for the group… (press Enter to type its id instead) "), done.signal);
+      await Promise.race([watching, typed.then(() => stop.abort())]);
+      done.abort();
+      await typed;
     }
+    await watching;
+    stop.abort();
     t.say();
   }
   if (contact && !(await confirm(t, `Is ${contact.name} you?`))) contact = undefined;

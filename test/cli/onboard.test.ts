@@ -258,3 +258,18 @@ test("a bot Household runs already is not watched (the daemon reads it): the own
   expect(home.channels.map((channel) => `${channel.kind}:${channel.chat}`)).toEqual([`telegram-group:${GROUP}`, "telegram-dm:888"]);
   expect(home.people.owners.map((owner) => owner.id)).toEqual(["777", "888"]);
 });
+
+test("the owner wrote and the group is not found: what to do next is said, and Enter stops waiting to type the group's id", async () => {
+  let aborted = false;
+  const { run, house } = setup({
+    watch: (_token, { signal, onContact }) => {
+      onContact({ id: "777", name: "Igor" });
+      return new Promise((resolve) => signal.addEventListener("abort", () => { aborted = true; resolve("timeout"); }));
+    },
+  });
+  const io = await run([...FIRST.slice(0, 8), "", "", GROUP, "n"]); // Enter: stop waiting; that's me; the group's id
+  expect(aborted).toBe(true);
+  expect(io.said()).toContain("Now the group: Add @house_bot to your group as an admin (Manage topics, Delete messages); if it is in the group already, send /start@house_bot there.");
+  expect(io.asked.some((question) => question.includes("press Enter to type its id instead"))).toBe(true);
+  expect((await house()).channels).toMatchObject([{ kind: "telegram-group", chat: GROUP }]);
+});
