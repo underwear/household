@@ -273,3 +273,19 @@ test("the owner wrote and the group is not found: what to do next is said, and E
   expect(io.asked.some((question) => question.includes("press Enter to type its id instead"))).toBe(true);
   expect((await house()).channels).toMatchObject([{ kind: "telegram-group", chat: GROUP }]);
 });
+
+test("a group stuck on something: another group's id can be typed at the check, and is checked in its place", async () => {
+  const checked: string[] = [];
+  const { run, house } = setup({
+    async watch(_token, { onContact, onGroup }) {
+      onContact({ id: "777", name: "Igor" });
+      onGroup({ id: "-5198099867", title: "Old", problems: ["turn on Topics in the group's settings"] });
+      return "timeout";
+    },
+    checkGroup: async (_token, chat) => { checked.push(chat); return { id: chat, title: "Ours", problems: chat === GROUP ? [] : ["turn on Topics in the group's settings"] }; },
+  });
+  const io = await run([...FIRST.slice(0, 8), "", "", "12345", GROUP, "n"]); // that's me; Enter: check again; a wrong id, then the right one
+  expect(checked).toEqual(["-5198099867", GROUP]);
+  expect(io.said()).toContain("a negative number starting with -100");
+  expect((await house()).channels).toMatchObject([{ kind: "telegram-group", chat: GROUP }]);
+});

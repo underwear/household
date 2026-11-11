@@ -44,3 +44,30 @@ test("the owner is the first to write privately from now on; the group is found 
   expect(offsets[1]).toBe(12); // the private message already there is passed over for the owner
   expect(offsets.at(-1)).toBe(15); // confirmed, so the daemon does not get it again
 });
+
+test("a group that became a supergroup (Topics on) is followed to its new id; its old id is never taken back", async () => {
+  // As Telegram sent them for a real bot: added to the new supergroup, the migration both ways, then promoted.
+  const migration = [
+    { update_id: 7, my_chat_member: { chat: { id: -1004391098876, type: "supergroup", title: "Ours" }, new_chat_member: { status: "member" } } },
+    { update_id: 8, message: { chat: { id: -1004391098876, type: "supergroup", title: "Ours" }, migrate_from_chat_id: -5198099867 } },
+    { update_id: 9, message: { chat: { id: -5198099867, type: "group", title: "Ours" }, migrate_to_chat_id: -1004391098876 } },
+    { update_id: 10, my_chat_member: { chat: { id: -1004391098876, type: "supergroup", title: "Ours" }, new_chat_member: { status: "administrator" } } },
+  ];
+  const asked: string[] = [];
+  const api = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const method = new URL(request.url).pathname.split("/").at(-1);
+      const body = (await request.json()) as { offset?: number; chat_id?: number };
+      if (method === "getChat") { asked.push(String(body.chat_id)); return Response.json({ ok: true, result: body.chat_id === -5198099867 ? { id: -5198099867, type: "group", title: "Ours" } : { id: -1004391098876, type: "supergroup", title: "Ours", is_forum: true } }); }
+      if (method === "getMe") return Response.json({ ok: true, result: { id: 4242, is_bot: true } });
+      if (method === "getChatMember") return Response.json({ ok: true, result: body.chat_id === -5198099867 ? { status: "member" } : { status: "administrator", can_manage_topics: true, can_delete_messages: true } });
+      return Response.json({ ok: true, result: (body.offset ?? 0) === 0 ? migration : [] });
+    },
+  });
+  const groups: FoundGroup[] = [];
+  await watchSetup("4242:token", { apiBase: `http://127.0.0.1:${api.port}`, timeoutMs: 300, group: true, onContact: () => {}, onGroup: (found) => groups.push(found) });
+  api.stop();
+  expect(asked).not.toContain("-5198099867");
+  expect(groups.at(-1)).toEqual({ id: "-1004391098876", title: "Ours", problems: [] });
+});

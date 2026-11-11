@@ -374,11 +374,14 @@ async function telegram(deps: OnboardDeps, house: string, chosen: ChannelOption,
       });
       group = await deps.checkGroup(token, typed);
     }
-    // Asked again until the group has what it needs; Ctrl-C leaves, with what is saved so far.
+    // Asked again until the group has what it needs, or another group's id is typed; Ctrl-C leaves, with what is saved so far.
     while (group.problems.length) {
       t.say(`${yellow("!")} group ${group.title} still needs: ${group.problems.join("; ")}`);
-      await t.ask(dim("Press Enter to check again "));
-      group = await deps.checkGroup(token, group.id);
+      const other = await until(t, () => t.ask(dim("Press Enter to check again, or type the group's id (-100…) ")), (value) => {
+        if (value && !TELEGRAM_GROUP_ID.test(value)) throw new Error("a negative number starting with -100, like -1001234567890");
+        return value;
+      });
+      group = await deps.checkGroup(token, other || group.id);
     }
     t.say(`${green("✓")} group ${group.title} is ready.`);
     t.say();

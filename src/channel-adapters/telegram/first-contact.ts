@@ -17,7 +17,8 @@ export interface FoundGroup {
 type Chat = { id: number; type: string; title?: string };
 interface Update {
   update_id: number;
-  message?: { chat: Chat; from?: { id: number; first_name?: string; last_name?: string; username?: string; is_bot?: boolean } };
+  /** `migrate_to_chat_id` / `migrate_from_chat_id`: a group turned into a supergroup (turning on Topics does), which has a new id. */
+  message?: { chat: Chat; from?: { id: number; first_name?: string; last_name?: string; username?: string; is_bot?: boolean }; migrate_to_chat_id?: number; migrate_from_chat_id?: number };
   my_chat_member?: { chat: Chat; new_chat_member?: { status?: string } };
 }
 
@@ -51,7 +52,8 @@ const contactOf = (from: NonNullable<NonNullable<Update["message"]>["from"]>): C
  * who need not look up their Telegram id), and, with `group`, the group it is in, found from the bot being added
  * or promoted there or a message in it, then checked (`groupProblems`) and said again whenever it changes there.
  * Updates that came before are skipped for the owner, not for the group: the bot is usually added before the
- * watch starts. Resolves "done" once it has the owner and, with `group`, a group with no problems; "timeout" at
+ * watch starts. A group that became a supergroup (turning on Topics does) is followed to its new id, and once a
+ * supergroup is found, a plain group seen later does not take its place. Resolves "done" once it has the owner and, with `group`, a group with no problems; "timeout" at
  * `timeoutMs` or when `signal` aborts. What was read is confirmed to Telegram, so the daemon does not get it later.
  */
 export async function watchSetup(token: string, { apiBase, timeoutMs = 180_000, signal, group = false, onContact, onGroup }: {
@@ -62,21 +64,34 @@ export async function watchSetup(token: string, { apiBase, timeoutMs = 180_000, 
   const deadline = Date.now() + timeoutMs;
   let contact: Contact | undefined;
   let found: FoundGroup | undefined;
+  let foundSuper = false;
+  /** Groups that became supergroups: their old ids, never a channel's chat. */
+  const moved = new Set<number>();
   const ready = () => !!contact && (!group || (!!found && found.problems.length === 0));
   const seeGroup = async (chat: Chat) => {
     if (!group || (chat.type !== "group" && chat.type !== "supergroup")) return;
+    if (moved.has(chat.id) || (chat.type === "group" && foundSuper)) return;
     try {
       found = await groupProblems(api, chat.id);
     } catch {
       return; // the bot is not in it (any more), or Telegram did not answer: the next update says again
     }
+    foundSuper = chat.type === "supergroup";
     onGroup?.(found);
   };
-  const pending = await api.call<Update[]>("getUpdates", { offset: 0, timeout: 0, allowed_updates: ["message", "my_chat_member"] }, { signal });
-  for (const update of pending) {
-    const chat = update.my_chat_member?.chat ?? update.message?.chat;
+  /** The group an update is about: a migrated group's new supergroup, else its chat. */
+  const seeUpdate = async (update: Update) => {
+    const message = update.message;
+    if (message?.migrate_from_chat_id) moved.add(message.migrate_from_chat_id);
+    if (message?.migrate_to_chat_id) {
+      moved.add(message.chat.id);
+      return seeGroup({ id: message.migrate_to_chat_id, type: "supergroup", ...(message.chat.title ? { title: message.chat.title } : {}) });
+    }
+    const chat = update.my_chat_member?.chat ?? message?.chat;
     if (chat) await seeGroup(chat);
-  }
+  };
+  const pending = await api.call<Update[]>("getUpdates", { offset: 0, timeout: 0, allowed_updates: ["message", "my_chat_member"] }, { signal });
+  for (const update of pending) await seeUpdate(update);
   let offset = pending.length ? pending.at(-1)!.update_id + 1 : 0;
   // After a long poll the network dropped, a pause that doubles up to 30 s: no busy loop while Telegram is unreachable.
   let pauseMs = 1000;
@@ -100,8 +115,7 @@ export async function watchSetup(token: string, { apiBase, timeoutMs = 180_000, 
         contact = contactOf(message.from);
         onContact(contact);
       }
-      const chat = update.my_chat_member?.chat ?? message?.chat;
-      if (chat) await seeGroup(chat);
+      await seeUpdate(update);
     }
     if (updates.length) await api.call("getUpdates", { offset, timeout: 0 }).catch(() => undefined);
     if (ready()) return "done";
