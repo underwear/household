@@ -16,7 +16,7 @@ import { joining, PLATFORMS, type ChannelConfig } from "../core/channels";
 import { assertCanAddPet, assertCanCreateHouse, findHouse, sameOwner, type House, type Household, type Owner } from "../core/household";
 import { PROVIDERS, type Provider } from "../core/keys";
 import { assertName } from "../core/names";
-import { DEFAULT_SECRET_HEADER } from "../core/secrets";
+import { DEFAULT_SECRET_HEADER, type Secret } from "../core/secrets";
 import { allowEntryError, formatAllowEntry, parseAllowEntry, parseEndpoint, sameEndpoint, type AllowEntry } from "../core/network-policy";
 import { ownerIdOf, parseHousehold, sideworkerProfilesSchema, scoutDefinitionSchema, scoutLimitsSchema, scoutAgentSchema, capabilityDefinitionSchema } from "./config-schema";
 import { withFileLock } from "./file-lock";
@@ -339,8 +339,9 @@ export class ConfigStore {
   }
 
   /** Changes a secret; a new value reaches the gateway at once, a new variable on the pets' next VM. */
-  async updateSecret(houseName: string, name: string, fields: SecretFields): Promise<Household> {
+  async updateSecret(houseName: string, name: string, fields: SecretFields, expected?: Secret): Promise<Household> {
     return this.edit((doc, household) => {
+      if (expected && JSON.stringify(knownHouse(household, houseName).secrets?.find(s => s.name === name)) !== JSON.stringify(expected)) throw new HouseholdError("Secret changed while awaiting approval");
       if (!(knownHouse(household, houseName).secrets ?? []).some((secret) => secret.name === name)) throw new NotFoundError(`unknown secret '${name}'`);
       if (fields.value !== undefined && !fields.value.trim()) throw new HouseholdError("a secret's value cannot be empty: remove the secret instead");
       if (fields.hosts !== undefined && fields.hosts.length === 0) throw new HouseholdError("a secret needs at least one host");
@@ -355,8 +356,9 @@ export class ConfigStore {
     });
   }
 
-  async removeSecret(houseName: string, name: string): Promise<Household> {
+  async removeSecret(houseName: string, name: string, expected?: Secret): Promise<Household> {
     return this.edit((doc, household) => {
+      if (expected && JSON.stringify(knownHouse(household, houseName).secrets?.find(s => s.name === name)) !== JSON.stringify(expected)) throw new HouseholdError("Secret changed while awaiting approval");
       if (!(knownHouse(household, houseName).secrets ?? []).some((secret) => secret.name === name)) throw new NotFoundError(`unknown secret '${name}'`);
       const users = [knownHouse(household, houseName)].flatMap(house => (house.capabilities ?? []).filter(capability => capability.keys.some(key => key.secret === name)).map(capability => `${house.name}/${capability.name}`));
       if (users.length) throw new HouseholdError(`secret '${name}' is in use by ${users.join(", ")}`);

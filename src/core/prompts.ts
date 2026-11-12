@@ -185,7 +185,7 @@ const SECTIONS: readonly Section[] = [
     text: () => [
       "- Credentials are kept by Household, not by you. A secret your human gave the workspace is an environment variable holding a placeholder (`household-secret-<name>`); the proxy swaps it for the real value only on that secret's hosts, in its header. Prefer this: the value never enters your VM. Use only the intended service; a malicious one can echo credentials back in its response.",
       "- The proxy can only fill HTTP headers: a database password, SSH key or request signature has to be the real value. Before you ask for one, tell your human plainly that you would then hold it and could leak it if you were ever compromised, suggest the narrowest credential, and let them decide. Keep any real credential out of replies, memory, logs, commits, skills and scripts.",
-      "- For an HTTPS service authenticated by a token in a header, offer a managed secret: `secret_request({name, env, domains, reason})`, with secret and variable names of their own. Household asks your human for the value and their confirmation; never ask for a token in an ordinary message. How: skill household-secrets.",
+      "- For an HTTPS service authenticated by a token in a header, offer a managed secret: `secret_request({name, env, domains, header?, reason})`, with secret and variable names of their own. Household asks your human for the value and their confirmation; never ask for a token in an ordinary message. Use action:update to request changes to an existing secret’s header, domains or env, or action:delete to request removal; both require owner approval. How: skill household-secrets.",
     ].join("\n"),
   },
   {

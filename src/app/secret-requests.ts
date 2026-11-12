@@ -2,7 +2,7 @@ import { CLOCK, type Clock } from "../core/clock";
 import type { House } from "../core/household";
 import { isWholeInternet } from "../core/network-policy";
 import { NAME_PATTERN } from "../core/names";
-import { envProblem, formatHosts, secretHost, secretPlaceholder, type Secret } from "../core/secrets";
+import { DEFAULT_SECRET_HEADER, envProblem, formatHosts, secretHost, secretPlaceholder, type Secret } from "../core/secrets";
 import { carriesHouseholdTag } from "../core/tags";
 import type { PetIdentity } from "../infra/agent-api";
 import type { McpTool } from "../infra/mcp-server";
@@ -27,7 +27,9 @@ export interface SecretInput {
 export interface SecretRequestOptions {
   house(name: string): House | undefined;
   secrets(house: string): readonly Secret[];
-  save(house: string, name: string, value: string, hosts: string[], env: string): Promise<void>;
+  save(house: string, name: string, value: string, hosts: string[], env: string, header?: string): Promise<void>;
+  update?(house: string, name: string, fields: { header?: string; hosts?: string[]; env?: string }, expected: Secret): Promise<void>;
+  remove?(house: string, name: string, expected: Secret): Promise<void>;
   notice(house: string, pet: string, text: string): Promise<void>;
   choose?(house: string, pet: string, card: OwnerCard<SecretDecision>, signal: AbortSignal): Promise<SecretDecision | undefined>;
   notify(house: string, pet: string, text: string): void;
@@ -35,8 +37,8 @@ export interface SecretRequestOptions {
   clock?: Clock;
   waitMs?: number;
 }
-interface Request { house: string; pet: string; name: string; reason: string; id: string; env: string; hosts: string[]; expiresAt: number; controller: AbortController; cancelTimer(): void }
-interface Confirmation { house: string; pet?: string; name: string; env: string; value: string; controller: AbortController; cancelTimer(): void }
+interface Request { house: string; pet: string; name: string; reason: string; id: string; env: string; header: string; hosts: string[]; expiresAt: number; controller: AbortController; cancelTimer(): void }
+interface Confirmation { house: string; pet?: string; name: string; env: string; header: string; value: string; controller: AbortController; cancelTimer(): void }
 const COMMAND = /^\s*\/secret(?:@\w+)?(?:\s|$)/i;
 const TOKEN = /(?:^|[^\p{L}\p{N}_])(?:ghp_[A-Za-z0-9_]{4,}|github_pat_[A-Za-z0-9_]{4,}|sk-[A-Za-z0-9_-]{4,}|(?:xox[bp]|xapp)-[A-Za-z0-9-]{4,}|AKIA[A-Z0-9]{4,}|-----BEGIN)/u;
 const WAIT_MS = 10 * 60_000;
@@ -54,6 +56,7 @@ export class SecretRequests {
   private readonly clock: Clock;
   private readonly pending = new Map<string, Request>();
   private readonly confirmations = new Map<string, Confirmation>();
+  private readonly changes = new Map<string, { pet: string; controller: AbortController }>();
   private readonly rate = new Map<string, number[]>();
   private readonly rawConfirmations = new Map<string, { pet: string; value: string; controller: AbortController }>();
   private readonly tasks = new Set<Promise<void>>();
@@ -61,10 +64,15 @@ export class SecretRequests {
 
   constructor(private readonly options: SecretRequestOptions) { this.clock = options.clock ?? CLOCK; }
 
-  async request(house: string, pet: string, args: { name: unknown; env: unknown; domains: unknown; reason: unknown }) {
+  async request(house: string, pet: string, args: { name: unknown; env?: unknown; domains?: unknown; reason: unknown; header?: unknown; action?: unknown }) {
     if (!validName(args.name)) throw new Error("name must start with a–z and contain only a–z, 0–9 or hyphens, up to 31 characters");
     if (typeof args.reason !== "string" || !args.reason.trim() || args.reason.length > 600 || /[\p{Cc}\p{Cf}]/u.test(args.reason) || carriesHouseholdTag(args.reason))
       throw new Error("reason must be 1–600 characters without control characters or Household tags");
+    const action = args.action ?? "create";
+    if (!["create", "update", "delete"].includes(action as string)) throw new Error("action must be create, update or delete");
+    if (args.header !== undefined && (typeof args.header !== "string" || !/^[a-z0-9-]{1,64}$/i.test(args.header))) throw new Error("header must be a header name: 1–64 letters, digits or hyphens");
+    if (action !== "create") return this.change(house, pet, args, action as "update" | "delete");
+    const header = typeof args.header === "string" ? args.header.toLowerCase() : DEFAULT_SECRET_HEADER;
     if (typeof args.env !== "string" || envProblem(args.env)) throw new Error("env must be a non-reserved uppercase environment variable name (A–Z, 0–9, _; up to 64 characters)");
     if (!Array.isArray(args.domains) || args.domains.length < 1 || args.domains.length > 16 || args.domains.some(domain => typeof domain !== "string" || domain.length > 253 || "problem" in secretHost(domain))) throw new Error("domains must contain 1–16 exact hostnames, optionally with ports");
     const hosts = [...new Set(args.domains.map(domain => formatHosts([secretHost(domain) as { host: string; port: number }])[0]!))];
@@ -76,11 +84,11 @@ export class SecretRequests {
     if (existing) return { status: "refused", message: "That secret name already exists; choose a unique name. Nothing will be overwritten." };
     if (this.options.secrets(house).some(s => s.env === env)) return { status: "refused", message: "That env is already used in this workspace; choose a unique environment variable." };
     const key = keyOf(house, pet);
-    if (this.confirmations.has(house) || [...this.pending.values()].some(r => r.house === house)) return { status: "busy", message: "This workspace already has an active secret request or confirmation. Wait for its outcome." };
+    if (this.changes.has(house) || this.confirmations.has(house) || [...this.pending.values()].some(r => r.house === house)) return { status: "busy", message: "This workspace already has an active secret request or confirmation. Wait for its outcome." };
     const recent = (this.rate.get(house) ?? []).filter(t => t > this.clock.now() - HOUR);
     if (recent.length >= MAX_REQUESTS) return { status: "busy", message: "This workspace has reached its hourly secret request limit." };
     recent.push(this.clock.now()); this.rate.set(house, recent);
-    const request: Request = { house, pet, name, reason: args.reason.trim(), id: `r${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`, env, hosts, expiresAt: this.clock.now() + (this.options.waitMs ?? WAIT_MS), controller: new AbortController(), cancelTimer: () => {} };
+    const request: Request = { house, pet, name, reason: args.reason.trim(), id: `r${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`, env, header, hosts, expiresAt: this.clock.now() + (this.options.waitMs ?? WAIT_MS), controller: new AbortController(), cancelTimer: () => {} };
     this.pending.set(key, request);
     request.cancelTimer = this.clock.after(this.options.waitMs ?? WAIT_MS, () => this.finishRequest(request, "expired"));
     const member = configured.pets.find(p => p.name === pet)!;
@@ -89,7 +97,7 @@ export class SecretRequests {
       const text = cardText({
         title: `${html(safeText(member.title ?? member.name))} asks for a secret`,
         quote: { label: "Why", text: request.reason },
-        facts: [`Secret: <code>${name}</code>`, `For: ${hostList(hosts)}`, `In: <code>$${env}</code>`, "Expires in: 10 minutes"],
+        facts: [`Secret: <code>${name}</code>`, `For: ${hostList(hosts)}`, `In: <code>$${env}</code>`, `Header: <code>${header}</code>`, "Expires in: 10 minutes"],
         note: "Reply <code>/secret &lt;value&gt;</code>. The pet never sees the value. Household removes your message where supported; otherwise delete it yourself.",
       });
       if (this.options.choose) {
@@ -105,11 +113,73 @@ export class SecretRequests {
       } else await this.options.notice(house, pet, text);
       if (this.pending.get(key) !== request) return { status: "cancelled" };
       this.options.log(`secret requested: ${house}/${pet} ${name}`);
-      return { status: "pending", name, env, request_id: request.id, domains: hosts, message: "Your owner was asked. Continue other work or wait for Household's internal notification; never ask them to send the value directly to you." };
+      return { status: "pending", name, env, header, request_id: request.id, domains: hosts, message: "Your owner was asked. Continue other work or wait for Household's internal notification; never ask them to send the value directly to you." };
     } catch {
       this.dropRequest(request);
       return { status: "unavailable", message: "The secret request could not be shown in chat. Ask your owner to use Household's admin secrets page." };
     }
+  }
+
+  private async change(house: string, pet: string, args: { name: unknown; reason: unknown; header?: unknown; env?: unknown; domains?: unknown }, action: "update" | "delete") {
+    const configured = this.options.house(house);
+    if (this.stopped || !configured?.pets.some(p => p.name === pet) || configured.network.allow.some(isWholeInternet)) return { status: "refused" };
+    const existing = this.options.secrets(house).find(s => s.name === args.name && s.onlyForCapabilities === undefined);
+    if (!existing) return { status: "refused", message: "No shared workspace secret by that name." };
+    if (!this.options.choose || (action === "update" ? !this.options.update : !this.options.remove)) return { status: "unavailable" };
+    if (this.changes.has(house) || this.confirmations.has(house) || [...this.pending.values()].some(r => r.house === house)) return { status: "busy" };
+    const fields: { header?: string; env?: string; hosts?: string[] } = {};
+    if (action === "delete" && [args.header, args.env, args.domains].some(v => v !== undefined)) throw new Error("delete only accepts name and reason");
+    if (args.header !== undefined) fields.header = (args.header as string).toLowerCase();
+    if (args.env !== undefined) {
+      if (typeof args.env !== "string" || envProblem(args.env)) throw new Error("env must be a non-reserved uppercase environment variable name");
+      fields.env = args.env;
+      if (this.options.secrets(house).some(s => s.name !== existing.name && s.env === fields.env)) return { status: "refused", message: "That env is already used." };
+    }
+    if (args.domains !== undefined) {
+      if (!Array.isArray(args.domains) || args.domains.length < 1 || args.domains.length > 16 || args.domains.some(d => typeof d !== "string" || d.length > 253 || "problem" in secretHost(d))) throw new Error("domains must contain 1–16 exact hostnames, optionally with ports");
+      fields.hosts = [...new Set(args.domains.map(d => formatHosts([secretHost(d) as { host: string; port: number }])[0]!))];
+    }
+    if (action === "update" && !Object.keys(fields).length) throw new Error("update requires header, env or domains");
+    const recent = (this.rate.get(house) ?? []).filter(t => t > this.clock.now() - HOUR);
+    if (recent.length >= MAX_REQUESTS) return { status: "busy" };
+    recent.push(this.clock.now()); this.rate.set(house, recent);
+    const snapshot = structuredClone(existing);
+    const pending = { pet, controller: new AbortController() };
+    this.changes.set(house, pending);
+    const cancelTimer = this.clock.after(this.options.waitMs ?? WAIT_MS, () => pending.controller.abort());
+    const before = [`Header: <code>${existing.header}</code>`, `For: ${hostList(formatHosts(existing.hosts))}`, `In: <code>$${existing.env}</code>`];
+    const after = [`Header: <code>${fields.header ?? existing.header}</code>`, `For: ${hostList(fields.hosts ?? formatHosts(existing.hosts))}`, `In: <code>$${fields.env ?? existing.env}</code>`];
+    const card: OwnerCard<SecretDecision> = {
+      text: cardText({ title: `${html(safeText(configured.pets.find(p => p.name === pet)!.title ?? pet))} asks to ${action} secret ${existing.name}`, quote: { label: "Why", text: args.reason as string },
+        facts: action === "delete" ? before : [`Before:\n${before.join("\n")}`, `After:\n${after.join("\n")}`],
+        note: action === "delete" ? "Removes this shared secret for all workspace members. Expires in 10 minutes." : "Keeps the existing value. Changes apply to all workspace members; the environment variable refreshes on VM start. Expires in 10 minutes." }),
+      format: "html", start: "waiting",
+      view: state => state === "waiting" ? { choices: [[action === "delete" ? "Yes, delete" : "Yes, update"], ["Cancel"]] } : { outcome: state === "save" ? "Approved" : "Cancelled" },
+      press: (state, index) => state === "waiting" ? index === 0 ? "save" : index === 1 ? "cancel" : state : state,
+    };
+    const task = (async () => {
+      try {
+        const aborted = new Promise<undefined>(resolve => pending.controller.signal.addEventListener("abort", () => resolve(undefined), { once: true }));
+        const decision = await Promise.race([this.options.choose!(house, pet, card, pending.controller.signal), aborted]);
+        if (decision !== "save" || pending.controller.signal.aborted || this.stopped) { this.notify(house, pet, `Secret ${existing.name} ${action} request cancelled or expired. Nothing changed.`); return; }
+        const currentHouse = this.options.house(house);
+        const current = this.options.secrets(house).find(s => s.name === snapshot.name);
+        if (!currentHouse?.pets.some(p => p.name === pet) || currentHouse.network.allow.some(isWholeInternet) || JSON.stringify(current) !== JSON.stringify(snapshot) || (fields.env && this.options.secrets(house).some(s => s.name !== snapshot.name && s.env === fields.env))) throw new Error("Secret changed while awaiting approval");
+        if (action === "delete") await this.options.remove!(house, snapshot.name, snapshot);
+        else await this.options.update!(house, snapshot.name, fields, snapshot);
+        this.notify(house, pet, action === "delete" ? `Secret ${snapshot.name} deleted. Its placeholder no longer works.` : `Secret ${snapshot.name} updated. Use ${secretPlaceholder(snapshot.name)} in the ${fields.header ?? snapshot.header} header. Domains: ${(fields.hosts ?? formatHosts(snapshot.hosts)).join(", ")}. Env: ${fields.env ?? snapshot.env} (next VM start). Network access is separate.`);
+        await this.options.notice(house, pet, `Secret ${snapshot.name} ${action === "delete" ? "deleted" : "updated"}.`);
+        this.options.log(`secret ${action}: ${house}/${pet} ${snapshot.name}`);
+      } catch {
+        this.notify(house, pet, `Could not confirm secret ${snapshot.name} ${action}. Ask your owner to check the admin secrets page.`);
+        await this.options.notice(house, pet, "Could not confirm the secret change. Check the admin secrets page before retrying.").catch(() => {});
+      } finally {
+        cancelTimer(); pending.controller.abort();
+        if (this.changes.get(house) === pending) this.changes.delete(house);
+      }
+    })();
+    this.tasks.add(task); void task.finally(() => this.tasks.delete(task));
+    return { status: "pending", action, name: existing.name, message: "Owner approval requested. Wait for the internal notification." };
   }
 
   /** Called before chat history/security rejection. True means the message must never reach a journal or pet. */
@@ -177,7 +247,7 @@ export class SecretRequests {
     if (this.options.secrets(input.house).some(s => s.name === name)) {
       await input.notice("A secret by that name exists: change it on the admin's Secrets page. /secret never overwrites.").catch(() => {}); return true;
     }
-    if (this.confirmations.has(input.house)) {
+    if (this.changes.has(input.house) || this.confirmations.has(input.house)) {
       await input.notice("Another secret is waiting for your answer: finish it first.").catch(() => {}); return true;
     }
     if (this.options.secrets(input.house).some(s => s.env === env)) {
@@ -188,7 +258,7 @@ export class SecretRequests {
       await input.notice("The requesting pet is no longer in this house.").catch(() => {}); return true;
     }
     if (request) this.dropRequest(request);
-    const pending: Confirmation = { house: input.house, pet, name, env, value, controller: new AbortController(), cancelTimer: () => {} };
+    const pending: Confirmation = { house: input.house, pet, name, env, header: request?.header ?? DEFAULT_SECRET_HEADER, value, controller: new AbortController(), cancelTimer: () => {} };
     raw = ""; fields.fill(""); value = "";
     this.confirmations.set(input.house, pending);
     let expired = false;
@@ -233,13 +303,13 @@ export class SecretRequests {
   }
 
   private async confirm(pending: Confirmation, hosts: string[], choose: SecretInput["choose"], notice: SecretInput["notice"], expired: () => boolean): Promise<void> {
-    const { house, pet, name, env } = pending;
+    const { house, pet, name, env, header } = pending;
     // Very short values must never be shown in full, even though the normal preview uses three characters.
     const preview = safeText(pending.value.slice(0, Math.min(3, Math.max(0, pending.value.length - 1))));
     // What would be saved, as the request card put it (its reason is on that card), and what the VM gets instead.
     const text = cardText({
       title: "🔑 Save this secret?",
-      facts: [`Secret: <code>${name}</code>`, `For: ${hostList(hosts)}`, `In: <code>$${env}</code>`, `Value: <code>${html(preview)}…</code> (${pending.value.length} characters)`],
+      facts: [`Secret: <code>${name}</code>`, `For: ${hostList(hosts)}`, `In: <code>$${env}</code>`, `Header: <code>${header}</code>`, `Value: <code>${html(preview)}…</code> (${pending.value.length} characters)`],
       note: `The VM only gets <code>${secretPlaceholder(name)}</code>; Household puts the value in on the way out. Reaching these hosts is a separate network request.`,
     });
     const card: OwnerCard<SecretDecision> = {
@@ -261,9 +331,9 @@ export class SecretRequests {
       pending.cancelTimer();
       const value = pending.value;
       pending.value = "";
-      await this.options.save(house, name, value, hosts, env);
+      await this.options.save(house, name, value, hosts, env, header);
       await notice(`✅ Secret ${name} saved for ${hosts.join(", ")}.`);
-      if (pet) this.notify(house, pet, `Secret ${name} is available. Use ${secretPlaceholder(name)} in the Authorization header (for example Bearer ${secretPlaceholder(name)}). Domains: ${hosts.join(", ")}. Network access is separate: if a host is blocked, request network_request. No VM restart is needed; ${env} will contain that placeholder on the next VM start. You may export ${env}=${secretPlaceholder(name)} in your current shell now.`);
+      if (pet) this.notify(house, pet, `Secret ${name} is available. Use ${secretPlaceholder(name)} in the ${header} header. Domains: ${hosts.join(", ")}. Network access is separate: if a host is blocked, request network_request. No VM restart is needed; ${env} will contain that placeholder on the next VM start. You may export ${env}=${secretPlaceholder(name)} in your current shell now.`);
       this.options.log(`secret saved: ${house}${pet ? `/${pet}` : ""} ${name} hosts=${hosts.join(",")}`);
     } catch {
       await notice("Could not confirm secret activation. Check the admin secrets page before retrying.").catch(() => {});
@@ -292,12 +362,14 @@ export class SecretRequests {
   }
   setPets(pets: { house: string; pet: string }[]): void {
     const present = (house: string, pet: string) => pets.some(p => p.house === house && p.pet === pet);
+    for (const [house, change] of this.changes) if (!present(house, change.pet)) change.controller.abort();
     for (const [house, pending] of this.rawConfirmations) if (!present(house, pending.pet)) { pending.value = ""; pending.controller.abort(); }
     for (const request of this.pending.values()) if (!present(request.house, request.pet)) this.dropRequest(request);
     for (const pending of this.confirmations.values()) if (pending.pet && !present(pending.house, pending.pet)) { pending.value = ""; pending.controller.abort(); }
   }
   async stop(): Promise<void> {
     this.stopped = true;
+    for (const change of this.changes.values()) change.controller.abort();
     for (const pending of this.rawConfirmations.values()) { pending.value = ""; pending.controller.abort(); }
     for (const request of this.pending.values()) this.dropRequest(request);
     for (const pending of this.confirmations.values()) { pending.value = ""; pending.controller.abort(); }
@@ -308,10 +380,11 @@ export class SecretRequests {
 export function secretRequestTool(requests: SecretRequests): McpTool<PetIdentity> {
   return {
     name: "secret_request",
-    description: "Ask your human to add a workspace secret. You never receive the value, only a placeholder. Choose unique name and env; domains are exact service hosts approved by the owner. Multiple secrets can share the same domains. One active request per workspace. reason explains why you need it. Returns promptly; Household sends an internal notification when ready or expired. Secret substitution does not grant network access: use network_request separately. Never ask for values through reply or ordinary chat.",
-    inputSchema: { type: "object", additionalProperties: false, required: ["name", "env", "domains", "reason"], properties: {
-      name: { type: "string" }, env: { type: "string" }, domains: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 16 }, reason: { type: "string", minLength: 1, maxLength: 600 },
+    description: "Ask your human to create, update or delete a workspace secret, always with owner approval. action defaults to create (requires env and domains); header defaults to authorization. update changes header, domains and/or env without exposing or replacing the value. delete removes an existing secret. No values in arguments. One active request per workspace; returns promptly and sends an internal notification on completion. Network access requires network_request separately.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["name", "reason"], properties: {
+      action: { type: "string", enum: ["create", "update", "delete"] },
+      name: { type: "string" }, env: { type: "string" }, header: { type: "string", pattern: "^[A-Za-z0-9-]{1,64}$" }, domains: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 16 }, reason: { type: "string", minLength: 1, maxLength: 600 },
     } },
-    async call({ house, pet }, args) { return JSON.stringify(await requests.request(house, pet, { name: args.name, env: args.env, domains: args.domains, reason: args.reason })); },
+    async call({ house, pet }, args) { return JSON.stringify(await requests.request(house, pet, { action: args.action, name: args.name, env: args.env, header: args.header, domains: args.domains, reason: args.reason })); },
   };
 }

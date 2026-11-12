@@ -19,13 +19,21 @@ test("secret_request exposes exactly one role-specific schema and dispatches by 
   const petTools=(await rpc("sibling","tools/list")).result.tools;
   expect(scoutTools).toHaveLength(1);expect(petTools).toHaveLength(1);
   expect(scoutTools[0].name).toBe("secret_request");expect(scoutTools[0].inputSchema.required).toEqual(["key"]);
-  expect(petTools[0].inputSchema.required).toEqual(["name","env","domains","reason"]);
+  expect(petTools[0].inputSchema.required).toEqual(["name","reason"]);
   expect((await rpc("scout-test","tools/call",{name:"secret_request",arguments:{key:"phone"}})).result.isError).toBeUndefined();
   expect(notices).toHaveLength(1);expect(requested).toHaveLength(0);
   expect((await rpc("scout-test","tools/call",{name:"secret_request",arguments:{name:"token",env:"TOKEN",domains:["example.com"],reason:"test"}})).result.isError).toBe(true);
   expect((await rpc("sibling","tools/call",{name:"secret_request",arguments:{key:"phone"}})).result.isError).toBe(true);
   expect((await rpc("sibling","tools/call",{name:"secret_request",arguments:{name:"token",env:"TOKEN",domains:["example.com"],reason:"test"}})).result.isError).toBeUndefined();
   expect(requested).toHaveLength(1);
+  for (const args of [
+    { action: "update", name: "token", header: "x-api-key", reason: "Fix header" },
+    { action: "delete", name: "token", reason: "Cleanup" },
+  ]) {
+    expect((await rpc("sibling", "tools/call", { name: "secret_request", arguments: args })).result.isError).toBeUndefined();
+    expect(requested.at(-1)).toEqual(["work", "sibling", expect.objectContaining(args)]);
+    expect((await rpc("scout-test", "tools/call", { name: "secret_request", arguments: args })).result.isError).toBe(true);
+  }
 });
 
 test("scout decisions replace the question with an explicit completed decision",()=>{

@@ -14,8 +14,17 @@ function setup() {
   const notices: string[] = [], notifications: string[] = [], logs: string[] = [];
   const saved: unknown[][] = [];
   let failSave = false;
+  const changed: unknown[][] = [];
+  let changeCard: OwnerCard<SecretDecision> | undefined;
+  let changeDecision!: (value: SecretDecision | undefined) => void;
   const requests = new SecretRequests({
     clock, waitMs: 1000,
+    update: async (...args) => { changed.push(["update", ...args]); },
+    remove: async (...args) => { changed.push(["delete", ...args]); },
+    choose: async (_house, _pet, card, signal) => {
+      changeCard = card;
+      return new Promise(resolve => { changeDecision = resolve; signal.addEventListener("abort", () => resolve(undefined), { once: true }); });
+    },
     house: name => houses.find(h => h.name === name), secrets: name => houses.find(house => house.name === name)?.secrets ?? [],
     notice: async (_house, _pet, text) => { notices.push(text); },
     notify: (_house, pet, text) => { notifications.push(`${pet}: ${text}`); }, log: text => logs.push(text),
@@ -30,14 +39,14 @@ function setup() {
     choose: async (shown, signal) => { card = shown; return new Promise(resolve => { decide = resolve; signal.addEventListener("abort", () => resolve(undefined)); }); },
     ...extra,
   });
-  return { requests, clock, houses, secrets, notices, notifications, logs, saved, input, card: () => card!, decide: (value: SecretDecision | undefined) => decide(value), deletes: () => deletes, failSave: () => { failSave = true; } };
+  return { changed, changeCard: () => changeCard!, changeDecide: (v: SecretDecision | undefined) => changeDecision(v), requests, clock, houses, secrets, notices, notifications, logs, saved, input, card: () => card!, decide: (value: SecretDecision | undefined) => decide(value), deletes: () => deletes, failSave: () => { failSave = true; } };
 }
 
 test("active request binds env and domains; only placeholder reaches requester", async () => {
   const s = setup();
   const requested = await s.requests.request("work", "worker", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.actual.com", "cdn.actual.com"], reason: "Forecast" });
   expect(requested).toMatchObject({ status: "pending", env: "WEATHER_TOKEN" });
-  expect(s.notices[0]).toContain(`/secret`);
+  expect(s.changeCard().text).toContain(`/secret`);
   const command = s.input(`/secret ghp_SYNTHETIC_TOKEN`);
   expect(await s.requests.handle(command)).toBe(true);
   expect(command.text).toBe("");
@@ -47,7 +56,7 @@ test("active request binds env and domains; only placeholder reaches requester",
   expect(s.card().text).not.toContain("hint.example.com");
   expect(s.saved).toHaveLength(0);
   s.decide("save"); await flush();
-  expect(s.saved).toEqual([["work", "weather", "ghp_SYNTHETIC_TOKEN", ["api.actual.com", "cdn.actual.com"], "WEATHER_TOKEN"]]);
+  expect(s.saved).toEqual([["work", "weather", "ghp_SYNTHETIC_TOKEN", ["api.actual.com", "cdn.actual.com"], "WEATHER_TOKEN", "authorization"]]);
   expect(s.notifications[0]).toContain("worker: Secret weather is available");
   expect(s.notifications[0]).toContain("household-secret-weather");
   expect(s.notifications[0]).toContain("network_request");
@@ -192,7 +201,7 @@ test("one house-wide request, short command, manual entry fallback, and a shared
   expect(s.notices.at(-1)).toContain("No secret request is open");
   await s.requests.handle(s.input("/secret manual SYNTHETIC_VALUE api.github.com"));
   s.decide("save"); await flush();
-  expect(s.saved[0]).toEqual(["work", "manual", "SYNTHETIC_VALUE", ["api.github.com"], "SECRET_MANUAL"]);
+  expect(s.saved[0]).toEqual(["work", "manual", "SYNTHETIC_VALUE", ["api.github.com"], "SECRET_MANUAL", "authorization"]);
   await s.requests.stop();
 });
 
@@ -205,7 +214,7 @@ test("multiple tokens share domains with unique names/env; env conflicts are che
   const request = await s.requests.request("work", "pet", args);
   await s.requests.handle(s.input(`/secret SYNTHETIC_VALUE`));
   s.decide("save"); await flush();
-  expect(s.saved[0]).toEqual(["work", "github-atlas", "SYNTHETIC_VALUE", ["api.github.com"], "ATLAS_TOKEN"]);
+  expect(s.saved[0]).toEqual(["work", "github-atlas", "SYNTHETIC_VALUE", ["api.github.com"], "ATLAS_TOKEN", "authorization"]);
   const second = await s.requests.request("work", "pet", { ...args, name: "github-second", env: "SECOND_TOKEN" });
   await s.requests.handle(s.input(`/secret SYNTHETIC_VALUE`));
   s.secrets.push({ ...s.secrets[0]!, name: "race", env: "SECOND_TOKEN" });
@@ -222,7 +231,7 @@ test("a retaining chat accepts /secret on the host, never forwards raw tokens or
   expect(input.text).toBe("");
   expect(s.notices.join()).toContain("Delete it yourself");
   s.decide("save"); await flush();
-  expect(s.saved[0]).toEqual(["work", "weather", "ghp_RETAINED_SYNTHETIC", ["api.example.com"], "SECRET_WEATHER"]);
+  expect(s.saved[0]).toEqual(["work", "weather", "ghp_RETAINED_SYNTHETIC", ["api.example.com"], "SECRET_WEATHER", "authorization"]);
   expect(JSON.stringify([s.notifications, s.logs, s.notices])).not.toContain("ghp_RETAINED_SYNTHETIC");
   let forwarded = false;
   await s.requests.handle(s.input("xapp-SYNTHETIC-DO-NOT-FORWARD", { retainsIncomingSecrets: true, sendRaw: async () => { forwarded = true; } }));
@@ -237,5 +246,77 @@ test("secret requests check names and variables only within their own house", as
   s.houses.push({ ...s.houses[0]!, name: "other", secrets: [{ name: "weather", value: "private", hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", env: "WEATHER_TOKEN" }] });
   expect(await s.requests.request("work", "pet", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.example.com"], reason: "Need weather" })).toMatchObject({ status: "pending" });
   expect(await s.requests.request("other", "pet", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.example.com"], reason: "Need weather" })).toMatchObject({ status: "refused" });
+  await s.requests.stop();
+});
+
+const existingSecret = (): Secret => ({ name: "weather", value: "NEVER_SHOW_EXISTING_VALUE", hosts: [{ host: "api.example.com", port: 443 }], header: "authorization", env: "WEATHER_TOKEN" });
+
+test("custom header is bound to request, approval and activation", async () => {
+  const s = setup();
+  expect(await s.requests.request("work", "pet", { name: "weather", env: "WEATHER_TOKEN", domains: ["api.example.com"], header: "X-Api-Key", reason: "Weather" })).toMatchObject({ status: "pending", header: "x-api-key" });
+  expect(s.changeCard().text).toContain("x-api-key");
+  await s.requests.handle(s.input("/secret SYNTHETIC_VALUE"));
+  expect(s.card().text).toContain("x-api-key");
+  s.decide("save"); await flush();
+  expect(s.saved[0]?.at(-1)).toBe("x-api-key");
+  expect(s.notifications.join()).toContain("in the x-api-key header");
+  await s.requests.stop();
+});
+
+test("update and deletion require explicit approval and never show the stored value", async () => {
+  for (const action of ["update", "delete"] as const) {
+    const s = setup(); s.secrets.push(existingSecret());
+    const args = { action, name: "weather", reason: "Fix integration", ...(action === "update" ? { header: "X-Api-Key", domains: ["new.example.com:8443"], env: "NEW_WEATHER_TOKEN" } : {}) };
+    expect(await s.requests.request("work", "pet", args)).toMatchObject({ status: "pending", action });
+    expect(s.changed).toHaveLength(0);
+    expect(s.changeCard().view("waiting")).toEqual({ choices: [[`Yes, ${action}`], ["Cancel"]] });
+    expect(s.changeCard().press("waiting", 1)).toBe("cancel");
+    expect(s.changeCard().text).toContain("authorization");
+    expect(s.changeCard().text).not.toContain("NEVER_SHOW_EXISTING_VALUE");
+    if (action === "update") { expect(s.changeCard().text).toContain("Before:"); expect(s.changeCard().text).toContain("x-api-key"); }
+    expect(await s.requests.request("work", "worker", { name: "another", env: "ANOTHER_TOKEN", domains: ["api.example.com"], reason: "Test" })).toMatchObject({ status: "busy" });
+    await s.requests.handle(s.input("/secret manual SYNTHETIC api.example.com"));
+    expect(s.saved).toHaveLength(0);
+    s.changeDecide("save"); await flush();
+    expect(s.changed).toHaveLength(1);
+    expect(s.changed[0]?.slice(0, 3)).toEqual([action, "work", "weather"]);
+    if (action === "update") expect(s.changed[0]?.[3]).toEqual({ header: "x-api-key", hosts: ["new.example.com:8443"], env: "NEW_WEATHER_TOKEN" });
+    expect(s.notifications.join()).toContain(action === "update" ? "updated" : "deleted");
+    expect(JSON.stringify([s.changeCard(), s.notifications, s.notices, s.logs])).not.toContain("NEVER_SHOW_EXISTING_VALUE");
+    await s.requests.stop();
+  }
+});
+
+test("secret changes fail closed on cancel, expiry, shutdown, member removal or concurrent edit", async () => {
+  for (const action of ["update", "delete"] as const) for (const end of ["cancel", "expiry", "stop", "removed", "race", "env-race"] as const) {
+    const s = setup(); s.secrets.push(existingSecret());
+    await s.requests.request("work", "pet", { action, name: "weather", reason: "Cleanup", ...(action === "update" ? { header: "x-api-key", env: "NEW_TOKEN" } : {}) });
+    if (end === "cancel") s.changeDecide("cancel");
+    if (end === "expiry") s.clock.tick(1001);
+    if (end === "stop") await s.requests.stop();
+    if (end === "removed") s.requests.setPets([]);
+    if (end === "race") { s.secrets[0]!.header = "another-header"; s.changeDecide("save"); }
+    if (end === "env-race") {
+      if (action === "delete") s.secrets.length = 0;
+      else s.secrets.push({ ...existingSecret(), name: "another", env: "NEW_TOKEN" });
+      s.changeDecide("save");
+    }
+    await flush();
+    expect(s.changed).toHaveLength(0);
+    expect(JSON.stringify([s.notifications, s.notices, s.logs])).not.toContain("NEVER_SHOW_EXISTING_VALUE");
+    await s.requests.stop();
+  }
+});
+
+test("invalid custom headers and empty updates are rejected; capability secrets are inaccessible", async () => {
+  const s = setup(); s.secrets.push(existingSecret());
+  for (const header of ["x-key\r\ninjected", "", "x key", "x".repeat(65)]) {
+    await expect(s.requests.request("work", "pet", { action: "update", name: "weather", header, reason: "Fix" })).rejects.toThrow("header");
+  }
+  await expect(s.requests.request("work", "pet", { action: "update", name: "weather", reason: "Fix" })).rejects.toThrow("update requires");
+  await expect(s.requests.request("work", "pet", { action: "delete", name: "weather", header: "x-api-key", reason: "Fix" })).rejects.toThrow("delete only");
+  s.secrets[0]!.onlyForCapabilities = ["weather"];
+  expect(await s.requests.request("work", "pet", { action: "delete", name: "weather", reason: "Fix" })).toMatchObject({ status: "refused" });
+  expect(s.changed).toHaveLength(0);
   await s.requests.stop();
 });

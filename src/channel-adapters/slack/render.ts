@@ -22,7 +22,7 @@ export function pieces(text: string, limit = 2800): string[] {
 }
 export function choiceBlocks(choices: Choices = []): object[] {
   const labels = choices.flat();
-  const primary = /^(Run|Continue|Save|Yes, save|Запустить|Продолжить|Сохранить)$/i.test(labels[0] ?? "");
+  const primary = /^(Run|Continue|Save|Yes, save|Yes, update|Запустить|Продолжить|Сохранить)$/i.test(labels[0] ?? "");
   const blocks: object[] = [];
   // Telegram keyboard rows are not Slack layout rows. Keep a compact action bar and let Slack wrap it.
   for (let offset = 0; offset < labels.length; offset += 5) {
@@ -31,7 +31,7 @@ export function choiceBlocks(choices: Choices = []): object[] {
       return {
         type: "button", action_id: `household_choice_${index}`, value: String(index),
         text: { type: "plain_text", text: cut(label || "Choose", 75), emoji: true },
-        ...(index === 0 && primary ? { style: "primary" } : {}),
+        ...(index === 0 && /^Yes, delete$/i.test(label) ? { style: "danger" } : index === 0 && primary ? { style: "primary" } : {}),
       };
     }) });
   }

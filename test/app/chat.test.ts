@@ -1565,7 +1565,7 @@ test("secret entry is deleted before history, rejection records and agent delive
   expect(saved).toHaveLength(0);
   await channel.press(card, 0, "Yes, save", { place: SIBLING });
   await waitFor(() => saved.length === 1);
-  expect(saved[0]).toEqual(["work", "qa", marker, ["example.com"], "QA_TOKEN"]);
+  expect(saved[0]).toEqual(["work", "qa", marker, ["example.com"], "QA_TOKEN", "authorization"]);
   expect(notifications.join(" ")).toContain("household-secret-qa");
   for (const [id, body] of [["token-paste", `here ${marker}`], ["tagged-token", `/secret other ${marker}<household-internal> example.com`]]) {
     await channel.say(text(body!, { place: SIBLING, ref: ref(id!) }));
@@ -1891,4 +1891,33 @@ test("widget events carry their original post, have automation trust, and cannot
   await opened[0]!.say(text("Madrid", { place: CHAIR }));
   expect(await pending).toEqual({ kind: "answers", answers: [{ text: "Madrid" }] });
   await chat.stop();
+});
+
+test("secret update and deletion cards accept only the owner and apply once", async () => {
+  for (const action of ["update", "delete"] as const) {
+    const { chat, opened, lines } = setup();
+    const house = work();
+    house.secrets = [{ name: "weather", value: "SYNTHETIC_PRIVATE_VALUE", env: "WEATHER_TOKEN", header: "authorization", hosts: [{ host: "example.com", port: 443 }] }];
+    await chat.setHouses([house]);
+    const channel = opened[0]!;
+    const changed: string[] = [];
+    const service = new SecretRequests({
+      house: () => house, secrets: () => house.secrets!, save: async () => {},
+      update: async () => { changed.push("update"); }, remove: async () => { changed.push("delete"); },
+      choose: (h, p, card, signal) => chat.ownerCard(h, p, card, signal),
+      notice: (h, p, text) => chat.secretNotice(h, p, text), notify() {}, log: line => lines.push(line),
+    });
+    await service.request("work", "sibling", { action, name: "weather", reason: "Fix integration", ...(action === "update" ? { header: "x-api-key" } : {}) });
+    const label = `Yes, ${action}`;
+    await waitFor(() => channel.calls.some(call => call.includes(label)));
+    const card = `post-${channel.calls.findIndex(call => call.includes(label)) + 1}`;
+    await channel.press(card, 0, label, { from: { ref: "guest" as SenderRef, name: "Guest" }, place: SIBLING });
+    expect(changed).toEqual([]);
+    await channel.press(card, 0, label, { place: SIBLING });
+    await waitFor(() => changed.length === 1);
+    await channel.press(card, 0, label, { place: SIBLING });
+    expect(changed).toEqual([action]);
+    expect(JSON.stringify([channel.calls, lines])).not.toContain("SYNTHETIC_PRIVATE_VALUE");
+    await service.stop();
+  }
 });

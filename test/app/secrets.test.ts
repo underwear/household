@@ -147,3 +147,17 @@ test("secret names and env variables are house-local; concurrent additions canno
   await config.removeSecret("work", "github");
   expect((await config.load()).houses[1]!.secrets![0]!.name).toBe("github");
 });
+
+test("approved secret metadata changes preserve values and reject stale updates and deletes at write time", async () => {
+  const { config } = store();
+  await config.addSecret("work", "weather", { value: "SYNTHETIC_PRIVATE", hosts: ["api.example.com"], env: "WEATHER_TOKEN" });
+  const original = (await config.load()).houses[0]!.secrets![0]!;
+  await config.updateSecret("work", "weather", { header: "x-api-key" }, original);
+  const updated = (await config.load()).houses[0]!.secrets![0]!;
+  expect(updated).toEqual({ ...original, header: "x-api-key" });
+  await expect(config.updateSecret("work", "weather", { header: "another-key" }, original)).rejects.toThrow("changed while awaiting approval");
+  await expect(config.removeSecret("work", "weather", original)).rejects.toThrow("changed while awaiting approval");
+  expect((await config.load()).houses[0]!.secrets![0]).toEqual(updated);
+  await config.removeSecret("work", "weather", updated);
+  expect((await config.load()).houses[0]!.secrets ?? []).toEqual([]);
+});

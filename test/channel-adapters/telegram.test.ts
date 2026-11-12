@@ -1298,3 +1298,24 @@ test("widgets validate bytes and arguments before API calls; groups expose none"
   await send!.call({ place: sibling }, { html: "<p>ok</p>", caption: "test" });
   expect(api.sent("sendWidget")[0]).not.toHaveProperty("message_thread_id");
 });
+
+test("all managed-secret request templates render in Telegram with approval and cancel buttons", async () => {
+  const { secretCard } = await import("../secret-card");
+  const { api, open } = setup();
+  const channel = open();
+  for (const action of ["create", "update", "delete"] as const) {
+    const card = await secretCard(action);
+    const view = card.view(card.start);
+    if (!("choices" in view)) throw new Error("Expected approval choices");
+    const [posted] = await channel.notice(sibling, card.text, view.choices, card.format);
+    const sent = api.sent("sendMessage").at(-1)!;
+    expect(sent.text).toContain("Read A & B <safely>");
+    expect(sent.text).not.toContain("SYNTHETIC_PRIVATE_VALUE");
+    const labels = sent.reply_markup.inline_keyboard.flat().map((button: { text: string }) => button.text);
+    expect(labels).toEqual(action === "create" ? ["Cancel request"] : [`Yes, ${action}`, "Cancel"]);
+    if (action !== "delete") expect(sent.text).toContain("x-api-key");
+    if (action === "update") expect(sent.text).toContain("Before:");
+    await channel.resolve(posted!, "Cancelled");
+    expect(api.sent("editMessageText").at(-1)!.text).toContain("→ Cancelled");
+  }
+});

@@ -221,3 +221,24 @@ test("Household HTML retains emphasis, quotes, code and safe links in Slack", as
   await s.channel.resolve(posted!, "Done");
   expect(s.calls.at(-1)?.params.text).toBe('🏠 *Household*\n*Started*\n`demo`');
 });
+
+test("all managed-secret request templates render in Slack with native approval buttons", async () => {
+  const { secretCard } = await import("../secret-card");
+  const s = setup();
+  for (const action of ["create", "update", "delete"] as const) {
+    const card = await secretCard(action);
+    const view = card.view(card.start);
+    if (!("choices" in view)) throw new Error("Expected approval choices");
+    const [posted] = await s.channel.notice(inbox, card.text, view.choices, card.format);
+    const sent = s.calls.at(-1)!.params;
+    expect(sent.text).toContain("Read A &amp; B &lt;safely&gt;");
+    expect(sent.text).not.toContain("SYNTHETIC_PRIVATE_VALUE");
+    const actions = (sent.blocks as any[]).find(block => block.type === "actions").elements;
+    expect(actions.map((button: any) => button.text.text)).toEqual(action === "create" ? ["Cancel request"] : [`Yes, ${action}`, "Cancel"]);
+    if (action === "delete") expect(actions[0].style).toBe("danger");
+    if (action === "update") expect(actions[0].style).toBe("primary");
+    if (action === "create") expect(sent.text).toContain("!secret");
+    await s.channel.resolve(posted!, "Cancelled");
+    expect((s.calls.at(-1)!.params.blocks as any[]).some(block => block.type === "actions")).toBe(false);
+  }
+});

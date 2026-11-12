@@ -21,7 +21,7 @@ real value there on the way out. The value is not placed in your VM. Use only th
 ## Ask for one
 
 For external HTTPS services that authenticate via an HTTP header, offer a managed secret first.
-Call `secret_request({name, env, domains, reason})`, for example:
+Call `secret_request({name, env, domains, header?, reason})`, for example:
 
 ```json
 {"name":"github-atlas-read","env":"ATLAS_GITHUB_TOKEN","domains":["api.github.com"],"reason":"Read Atlas issues with a read-only repository token"}
@@ -30,17 +30,35 @@ Call `secret_request({name, env, domains, reason})`, for example:
 Choose a unique secret name and a unique env name for the workspace. Multiple tokens may use the same domains;
 select the appropriate placeholder for each task. Collisions are refused, never silently overwritten.
 Household creates a request and tells the owner to send `/secret <value>`, then confirm the
-name, env, domains and masked value. There is only one active request per workspace (including confirmation),
+name, env, domains, header and masked value. There is only one active request per workspace (including confirmation),
 with a shared 10-minute deadline. The owner can cancel it. The tool returns promptly; wait for Household's
 internal notification. Do not ask the owner to compose domain lists.
 Without an active request the owner can still use `/secret <name> <value> <domain>[,<domain>…]` manually.
 Never ask your owner to paste a token as a normal message, and never put a real value in a tool argument.
 
-When approved, use the supplied `household-secret-<name>` directly in the Authorization header. It works
+When approved, use the supplied `household-secret-<name>` directly in the approved header (default: Authorization). It works
 immediately without a VM restart; the environment variable is populated at the next VM start. Until then you may export the supplied placeholder under the requested env name in your shell. Secrets are
 shared by the workspace, including sideworkers. Network access is separate: request `network_request` if needed.
-An existing name cannot be overwritten from chat; ask your owner to rotate it in the admin. For a custom header,
-use the admin secret editor. Open-network workspaces cannot request secrets.
+For a custom header, pass `header`, for example `"header":"x-api-key"`; send the placeholder in that header.
+
+## Change or delete one
+
+Ask for changes to an existing shared secret without reading or replacing its value:
+
+```json
+{"action":"update","name":"github-atlas-read","header":"x-api-key","reason":"The service expects its token in x-api-key"}
+```
+
+You may update `header`, `domains` and/or `env`. Omitted fields keep their current values. Household shows the owner the before/after settings and waits for approval. These changes affect everyone in the workspace.
+To remove a secret:
+
+```json
+{"action":"delete","name":"github-atlas-read","reason":"This integration is no longer used"}
+```
+
+Deletion also requires owner approval. Both operations return promptly: wait for the internal outcome notification before using the new settings or assuming deletion. A changed secret must be requested again. Capability-only secrets cannot be managed with this tool. Rotation of the value remains in the admin secret editor. Open-network workspaces cannot request secrets.
+
+The same approval cards work in Telegram and Slack. Slack displays `/secret` instructions as `!secret`.
 
 Telegram command entry is not end-to-end encrypted. Household deletes the command before processing it and
 keeps its value out of bot sessions, journals and logs, but it has already passed through Telegram's servers.

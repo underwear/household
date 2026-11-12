@@ -418,8 +418,16 @@ export async function startDaemon(deps: DaemonDeps) {
   const secretRequests = new SecretRequests({
     house: name => appliedHousehold?.houses.find(house => house.name === name),
     secrets: name => appliedHousehold?.houses.find(house => house.name === name)?.secrets ?? [],
-    save: async (house, name, value, hosts, env) => {
-      await config.addSecret(house, name, { value, hosts, env });
+    save: async (house, name, value, hosts, env, header) => {
+      await config.addSecret(house, name, { value, hosts, env, header });
+      await applySecrets();
+    },
+    update: async (house, name, fields, expected) => {
+      await config.updateSecret(house, name, fields, expected);
+      await applySecrets();
+    },
+    remove: async (house, name, expected) => {
+      await config.removeSecret(house, name, expected);
       await applySecrets();
     },
     choose: (house, pet, card, signal) => chat.ownerCard(house, pet, card, signal),
