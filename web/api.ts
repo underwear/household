@@ -1,3 +1,5 @@
+import type { MicrosoftConnectionView, MicrosoftConnectorsView, MicrosoftAuthorizationView, MicrosoftPollView } from "../src/core/microsoft-connectors";
+export type { MicrosoftConnectionView, MicrosoftConnectorsView, MicrosoftAuthorizationView, MicrosoftPollView };
 import type { SlackConnectionView, SlackConnectorsView } from "../src/core/slack-connectors";
 export type { SlackConnectionView, SlackConnectorsView };
 import type { GoogleConnectorsView, GoogleConnectionView, GoogleService } from "../src/core/google-connectors";
@@ -200,6 +202,12 @@ export const api = {
   connectSlack: (house: string, token: string, pets: string[], allowWrite = false) => call<SlackConnectionView>("POST", `${housePath(house)}/connectors/slack/connect`, { token, pets, allowWrite }),
   shareSlack: (house: string, id: string, pets: string[]) => call<SlackConnectionView>("PATCH", `${housePath(house)}/connectors/slack/${encodeURIComponent(id)}`, { pets }),
   disconnectSlack: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/slack/${encodeURIComponent(id)}`),
+  microsoftConnections: (house: string) => call<MicrosoftConnectorsView>("GET", `${housePath(house)}/connectors/microsoft`),
+  authorizeMicrosoft: (house: string, pets: string[], write: boolean) => call<MicrosoftAuthorizationView>("POST", `${housePath(house)}/connectors/microsoft/authorize`, { pets, write }),
+  pollMicrosoft: (house: string, id: string) => call<MicrosoftPollView>("POST", `${housePath(house)}/connectors/microsoft/poll`, { id }),
+  cancelMicrosoft: (house: string, id: string) => call<{ ok: boolean }>("POST", `${housePath(house)}/connectors/microsoft/cancel`, { id }),
+  shareMicrosoft: (house: string, id: string, pets: string[]) => call<MicrosoftConnectionView>("PATCH", `${housePath(house)}/connectors/microsoft/${encodeURIComponent(id)}`, { pets }),
+  disconnectMicrosoft: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/microsoft/${encodeURIComponent(id)}`),
   googleConnections: (house: string) => call<GoogleConnectorsView>("GET", `${housePath(house)}/connectors/google`),
   connectGoogle: (house: string, services: GoogleService[], pets: string[], write: boolean) => call<{ url: string }>("POST", `${housePath(house)}/connectors/google/connect`, { services, pets, write }),
   shareGoogle: (house: string, id: string, pets: string[]) => call<GoogleConnectionView>("PATCH", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`, { pets }),

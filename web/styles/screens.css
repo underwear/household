@@ -517,3 +517,6 @@ button.setup-head:hover .setup-name { color: var(--ink); }
   .setup-step:not(.current) .setup-name { display: none; }
   .setup-summary, .setup-subs { display: none; }
 }
+
+/* A device-code sign-in the owner can select and enter on another device. */
+.microsoft-signin-code { font-family: var(--font-mono); font-size: 1.5rem; letter-spacing: .12em; user-select: all; }

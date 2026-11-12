@@ -1,3 +1,5 @@
+import { MicrosoftSetup, microsoftAccessWords, useMicrosoftConnections } from "./microsoft-connectors";
+import type { MicrosoftConnectionView } from "../api";
 import { useEffect, useState, type ReactNode } from "react";
 import { CalendarDays, Files, Mail } from "lucide-react";
 import { api, type GoogleConnectionView, type GoogleConnectorsView, type GoogleService, type SlackConnectionView, type WorkspaceView } from "../api";
@@ -9,7 +11,7 @@ import { Cell, List, ListRow, Page, Section } from "./layout";
 import { relative } from "./bot-crons";
 
 /** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
-export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }] as const;
+export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }] as const;
 type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
 /** A Google account's services: what the owner picks to share (and what bots may do with each), and their names. */
 const SERVICES = [
@@ -50,8 +52,9 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
   const [view, setView] = useState<GoogleConnectorsView>();
   const [error, setError] = useState("");
   const slack = useSlackConnections(house.name);
-  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView }>();
-  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView }>();
+  const microsoft = useMicrosoftConnections(house.name);
+  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView; microsoft?: MicrosoftConnectionView }>();
+  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView } | { microsoft: MicrosoftConnectionView }>();
   const dialog = useDialog();
   const refresh = async () => {
     try {
@@ -70,7 +73,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     }
   }, [house.name]);
   const connections = view?.connections ?? [];
-  const loaded = view !== undefined && slack.connections !== undefined;
+  const loaded = view !== undefined && slack.connections !== undefined && microsoft.connections !== undefined;
   const disconnect = (c: GoogleConnectionView) =>
     dialog.open({
       title: `Disconnect ${c.email}?`,
@@ -104,7 +107,13 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
         notify(`Slack ${c.team} disconnected`);
       },
     });
-  const failed = [error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
+  const disconnectMicrosoft = (c: MicrosoftConnectionView) => dialog.open({
+    title: `Disconnect ${c.account}?`,
+    body: "Its bots lose access right away. The credentials are removed from this host. What bots already read stays in their history and backups. This does not revoke Microsoft's account-wide app consent.",
+    confirmLabel: "Disconnect", danger: true,
+    onConfirm: async () => { await api.disconnectMicrosoft(house.name, c.id); await microsoft.refresh(); notify(`${c.account} disconnected`); },
+  });
+  const failed = [microsoft.error && { what: "Microsoft", message: microsoft.error, retry: microsoft.refresh }, error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
   return (
     <Page
       title="Connectors"
@@ -129,7 +138,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
             </button>
           </p>
         ))}
-        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add a Google account or a Slack user and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add a Google, Slack or Microsoft To Do account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
           {connections.map((c) => (
             <ConnectionRow
               key={c.id}
@@ -142,6 +151,11 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
               onReconnect={() => setSetup({ type: "google", existing: c })}
               onDisconnect={() => disconnect(c)}
             />
+          ))}
+          {(microsoft.connections ?? []).map(c => (
+            <ConnectionRow key={c.id} house={house} type="microsoft" title={<span className="strong connector-email">{c.account}</span>}
+              sub={`Microsoft To Do · ${microsoftAccessWords(c)}`} connection={c}
+              onAccess={() => setAccess({ microsoft: c })} onReconnect={() => setSetup({ type: "microsoft", microsoft: c })} onDisconnect={() => disconnectMicrosoft(c)} />
           ))}
           {(slack.connections ?? []).map((c) => (
             <ConnectionRow
@@ -158,7 +172,10 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           ))}
         </List>
       </Section>
-      {setup && setup.type !== "slack" && <ConnectorSetup onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      {setup && setup.type !== "slack" && setup.type !== "microsoft" && <ConnectorSetup onMicrosoft={() => setSetup({ type: "microsoft" })} onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      {setup?.type === "microsoft" && <MicrosoftSetup key={setup.microsoft?.id ?? "new"} house={house.name} ready={!!microsoft.ready} existing={setup.microsoft}
+        options={sharable(house)} back={setup.microsoft ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
+        saved={async () => { await microsoft.refresh(); notify("Microsoft To Do connected"); }} />}
       {setup?.type === "slack" && (
         <SlackSetup
           key={setup.slack?.id ?? "new"}
@@ -173,6 +190,9 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           }}
         />
       )}
+      {access && "microsoft" in access && <BotAccess house={house} title={access.microsoft.account} pets={access.microsoft.pets}
+        body={`Microsoft To Do, ${microsoftAccessWords(access.microsoft)}. Changes apply right away.`} onClose={() => setAccess(undefined)}
+        save={async pets => { await api.shareMicrosoft(house.name, access.microsoft.id, pets); await microsoft.refresh(); notify("Bot access saved"); }} />}
       {access && "google" in access && (
         <BotAccess
           key={access.google.id}
@@ -264,7 +284,7 @@ const sharable = (house: WorkspaceView) => house.pets.filter((p) => !p.sideworke
  * Add connector, in two steps: what to connect, then the provider's form (services and bots), which leaves for its
  * sign-in page. Reconnecting an account starts at the form, with that account's choices.
  */
-function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
+function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft }: { onMicrosoft: () => void; /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
   const [step, setStep] = useState(existing ? 1 : 0);
   const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
@@ -282,6 +302,7 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack }: { /** Slac
         onConfirm: async () => {
           if (step === 0) {
             if (type === "slack") { onSlack(); return "stay"; }
+            if (type === "microsoft") { onMicrosoft(); return "stay"; }
             setStep(1);
             return "stay";
           }
