@@ -5,7 +5,7 @@ import {
   ENVIRONMENT_GET_TOOL, ENVIRONMENT_SETUP_TOOL, ENVIRONMENT_UPDATE_TOOL, HISTORY_TOOL, MCP_SERVER, NETWORK_LIST_TOOL,
   NETWORK_REQUEST_TOOL, REACT_TOOL, REPLY_TOOL,
 } from "./instructions";
-import { ATTACHMENTS_TAG, BATCH_TAG, CONTENT_TAG, HEADER_TAG, MESSAGE_TAG } from "./tags";
+import { ATTACHMENTS_TAG, BATCH_TAG, CLOCK_TAG, CONTENT_TAG, HEADER_TAG, MESSAGE_TAG } from "./tags";
 
 /**
  * Household's system prompt: what every agent it runs is told at the start of each session, whatever its agent
@@ -28,9 +28,11 @@ export interface PromptContext {
   role: PromptRole;
   /** The house's features, on or off. */
   features: HouseFeatures;
-  /** A pet's scheduled restarts, and the household's timezone they are in. */
+  /**
+   * A pet's scheduled restarts. Their time zone is not named here: each message's household-clock says it, so a new
+   * zone reaches the pet without changing its instructions (which would restart it).
+   */
   lifecycle?: PetLifecycle;
-  timezone?: string;
 }
 
 type Kind = PromptRole["kind"];
@@ -197,8 +199,8 @@ const SECTIONS: readonly Section[] = [
     title: "Scheduled restarts",
     for: ["pet"],
     when: ({ lifecycle }) => lifecycle?.enabled === true,
-    text: ({ lifecycle, timezone }) => [
-      `- Household restarts your VM and starts a new session ${describeLifecycle(lifecycle!)} (${timezone ?? "UTC"}). This conversation does not carry over; your home directory and Household memory do.`,
+    text: ({ lifecycle }) => [
+      `- Household restarts your VM and starts a new session ${describeLifecycle(lifecycle!)}, Household time (the timezone in each message's ${CLOCK_TAG}). This conversation does not carry over; your home directory and Household memory do.`,
       `- Up to ${lifecycle!.notice} minute${lifecycle!.notice === 1 ? "" : "s"} before a restart you get a shutdown notice: wrap up as it asks and finish your turn. The restart comes when that turn ends or the time is up.`,
       "- After a restart you get a wake-up message: pick up from there.",
     ].join("\n"),

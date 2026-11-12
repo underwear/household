@@ -97,6 +97,17 @@ export interface PetTransport {
   tokenFor(pet: { house: string; pet: string }): string;
 }
 
+/** Why a reload restarts a running VM: a new image or mounts (`recreate`), or a changed launch (names only, no values). */
+export type Relaunch = { kind: "recreate" } | { kind: "relaunch"; changed?: string[] };
+
+/** The names whose values differ between two launch environments (added, removed or changed), sorted. */
+export function changedKeys(before: Record<string, string>, after: Record<string, string>): string[] {
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((key) => before[key] !== after[key]).sort();
+}
+
+/** An agent's image being prepared or ready, and who waits to hear that it is being downloaded. */
+interface ImageEntry { promise: Promise<{ ref: string; id: string }>; fetching: boolean; listeners: Set<() => void> }
+
 type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "prepareImage">;
 
 /**
@@ -105,8 +116,8 @@ type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "prepareImage">;
  * Docker disks. Homes stay.
  */
 export class PetPlane {
-  /** Agent name → image id, built once per daemon run. */
-  private readonly images = new Map<string, { ref: string; id: string }>();
+  /** Each agent's image, prepared once: two VMs booting at once wait for the same download, never start two. */
+  private readonly images = new Map<string, ImageEntry>();
   private waiting = true;
   private resident: ContainerInfo[] = [];
   /** Refresh before admission starts and after lifecycle changes; failures keep the previous reservation. */
@@ -140,6 +151,12 @@ export class PetPlane {
 
   private beforeStop: (house: string, pet: string) => Promise<void> = async () => {};
   onBeforeStop(callback: (house: string, pet: string) => Promise<void>) { this.beforeStop = callback; }
+
+  /** Each pet VM's launch environment as this run last placed it: a relaunch can say what changed. */
+  private readonly launched = new Map<string, Record<string, string>>();
+  private relaunching: (house: string, pet: string, why: Relaunch) => void = () => {};
+  /** Hears why a running VM is restarted by a reload: its new image or mounts, or the names of what its launch changes. */
+  onRelaunch(callback: (house: string, pet: string, why: Relaunch) => void) { this.relaunching = callback; }
 
   /**
    * Starts what is missing without waiting for it (see `awaitReady`); `onStopped` hears of each running VM it
@@ -190,6 +207,11 @@ export class PetPlane {
       const vm = await this.vm(placed);
       this.runtime.configureEnvironmentSetup?.(name, placed.scout?.setup ?? placed.environment?.setup, placed.environment?.onStart);
       const change = petChange(current, vm);
+      const before = this.launched.get(name);
+      this.launched.set(name, vm.spec.env ?? {});
+      if (current && current.state !== "stopped" && (change === "recreate" || change === "relaunch")) {
+        this.relaunching(placed.house, placed.pet, change === "recreate" ? { kind: "recreate" } : { kind: "relaunch", ...(before ? { changed: changedKeys(before, vm.spec.env ?? {}) } : {}) });
+      }
       if (change === "create" || change === "recreate") {
         await this.beforeStop(placed.house, placed.pet);
         await this.runtime.removeContainer(name);
@@ -270,17 +292,34 @@ export class PetPlane {
   }
 
   /**
+   * `agent`'s image, ready to boot: prepared on first use and kept (a failed one is tried again next time). `fetching`
+   * hears when it has to be downloaded or built, also when another caller's download is already under way.
+   */
+  private image(agent: AgentAdapter, fetching?: () => void): Promise<{ ref: string; id: string }> {
+    let entry = this.images.get(agent.name);
+    if (!entry) {
+      const made: ImageEntry = { fetching: false, listeners: new Set(), promise: undefined! };
+      made.promise = this.runtime.prepareImage(agentImage(agent), agent.imageContext, () => {
+        made.fetching = true;
+        for (const each of made.listeners) each();
+      });
+      made.promise.then(() => made.listeners.clear(), () => { if (this.images.get(agent.name) === made) this.images.delete(agent.name); });
+      this.images.set(agent.name, made);
+      entry = made;
+    }
+    if (fetching) { if (entry.fetching) fetching(); else entry.listeners.add(fetching); }
+    return entry.promise;
+  }
+
+  /**
    * A throwaway VM of `agent`'s image for Household's own work (a Claude sign-in or its renewal): it reaches the
    * gateway as `identity` (a `household` subject the caller registered), its entrypoint is told `env`, and it is no
    * pet: no home, no CA (nothing it calls is intercepted), no Docker; `close` removes it. Leftovers of a crash go
    * with `removeUtilities`.
    */
-  async runUtility(agent: AgentAdapter, identity: { house: string; pet: string }, env: Record<string, string>): Promise<{ exec: (command: string[], stdin?: string, timeoutMs?: number) => Promise<{ ok: boolean; output: string }>; close(): Promise<void> }> {
-    let image = this.images.get(agent.name);
-    if (!image) {
-      image = await this.runtime.prepareImage(agentImage(agent), agent.imageContext);
-      this.images.set(agent.name, image);
-    }
+  async runUtility(agent: AgentAdapter, identity: { house: string; pet: string }, env: Record<string, string>, progress?: (phase: "image" | "booting") => void): Promise<{ exec: (command: string[], stdin?: string, timeoutMs?: number) => Promise<{ ok: boolean; output: string }>; close(): Promise<void> }> {
+    const image = await this.image(agent, () => progress?.("image"));
+    progress?.("booting");
     const { host, proxyPort } = this.transport;
     const proxy = `http://household:${this.transport.tokenFor(identity)}@${host}:${proxyPort}`;
     const name = `household-utility-${identity.pet}`;
@@ -393,11 +432,7 @@ export class PetPlane {
 
   private async vm(placed: PlacedPet): Promise<PetVm> {
     const { house, pet, agent, model, reasoningEffort, mode, settings, keyUse, secrets = [] } = placed;
-    let image = this.images.get(agent.name);
-    if (!image) {
-      image = await this.runtime.prepareImage(agentImage(agent), agent.imageContext);
-      this.images.set(agent.name, image);
-    }
+    const image = await this.image(agent);
     const name = petContainer(house, pet);
     const { host, proxyPort, relayPort } = this.transport;
     const token = this.transport.tokenFor({ house, pet });

@@ -56,6 +56,14 @@ const SCAN: LogScan = { window: 8 * 1024 * 1024, budget: 64 * 1024 * 1024, keep:
 const PET_IN_MESSAGE = /\b(?:bot|pet) '?([a-z][\w-]*)\/([a-z][\w-]*)/;
 const HOUSE_IN_MESSAGE = /\b(?:workspace|house) '?([a-z][\w-]*)/;
 
+/**
+ * Answers a harness gets on every start and takes in its stride, so no problem: Claude Code asks for its account's
+ * managed settings, and an account with none gets a 404.
+ */
+const EXPECTED_MISSES = [{ status: 404, method: "GET", target: /^api\.anthropic\.com(?::443)?\/api\/claude_code\/settings$/ }];
+const expectedMiss = (event: { status: number; method: string; target: string }) =>
+  EXPECTED_MISSES.some((miss) => miss.status === event.status && miss.method === event.method && miss.target.test(event.target));
+
 /** An event as a log line; undefined for a record that is no event. */
 export function logLine(event: HouseholdEvent): LogEvent | undefined {
   if (event.type === "daemon") {
@@ -71,7 +79,7 @@ export function logLine(event: HouseholdEvent): LogEvent | undefined {
     const whose = { ...(event.subject ? { house: event.subject.name } : {}), ...(event.pet ? { pet: event.pet } : {}) };
     const why = event.reason ? ` — ${event.reason}` : "";
     if (event.kind === "request") {
-      const level = event.status >= 500 ? "error" : event.status >= 400 ? "warn" : "info";
+      const level = event.status >= 500 ? "error" : event.status >= 400 && !expectedMiss(event) ? "warn" : "info";
       return { at: event.ts, kind: "network", level, ...whose, text: escapeControls(`${event.method} ${event.target} → ${event.status}${event.swapped ? " · key filled in" : ""}${why}`) };
     }
     const level = event.verdict === "ALLOW" ? "info" : event.verdict === "DENY" ? "warn" : "error";

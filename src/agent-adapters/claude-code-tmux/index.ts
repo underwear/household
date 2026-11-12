@@ -226,6 +226,9 @@ export const claudeCodeTmux: AgentAdapter = {
     ...(home === undefined ? {} : { HOME: home }),
     ...(workspace === undefined ? {} : { HOUSEHOLD_WORKSPACE: workspace }),
     // Household's timer is the only one on claude's permission dialogs (it puts them to the person, then refuses).
+    // No official plugin marketplace fetched on every start (downloads.claude.ai, then a git clone from github.com):
+    // Household gives a bot its skills, and the allowlist would refuse both.
+    CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: "1",
     CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT: "1",
     CLAUDE_CODE_DISABLE_CRON: "1",
     ENABLE_CLAUDEAI_MCP_SERVERS: !scout && settings?.claudeAiConnectors === "true" ? "true" : "false",

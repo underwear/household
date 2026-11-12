@@ -260,3 +260,9 @@ test("a pet's VM logs: by source, 409 while its VM is not running, 404 for no su
   expect((await local(handler, "/api/houses/work/pets/sibling/logs?source=journal")).status).toBe(400);
   expect((await local(handler, "/api/houses/work/pets/ghost/logs")).status).toBe(404);
 });
+
+test("Claude Code's managed-settings 404 on every start is no problem; another 404 still is", () => {
+  const settings = logLine({ ...request, target: "api.anthropic.com:443/api/claude_code/settings", status: 404 } as never);
+  expect(settings?.level).toBe("info");
+  expect(logLine({ ...request, target: "api.anthropic.com:443/v1/messages", status: 404 } as never)?.level).toBe("warn");
+});

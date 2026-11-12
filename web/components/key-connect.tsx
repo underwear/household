@@ -76,6 +76,7 @@ export function useKeyConnect(method: KeyMethod, name: string, onSignedIn: () =>
   const body: ReactNode = (
     <>
       {input.kind === "claude-signin" && claude.steps ? claude.steps : <Guide steps={method.steps} />}
+      {input.kind === "claude-signin" && claude.status}
       {input.kind === "paste" && <TextField label={input.label} type="password" mono value={value} onChange={setValue} placeholder={input.placeholder} />}
       {login && (
         <div className="setup-code">

@@ -1,4 +1,4 @@
-import type { ClaudeSigninView, KeysView } from "../app/web-views";
+import type { ClaudeSigninProgressView, ClaudeSigninView, KeysView } from "../app/web-views";
 import { HouseholdError } from "../core/errors";
 import type { Paths } from "../infra/paths";
 import { api } from "./commands";
@@ -20,7 +20,7 @@ export async function signInClaude(t: Terminal, paths: Paths, name: string): Pro
   for (const point of POINTS) t.say(dim(`  · ${point}`));
   for (;;) {
     t.say(dim("  Starting Claude's sign-in…"));
-    const { id, url } = await api<ClaudeSigninView>(paths, "POST", "/api/keys/claude/signin", { name });
+    const { id, url } = await withProgress(t, paths, name, api<ClaudeSigninView>(paths, "POST", "/api/keys/claude/signin", { name }));
     t.say(`  1. Open this on any device and sign in to the account your bots should use:`);
     t.say(`     ${url}`);
     const code = await t.ask("  2. Paste the code Claude shows: ");
@@ -42,8 +42,30 @@ export async function signInClaude(t: Terminal, paths: Paths, name: string): Pro
   }
 }
 
+const PHASES: Record<NonNullable<ClaudeSigninProgressView["progress"]>["phase"], string> = {
+  image: "Downloading the sign-in VM's image, about 1.4 GB (only the first time: it can take several minutes)…",
+  booting: "Booting the sign-in VM…",
+  login: "Starting Claude Code's sign-in…",
+};
+
+/** `starting`, saying each phase of the sign-in's start as it begins (the first one downloads an image: minutes). */
+async function withProgress<T>(t: Terminal, paths: Paths, name: string, starting: Promise<T>): Promise<T> {
+  let said: string | undefined;
+  let done = false;
+  const look = async () => {
+    const state = await api<ClaudeSigninProgressView>(paths, "GET", `/api/keys/${encodeURIComponent(name)}/claude-signin`).catch(() => undefined);
+    const phase = state?.progress?.phase;
+    if (done || !phase || phase === said || (phase === "booting" && !said)) return;
+    said = phase;
+    t.say(dim(`  ${PHASES[phase]}`));
+  };
+  const timer = setInterval(() => void look(), 2000);
+  try { return await starting; } finally { done = true; clearInterval(timer); }
+}
+
 /** `--link`: starts key `name`'s sign-in and prints its link, without waiting (the daemon keeps it 10 minutes). */
 export async function claudeSigninLink(paths: Paths, name: string): Promise<void> {
+  console.error("Starting Claude's sign-in (the first one downloads the sign-in VM's image, about 1.4 GB: minutes)…");
   const { url } = await api<ClaudeSigninView>(paths, "POST", "/api/keys/claude/signin", { name });
   console.log(`Open this on any device and sign in to the Claude account the bots should use (it works once, for 10 minutes):`);
   console.log(url);

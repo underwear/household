@@ -292,11 +292,21 @@ test("an exact entry reaches its private host as before, by name; a trailing dot
 test("a caller the identity seam does not know is denied at its CONNECT", async () => {
   useRules([String(echoPort)]);
   known = false;
-  const response = await connect(`127.0.0.1:${echoPort}`).finally(() => (known = true));
+  const target = `127.0.0.1:${echoPort}`;
+  const response = await request(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\nProxy-Authorization: Basic ${btoa("household:nope")}\r\n\r\n`).finally(() => (known = true));
   expect(response).toStartWith("HTTP/1.1 407 Proxy Authentication Required\r\n");
   expect(response).toContain('Proxy-Authenticate: Basic realm="Household"\r\n');
   expect(response).toEndWith("\r\n\r\nHousehold: not a known pet\n");
   expect(logs).toEqual([expect.objectContaining({ verdict: "DENY", source: "127.0.0.1", reason: "127.0.0.1 is not a known pet" })]);
+});
+
+test("a CONNECT with no credentials yet is asked for them (407), not logged as refused: git sends them on the retry", async () => {
+  useRules([String(echoPort)]);
+  known = false;
+  const response = await connect(`127.0.0.1:${echoPort}`).finally(() => (known = true));
+  expect(response).toStartWith("HTTP/1.1 407 Proxy Authentication Required\r\n");
+  expect(response).toContain('Proxy-Authenticate: Basic realm="Household"\r\n');
+  expect(logs).toEqual([]);
 });
 
 test("the identity seam is asked once per CONNECT, with its source and its headers (a House token, later)", async () => {

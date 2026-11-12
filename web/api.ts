@@ -29,9 +29,9 @@ export type { EnvironmentView };
 // The web UI's only way to the daemon: its JSON API. The types are the server's (type-only: nothing of it is bundled).
 import type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView } from "../src/app/web-views";
 export type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView };
-import type { AgentModelsView as HarnessModelsView, AgentView as HarnessView, AllowView, ChannelKindView, ChannelView, ClaudeSigninView, HouseView as WorkspaceView, KeysView, KeyView, MeView, OwnerView, PetView as BotView, PlatformView, SecretView, SigninView, WriteView } from "../src/app/web-views";
+import type { AgentModelsView as HarnessModelsView, AgentView as HarnessView, AllowView, ChannelKindView, ChannelView, ClaudeSigninProgressView, ClaudeSigninView, HouseView as WorkspaceView, KeysView, KeyView, MeView, OwnerView, PetView as BotView, PlatformView, SecretView, SigninView, WriteView } from "../src/app/web-views";
 
-export type { HarnessModelsView, HarnessView, AllowView, ChannelKindView, ChannelView, ClaudeSigninView, WorkspaceView, KeysView, KeyView, MeView, OwnerView, BotView, PlatformView, SecretView, SigninView, WriteView };
+export type { HarnessModelsView, HarnessView, AllowView, ChannelKindView, ChannelView, ClaudeSigninProgressView, ClaudeSigninView, WorkspaceView, KeysView, KeyView, MeView, OwnerView, BotView, PlatformView, SecretView, SigninView, WriteView };
 
 /**
  * A channel as the forms send it: its chat (when it is added), its kind's own fields (by the kind's keys), and
@@ -249,6 +249,8 @@ export const api = {
   startClaudeSignin: (name: string) => call<ClaudeSigninView>("POST", "/api/keys/claude/signin", { name }),
   finishClaudeSignin: (id: string, code: string) => call<KeysView>("POST", `/api/keys/claude/signin/${encodeURIComponent(id)}`, { code }),
   cancelClaudeSignin: (id: string) => call<void>("DELETE", `/api/keys/claude/signin/${encodeURIComponent(id)}`),
+  claudeSigninProgress: (name: string) => call<ClaudeSigninProgressView>("GET", `/api/keys/${encodeURIComponent(name)}/claude-signin`),
+  cancelClaudeSigninOf: (name: string) => call<void>("DELETE", `/api/keys/${encodeURIComponent(name)}/claude-signin`),
   listenBot: (house: string, kind: string, token: string) => call<BotListenView>("POST", "/api/onboarding/telegram", { house, kind, token }),
   botListen: (id: string) => call<BotListenStatus & { bot: string }>("GET", `/api/onboarding/telegram/${encodeURIComponent(id)}`),
   listenAgain: (id: string) => call<BotListenStatus & { bot: string }>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/again`),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { gib, workspaceResourcesSchema, type HostCapacity, type PetResources, type ResourceAllocation, type WorkspaceBudget } from "../../src/core/resources";
+import { gib, hostRamMiB, RAM_STEP_MIB, workspaceResourcesSchema, type HostCapacity, type PetResources, type ResourceAllocation, type WorkspaceBudget } from "../../src/core/resources";
 import { api, type WorkspaceView } from "../api";
 import { botPath, workspacePath } from "../router";
 import { Dialog } from "./dialog";
@@ -133,8 +133,10 @@ export function ResourcesPage({ house, host, refresh, notify }: { house: Workspa
 
 /** The workspace's total CPU and RAM: up to this machine's, and not below what bots, scouts and sideworkers hold now (the daemon refuses it). */
 export function CapacityDialog({ house, budget, host, onClose, save }: { house: string; budget: WorkspaceBudget; host: HostCapacity; onClose: () => void; save: (value: PetResources) => Promise<void> }) {
-  const [cpus, setCpus] = useState(String(budget.total.cpus));
-  const [ram, setRam] = useState(String(budget.total.memoryMiB / 1024));
+  // Up to this machine's, in whole steps of RAM; a total beyond it (the 8 vCPU · 8 GiB default on a small host) opens at the host's.
+  const maxRam = hostRamMiB(host) / 1024;
+  const [cpus, setCpus] = useState(String(Math.min(budget.total.cpus, host.cpus)));
+  const [ram, setRam] = useState(String(Math.min(budget.total.memoryMiB / 1024, maxRam)));
   const value = { cpus: Number(cpus), memoryMiB: Number(ram) * 1024 };
   const held = { cpus: budget.reserved.cpus + budget.helpers.cpus, memoryMiB: budget.reserved.memoryMiB + budget.helpers.memoryMiB };
   const below = (key: Key) =>
@@ -155,7 +157,7 @@ export function CapacityDialog({ house, budget, host, onClose, save }: { house: 
         <>
           <FormGrid>
             <StepperField label="CPU" value={cpus} onChange={setCpus} min={1} max={host.cpus} step={1} unit="vCPU" error={below("cpus")} />
-            <StepperField label="RAM" value={ram} onChange={setRam} min={0.5} max={host.memoryMiB / 1024} step={0.125} unit="GiB" error={below("memoryMiB")} />
+            <StepperField label="RAM" value={ram} onChange={setRam} min={0.5} max={maxRam} step={RAM_STEP_MIB / 1024} unit="GiB" error={below("memoryMiB")} />
           </FormGrid>
           <p className="hint">Bots reserve {resourcesText(budget.reserved)}; scouts and sideworkers share the rest.</p>
         </>

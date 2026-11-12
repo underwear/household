@@ -128,9 +128,12 @@ test("a changed launch configuration restarts the same VM with it: model, mode, 
     const { started } = await plane.reconcile(wanted, onStopped);
     return started.map((pet) => pet.pet);
   };
+  const why: string[] = [];
+  plane.onRelaunch((_, pet, reason) => why.push(`${pet}: ${reason.kind === "relaunch" ? reason.changed?.join(",") : reason.kind}`));
   const chair = runtime.containers.get("household.work.chair")!;
   expect(await relaunched([pets[0]!, { ...pets[1]!, model: "big" }])).toEqual(["chair"]);
   expect(runtime.calls).toEqual(["stop household.work.chair", "launch household.work.chair", "start household.work.chair"]);
+  expect(why).toEqual(["chair: MODEL"]); // what changed, by name only
   expect(stopped).toEqual(["chair"]);
   expect(runtime.containers.get("household.work.chair")).toBe(chair); // not recreated
   expect(runtime.specs).toHaveLength(2);

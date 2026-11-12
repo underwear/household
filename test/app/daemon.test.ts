@@ -268,9 +268,10 @@ test("the gateway's connections land in the event log as they happen", async () 
   const { paths, lines, deps } = setup();
   const daemon = await startDaemon(deps);
   try {
-    // A caller with no pet's token, as a stray process on the host would be.
+    // A caller with no pet's token, as a stray process on the host would be (credentials it made up: with none at all
+    // it is only asked for them, which is no refusal).
     const socket = await Bun.connect({ hostname: "127.0.0.1", port: deps.network.proxyPort, socket: { data() {} } });
-    socket.write("CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n");
+    socket.write(`CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\nProxy-Authorization: Basic ${btoa("household:made-up")}\r\n\r\n`);
     await waitFor(() => lines.some((line) => line.includes("DENY")));
     socket.end();
     expect(lines.find((line) => line.includes("DENY"))).toMatch(/^\d\d:\d\d:\d\d DENY  unknown 127\.0\.0\.1(:\d+)? CONNECT example\.com:443 \(.* is not a known pet\)$/);

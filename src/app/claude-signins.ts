@@ -141,16 +141,26 @@ export class SigninState {
 /** A sign-in under way: the link the person opens, waiting for the code they bring back. */
 export interface PendingSignin { id: string; key: string; url: string; startedAt: number }
 
+/**
+ * How far a sign-in's start has got: getting the VM's image (the first one downloads it, over a gigabyte), booting
+ * the VM, then Claude Code's own login giving its link.
+ */
+export type SigninPhase = "image" | "booting" | "login";
+export interface SigninProgress { phase: SigninPhase; since: number; startedAt: number }
+
 const SIGNIN_TTL_MS = 10 * 60_000;
 
 /** Sign-ins under way and done: each in its own throwaway VM, the code typed back into Claude Code's own login. */
 export class ClaudeSignins {
   private readonly pending = new Map<string, PendingSignin & { vm: SigninVm; timer: ReturnType<typeof setTimeout> }>();
+  /** Starts under way, one per key: a second start joins it (a click again, a page opened again), never a second VM. */
+  private readonly starting = new Map<string, { promise: Promise<PendingSignin>; progress: SigninProgress; cancelled: boolean }>();
 
   constructor(private readonly deps: {
     store: SigninStore;
     state: SigninState;
-    launch(): Promise<SigninVm>;
+    /** Boots a sign-in VM; `progress` hears each phase as it begins. */
+    launch(progress?: (phase: SigninPhase) => void): Promise<SigninVm>;
     /** Why key `name` cannot become a sign-in (it is another kind of key), before a VM boots; undefined: it can. */
     refuse?(name: string): Promise<string | undefined>;
     /** Saves key `name` as this sign-in (`claude-signin:<org>`), replacing one of that name. */
@@ -158,22 +168,46 @@ export class ClaudeSignins {
     now?: () => number;
   }) {}
 
-  /** Boots a VM, starts Claude Code's login in it and gives the link to open; the VM waits up to 10 minutes. */
+  private now(): number { return (this.deps.now ?? Date.now)(); }
+
+  /**
+   * Boots a VM, starts Claude Code's login in it and gives the link to open; the VM waits up to 10 minutes. A start
+   * for a key whose start is under way joins it; one for a key with a link out ends that sign-in and makes a new one.
+   */
   async start(key: string): Promise<PendingSignin> {
     this.deps.store.folder(key); // the name, checked before a VM boots
+    const under = this.starting.get(key);
+    if (under) { under.cancelled = false; return under.promise; }
+    const at = this.now();
+    const entry = { progress: { phase: "booting" as SigninPhase, since: at, startedAt: at }, cancelled: false } as { promise: Promise<PendingSignin>; progress: SigninProgress; cancelled: boolean };
+    entry.promise = this.boot(key, entry).finally(() => { if (this.starting.get(key) === entry) this.starting.delete(key); });
+    this.starting.set(key, entry);
+    return entry.promise;
+  }
+
+  private async boot(key: string, entry: { progress: SigninProgress; cancelled: boolean }): Promise<PendingSignin> {
     const refused = await this.deps.refuse?.(key);
     if (refused) throw new HouseholdError(refused);
-    for (const each of this.pending.values()) if (each.key === key) await this.cancel(each.id);
-    const vm = await this.deps.launch();
+    for (const each of [...this.pending.values()]) if (each.key === key) await this.cancel(each.id);
+    const phase = (next: SigninPhase) => { if (entry.progress.phase !== next) entry.progress = { ...entry.progress, phase: next, since: this.now() }; };
+    const vm = await this.deps.launch(phase);
     let url: string;
-    try { url = await startLogin(vm.exec); } catch (error) { await vm.close().catch(() => {}); throw error; }
+    try {
+      if (entry.cancelled) throw new HouseholdError("The sign-in was cancelled");
+      phase("login");
+      url = await startLogin(vm.exec);
+      if (entry.cancelled) throw new HouseholdError("The sign-in was cancelled");
+    } catch (error) { await vm.close().catch(() => {}); throw error; }
     const id = randomUUID();
     const timer = setTimeout(() => void this.cancel(id), SIGNIN_TTL_MS);
     timer.unref?.();
-    const signin = { id, key, url, startedAt: (this.deps.now ?? Date.now)(), vm, timer };
+    const signin = { id, key, url, startedAt: this.now(), vm, timer };
     this.pending.set(id, signin);
     return { id, key, url, startedAt: signin.startedAt };
   }
+
+  /** How far key `key`'s start has got, while it is under way. */
+  progress(key: string): SigninProgress | undefined { return this.starting.get(key)?.progress; }
 
   /** Types the person's code into the waiting login; saves the sign-in and its key; ends the VM either way. */
   async finish(id: string, code: string): Promise<ClaudeAccount> {
@@ -182,18 +216,21 @@ export class ClaudeSignins {
     checkCode(code); // a typo keeps the link
     this.pending.delete(id);
     clearTimeout(signin.timer);
+    let login: Awaited<ReturnType<typeof finishLogin>>;
     try {
-      const { credentials, account } = await finishLogin(signin.vm.exec, code);
-      // After any renewal of the sign-in it replaces: that one would rotate these tokens away.
-      await this.deps.state.lock(signin.key, async () => {
-        await this.deps.store.save(signin.key, credentials, account, (this.deps.now ?? Date.now)());
-        this.deps.state.reset(signin.key);
-      });
-      await this.deps.saveKey(signin.key, `${SIGNIN_PREFIX}${account.orgId}`, account);
-      return account;
+      login = await finishLogin(signin.vm.exec, code);
     } finally {
+      // The VM is done once Claude Code has the tokens: it goes now, not after the reload that saving the key starts.
       await signin.vm.close().catch(() => {});
     }
+    const { credentials, account } = login;
+    // After any renewal of the sign-in it replaces: that one would rotate these tokens away.
+    await this.deps.state.lock(signin.key, async () => {
+      await this.deps.store.save(signin.key, credentials, account, this.now());
+      this.deps.state.reset(signin.key);
+    });
+    await this.deps.saveKey(signin.key, `${SIGNIN_PREFIX}${account.orgId}`, account);
+    return account;
   }
 
   /** The sign-in of key `key` waiting for its code, if one is (the newest: starting one ends the one before). */
@@ -210,7 +247,20 @@ export class ClaudeSignins {
     await signin.vm.close().catch(() => {});
   }
 
-  async stop(): Promise<void> { await Promise.all([...this.pending.keys()].map((id) => this.cancel(id))); }
+  /**
+   * Ends key `key`'s sign-in, whether its link is out or its VM is still on the way (that VM goes as soon as it is
+   * up, unless a start joins it meanwhile): a page left half-way leaves no VM behind.
+   */
+  async cancelKey(key: string): Promise<void> {
+    const under = this.starting.get(key);
+    if (under) under.cancelled = true;
+    for (const each of [...this.pending.values()]) if (each.key === key) await this.cancel(each.id);
+  }
+
+  async stop(): Promise<void> {
+    for (const each of this.starting.values()) each.cancelled = true;
+    await Promise.all([...this.pending.keys()].map((id) => this.cancel(id)));
+  }
 }
 
 /** Renew this long before a token runs out: a VM boot and Claude's answer fit many times over. */

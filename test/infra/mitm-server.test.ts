@@ -173,7 +173,8 @@ test("fail closed: an unknown caller, a pet without a key, a key missing on the 
   }
   expect(seen).toEqual([]); // nothing reached upstream, not even the placeholder
   expect(logs.filter((e) => e.kind === "request").map((e) => e.status)).toEqual([403, 403]);
-  expect(logs.some((e) => e.kind === "connect" && e.verdict === "DENY" && e.reason === "127.0.0.1 is not a known pet")).toBe(true);
+  // Refused at its CONNECT with no credentials: asked for them (407), which the log does not count as a refusal.
+  expect(logs.some((e) => e.kind === "connect" && e.verdict === "DENY")).toBe(false);
 });
 
 

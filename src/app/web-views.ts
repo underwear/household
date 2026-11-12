@@ -95,6 +95,13 @@ export interface ClaudeSigninView {
   url: string;
 }
 
+/** A Claude sign-in's start while its VM comes up: getting the image (a download the first time), booting, the login. */
+export interface ClaudeSigninProgressView {
+  progress: { phase: "image" | "booting" | "login"; since: number; startedAt: number } | null;
+  /** Its link is out, waiting for the code. */
+  waiting: boolean;
+}
+
 /** A write to the keys' answer: the keys after it. */
 export interface KeysView {
   keys: KeyView[];

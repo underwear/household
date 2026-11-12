@@ -1,5 +1,5 @@
 import { BotResourceSummary, useWorkspaceMetrics } from "./bot-resource-summary";
-import { allocatedTotal, crowds, gib, CROWDED_SHARE, petResources, petCpuSchema, petMemorySchema, type HostCapacity, type PetResources as BotResources } from "../../src/core/resources";
+import { allocatedTotal, crowds, gib, hostRamMiB, CROWDED_SHARE, RAM_STEP_MIB, petResources, petCpuSchema, petMemorySchema, type HostCapacity, type PetResources as BotResources } from "../../src/core/resources";
 import { PET_NAME_PATTERN as BOT_NAME_PATTERN, PET_NAME_HINT as BOT_NAME_HINT } from "../../src/core/names";
 import type { AgentModel as HarnessModel } from "../../src/core/agent";
 import { useEffect, useState } from "react";
@@ -269,55 +269,67 @@ export interface Capacity {
   houses: WorkspaceView[];
 }
 
-// The RAM stepper's step: a quarter of a GiB (the config takes any 128 MiB).
-const RAM_STEP_MIB = 256;
+// The RAM stepper's step: a quarter of a GiB (the config takes any RAM_STEP_MIB).
+const RAM_STEPPER_MIB = 256;
 const CROWDED = `More than ${CROWDED_SHARE * 100}% of this host.`;
 
 /**
- * A bot's CPU and RAM, a stepper each up to what the host has; one past 80% of the host turns red (a warning: it
- * still saves), and under them what every workspace's enabled bots take together with these. `value` is what it says,
- * `error` why it cannot be saved, `changed` whether it differs from `bot`'s.
+ * A bot's CPU and RAM, a stepper each up to what it may have: the host's, and within its workspace's capacity what
+ * is left with this bot's own share back. One past 80% of the host turns red (a warning: it still saves); under them
+ * what the workspace holds with these (no capacity: every workspace's enabled bots against the host). `value` is what
+ * it says, `error` why it cannot be saved, `changed` whether it differs from `bot`'s.
  */
 export function useResourceForm({ host, houses }: Capacity, house: string, pet?: BotView) {
-  const saved = petResources(pet ?? {});
-  const [cpus, setCpus] = useState(String(saved.cpus));
-  const [ram, setRam] = useState(String(saved.memoryMiB / 1024));
-  const value = { cpus: Number(cpus), memoryMiB: Number(ram) * 1024 };
-  const maxRam = (Math.floor(host.memoryMiB / RAM_STEP_MIB) * RAM_STEP_MIB) / 1024;
-  const cpuError = petCpuSchema.safeParse(value.cpus).success && value.cpus <= host.cpus ? undefined : `A whole number from 1 to ${host.cpus}.`;
-  const ramError = petMemorySchema.safeParse(value.memoryMiB).success && value.memoryMiB <= host.memoryMiB ? undefined : `From 0.5 to ${maxRam} GiB, in steps of 0.125 GiB (128 MiB).`;
-  const changed = pet !== undefined && (value.cpus !== saved.cpus || value.memoryMiB !== saved.memoryMiB);
-  // A new bot has no name yet that any bot has: it counts on top of the rest.
-  const total = allocatedTotal(houses.flatMap((each) => each.pets.map((one) => ({ ...one, house: each.name }))), { house, name: pet?.name ?? "", enabled: pet?.enabled, ...value });
   const budget = houses.find(h => h.name === house)?.resources;
   const allocation = budget?.allocations.find(a => a.kind === "pet" && a.name === pet?.name);
   const previous = allocation ?? (pet ? petResources(pet) : { cpus: 0, memoryMiB: 0 });
+  const hostRam = hostRamMiB(host);
+  const room = budget && { cpus: budget.total.cpus - budget.reserved.cpus - budget.helpers.cpus + previous.cpus, memoryMiB: budget.total.memoryMiB - budget.reserved.memoryMiB - budget.helpers.memoryMiB + previous.memoryMiB };
+  const most = {
+    cpus: Math.max(1, Math.min(host.cpus, room?.cpus ?? Infinity)),
+    memoryMiB: Math.max(512, Math.min(hostRam, room ? Math.floor(room.memoryMiB / RAM_STEP_MIB) * RAM_STEP_MIB : Infinity)),
+  };
+  const saved = petResources(pet ?? {});
+  // A new bot starts at the defaults, or at what its workspace has left when that is less.
+  const [cpus, setCpus] = useState(() => String(pet ? saved.cpus : Math.min(saved.cpus, most.cpus)));
+  const [ram, setRam] = useState(() => String((pet ? saved.memoryMiB : Math.min(saved.memoryMiB, most.memoryMiB)) / 1024));
+  const value = { cpus: Number(cpus), memoryMiB: Number(ram) * 1024 };
+  const cpuError = petCpuSchema.safeParse(value.cpus).success && value.cpus <= host.cpus ? undefined : `A whole number from 1 to ${host.cpus}.`;
+  const ramError = petMemorySchema.safeParse(value.memoryMiB).success && value.memoryMiB <= host.memoryMiB ? undefined : `From 0.5 to ${gib(hostRam).replace(" GiB", "")} GiB, in steps of 0.125 GiB (128 MiB).`;
+  const changed = pet !== undefined && (value.cpus !== saved.cpus || value.memoryMiB !== saved.memoryMiB);
+  // A new bot has no name yet that any bot has: it counts on top of the rest.
+  const total = allocatedTotal(houses.flatMap((each) => each.pets.map((one) => ({ ...one, house: each.name }))), { house, name: pet?.name ?? "", enabled: pet?.enabled, ...value });
   const effective = { cpus: Math.max(value.cpus, allocation?.resident?.cpus ?? 0), memoryMiB: Math.max(value.memoryMiB, allocation?.resident?.memoryMiB ?? 0) };
-  const remaining = budget && { cpus: budget.total.cpus - budget.reserved.cpus - budget.helpers.cpus + previous.cpus - effective.cpus, memoryMiB: budget.total.memoryMiB - budget.reserved.memoryMiB - budget.helpers.memoryMiB + previous.memoryMiB - effective.memoryMiB };
+  const remaining = room && { cpus: room.cpus - effective.cpus, memoryMiB: room.memoryMiB - effective.memoryMiB };
   const budgetError = remaining && (remaining.cpus < 0 || remaining.memoryMiB < 0) ? "More than this workspace’s capacity: choose less, close a scout or sideworker, or raise the capacity on the Resources page." : undefined;
+  const crowded = crowds(total.cpus, host.cpus) || crowds(total.memoryMiB, host.memoryMiB);
   const fields = (
     <>
       <FormGrid>
-        <StepperField label="CPU" value={cpus} onChange={setCpus} step={1} min={1} max={host.cpus} unit="vCPU" error={cpuError}
+        <StepperField label="CPU" value={cpus} onChange={setCpus} step={1} min={1} max={most.cpus} unit="vCPU" error={cpuError}
           warning={!cpuError && crowds(value.cpus, host.cpus) ? CROWDED : undefined} />
-        <StepperField label="RAM" value={ram} onChange={setRam} step={RAM_STEP_MIB / 1024} min={0.5} max={maxRam} unit="GiB" error={ramError}
+        <StepperField label="RAM" value={ram} onChange={setRam} step={RAM_STEPPER_MIB / 1024} min={0.5} max={most.memoryMiB / 1024} unit="GiB" error={ramError}
           hint={!ramError && value.memoryMiB < 1024 ? "Under 1 GiB a harness may run out of memory." : undefined}
           warning={!ramError && crowds(value.memoryMiB, host.memoryMiB) ? CROWDED : undefined} />
       </FormGrid>
       {remaining && <p className={budgetError ? "error" : "hint"} role="status">{budgetError ?? `Kept for this bot even while paused; a smaller size frees the rest at its next start. Leaves ${remaining.cpus} vCPU · ${gib(remaining.memoryMiB)} for scouts and sideworkers.`}</p>}
-      {!cpuError && !ramError && <AllocatedLine total={total} host={host} hostRam={maxRam} />}
+      {!cpuError && !ramError && (budget && remaining
+        ? <AllocatedLine used={{ cpus: budget.total.cpus - remaining.cpus, memoryMiB: budget.total.memoryMiB - remaining.memoryMiB }} of={budget.total} what="In this workspace" crowded={crowded} />
+        : <AllocatedLine used={total} of={{ cpus: host.cpus, memoryMiB: hostRam }} what="Allocated" crowded={crowded} />)}
     </>
   );
   const error = cpuError ? `CPU: ${cpuError}` : ramError ? `RAM: ${ramError}` : budgetError;
   return { fields, value, error, changed };
 }
 
-/** «Allocated: 7 of 10 vCPU · 20 of 32 GiB»: every workspace's enabled bots together; red past 80% of the host. */
-function AllocatedLine({ total, host, hostRam }: { total: BotResources; host: HostCapacity; /** The host's memory as the RAM stepper shows it, in GiB. */ hostRam: number }) {
-  const crowded = crowds(total.cpus, host.cpus) || crowds(total.memoryMiB, host.memoryMiB);
+/**
+ * «In this workspace: 2 of 2 vCPU · 1 of 1 GiB» (what it holds with these values, of its capacity), or with no capacity
+ * «Allocated: 7 of 10 vCPU · 20 of 32 GiB» (every workspace's enabled bots, of the host); red past 80% of the host.
+ */
+function AllocatedLine({ used, of, what, crowded }: { used: BotResources; of: BotResources; what: string; crowded: boolean }) {
   return (
     <p className={crowded ? "hint danger" : "hint"} role="status">
-      Allocated: {total.cpus} of {host.cpus} vCPU · {total.memoryMiB / 1024} of {hostRam} GiB{crowded && ` — ${CROWDED.toLowerCase()}`}
+      {what}: {used.cpus} of {of.cpus} vCPU · {gib(used.memoryMiB).replace(" GiB", "")} of {gib(of.memoryMiB)}{crowded && ` — ${CROWDED.toLowerCase()}`}
     </p>
   );
 }

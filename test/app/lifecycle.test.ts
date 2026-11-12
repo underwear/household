@@ -25,8 +25,9 @@ test("the next restart is in the household's timezone", () => {
 });
 
 test("a pet's prompt tells it about its restarts only while they are on", () => {
-  const on = systemPrompt({ role: { kind: "pet" }, features, lifecycle: DEFAULT_LIFECYCLE, timezone: "Europe/Madrid" });
-  expect(on).toContain("Scheduled restarts\n- Household restarts your VM and starts a new session every day at 04:00 (Europe/Madrid).");
+  const on = systemPrompt({ role: { kind: "pet" }, features, lifecycle: DEFAULT_LIFECYCLE });
+  // No zone of its own: each message's household-clock says it, so a new zone changes no instructions (no restart).
+  expect(on).toContain("Scheduled restarts\n- Household restarts your VM and starts a new session every day at 04:00, Household time (the timezone in each message's household-clock).");
   expect(on).toContain("Up to 5 minutes before a restart you get a shutdown notice");
   expect(on).toContain("wake-up message");
   expect(systemPrompt({ role: { kind: "pet" }, features, lifecycle: { ...DEFAULT_LIFECYCLE, enabled: false } })).not.toContain("Scheduled restarts");

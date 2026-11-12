@@ -1,5 +1,5 @@
 import net from "node:net";
-import { decide, privateReason, type Identify, type PetIdentity, type Subject, type SubjectRule } from "../core/egress";
+import { decide, PET_TOKEN_HEADER, privateReason, type Identify, type PetIdentity, type Subject, type SubjectRule } from "../core/egress";
 import { formatEndpoint, parseTarget, within, type Endpoint, type Reach } from "../core/network-policy";
 import type { Interceptor, RequestLogEntry } from "./mitm-server";
 import { ownAddresses, screenHost, systemResolve, type Resolve } from "./public-resolve";
@@ -141,7 +141,9 @@ class Connection {
     // Who calls, once: the tunnel's every request is that pet's.
     const pet = this.options.identify({ source: this.source, header: (name) => headers.get(name.toLowerCase()) });
     if (!pet) {
-      this.log("DENY", { method, target, reason: `${this.source} is not a known pet` });
+      // No credentials at all is the first half of proxy authentication (git and libcurl send theirs only once asked):
+      // asked for them, it is not logged as a refusal. Credentials that name no pet are.
+      if (headers.has("proxy-authorization") || headers.has(PET_TOKEN_HEADER)) this.log("DENY", { method, target, reason: `${this.source} is not a known pet` });
       // Git/libcurl negotiates proxy authentication: a 403 never prompts it to send its credentials.
       return this.reply("407 Proxy Authentication Required", TOLD.caller, 'Proxy-Authenticate: Basic realm="Household"\r\n');
     }

@@ -39,7 +39,7 @@ import { ownerProblem, type ChannelKinds, type Platforms } from "./kinds";
 import type { PetStatus } from "./pet-plane";
 import { requestDomain, requestPort, type NetworkRequests } from "./network-requests";
 import { clearedCookie, cookieValue, sessionCookie, sessionCookieName, type WebAuth } from "./web-auth";
-import type { AgentView, BotListenView, ClaudeSigninView, DeviceLoginView, HouseView, KeysView, MeView, WriteView } from "./web-views";
+import type { AgentView, BotListenView, ClaudeSigninProgressView, ClaudeSigninView, DeviceLoginView, HouseView, KeysView, MeView, WriteView } from "./web-views";
 import type { ClaudeSignins } from "./claude-signins";
 import type { KeySignin } from "./keys";
 import type { Onboarding } from "./onboarding";
@@ -106,7 +106,7 @@ export interface WebRoutesDeps {
   /** The setup's sign-ins and waits for a bot's first message. */
   onboarding?: Onboarding;
   /** Claude sign-ins: each in a throwaway VM, the person's code typed back into Claude Code's own login. */
-  claudeSignins?: Pick<ClaudeSignins, "start" | "finish" | "cancel" | "waitingFor">;
+  claudeSignins?: Pick<ClaudeSignins, "start" | "finish" | "cancel" | "cancelKey" | "waitingFor" | "progress">;
   /** A key's Claude sign-in as last saved (whose, until when); undefined for a pasted key. */
   signins?: (key: string) => KeySignin | undefined;
   /** Removes a key's Claude sign-in files, if it had any. */
@@ -474,6 +474,17 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     }],
     ["DELETE", /^\/api\/keys\/claude\/signin\/([^/]+)$/, async ({ params: [id] }) => {
       await deps.claudeSignins?.cancel(id!);
+      return json({});
+    }],
+    // How far key `name`'s sign-in has got while its VM comes up (the first one downloads the VM's image: minutes).
+    ["GET", /^\/api\/keys\/([^/]+)\/claude-signin$/, async ({ params: [name] }) => {
+      const progress = deps.claudeSignins?.progress(name!);
+      const waiting = deps.claudeSignins?.waitingFor(name!);
+      return json({ progress: progress ?? null, waiting: !!waiting } satisfies ClaudeSigninProgressView);
+    }],
+    // Key `name`'s sign-in left half-way, its link out or its VM still coming up: nothing stays behind.
+    ["DELETE", /^\/api\/keys\/([^/]+)\/claude-signin$/, async ({ params: [name] }) => {
+      await deps.claudeSignins?.cancelKey(name!);
       return json({});
     }],
     ["DELETE", /^\/api\/onboarding\/codex\/login\/([^/]+)$/, async ({ params: [id] }) => {

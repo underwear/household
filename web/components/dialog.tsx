@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useFocusTrap } from "./focus-trap";
 import { focusPage } from "./layout";
 
@@ -76,6 +76,35 @@ function useVisualViewport(): void {
 }
 
 /**
+ * Whether `body` (a scrolling box) has more above and below what shows: its edges are shaded then, so content
+ * that goes on under the buttons does not look cut off. Kept as it scrolls and as its content or size changes.
+ */
+function useScrollEdges(body: RefObject<HTMLElement | null>): { above: boolean; below: boolean } {
+  const [edges, setEdges] = useState({ above: false, below: false });
+  useEffect(() => {
+    const element = body.current;
+    if (!element) return;
+    const update = () => {
+      const above = element.scrollTop > 1;
+      const below = element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+      setEdges((last) => (last.above === above && last.below === below ? last : { above, below }));
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    const resized = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    resized?.observe(element);
+    for (const child of element.children) resized?.observe(child);
+    const changed = typeof MutationObserver === "undefined" ? undefined : new MutationObserver(() => {
+      for (const child of element.children) resized?.observe(child);
+      update();
+    });
+    changed?.observe(element, { childList: true, subtree: true });
+    return () => { element.removeEventListener("scroll", update); resized?.disconnect(); changed?.disconnect(); };
+  }, [body]);
+  return edges;
+}
+
+/**
  * A confirmation (or a small form): Cancel, Escape or a click outside closes it; Enter confirms (in a `safe` one,
  * where the focus starts on Cancel, Enter there cancels). The focus goes to
  * its first field (else to its button), stays inside while it is open, and goes back where it was when it closes
@@ -86,6 +115,8 @@ export function Dialog({ spec, onClose }: { spec: DialogSpec; onClose: () => voi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const form = useRef<HTMLFormElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges(body);
   /** A press that started on the scrim (a drag from inside that ends outside is not a click outside). */
   const pressedOutside = useRef(false);
   const close = useCallback(() => !busy && onClose(), [busy, onClose]);
@@ -138,7 +169,7 @@ export function Dialog({ spec, onClose }: { spec: DialogSpec; onClose: () => voi
         }}
       >
         <h2 className="dialog-title">{spec.title}</h2>
-        <div className="dialog-body">
+        <div ref={body} className={`dialog-body${edges.above ? " more-above" : ""}${edges.below ? " more-below" : ""}`}>
           {spec.body && <p className="dialog-text">{spec.body}</p>}
           {spec.children}
           {error && (

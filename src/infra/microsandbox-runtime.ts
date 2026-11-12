@@ -113,25 +113,27 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
    * The image a VM boots from: the release's, pulled from its registry, when `released` names one, else built here
    * (also when the pull fails, so a release with no published images still runs where Docker is).
    */
-  async prepareImage(tag: string, contextDir: string): Promise<{ ref: string; id: string }> {
+  async prepareImage(tag: string, contextDir: string, fetching?: () => void): Promise<{ ref: string; id: string }> {
     await this.ready();
     const released = await this.options.released?.(tag, contextDir);
+    // Built here (a development checkout): mostly cached, so not said to be a download.
     if (!released) return { ref: tag, id: await this.buildImage(tag, contextDir) };
     let pullError: string;
-    try { return { ref: released, id: await this.pull(released) }; }
+    try { return { ref: released, id: await this.pull(released, fetching) }; }
     catch (error) { pullError = (error as Error).message; }
     try { return { ref: tag, id: await this.buildImage(tag, contextDir) }; }
     catch (error) { throw new Error(`${pullError}; building it here failed too: ${(error as Error).message}`); }
   }
 
   /** Pulls a registry image unless cached (release tags are not moved), retrying a registry's passing refusals. */
-  private async pull(ref: string): Promise<string> {
+  private async pull(ref: string, fetching?: () => void): Promise<string> {
     const digest = async () => {
       const cached = await this.msb(["image", "inspect", ref, "--format", "json"]);
       return cached.ok ? this.json(cached.stdout).config?.digest as string | undefined : undefined;
     };
     const have = await digest();
     if (have) return have;
+    fetching?.();
     let reason = "";
     for (let attempt = 0; attempt < PULL_ATTEMPTS; attempt++) {
       if (attempt) await Bun.sleep((this.options.pullRetryMs ?? 3000) * attempt);

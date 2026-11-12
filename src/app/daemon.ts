@@ -92,7 +92,7 @@ import { webRoutes, type ApiHandler } from "./web-routes";
 import { Onboarding } from "./onboarding";
 import { startDeviceLogin } from "./codex-login";
 import { codexSigninInfo, dedicatedAuthRoot } from "./codex-auth-backup";
-import { ClaudeSignins, claudeAuthRoot, SIGNIN_HOSTS, SigninState, SigninStore, signinReminder, startClaudeRefresh, UTILITY_SUBJECT, type SigninVm } from "./claude-signins";
+import { ClaudeSignins, claudeAuthRoot, SIGNIN_HOSTS, SigninState, SigninStore, signinReminder, startClaudeRefresh, UTILITY_SUBJECT, type SigninPhase, type SigninVm } from "./claude-signins";
 import { SIGNIN_PREFIX } from "../agent-adapters/claude-code-tmux/signin";
 import { checkGroup, watchSetup } from "../channel-adapters/telegram/first-contact";
 import { readPetLog } from "./pet-logs";
@@ -335,7 +335,7 @@ export async function startDaemon(deps: DaemonDeps) {
   const signinStore = new SigninStore(claudeAuthRoot(paths.configFile));
   const signinState = new SigninState();
   const utilities = new Map<string, SubjectSpec & { subject: { kind: "household"; name: string; pet: string } }>();
-  const launchSigninVm = async (mode: "signin" | "renew"): Promise<SigninVm> => {
+  const launchSigninVm = async (mode: "signin" | "renew", progress?: (phase: SigninPhase) => void): Promise<SigninVm> => {
     if (!appliedHousehold) throw new HouseholdError("Household is still starting: try again in a moment");
     if (appliedHousehold.houses.some((house) => house.name === UTILITY_SUBJECT)) throw new HouseholdError(`a workspace is named '${UTILITY_SUBJECT}', which Household keeps for its own sign-in VMs: rename it to sign in to Claude`);
     const adapter = agents.get("claude-code-tmux");
@@ -346,7 +346,7 @@ export async function startDaemon(deps: DaemonDeps) {
     const release = async () => { utilities.delete(pet); await network().catch(() => {}); };
     try {
       await network();
-      const vm = await pets.runUtility(adapter, { house: UTILITY_SUBJECT, pet }, { HOUSEHOLD_UTILITY: mode });
+      const vm = await pets.runUtility(adapter, { house: UTILITY_SUBJECT, pet }, { HOUSEHOLD_UTILITY: mode }, progress);
       return { exec: vm.exec, close: async () => { await vm.close().catch(() => {}); await release(); } };
     } catch (error) {
       await pets.removeUtility(pet).catch(() => {}); // this one only: another key's may be mid-renewal
@@ -359,7 +359,7 @@ export async function startDaemon(deps: DaemonDeps) {
   const claudeSignins = new ClaudeSignins({
     store: signinStore,
     state: signinState,
-    launch: () => launchSigninVm("signin"),
+    launch: (progress) => launchSigninVm("signin", progress),
     // A sign-in may replace only a sign-in: never quietly another kind of key (and its bots' harness with it).
     refuse: async (name) => {
       const existing = (await config.load()).keys.find((key) => key.name === name);
@@ -495,6 +495,8 @@ export async function startDaemon(deps: DaemonDeps) {
     log: (caller, text) => events.info(`bot ${caller.house}/${caller.pet}: preview ${text}`),
   });
   pets.onBeforeStop((house, pet) => previews.closePet({ house, pet }));
+  // A reload that restarts a bot says why: what in its launch changed (names only), or a new image or mounts.
+  pets.onRelaunch((house, pet, why) => events.info(`bot ${house}/${pet}: restarting to apply ${why.kind === "recreate" ? "a new image or mounts" : why.changed?.length ? `changed ${why.changed.join(", ")}` : "a changed launch configuration"}`));
   const lifecycleTitle = (house: string, pet: string) => petDisplay(appliedHousehold?.houses.find(item => item.name === house)?.pets.find(item => item.name === pet) ?? { name: pet });
   const announceStopped = async ({ house, pet }: { house: string; pet: string }) => {
     events.info(`bot ${house}/${pet} stopped`);

@@ -151,8 +151,9 @@ fieldset.field > legend { margin-bottom: var(--space-2); }
 .stepper > .icon-btn { height: 100%; width: var(--control-h); border-radius: 0; color: var(--muted); }
 .stepper > .icon-btn:hover:not(:disabled) { color: var(--ink); }
 .stepper > .icon-btn:disabled { opacity: 0.35; }
-.stepper > .control { flex: 1; height: 100%; border: 0; background: none; box-shadow: none; padding: 0 2px; text-align: right; font-variant-numeric: tabular-nums; }
-.stepper-unit { padding: 0 2px 0 5px; color: var(--muted); font: 400 var(--control-font)/1 var(--font-sans); white-space: nowrap; flex: 1; }
+.stepper > .control { flex: 1; min-width: 3.5em; height: 100%; border: 0; background: none; box-shadow: none; padding: 0 2px; text-align: right; font-variant-numeric: tabular-nums; }
+/* The number keeps its room: a long «of …» gives way (ellipsis), never the field. */
+.stepper-unit { padding: 0 2px 0 5px; color: var(--muted); font: 400 var(--control-font)/1 var(--font-sans); white-space: nowrap; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (width < 600px) {
   .form-grid { grid-template-columns: minmax(0, 1fr); }
   .inline-form > .field { flex: 1 1 200px; }
@@ -177,6 +178,12 @@ html:has(.scrim) { overflow: hidden; }
 .dialog-text { margin: 0; font: 400 var(--text-base)/1.55 var(--font-sans); color: var(--muted); text-wrap: pretty; }
 .dialog-body > * { flex-shrink: 0; }
 .dialog-foot { flex-shrink: 0; display: flex; justify-content: flex-end; gap: var(--space-3); padding: 0 22px 22px; }
+/* A body that scrolls says so: what goes on under the title or the buttons fades out at that edge (no layout change). */
+.dialog-title, .dialog-foot { position: relative; z-index: 1; }
+.dialog-title::after, .dialog-foot::before { content: ""; position: absolute; left: 0; right: 0; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+.dialog-title::after { top: 100%; height: 18px; background: linear-gradient(var(--pop), transparent); }
+.dialog-foot::before { bottom: 100%; height: 32px; background: linear-gradient(transparent, var(--pop) 85%); }
+.dialog:has(> .dialog-body.more-above) > .dialog-title::after, .dialog-body.more-below + .dialog-foot::before { opacity: 1; }
 .dialog-foot > .back { margin-right: auto; }
 .dialog-foot.safe > .btn.primary { order: 1; }
 @media (width < 600px) {

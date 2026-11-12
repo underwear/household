@@ -185,3 +185,81 @@ test("a sign-in replaces only a sign-in: another kind of key of that name is ref
   expect(signins.waitingFor("claude")?.id).toBe(started.id);
   await signins.stop();
 });
+
+/** A sign-in VM that gives a link once `release` is called; its launches and closes are counted. */
+function slowLinkVm() {
+  const used = { launched: 0, closed: 0 };
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  const launch = async (progress?: (phase: "image" | "booting" | "login") => void): Promise<SigninVm> => {
+    used.launched++;
+    progress?.("image");
+    await ready;
+    let typed = false;
+    return {
+      exec: async (command) => {
+        const words = command.join(" ");
+        if (words.startsWith("tmux capture-pane")) return { ok: true, output: "visit: https://claude.com/cai/oauth/authorize?code=true&state=x" };
+        if (words.startsWith("tmux send-keys")) { typed = true; return { ok: true, output: "" }; }
+        if (command[0] === "cat") return typed ? { ok: true, output: credentialsFile(credentials("a", Date.now() + 8 * HOUR)) } : { ok: false, output: "" };
+        if (words.includes("claude auth status")) return { ok: true, output: status };
+        return { ok: false, output: "" };
+      },
+      close: async () => { used.closed++; },
+    };
+  };
+  return { launch, used, release: () => release() };
+}
+
+test("a second start while the first VM still comes up joins it: one VM, one link, its progress readable", async () => {
+  const vm = slowLinkVm();
+  const signins = new ClaudeSignins({ store: new SigninStore(join(tempDir(), "claude-auth")), state: new SigninState(), launch: vm.launch, saveKey: async () => {} });
+  const first = signins.start("claude");
+  await Bun.sleep(5);
+  expect(signins.progress("claude")?.phase).toBe("image");
+  const second = signins.start("claude");
+  vm.release();
+  const [a, b] = await Promise.all([first, second]);
+  expect(a.id).toBe(b.id);
+  expect(vm.used.launched).toBe(1);
+  expect(signins.progress("claude")).toBeUndefined();
+  await signins.finish(a.id, "Abcdefgh1234#Ijklmnop5678");
+  expect(vm.used.closed).toBe(1);
+});
+
+test("a start cancelled while its VM comes up removes that VM as soon as it is up; one joined meanwhile keeps it", async () => {
+  const cancelled = slowLinkVm();
+  const signins = new ClaudeSignins({ store: new SigninStore(join(tempDir(), "claude-auth")), state: new SigninState(), launch: cancelled.launch, saveKey: async () => {} });
+  const left = signins.start("claude");
+  await Bun.sleep(5);
+  await signins.cancelKey("claude");
+  cancelled.release();
+  await expect(left).rejects.toThrow("cancelled");
+  expect(cancelled.used).toEqual({ launched: 1, closed: 1 });
+  expect(signins.waitingFor("claude")).toBeUndefined();
+
+  const rejoined = slowLinkVm();
+  const again = new ClaudeSignins({ store: new SigninStore(join(tempDir(), "claude-auth")), state: new SigninState(), launch: rejoined.launch, saveKey: async () => {} });
+  const first = again.start("claude");
+  await Bun.sleep(5);
+  await again.cancelKey("claude"); // the page went
+  const back = again.start("claude"); // and came back
+  rejoined.release();
+  expect((await back).id).toBe((await first).id);
+  expect(rejoined.used).toEqual({ launched: 1, closed: 0 });
+  await again.stop();
+});
+
+test("finishing closes the VM before the key is saved (saving reloads, which may take long)", async () => {
+  const vm = slowLinkVm();
+  const order: string[] = [];
+  const signins = new ClaudeSignins({
+    store: new SigninStore(join(tempDir(), "claude-auth")), state: new SigninState(),
+    launch: async (progress) => { const made = await vm.launch(progress); return { exec: made.exec, close: async () => { order.push("close"); await made.close(); } }; },
+    saveKey: async () => { order.push("save"); },
+  });
+  vm.release();
+  const started = await signins.start("claude");
+  await signins.finish(started.id, "Abcdefgh1234#Ijklmnop5678");
+  expect(order).toEqual(["close", "save"]);
+});

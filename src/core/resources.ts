@@ -4,7 +4,7 @@ export const DEFAULT_PET_CPUS = 2;
 export const DEFAULT_PET_MEMORY_MIB = 1024;
 // A sane bound for any machine; the host a pet runs on bounds it further (`beyondHost`).
 export const petCpuSchema = z.number().int().min(1).max(1024);
-export const petMemorySchema = z.number().int().min(512).multipleOf(128);
+export const petMemorySchema = z.number().int().min(512).multipleOf(128); // RAM_STEP_MIB
 export interface PetResources { cpus: number; memoryMiB: number }
 export function petResources(pet: { cpus?: number | null; memoryMiB?: number | null }): PetResources {
   return { cpus: pet.cpus ?? DEFAULT_PET_CPUS, memoryMiB: pet.memoryMiB ?? DEFAULT_PET_MEMORY_MIB };
@@ -15,6 +15,11 @@ export interface HostCapacity { cpus: number; memoryMiB: number }
 
 /** «2 GiB», «1.5 GiB», «0.5 GiB»: mebibytes in GiB, without trailing zeros. */
 export const gib = (mebibytes: number) => `${Number((mebibytes / 1024).toFixed(3))} GiB`;
+
+/** What RAM is counted in: the config takes any multiple of it (`petMemorySchema`, `workspaceResourcesSchema`). */
+export const RAM_STEP_MIB = 128;
+/** The most RAM a VM or workspace may be given on `host`, in whole steps (3786 MiB → 3712 MiB, «3.625 GiB»). */
+export const hostRamMiB = (host: HostCapacity) => Math.floor(host.memoryMiB / RAM_STEP_MIB) * RAM_STEP_MIB;
 
 /** What a pet is given beyond its host, a line per resource; none when its VM fits on the host. */
 export function beyondHost({ cpus, memoryMiB }: PetResources, host: HostCapacity): string[] {

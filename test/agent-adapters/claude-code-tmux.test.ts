@@ -22,6 +22,8 @@ test("provisioning: CA trust in env; the key's placeholder by its kind, the real
     HOUSEHOLD_MCP_URL: "http://gw:8080/mcp",
     HOUSEHOLD_INSTRUCTIONS: `Be brief.\n${BASH_DESCRIPTIONS}`, // and what claude is told of its own tools
     HOUSEHOLD_MODEL: "sonnet",
+    // No official plugin marketplace on every start (downloads.claude.ai, then github.com: on no allowlist).
+    CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: "1",
     // Household's timer is the only one on claude's permission dialogs (the name is in the 2.1.296 binary).
     CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT: "1",
     CLAUDE_CODE_DISABLE_CRON: "1",
