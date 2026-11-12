@@ -66,6 +66,8 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
   private version?: Promise<void>;
   private readonly run: MicrosandboxRun;
   private readonly setupScripts = new Map<string, string>();
+  /** VMs started without guest services (`ContainerSpec.noGuestServices`). */
+  private readonly withoutServices = new Set<string>();
   private readonly setupRunSources = new Map<string, string>();
   private readonly setupRuns = new Map<string, Promise<EnvironmentSetupResult>>();
   private readonly setupResults = new Map<string, EnvironmentSetupResult>();
@@ -185,6 +187,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
 
   private async create(spec: ContainerSpec): Promise<void> {
     this.configureEnvironmentSetup(spec.name, spec.environmentSetup, spec.environmentOnStart);
+    if (spec.noGuestServices) this.withoutServices.add(spec.name); else this.withoutServices.delete(spec.name);
     const args = ["create", spec.image, "--name", spec.name, "--pull", "never", "--cpus", String(spec.cpus ?? this.options.cpus ?? 2), "--memory", spec.limits?.memory ?? "1G", "--no-net"];
     for (const port of new Set([this.options.proxyPort, this.options.relayPort])) args.push("--net-rule", `allow@host:tcp:${port}`);
     for (const [key, value] of Object.entries(spec.env ?? {})) args.push("--env", `${key}=${value}`);
@@ -219,7 +222,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
     // Do this before launching either agent and before its readiness deadline starts. msb preserves the
     // image's uid/workdir/env, so setup has precisely the pet's existing rights and proxied networking.
     await this.checked(["exec", "--stream", "--no-tty", name, "--", "sh", "-c", GUEST_TRUST_SETUP]);
-    await this.startGuestServices(name);
+    if (!this.withoutServices.has(name)) await this.startGuestServices(name);
     if ((item.config?.env ?? []).some?.((item: {key?: string}) => item.key === "HOUSEHOLD_SKILLS_DIRECTORY")) {
       await this.checked(["exec", "--stream", "--no-tty", name, "--", "python3", "-"], { stdin: GUEST_SKILLS_SETUP });
     }

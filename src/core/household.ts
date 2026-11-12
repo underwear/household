@@ -133,6 +133,8 @@ export function trustOf(people: People, isSender: (owner: Owner) => boolean): Tr
 
 export function assertCanCreateHouse(household: Household, name: string): void {
   assertName("house", name);
+  // Household's own sign-in VMs reach the gateway under this name (app/claude-signins.ts UTILITY_SUBJECT).
+  if (name === "household-auth") throw new HouseholdError("'household-auth' is Household's own name: choose another");
   if (findHouse(household, name)) throw new HouseholdError(`workspace '${name}' already exists`);
 }
 

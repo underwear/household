@@ -1,6 +1,7 @@
 import type { AgentAdapter, Exec, KeyUse, SendResult } from "../../core/agent";
 import type { Provider } from "../../core/keys";
 import { HOME } from "./actions";
+import { parseSigninMarker, SIGNIN_SCOPES } from "./signin";
 import { readAnthropicAllowance } from "./allowance";
 import { answerFor, askOf } from "./dialogs";
 import { translateHook } from "./translate";
@@ -18,17 +19,28 @@ export const PLACEHOLDER_TOKEN = `sk-ant-oat01-household-placeholder-${"x".repea
 export const PLACEHOLDER_API_KEY = `sk-ant-api03-household-placeholder-${"x".repeat(71)}AA`;
 
 const ANTHROPIC = { host: "api.anthropic.com", port: 443 };
+/** Where claude calls the account's claude.ai connectors (`/v1/mcp/<server>`), on the same token. */
+const MCP_PROXY = { host: "mcp-proxy.anthropic.com", port: 443 };
 
-/** An Anthropic key by its value: a subscription's OAuth token, or an API key. */
+/**
+ * An Anthropic key by its value: a sign-in Household holds (`claude-signin:`, connectors and all), a subscription's
+ * OAuth token (`claude setup-token`'s: inference only), or an API key.
+ */
 function useKey(provider: Provider, value: string): KeyUse | { problem: string } {
   if (provider !== "anthropic") return { problem: `claude-code-tmux runs on anthropic keys, not ${provider}` };
+  if (parseSigninMarker(value)) {
+    // A token from the env has no scopes claude can read: it is told the sign-in's, so it loads the connectors.
+    // The connectors' proxy gets the token only for a bot that turned them on (core/agent.ts placedKeyUse).
+    return { kind: "sign-in", accountConnectors: true, env: { CLAUDE_CODE_OAUTH_TOKEN: PLACEHOLDER_TOKEN, CLAUDE_CODE_OAUTH_SCOPES: SIGNIN_SCOPES },
+      wire: [{ target: ANTHROPIC, header: "authorization", prefix: "Bearer " }], connectorWire: [{ target: MCP_PROXY, header: "authorization", prefix: "Bearer " }] };
+  }
   if (value.startsWith("sk-ant-oat")) {
     return { kind: "subscription", env: { CLAUDE_CODE_OAUTH_TOKEN: PLACEHOLDER_TOKEN }, wire: [{ target: ANTHROPIC, header: "authorization", prefix: "Bearer " }] };
   }
   if (value.startsWith("sk-ant-api")) {
     return { kind: "API key", env: { ANTHROPIC_API_KEY: PLACEHOLDER_API_KEY }, wire: [{ target: ANTHROPIC, header: "x-api-key", prefix: "" }] };
   }
-  return { problem: "not an Anthropic key: a subscription token (sk-ant-oat01-…, from `claude setup-token`) or an API key (sk-ant-api03-…)" };
+  return { problem: "not an Anthropic key: a Household sign-in (`house key claude`), a subscription token (sk-ant-oat01-…, from `claude setup-token`) or an API key (sk-ant-api03-…)" };
 }
 
 const SESSION = "main";
@@ -162,9 +174,10 @@ const SETTINGS = [
   {
     key: "claudeAiConnectors",
     label: "Claude.ai connectors",
-    description: "Use this account’s Claude.ai connectors for this bot and its sideworkers. Scouts always run without them. Also allows other MCP servers configured in the harness’s environment.",
+    description: "The bot and its sideworkers use the connectors of the Claude account its key signed in to (Drive, Jira…), as that account. Scouts never do.",
     checkbox: true,
     petOnly: true,
+    needsAccountConnectors: true,
     options: [{ id: "true", label: "Enabled" }, { id: "false", label: "Disabled" }],
     defaultLabel: "disabled",
   },
@@ -241,7 +254,7 @@ export const claudeCodeTmux: AgentAdapter = {
   allowance: { target: ANTHROPIC, read: readAnthropicAllowance },
   providers: ["anthropic"],
   useKey,
-  credentialHeaders: [{ target: ANTHROPIC, headers: ["authorization", "x-api-key"] }],
+  credentialHeaders: [{ target: ANTHROPIC, headers: ["authorization", "x-api-key"] }, { target: MCP_PROXY, headers: ["authorization", "x-api-key"] }],
   async isReady(exec, mode) {
     const { ok, output } = await exec(CAPTURE);
     const ready = ok && isClaudeReady(output);

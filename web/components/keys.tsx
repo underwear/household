@@ -5,9 +5,14 @@ import { Dialog, useDialog } from "./dialog";
 import { CheckList, SelectField, TextField } from "./fields";
 import { Cell, List, ListRow, Section } from "./layout";
 import { RowActions, written } from "./section";
+import { SigninLine, signinAccount } from "./claude-signin";
+import { AddKeyDialog } from "./add-key";
 
-/** A key as the list shows it: its first five characters, then two dots; the whole value only on Reveal. */
-export const masked = (value: string) => `${value.slice(0, 5)}••`;
+/** A key Household signed in itself (Claude's or ChatGPT's): signed in again, never revealed (it holds no token). */
+const signedIn = (key: KeyView) => key.signin !== null || key.kind === "sign-in" || (key.accountConnectors && key.provider === "openai");
+
+/** A key as the list shows it: its first ten characters (enough to tell sk-ant-oat01 from sk-ant-api03), then two dots; the whole value only on Reveal. */
+export const masked = (value: string) => `${value.slice(0, 10)}••`;
 
 export interface KeysSectionProps {
   keys: KeyView[];
@@ -27,8 +32,10 @@ export interface KeysSectionProps {
  */
 export function KeysSection({ keys, houses, providers, noteMax, refresh, notify }: KeysSectionProps) {
   const dialog = useDialog();
-  /** The key being edited, or "new". */
-  const [editing, setEditing] = useState<KeyView | "new">();
+  /** The key being edited. */
+  const [editing, setEditing] = useState<KeyView>();
+  /** A key being added ("new"), or a signed-in one signed in again. */
+  const [adding, setAdding] = useState<KeyView | "new">();
   const save = async (write: Promise<unknown>, done: string) => {
     try {
       const warning = await written(write);
@@ -57,7 +64,7 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
       title="Keys"
       hint="Model provider keys your bots run on. Bots never see them."
       actions={
-        <button className="btn primary" onClick={() => setEditing("new")}>
+        <button className="btn primary" onClick={() => setAdding("new")}>
           + Add key
         </button>
       }
@@ -68,9 +75,15 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
             key={key.name}
             actions={
               <>
-                <button className="text-btn plain" onClick={() => reveal(key)}>
-                  Reveal
-                </button>
+                {signedIn(key) ? (
+                  <button className="text-btn plain" onClick={() => setAdding(key)}>
+                    Sign in again
+                  </button>
+                ) : (
+                  <button className="text-btn plain" onClick={() => reveal(key)}>
+                    Reveal
+                  </button>
+                )}
                 <RowActions onEdit={() => setEditing(key)} onRemove={() => remove(key)} />
               </>
             }
@@ -84,7 +97,17 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
               {key.note && <span className="hint">{key.note}</span>}
             </Cell>
             <Cell lines>
-              <span className="id">{masked(key.value)}</span>
+              {key.signin ? (
+                <>
+                  <span>Signed in · {signinAccount(key.signin)}</span>
+                  <SigninLine signin={key.signin} />
+                </>
+              ) : signedIn(key) ? (
+                <span className="error">Not signed in on this Household (restored from a backup?): sign in again.</span>
+              ) : (
+                <span className="id">{masked(key.value)}</span>
+              )}
+              {key.provider === "anthropic" && !key.accountConnectors && key.kind !== null && <span className="hint">No claude.ai connectors on this kind of key.</span>}
               <UsedIn pets={key.pets} />
               <AllowanceLine allowance={key.allowance} allowOverage={key.allowOverage} />
             </Cell>
@@ -96,9 +119,18 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
           houses={houses}
           providers={providers}
           noteMax={noteMax}
-          keyView={editing === "new" ? undefined : editing}
+          keyView={editing}
           onClose={() => setEditing(undefined)}
-          save={(name, fields) => (editing === "new" ? save(api.addKey(name, fields), `Key ${name} added`) : save(api.updateKey(name, fields), `Key ${name} saved`))}
+          save={(name, fields) => save(api.updateKey(name, fields), `Key ${name} saved`)}
+        />
+      )}
+      {adding && (
+        <AddKeyDialog
+          keys={keys}
+          providers={providers}
+          again={adding === "new" ? undefined : adding}
+          onClose={() => setAdding(undefined)}
+          onDone={async (name, warning) => { setAdding(undefined); notify(warning ?? (adding === "new" ? `Key ${name} added` : `Key ${name} signed in again`), warning !== undefined); await refresh(); }}
         />
       )}
       {dialog.element}
@@ -171,11 +203,17 @@ export function KeyDialog({ houses = [], providers, noteMax, keyView, onClose, s
         children: (
           <>
             {!keyView && <TextField label="Name" mono value={name} onChange={setName} placeholder="claude" />}
-            <SelectField label="Provider" value={provider} onChange={setProvider} options={providers.map((each) => ({ value: each, label: each }))} />
-            <TextField label="Value" mono value={value} onChange={setValue}
-              placeholder={provider === "anthropic" ? "sk-ant-oat01-… or sk-ant-api03-…" : provider === "openai" ? "sk-…" : "Key or token"}
-              hint={<KeyHelp provider={provider} />}
-            />
+            {keyView && signedIn(keyView) ? (
+              <p className="hint">A sign-in: its tokens stay with Household. To change the account, use Sign in again.</p>
+            ) : (
+              <>
+                <SelectField label="Provider" value={provider} onChange={setProvider} options={providers.map((each) => ({ value: each, label: each }))} />
+                <TextField label="Value" mono value={value} onChange={setValue}
+                  placeholder={provider === "anthropic" ? "sk-ant-oat01-… or sk-ant-api03-…" : provider === "openai" ? "sk-…" : "Key or token"}
+                  hint={<KeyHelp provider={provider} />}
+                />
+              </>
+            )}
             <TextField label="Note" hint="Only you see this." value={note} onChange={setNote} placeholder="Max subscription" maxLength={noteMax} />
             {houses.length > 0 && <WorkspacesField houses={houses} checked={only} onChange={setOnly} />}
             <CheckList label="Past its allowance" options={[{ value: "overage", label: "Go on in overage (billed apart from the subscription)" }]}
@@ -218,12 +256,6 @@ function KeyHelp({ provider }: { provider: string }) {
             OpenAI Platform
           </a>
           .
-        </span>
-        <span>
-          <strong>ChatGPT subscription:</strong> run <code>house key codex my-chatgpt</code> on the Household machine and sign in; the key shows up here.{" "}
-          <a className="text-link" href="https://learn.chatgpt.com/docs/auth?surface=cli#login-on-headless-devices" target="_blank" rel="noreferrer">
-            Sign-in help
-          </a>
         </span>
       </span>
     );

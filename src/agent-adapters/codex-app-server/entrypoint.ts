@@ -65,7 +65,8 @@ export async function runBridge(options: BridgeOptions = {}) {
     "-c", "features.memories=false",
     "-c", "memories.generate_memories=false",
     "-c", "memories.use_memories=false",
-    "-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false",
+    // ChatGPT's apps (Codex's built-in codex_apps server, on chatgpt.com) only when the bot's owner turned them on.
+    "-c", `features.apps=${env.HOUSEHOLD_CODEX_APPS === "true" && !apiKey}`, "-c", "features.plugins=false", "-c", "features.remote_plugin=false",
     "-c", "features.browser_use=false", "-c", "features.browser_use_external=false", "-c", "features.computer_use=false", "-c", "features.in_app_browser=false",
     "-c", `mcp_servers.household.url=${JSON.stringify(env.HOUSEHOLD_MCP_URL)}`, "-c", "mcp_servers.household.required=true",
     // Household's tools enforce routing and owner approvals themselves. In manual mode, a second MCP

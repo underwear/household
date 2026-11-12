@@ -28,6 +28,8 @@ export interface AgentSetting {
   checkbox?: boolean;
   /** Only pets configure this; sideworkers inherit it and scouts cannot use it. */
   petOnly?: boolean;
+  /** Works only on a key whose account brings its connectors (`KeyUse.accountConnectors`); otherwise it does nothing. */
+  needsAccountConnectors?: boolean;
   label: string;
   /** What choosing it does, in a line. */
   description?: string;
@@ -147,6 +149,23 @@ export interface KeyUse {
   env: Record<string, string>;
   /** Where the gateway puts the value: on requests to `target`, header `header` becomes `prefix` + the value. */
   wire: { target: Endpoint; header: string; prefix: string }[];
+  /** The account's own connectors (claude.ai's, ChatGPT's apps) can reach the bot on this key: a sign-in's. */
+  accountConnectors?: boolean;
+  /**
+   * Where the value goes too, only for a bot that turned the account's connectors on (a setting with
+   * `needsAccountConnectors`), never for a scout: the connectors' own hosts, unreachable otherwise.
+   */
+  connectorWire?: { target: Endpoint; header: string; prefix: string }[];
+}
+
+/**
+ * The key's use as the gateway applies it to one pet: its connector hosts (`KeyUse.connectorWire`) join its wire only
+ * when the pet turned the account's connectors on and is no scout.
+ */
+export function placedKeyUse(use: KeyUse, agent: Pick<AgentAdapter, "settings">, settings: Record<string, string> | undefined, scout: boolean): KeyUse {
+  const { connectorWire, ...rest } = use;
+  const on = !scout && (agent.settings ?? []).some((setting) => setting.needsAccountConnectors && settings?.[setting.key] === "true");
+  return on && connectorWire?.length ? { ...rest, wire: [...rest.wire, ...connectorWire] } : rest;
 }
 
 export type SendResult =

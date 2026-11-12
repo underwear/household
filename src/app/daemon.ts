@@ -90,7 +90,10 @@ import { COMPILED, releaseShare } from "../infra/release";
 import { WebAuth } from "./web-auth";
 import { webRoutes, type ApiHandler } from "./web-routes";
 import { Onboarding } from "./onboarding";
-import { importCodex, localCodexLogin, startDeviceLogin } from "./codex-login";
+import { startDeviceLogin } from "./codex-login";
+import { codexSigninInfo, dedicatedAuthRoot } from "./codex-auth-backup";
+import { ClaudeSignins, claudeAuthRoot, SIGNIN_HOSTS, SigninState, SigninStore, signinReminder, startClaudeRefresh, UTILITY_SUBJECT, type SigninVm } from "./claude-signins";
+import { SIGNIN_PREFIX } from "../agent-adapters/claude-code-tmux/signin";
 import { checkGroup, watchSetup } from "../channel-adapters/telegram/first-contact";
 import { readPetLog } from "./pet-logs";
 import { backUpBeforeMigrating, migrateHousehold } from "./migrations";
@@ -195,6 +198,7 @@ export async function startDaemon(deps: DaemonDeps) {
   // The database's schema migrated when it opened; the config's and the records' go here, in their order.
   await migrateHousehold({ config, records, log: (text) => events.info(text) });
   await pets.refreshResources();
+  await pets.removeUtilities().catch(() => {}); // a crash's leftover sign-in VMs
   let state: StatusReport["state"] = "starting";
   let timezone = householdTimezone();
   let placed: PlacedPet[] = [];
@@ -327,7 +331,48 @@ export async function startDaemon(deps: DaemonDeps) {
     close:()=>scouts.end(r,"cancelled"),
   };}});
   const histories = new History((house, pet) => chat.conversation(house, pet), records, history);
-  const subscriptionKeys = new SubscriptionKeys(paths.gatewaySecretsDir, paths.configFile, (text) => events.error(text));
+  // Claude sign-ins: made and renewed by Claude Code in throwaway VMs that reach only Claude's sign-in hosts.
+  const signinStore = new SigninStore(claudeAuthRoot(paths.configFile));
+  const signinState = new SigninState();
+  const utilities = new Map<string, SubjectSpec & { subject: { kind: "household"; name: string; pet: string } }>();
+  const launchSigninVm = async (mode: "signin" | "renew"): Promise<SigninVm> => {
+    if (!appliedHousehold) throw new HouseholdError("Household is still starting: try again in a moment");
+    if (appliedHousehold.houses.some((house) => house.name === UTILITY_SUBJECT)) throw new HouseholdError(`a workspace is named '${UTILITY_SUBJECT}', which Household keeps for its own sign-in VMs: rename it to sign in to Claude`);
+    const adapter = agents.get("claude-code-tmux");
+    if (!adapter) throw new HouseholdError("this Household has no Claude Code harness");
+    const pet = `u-${randomBytes(5).toString("hex")}`;
+    utilities.set(pet, { subject: { kind: "household", name: UTILITY_SUBJECT, pet }, policy: { kind: "allowlist", allow: SIGNIN_HOSTS }, intercept: [] });
+    const network = () => enqueue(() => appliedHousehold ? applyNetwork(appliedHousehold, placed) : Promise.resolve());
+    const release = async () => { utilities.delete(pet); await network().catch(() => {}); };
+    try {
+      await network();
+      const vm = await pets.runUtility(adapter, { house: UTILITY_SUBJECT, pet }, { HOUSEHOLD_UTILITY: mode });
+      return { exec: vm.exec, close: async () => { await vm.close().catch(() => {}); await release(); } };
+    } catch (error) {
+      await pets.removeUtility(pet).catch(() => {}); // this one only: another key's may be mid-renewal
+      await release();
+      throw error;
+    }
+  };
+  const subscriptionKeys = new SubscriptionKeys(paths.gatewaySecretsDir, paths.configFile, (text) => events.error(text), undefined,
+    (options) => startClaudeRefresh(options, { store: signinStore, state: signinState, launch: () => launchSigninVm("renew") }));
+  const claudeSignins = new ClaudeSignins({
+    store: signinStore,
+    state: signinState,
+    launch: () => launchSigninVm("signin"),
+    // A sign-in may replace only a sign-in: never quietly another kind of key (and its bots' harness with it).
+    refuse: async (name) => {
+      const existing = (await config.load()).keys.find((key) => key.name === name);
+      return existing && !existing.value.startsWith(SIGNIN_PREFIX) ? `key '${name}' exists and is not a Claude sign-in: choose another name` : undefined;
+    },
+    saveKey: async (name, value, account) => {
+      const note = `Claude sign-in: ${[account.email, account.orgName].filter(Boolean).join(" · ")}`;
+      if ((await config.load()).keys.some((key) => key.name === name)) await config.updateKey(name, { provider: "anthropic", value, note });
+      else await config.addKey(name, { provider: "anthropic", value, note });
+      // Saved either way: a reload that fails says so in the log, not as a failed sign-in.
+      await applyConfig().catch(() => {});
+    },
+  });
   // What each subscription key has left, read off the gateway; a used-up key's requests stop there (keys.<k>.allowOverage lets them go on).
   const allowances = new KeyAllowances(records, (text) => events.info(text));
   let appliedHousehold: Household | undefined;
@@ -368,7 +413,10 @@ export async function startDaemon(deps: DaemonDeps) {
   const applyNetwork = async (household: Household, wanted: PlacedPet[]) => {
     const staged = await subscriptionKeys.prepare(wanted, household.keys, household.houses);
     try {
-      const result = await network.reconcile(specsOf(household, wanted), staged.credentials, access);
+      // Household's own throwaway VMs: their narrow allowlists, and a token each (no credentials to fill in).
+      const own = [...utilities.values()];
+      const credentials = { ...staged.credentials, pets: [...staged.credentials.pets, ...own.map(({ subject }) => ({ house: subject.name, pet: subject.pet, credentials: [] }))] };
+      const result = await network.reconcile([...specsOf(household, wanted), ...own], credentials, access);
       subjects = result.subjects;
       staged.commit();
       allowances.follow(wanted, household.keys, household.timezone);
@@ -545,8 +593,6 @@ export async function startDaemon(deps: DaemonDeps) {
     }
   };
   const onboarding = new Onboarding({
-    localCodex: () => localCodexLogin(),
-    importCodex: (name) => importCodex(paths, config, name),
     deviceLogin: (name) => startDeviceLogin(paths, config, name),
     watch: (token, options) => watchSetup(token, { ...options, apiBase: deps.telegramApi }),
     checkGroup: (token, chat) => checkGroup(token, chat, deps.telegramApi),
@@ -616,6 +662,10 @@ export async function startDaemon(deps: DaemonDeps) {
         applySecrets,
         petStates: () => pets.status(placed),
         allowances: (key) => allowances.of(key),
+        claudeSignins,
+        // Whose each sign-in is: Claude's from Household's own files, ChatGPT's from its own auth.json.
+        signins: (key) => signinStore.infoNow(key) ?? codexSigninInfo(dedicatedAuthRoot(paths.configFile), key),
+        forgetSignin: (key) => signinState.lock(key, () => signinStore.remove(key)), // after any renewal of it
         terminalSnapshot: async (house, pet, agent) => {
           const current = placed.find((item) => item.house === house && item.pet === pet && item.agent.name === agent);
           return current ? pets.terminalSnapshot(current) : undefined;
@@ -708,6 +758,7 @@ export async function startDaemon(deps: DaemonDeps) {
     await secretRequests.stop();
     await previews.stop();
     subscriptionKeys.stop();
+    await claudeSignins.stop();
     await network.stop();
     await chat.stop();
     onboarding.stopAll();
@@ -735,6 +786,24 @@ export async function startDaemon(deps: DaemonDeps) {
   houseInboxes.start();
   lifecycles?.start();
   const stopSweeping = sweepInboxes(inboxes, events);
+  // A Claude sign-in's last days are said in its bots' chats, once a day (one bot per workspace says it).
+  const remindSignins = async () => {
+    const household = appliedHousehold;
+    if (!household) return;
+    for (const key of household.keys.filter(({ value }) => value.startsWith(SIGNIN_PREFIX))) {
+      const info = signinStore.infoNow(key.name);
+      const said = `claude-signin.reminded.v1.${key.name}`;
+      const reminder = info && signinReminder(key.name, info, Date.now(), records.get(said));
+      if (!reminder) continue;
+      const tellers = new Map<string, string>();
+      for (const pet of placed) if (pet.key === key.name && !pet.scout && !tellers.has(pet.house)) tellers.set(pet.house, pet.pet);
+      for (const [house, pet] of tellers) await chat.notice(house, pet, reminder.text).catch(() => {});
+      events.info(`Claude sign-in '${key.name}': ${info.endsAt !== undefined && info.endsAt <= Date.now() ? "ended" : "ends soon"}; reminded`);
+      records.set(said, reminder.day);
+    }
+  };
+  const signinReminders = setInterval(() => void remindSignins().catch(() => {}), 60 * 60_000);
+  signinReminders.unref?.();
   state = "running";
   events.info(`ready, control socket ${paths.socket}`);
 
@@ -751,13 +820,17 @@ export async function startDaemon(deps: DaemonDeps) {
       await houseInboxes.stop();
       lifecycles?.stop();
       stopSweeping();
+      clearInterval(signinReminders);
       await networkRequests.stop();
       await secretRequests.stop();
       await previews.stop();
       const closed = control.stop();
       pets.stopWaiting();
+      // A renewal under way saves the only live tokens: waited for (up to two minutes) before anything stops.
+      await Promise.race([signinState.idle(), Bun.sleep(120_000)]);
       await queue; // an in-flight reload finishes (and answers) before the gateway goes away
       subscriptionKeys.stop();
+      await claudeSignins.stop();
       await chat.stop();
       delivery.stop();
       await agentApi?.stop();

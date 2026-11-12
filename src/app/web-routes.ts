@@ -39,7 +39,9 @@ import { ownerProblem, type ChannelKinds, type Platforms } from "./kinds";
 import type { PetStatus } from "./pet-plane";
 import { requestDomain, requestPort, type NetworkRequests } from "./network-requests";
 import { clearedCookie, cookieValue, sessionCookie, sessionCookieName, type WebAuth } from "./web-auth";
-import type { AgentView, BotListenView, DeviceLoginView, HouseView, KeysView, MeView, OnboardingView, WriteView } from "./web-views";
+import type { AgentView, BotListenView, ClaudeSigninView, DeviceLoginView, HouseView, KeysView, MeView, WriteView } from "./web-views";
+import type { ClaudeSignins } from "./claude-signins";
+import type { KeySignin } from "./keys";
 import type { Onboarding } from "./onboarding";
 import { DEFAULT_BOT, SETUP_FEATURES, PROVIDERS as SETUP_PROVIDERS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, defaultBotSize } from "../core/onboarding";
 import { assertName } from "../core/names";
@@ -103,6 +105,12 @@ export interface WebRoutesDeps {
   applyWaitMs?: number;
   /** The setup's sign-ins and waits for a bot's first message. */
   onboarding?: Onboarding;
+  /** Claude sign-ins: each in a throwaway VM, the person's code typed back into Claude Code's own login. */
+  claudeSignins?: Pick<ClaudeSignins, "start" | "finish" | "cancel" | "waitingFor">;
+  /** A key's Claude sign-in as last saved (whose, until when); undefined for a pasted key. */
+  signins?: (key: string) => KeySignin | undefined;
+  /** Removes a key's Claude sign-in files, if it had any. */
+  forgetSignin?: (key: string) => Promise<void>;
 }
 
 /** The web routes, and the same API without a browser session for the daemon's own control socket (the CLI). */
@@ -125,6 +133,7 @@ interface Call {
 type Route = [method: string, pattern: RegExp, handle: (call: Call) => Promise<Response>];
 
 const nameBody = z.strictObject({ name: z.string() });
+const codeBody = z.strictObject({ code: z.string().min(1).max(1100) });
 const hostBody = z.strictObject({ host: z.string() });
 const hostsBody = z.strictObject({ hosts: z.array(z.string()).min(1).max(50) });
 const ONBOARDING_KINDS = ["telegram-private", "telegram-dm", "telegram-group"];
@@ -312,7 +321,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
   const keysWritten = async (household: Household, what: string, status = 200): Promise<Response> => {
     events.info(`web: key ${what}`);
     const state = await applied();
-    return json({ keys: keyViews(deps.agents, household, deps.allowances), ...state } satisfies KeysView, status);
+    return json({ keys: keyViews(deps.agents, household, deps.allowances, deps.signins), ...state } satisfies KeysView, status);
   };
 
   /** After a write to the secrets: the reload, and the secrets as written (never their values in the log). */
@@ -434,18 +443,39 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     return [{ house: await viewOf(after, house), ...state }, 201];
   };
   const routes: Route[] = [
-    ["GET", /^\/api\/onboarding$/, async () => json({ localCodex: deps.onboarding?.localCodex() ?? null } satisfies OnboardingView)],
-    ["POST", /^\/api\/onboarding\/codex\/import$/, async ({ request }) => {
-      const { name } = await bodyOf(request, nameBody);
-      await onboarding().importCodex(name);
-      events.info(`web: key ${name} added (a copy of this machine's Codex login)`);
-      return json({ keys: keyViews(deps.agents, await config.load(), deps.allowances) } satisfies KeysView, 201);
-    }],
     ["POST", /^\/api\/onboarding\/codex\/login$/, async ({ request }) => {
       const { name } = await bodyOf(request, nameBody);
       return json(await onboarding().startLogin(name) satisfies DeviceLoginView, 201);
     }],
     ["GET", /^\/api\/onboarding\/codex\/login\/([^/]+)$/, async ({ params: [id] }) => json(onboarding().login(id!))],
+    // A Claude sign-in (key `name`, new or signed in again): a throwaway VM runs Claude Code's login and gives its link.
+    ["POST", /^\/api\/keys\/claude\/signin$/, async ({ request }) => {
+      const { name } = await bodyOf(request, nameBody);
+      if (!deps.claudeSignins) throw new HouseholdError("this Household cannot sign in to Claude");
+      const { id, url } = await deps.claudeSignins.start(name);
+      return json({ id, url } satisfies ClaudeSigninView, 201);
+    }],
+    // The code Claude's page showed: typed into the waiting login; the key is saved (or replaced) once Claude takes it.
+    ["POST", /^\/api\/keys\/claude\/signin\/([^/]+)$/, async ({ params: [id], request }) => {
+      const { code } = await bodyOf(request, codeBody);
+      if (!deps.claudeSignins) throw new HouseholdError("this Household cannot sign in to Claude");
+      const account = await deps.claudeSignins.finish(id!, code);
+      events.info(`web: Claude sign-in saved (${[account.email, account.orgName].filter(Boolean).join(", ")})`);
+      return json({ keys: keyViews(deps.agents, await config.load(), deps.allowances, deps.signins) } satisfies KeysView, 201);
+    }],
+    // The code for key `name`'s waiting sign-in (`house key claude <name> --code`): a CLI or an agent knows the key, not the id.
+    ["POST", /^\/api\/keys\/([^/]+)\/claude-signin\/code$/, async ({ params: [name], request }) => {
+      const { code } = await bodyOf(request, codeBody);
+      const waiting = deps.claudeSignins?.waitingFor(name!);
+      if (!waiting) throw new HouseholdError(`no sign-in of key '${name}' waits for a code (they last 10 minutes): start one with house key claude ${name} --link`);
+      const account = await deps.claudeSignins!.finish(waiting.id, code);
+      events.info(`Claude sign-in saved (${[account.email, account.orgName].filter(Boolean).join(", ")})`);
+      return json({ keys: keyViews(deps.agents, await config.load(), deps.allowances, deps.signins) } satisfies KeysView, 201);
+    }],
+    ["DELETE", /^\/api\/keys\/claude\/signin\/([^/]+)$/, async ({ params: [id] }) => {
+      await deps.claudeSignins?.cancel(id!);
+      return json({});
+    }],
     ["DELETE", /^\/api\/onboarding\/codex\/login\/([^/]+)$/, async ({ params: [id] }) => {
       onboarding().cancelLogin(id!);
       return json({});
@@ -567,7 +597,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       const [household, states] = await Promise.all([loadEffective(), deps.petStates()]);
       return json(household.houses.map((house) => houseView(house, states, household.keys)));
     }],
-    ["GET", /^\/api\/keys$/, async () => json(keyViews(deps.agents, await config.load(), deps.allowances))],
+    ["GET", /^\/api\/keys$/, async () => json(keyViews(deps.agents, await config.load(), deps.allowances, deps.signins))],
     ["POST", /^\/api\/keys$/, async ({ request }) => {
       const { name, ...fields } = await bodyOf(request, newKeyBody);
       return keysWritten(await config.addKey(name, fields), `${name} added`, 201);
@@ -589,7 +619,9 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
     ["DELETE", /^\/api\/keys\/([^/]+)$/, async ({ params: [name] }) => {
       const active = (await loadEffective()).houses.flatMap(house => house.pets.filter(pet => pet.sideworker && pet.key === name).map(pet => `${house.name}/${pet.name}`));
       if (active.length) throw new HouseholdError(`key '${name}' is used by sideworkers: ${active.join(", ")}; close them first`);
-      return keysWritten(await config.removeKey(name!), `${name} removed`);
+      const removed = await config.removeKey(name!);
+      await deps.forgetSignin?.(name!); // a Claude sign-in's tokens go with its key
+      return keysWritten(removed, `${name} removed`);
     }],
     ["GET", /^\/api\/houses\/([^/]+)\/secrets$/, async ({ params: [houseName] }) => {
       const house = (await config.load()).houses.find(house => house.name === houseName);

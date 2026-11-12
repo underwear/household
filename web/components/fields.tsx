@@ -247,6 +247,8 @@ export interface SwitchOption {
   label: ReactNode;
   /** A line on what turning it on does. */
   description?: ReactNode;
+  /** It cannot be turned on here (its description says why); one that is on can still be turned off. */
+  disabled?: boolean;
 }
 
 /** On/off settings in one frame: each its name and a line on it, a switch on the right. */
@@ -260,7 +262,7 @@ export function SwitchList({ label, options, on, onToggle, disabled }: { label: 
             <span className="strong">{option.label}</span>
             {option.description && <span className="hint">{option.description}</span>}
           </span>
-          <input type="checkbox" role="switch" className="switch" checked={on.includes(option.value)} disabled={disabled} onChange={() => onToggle(option.value)} />
+          <input type="checkbox" role="switch" className="switch" checked={on.includes(option.value)} disabled={disabled || (option.disabled && !on.includes(option.value))} onChange={() => onToggle(option.value)} />
         </label>
       ))}
     </fieldset>

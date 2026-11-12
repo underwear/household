@@ -21,7 +21,8 @@ import { callControl } from "../infra/control-socket";
 import { openInBrowser, runCommand } from "../infra/process";
 import { resolvePaths, type Paths } from "../infra/paths";
 import { MORE_USAGE, runMore } from "./commands";
-import { connectCodex, importCodex, localCodexLogin } from "../app/codex-login";
+import { connectCodex } from "../app/codex-login";
+import { claudeSigninCode, claudeSigninLink, signInClaude } from "./claude-signin";
 import { onboard } from "./onboard";
 import { resolveSlackDm } from "../channel-adapters/slack/setup";
 import { update } from "./update";
@@ -49,9 +50,12 @@ const USAGE = `usage:
   house key add <name> --provider anthropic|openai [--value <value>] [--note <text>]
                                  a key the bots may run on (its value from stdin when --value is left out:
                                  a command line stays in the shell's history)
-  house key codex <name> [--local]
-                                 sign in to ChatGPT for Household (its own login: a code for any browser), or with
-                                 --local copy the ChatGPT login of the Codex on this machine ($CODEX_HOME or ~/.codex)
+  house key claude <name> [--link | --code <code>]
+                                 sign in to Claude for Household (its own login: a link for any browser, then the
+                                 code it shows); bots on it can get the account's claude.ai connectors. Again to
+                                 sign in anew. Without a terminal to answer in: --link prints the link, --code
+                                 gives the code (within 10 minutes)
+  house key codex <name>         sign in to ChatGPT for Household (its own login: a code for any browser)
   house key rm <name>            remove a key (refused while a bot runs on it)
                                  key add and key set take --workspaces a,b: only those workspaces' bots may run on it
   house key set <name> --allow-overage on|off
@@ -138,8 +142,7 @@ async function startOnboarding(paths: Paths, config: ConfigStore): Promise<void>
     watch: (token, options) => watchSetup(token, { ...options, apiBase: telegramApi }),
     checkGroup: (token, chat) => checkGroup(token, chat, telegramApi),
     codexLogin: (name) => connectCodex(paths, config, name),
-    localCodex: () => localCodexLogin(),
-    codexImport: async (name) => { await importCodex(paths, config, name); },
+    claudeSignin: (name, terminal) => signInClaude(terminal, paths, name),
     claudeHere: async () => Bun.which("claude") !== null,
     async claudeSetupToken() {
       try { return (await Bun.spawn(["claude", "setup-token"], { stdin: "inherit", stdout: "inherit", stderr: "inherit" }).exited) === 0; }
@@ -287,6 +290,8 @@ async function main(argv: string[]): Promise<void> {
       name: { type: "string" },
       force: { type: "boolean" },
       local: { type: "boolean" },
+      link: { type: "boolean" },
+      code: { type: "string" },
       "no-open": { type: "boolean" },
       cpus: { type: "string" },
       memory: { type: "string" },
@@ -351,11 +356,15 @@ async function main(argv: string[]): Promise<void> {
     return notifyDaemon(paths);
   }
   if (command === "key" && args[0] === "codex" && args.length === 2) {
-    if (values.local) {
-      const from = await importCodex(paths, config, args[1]!, undefined, values.note);
-      console.log(`subscription '${args[1]}' connected: a copy of this machine's Codex login${from.email ? ` (${from.email})` : ""}, refreshed by Household`);
-    } else await connectCodex(paths, config, args[1]!, values.note);
+    if (values.local) throw new HouseholdError("Household no longer copies this machine's Codex login: `house key codex <name>` signs it in on its own");
+    await connectCodex(paths, config, args[1]!, values.note);
     return notifyDaemon(paths);
+  }
+  // The daemon boots the sign-in VM and saves the key; it reloads by itself.
+  if (command === "key" && args[0] === "claude" && args.length === 2) {
+    if (values.link) return claudeSigninLink(paths, args[1]!);
+    if (values.code !== undefined) return claudeSigninCode(paths, args[1]!, values.code);
+    return signInClaude(consoleTerminal(), paths, args[1]!);
   }
   if (command === "key" && args[0] === "set" && args.length === 2 && values["allow-overage"] !== undefined) {
     const allowOverage = { on: true, off: false }[values["allow-overage"]];

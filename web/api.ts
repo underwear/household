@@ -27,11 +27,11 @@ import type { EnvironmentView } from "../src/app/environment";
 import type { EnvironmentSetupResult } from "../src/infra/environment-setup";
 export type { EnvironmentView };
 // The web UI's only way to the daemon: its JSON API. The types are the server's (type-only: nothing of it is bundled).
-import type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView, OnboardingView } from "../src/app/web-views";
-export type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView, OnboardingView };
-import type { AgentModelsView as HarnessModelsView, AgentView as HarnessView, AllowView, ChannelKindView, ChannelView, HouseView as WorkspaceView, KeysView, KeyView, MeView, OwnerView, PetView as BotView, PlatformView, SecretView, WriteView } from "../src/app/web-views";
+import type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView } from "../src/app/web-views";
+export type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView };
+import type { AgentModelsView as HarnessModelsView, AgentView as HarnessView, AllowView, ChannelKindView, ChannelView, ClaudeSigninView, HouseView as WorkspaceView, KeysView, KeyView, MeView, OwnerView, PetView as BotView, PlatformView, SecretView, SigninView, WriteView } from "../src/app/web-views";
 
-export type { HarnessModelsView, HarnessView, AllowView, ChannelKindView, ChannelView, WorkspaceView, KeysView, KeyView, MeView, OwnerView, BotView, PlatformView, SecretView, WriteView };
+export type { HarnessModelsView, HarnessView, AllowView, ChannelKindView, ChannelView, ClaudeSigninView, WorkspaceView, KeysView, KeyView, MeView, OwnerView, BotView, PlatformView, SecretView, SigninView, WriteView };
 
 /**
  * A channel as the forms send it: its chat (when it is added), its kind's own fields (by the kind's keys), and
@@ -242,11 +242,13 @@ export const api = {
   removeSecret: (house: string, name: string) => call<{ secrets: SecretView[] }>("DELETE", `/api/houses/${encodeURIComponent(house)}/secrets/${encodeURIComponent(name)}`),
   signOut: () => call<void>("POST", "/api/logout"),
   // The guided setup (/setup): what it may offer, a ChatGPT sign-in, a Telegram bot and the wait for its first message.
-  onboarding: () => call<OnboardingView>("GET", "/api/onboarding"),
-  importCodex: (name: string) => call<KeysView>("POST", "/api/onboarding/codex/import", { name }),
   startChatgptLogin: (name: string) => call<DeviceLoginView>("POST", "/api/onboarding/codex/login", { name }),
   chatgptLogin: (id: string) => call<DeviceLoginStatus>("GET", `/api/onboarding/codex/login/${encodeURIComponent(id)}`),
   cancelChatgptLogin: (id: string) => call<void>("DELETE", `/api/onboarding/codex/login/${encodeURIComponent(id)}`),
+  // A Claude sign-in: a link to open (Household boots a VM for Claude Code's own login), then the code Claude shows.
+  startClaudeSignin: (name: string) => call<ClaudeSigninView>("POST", "/api/keys/claude/signin", { name }),
+  finishClaudeSignin: (id: string, code: string) => call<KeysView>("POST", `/api/keys/claude/signin/${encodeURIComponent(id)}`, { code }),
+  cancelClaudeSignin: (id: string) => call<void>("DELETE", `/api/keys/claude/signin/${encodeURIComponent(id)}`),
   listenBot: (house: string, kind: string, token: string) => call<BotListenView>("POST", "/api/onboarding/telegram", { house, kind, token }),
   botListen: (id: string) => call<BotListenStatus & { bot: string }>("GET", `/api/onboarding/telegram/${encodeURIComponent(id)}`),
   listenAgain: (id: string) => call<BotListenStatus & { bot: string }>("POST", `/api/onboarding/telegram/${encodeURIComponent(id)}/again`),

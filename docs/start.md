@@ -34,7 +34,10 @@ house onboard
 
 It asks, one step at a time, and shows for each choice how to get what it needs:
 
-1. **Model** — a key you saved before, or a new one: Claude or ChatGPT / OpenAI, then how to sign in: a Claude subscription (`claude setup-token` makes the token), an Anthropic or OpenAI API key, a ChatGPT sign-in by code, or the ChatGPT login of the Codex on this machine.
+1. **Model** — a key you saved before, or a new one: Claude or ChatGPT / OpenAI, then how to sign in:
+   - **Sign in to Claude** (recommended): Household shows Claude's sign-in link, you sign in on any device and paste the code it shows. Your bots can then also use that account's claude.ai connectors (Drive, Jira…), as that account, once you switch **Claude.ai connectors** on for a bot. Household keeps the sign-in fresh by itself; Claude ends it about once a month, and Household reminds your bots' chats a few days before (`house key claude <name>` or **Keys → Sign in again**). It is Household's own sign-in, made by Claude Code itself in a short-lived VM: the Claude on your computer stays as it is, and a backup does not carry it (sign in again after a restore).
+   - **Claude subscription token**: `claude setup-token` makes one for a year. No claude.ai connectors on it.
+   - an Anthropic or OpenAI API key, or a ChatGPT sign-in by code (its apps for a bot: **ChatGPT apps**).
 2. **Workspace** — a name for your bots' home, and how much of the machine's CPU and memory it may use.
 3. **Channel** — where you talk to your bots:
    - **Telegram group with topics** (recommended): a topic per bot in a group of yours;

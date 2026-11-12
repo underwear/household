@@ -19,6 +19,8 @@ export const petDockerDisk = (house: string, pet: string) => `${petContainer(hou
 export const agentImage = (agent: AgentAdapter) => `household-agent-${agent.name}`;
 
 const LABEL = { owner: "household.owner", house: "household.house", pet: "household.pet", identity: "household.identity", launch: "household.launch" };
+/** Labels Household's own throwaway VMs (`runUtility`), by instance: never `LABEL.owner`, whose strays reconcile removes. */
+const UTILITY_LABEL = "household.utility";
 /** Runtime states of a pet that lives: a paused one (an export reading its home) is not recreated. */
 const ALIVE = new Set(["running", "paused"]);
 
@@ -265,6 +267,43 @@ export class PetPlane {
     const results: PetStart[] = [];
     for (const placed of pets) results.push({ house: placed.house, pet: placed.pet, ...(await this.waitReady(placed)) });
     return results;
+  }
+
+  /**
+   * A throwaway VM of `agent`'s image for Household's own work (a Claude sign-in or its renewal): it reaches the
+   * gateway as `identity` (a `household` subject the caller registered), its entrypoint is told `env`, and it is no
+   * pet: no home, no CA (nothing it calls is intercepted), no Docker; `close` removes it. Leftovers of a crash go
+   * with `removeUtilities`.
+   */
+  async runUtility(agent: AgentAdapter, identity: { house: string; pet: string }, env: Record<string, string>): Promise<{ exec: (command: string[], stdin?: string, timeoutMs?: number) => Promise<{ ok: boolean; output: string }>; close(): Promise<void> }> {
+    let image = this.images.get(agent.name);
+    if (!image) {
+      image = await this.runtime.prepareImage(agentImage(agent), agent.imageContext);
+      this.images.set(agent.name, image);
+    }
+    const { host, proxyPort } = this.transport;
+    const proxy = `http://household:${this.transport.tokenFor(identity)}@${host}:${proxyPort}`;
+    const name = `household-utility-${identity.pet}`;
+    await this.runtime.runContainer({
+      name, image: image.ref, noGuestServices: true, cpus: 1, limits: { ...PET_LIMITS, memory: "1024M" },
+      labels: { [UTILITY_LABEL]: this.owner },
+      env: { ...env, HOME: agent.home, HTTPS_PROXY: proxy, https_proxy: proxy, NO_PROXY: host, no_proxy: host,
+        // Only what the work needs goes out: no telemetry, no update checks.
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1" },
+    });
+    let closed = false;
+    return {
+      exec: (command, stdin, timeoutMs) => this.runtime.exec(name, command, stdin, timeoutMs),
+      close: async () => { if (!closed) { closed = true; await this.runtime.removeContainer(name); } },
+    };
+  }
+
+  /** Removes one throwaway VM (`runUtility`'s, by its identity's `pet`), as when it failed to start. */
+  async removeUtility(pet: string): Promise<void> { await this.runtime.removeContainer(`household-utility-${pet}`); }
+
+  /** Removes this instance's throwaway VMs a crash left behind. */
+  async removeUtilities(): Promise<void> {
+    for (const vm of await this.runtime.listContainers(`${UTILITY_LABEL}=${this.owner}`)) await this.runtime.removeContainer(vm.name).catch(() => {});
   }
 
   /** Runs commands in a pet's container, each given 5 s unless `timeoutMs` says otherwise. */

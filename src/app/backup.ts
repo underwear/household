@@ -14,7 +14,9 @@ import type { HouseholdVersion } from "./version";
  * configured ChatGPT subscription credentials as `codex-auth/<key>/auth.json`, and the
  * home volume of each pet that has one, as `volumes/<volume>.tar`. Enough for a whole Household on a new Mac:
  * pets keep trusting the same CA. Not the leaf (made again on the next start), the gateway's copies of the keys
- * (made on every start) or the logs. Which pets there are, and so which volumes, is the config's to say.
+ * (made on every start) or the logs. Which pets there are, and so which volumes, is the config's to say. Not the
+ * Claude sign-ins (`claude-auth/`) either: each renewal (every few hours) kills the tokens before it, so a copy is
+ * dead within hours; a restored Household signs in to Claude again (its keys say so).
  */
 export const BACKUP = {
   /** 4: shared house skills, once per house. Format 3 remains importable (no shared skills). */

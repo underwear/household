@@ -79,42 +79,6 @@ export async function connectCodex(paths: Paths, config: ConfigStore, name: stri
   console.log(`subscription '${name}' connected; dedicated credentials stay with Household`);
 }
 
-/** A Codex's ChatGPT login on this machine: its auth.json, and whose it is. */
-export interface LocalCodexLogin { file: string; email?: string; plan?: string }
-
-/** The ChatGPT login of the Codex at `codexHome` (`$CODEX_HOME`, else ~/.codex), or undefined when it has none. */
-export function localCodexLogin(codexHome = process.env.CODEX_HOME || join(homedir(), ".codex")): LocalCodexLogin | undefined {
-  const file = join(codexHome, "auth.json");
-  try {
-    const auth = JSON.parse(readFileSync(file, "utf8"));
-    if (auth.auth_mode !== "chatgpt" || typeof auth.tokens?.refresh_token !== "string") return undefined;
-    let claims: Record<string, unknown> = {};
-    try { claims = JSON.parse(Buffer.from(String(auth.tokens.id_token).split(".")[1] ?? "", "base64url").toString("utf8")); } catch { /* who it is is a nicety */ }
-    const plan = (claims["https://api.openai.com/auth"] as { chatgpt_plan_type?: unknown } | undefined)?.chatgpt_plan_type;
-    return { file, ...(typeof claims.email === "string" ? { email: claims.email } : {}), ...(typeof plan === "string" ? { plan } : {}) };
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Subscription `name` from a copy of a Codex's ChatGPT login (this machine's by default); Household refreshes its copy
- * itself from then on. The two share one sign-in: when it ends there, Household is signed in again.
- */
-export async function importCodex(paths: Paths, config: ConfigStore, name: string, source = localCodexLogin(), note?: string): Promise<LocalCodexLogin> {
-  if (!source) throw new HouseholdError("no ChatGPT login of Codex on this machine (`codex login` makes one)");
-  const { existing, home, file } = await dedicatedHome(paths, config, name);
-  copyFileSync(source.file, file);
-  chmodSync(file, 0o600);
-  const auth = await usableLogin(home);
-  if (!auth) {
-    rmSync(file, { force: true });
-    throw new HouseholdError("that Codex login has ended: sign in to Codex again (`codex login`), then try again");
-  }
-  await saveSubscription(config, name, file, auth, note ?? `ChatGPT login copied from this machine's Codex${source.email ? ` (${source.email})` : ""}`, existing);
-  return source;
-}
-
 /** A ChatGPT sign-in under way for the web: where to sign in and the code to enter, and its end. */
 export interface DeviceLogin {
   url: string;

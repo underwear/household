@@ -22,8 +22,8 @@ export const PROVIDERS: ProviderOption[] = [
   { id: "openai", label: "ChatGPT / OpenAI", description: "Your bots run Codex. A ChatGPT Plus or Pro subscription, or an OpenAI API key.", harness: "codex-app-server" },
 ];
 
-/** How a key gets in: pasted, a ChatGPT sign-in by code, or a copy of this machine's Codex login. */
-export type KeyInput = { kind: "paste"; label: string; placeholder: string; prefix: string; wrong: string } | { kind: "device" } | { kind: "local" };
+/** How a key gets in: pasted, a ChatGPT sign-in by device code, or a Claude sign-in (a link, then the code it shows). */
+export type KeyInput = { kind: "paste"; label: string; placeholder: string; prefix: string; wrong: string } | { kind: "device" } | { kind: "claude-signin" };
 
 export interface KeyMethod {
   id: string;
@@ -35,14 +35,24 @@ export interface KeyMethod {
   /** What to do to get the credential, in order. */
   steps: string[];
   input: KeyInput;
-  /** Offered only when this machine has a Codex login to copy. */
-  needsLocalCodex?: true;
+  /** The one to pick when unsure. */
+  recommended?: true;
 }
 
 export const KEY_METHODS: KeyMethod[] = [
   {
+    id: "claude-signin", provider: "anthropic", name: "claude", recommended: true,
+    label: "Sign in to Claude", description: "Pro, Max or Team. Your bots also get this account's claude.ai connectors. Sign in again about once a month.",
+    steps: [
+      "Household starts Claude Code's own sign-in for you and shows its link.",
+      "Open the link on any device, your phone too, and sign in to the account your bots should use.",
+      "Paste the code Claude shows. Household keeps the sign-in fresh, and asks you to sign in again when Claude ends it (about monthly).",
+    ],
+    input: { kind: "claude-signin" },
+  },
+  {
     id: "claude-subscription", provider: "anthropic", name: "claude",
-    label: "Claude subscription", description: "Pro or Max. Usage counts against your plan; nothing is billed apart.",
+    label: "Claude subscription token", description: "One token for a year, nothing to renew. No claude.ai connectors.",
     steps: [
       "Install Claude Code on any computer ([how](https://code.claude.com/docs/en/setup)).",
       "Run `claude setup-token` and sign in with your Claude account in the browser.",
@@ -61,17 +71,8 @@ export const KEY_METHODS: KeyMethod[] = [
     input: { kind: "paste", label: "API key", placeholder: "sk-ant-api03-…", prefix: "sk-ant-", wrong: "That does not look like an Anthropic API key (sk-ant-api03-…)." },
   },
   {
-    id: "chatgpt-local", provider: "openai", name: "chatgpt", needsLocalCodex: true,
-    label: "ChatGPT login of Codex on this machine", description: "Household takes a copy and keeps it fresh. Nothing to type.",
-    steps: [
-      "Household copies the ChatGPT login of the Codex installed here (`~/.codex`).",
-      "It is the same sign-in: if you sign out of Codex there, sign Household in again.",
-    ],
-    input: { kind: "local" },
-  },
-  {
-    id: "chatgpt", provider: "openai", name: "chatgpt",
-    label: "ChatGPT subscription", description: "Plus or Pro. Sign in with a code on any device, your phone included.",
+    id: "chatgpt", provider: "openai", name: "chatgpt", recommended: true,
+    label: "Sign in to ChatGPT", description: "Plus or Pro, with a code on any device. Your bots can also get this account's ChatGPT apps.",
     steps: [
       "Start the sign-in: Household shows a link and a one-time code.",
       "Open the link, sign in to ChatGPT and enter the code. If ChatGPT refuses device codes, allow them in its security settings ([help](https://learn.chatgpt.com/docs/auth?surface=cli#login-on-headless-devices)).",

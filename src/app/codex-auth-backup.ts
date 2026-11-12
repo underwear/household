@@ -48,3 +48,17 @@ export function copyDedicatedAuth(content: string, root: string, name: string): 
   writeFileSync(join(home, "auth.json"), content, { mode: 0o600, flag: "wx" });
   chmodSync(join(home, "auth.json"), 0o600);
 }
+
+/** Whose a ChatGPT sign-in is (its id token's email and plan) and when its token runs out, for the key list; undefined when unreadable. */
+export function codexSigninInfo(root: string, name: string): { email?: string; subscriptionType?: string; expiresAt: number } | undefined {
+  try {
+    const auth = JSON.parse(readFileSync(join(root, name, "auth.json"), "utf8"));
+    const claims = (token: unknown) => JSON.parse(Buffer.from(String(token).split(".")[1] ?? "", "base64url").toString("utf8"));
+    const id = claims(auth.tokens?.id_token);
+    const access = claims(auth.tokens?.access_token);
+    const plan = id["https://api.openai.com/auth"]?.chatgpt_plan_type;
+    return { ...(typeof id.email === "string" ? { email: id.email } : {}), ...(typeof plan === "string" ? { subscriptionType: plan } : {}), expiresAt: Number(access.exp) * 1000 };
+  } catch {
+    return undefined;
+  }
+}

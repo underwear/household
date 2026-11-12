@@ -530,12 +530,12 @@ test("keys: listed with their kind, value and pets; added, changed, removed (not
   const { call, signIn, text, logged, applied } = setup();
   await signIn();
   const keys = async (response: Response) => ((await response.json()) as KeysView).keys;
-  const claude: KeyView = { name: "claude", provider: "anthropic", kind: "subscription", value: KEY, note: null, pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null };
+  const claude: KeyView = { name: "claude", provider: "anthropic", kind: "subscription", value: KEY, note: null, pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null, accountConnectors: false, signin: null };
   expect(await (await call("GET", "/api/keys")).json()).toEqual([claude]);
 
   const added = await call("POST", "/api/keys", { name: "api", provider: "anthropic", value: " sk-ant-api03-web-routes-test ", note: "pay as you go" });
   expect(added.status).toBe(201);
-  expect(await keys(added)).toEqual([claude, { name: "api", provider: "anthropic", kind: "API key", value: "sk-ant-api03-web-routes-test", note: "pay as you go", pets: [], houses: null, allowOverage: false, allowance: null }]);
+  expect(await keys(added)).toEqual([claude, { name: "api", provider: "anthropic", kind: "API key", value: "sk-ant-api03-web-routes-test", note: "pay as you go", pets: [], houses: null, allowOverage: false, allowance: null, accountConnectors: false, signin: null }]);
   // Two keys fit now; sibling names its own, as every pet does: nothing changes for it.
   const [work] = (await (await call("GET", "/api/houses")).json()) as HouseView[];
   expect(work!.pets[0]).toMatchObject({ key: "claude", problem: null });
@@ -546,7 +546,7 @@ test("keys: listed with their kind, value and pets; added, changed, removed (not
   expect(await keys(await call("PATCH", "/api/keys/claude", { value: "sk-ant-oat01-rotated", note: "Max" }))).toContainEqual({ ...claude, value: "sk-ant-oat01-rotated", note: "Max", pets: [] });
   const inUse = await call("DELETE", "/api/keys/api");
   expect(((await inUse.json()) as { error: string }).error).toBe("key 'api' is in use by work/sibling: give it another key first");
-  expect(await keys(await call("DELETE", "/api/keys/claude"))).toEqual([{ name: "api", provider: "anthropic", kind: "API key", value: "sk-ant-api03-web-routes-test", note: "pay as you go", pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null }]);
+  expect(await keys(await call("DELETE", "/api/keys/claude"))).toEqual([{ name: "api", provider: "anthropic", kind: "API key", value: "sk-ant-api03-web-routes-test", note: "pay as you go", pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null, accountConnectors: false, signin: null }]);
   expect(applied).toHaveLength(4);
   expect(logged.some((line) => line.includes("web: key api added"))).toBe(true);
   for (const value of [KEY, "sk-ant-oat01-rotated", "sk-ant-api03-web-routes-test"]) expect(logged.join("\n")).not.toContain(value);
@@ -1162,11 +1162,10 @@ test("setup: a ChatGPT sign-in gives the page its link and code, and the key onc
   finish();
   await Bun.sleep(10);
   expect(await (await call("GET", `/api/onboarding/codex/login/${id}`)).json()).toEqual({ status: "done", key: "chatgpt" });
-  expect((await call("POST", "/api/onboarding/codex/import", { name: "codex" })).status).toBe(400);
+  expect((await call("POST", "/api/onboarding/codex/import", { name: "codex" })).status).toBe(404); // copying this machine's Codex login is gone
 
   const bare = setup();
   await bare.signIn();
-  expect(await (await bare.call("GET", "/api/onboarding")).json()).toEqual({ localCodex: null });
   expect((await bare.call("POST", "/api/onboarding/codex/login", { name: "chatgpt" })).status).toBe(400);
 });
 

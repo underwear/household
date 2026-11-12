@@ -14,14 +14,22 @@ Done when the user writes to their bot in their messenger and it answers. `house
 Steps 4–8 are what `house onboard` asks for, one at a time, in a terminal; the user can run it instead of you
 doing them (it needs a real terminal, it asks questions).
 
-4. **A key** for the harness the user wants:
-   - Claude subscription: the user runs `claude setup-token`; the token goes to
+4. **A key** for the harness the user wants. Ask which account: the bots work as it, and use its plan.
+   - **Claude subscription, recommended: Household's own sign-in.** It needs the daemon (`house start`, step 9,
+     first). `house key claude claude --link` prints a link; the user opens it on any device, signs in, and gives
+     you the code Claude shows; then `house key claude claude --code '<code>'` within 10 minutes. Claude Code
+     itself signs in, in a short-lived VM; the Claude on the user's machine is untouched. Household renews it by
+     itself; Claude ends it about once a month, and Household says so in the bots' chats a few days before: the
+     same two commands then. Bots on it can use the account's claude.ai connectors (step 6).
+   - Or a Claude token for a year, without connectors: the user runs `claude setup-token`; the token goes to
      `house key add claude --provider anthropic` (stdin). Or an Anthropic API key, the same way.
-   - ChatGPT subscription: `house key codex codex --local` copies the login of the Codex on this machine;
-     `house key codex codex` signs in with a code instead. Or an OpenAI API key with `--provider openai`.
+   - **ChatGPT subscription**: `house key codex codex` prints a link and a code; the user enters the code there,
+     on any device, and the command ends once they have. Or an OpenAI API key with `--provider openai`.
 5. **A workspace**: `house workspace create my-workspace`, and `house workspace allow` for the hosts the user's work needs.
 6. **A bot**: `house bot add my-workspace assistant --key <key> --title Assistant`
-   (`--harness codex-app-server` for Codex).
+   (`--harness codex-app-server` for Codex). On a sign-in key, the account's connectors are one setting away, if
+   the user wants the bot to act as that account in them: `--setting claudeAiConnectors=true` (Claude's
+   claude.ai connectors) or `--setting chatgptApps=true` (ChatGPT's apps). A pasted token or an API key has none.
 7. **Scouts on**: `house features my-workspace scouts=on`.
 8. **A channel** for the workspace. Recommended: a **Telegram group with topics**:
    - the user creates a bot with @BotFather, makes a group with **Topics** on, and adds the bot as an admin

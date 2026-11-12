@@ -73,6 +73,26 @@ export interface KeyView {
   allowOverage: boolean;
   /** What its provider last said is left of it (the gateway's meter); null when it never said (an API key, no request yet). */
   allowance: Allowance | null;
+  /** Its account's own connectors can reach its bots (a sign-in's key), or not (a pasted token, an API key). */
+  accountConnectors: boolean;
+  /** A sign-in Household holds: whose, and until when (epoch ms); null for a pasted key. */
+  signin: SigninView | null;
+}
+
+/** A Claude sign-in as the owner sees it: the account, its current token's end (renewed before), the sign-in's end. */
+export interface SigninView {
+  email: string | null;
+  orgName: string | null;
+  subscriptionType: string | null;
+  expiresAt: number;
+  endsAt: number | null;
+  renewedAt: number | null;
+}
+
+/** A Claude sign-in under way: the link to open; the code it shows goes back with `id`. */
+export interface ClaudeSigninView {
+  id: string;
+  url: string;
 }
 
 /** A write to the keys' answer: the keys after it. */
@@ -189,11 +209,6 @@ export interface WriteView {
   house?: HouseView;
   /** Saved, but Household is still applying it (a bot starting holds every reload); it goes on by itself. */
   applying?: true;
-}
-
-/** What the web's setup may offer: a copy of this machine's Codex login, if it has one. */
-export interface OnboardingView {
-  localCodex: { email: string | null; plan: string | null } | null;
 }
 
 /** A ChatGPT sign-in started for the web: where to go and the code to enter there. */

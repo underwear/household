@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { gib, type HostCapacity } from "../../src/core/resources";
-import { api, type BotListenStatus, type BotListenView, type DeviceLoginView, type KeyView, type OnboardingView, type SetupFields, type WorkspaceView } from "../api";
+import { api, type BotListenStatus, type BotListenView, type DeviceLoginView, type KeyView, type SetupFields, type WorkspaceView } from "../api";
 import { botPath, navigate, workspacePath } from "../router";
 import { ChoiceList, StepperField, Switch, TextField } from "./fields";
 import { Cell, Cluster, FormGrid, List, ListRow, Page, Panel, Stack } from "./layout";
 import { Link } from "./link";
+import { Guide, useKeyConnect } from "./key-connect";
 import { petState } from "./bot-state";
 import { CHANNELS, DEFAULT_BOT, KEY_METHODS, PROVIDERS, SLACK_MEMBER_STEPS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, defaultBotSize, guidePieces, suggestedBudget, type ChannelOption, type KeyMethod, type Provider } from "../../src/core/onboarding";
 
@@ -161,15 +162,6 @@ function Missing({ step, onOpen }: { step: string; onOpen: () => void }) {
   return <Screen title={`Choose the ${step.toLowerCase()} first`} primary={<button className="btn primary" onClick={onOpen}>{step}</button>} />;
 }
 
-/** What to do, in order: the catalog's lines, their `code`, **bold** and links drawn. */
-function Guide({ steps }: { steps: string[] }) {
-  const line = (text: string) => guidePieces(text).map((piece, index) =>
-    piece.kind === "code" ? <code key={index}>{piece.text}</code>
-    : piece.kind === "bold" ? <b key={index}>{piece.text}</b>
-    : piece.kind === "link" ? <a key={index} className="text-link" href={piece.href} target="_blank" rel="noreferrer">{piece.text}</a>
-    : piece.text);
-  return <ol className="setup-steps">{steps.map((step, index) => <li key={index}><span>{line(step)}</span></li>)}</ol>;
-}
 
 /** An action's busy state and its error, shown under the fields. */
 function useAction() {
@@ -194,13 +186,10 @@ function useAction() {
 function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: number) => void; keys: KeyView[]; refresh: () => Promise<void>; onDone: (key: KeyDraft) => void }) {
   const fitting = keys.filter((key) => PROVIDERS.some((provider) => provider.id === key.provider));
   const [choice, setChoice] = useState(fitting[0] ? `key:${fitting[0].name}` : PROVIDERS[0]!.id);
-  const [info, setInfo] = useState<OnboardingView>();
   const provider = choice.startsWith("key:") ? undefined : (choice as Provider);
-  const methods = KEY_METHODS.filter((method) => method.provider === provider && (!method.needsLocalCodex || info?.localCodex));
+  const methods = KEY_METHODS.filter((method) => method.provider === provider);
   const [methodId, setMethodId] = useState<string>();
   const method = methods.find((each) => each.id === methodId) ?? methods[0];
-
-  useEffect(() => { void api.onboarding().then(setInfo, () => setInfo({ localCodex: null })); }, []);
 
   if (sub === 0) {
     return (
@@ -229,8 +218,8 @@ function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: 
       <Screen title={`How will ${provider === "openai" ? "Codex" : "Claude Code"} sign in?`} back={() => go(0)} primary={<button className="btn primary" disabled={!method} onClick={() => go(2)}>Next</button>}>
         <ChoiceList label="Sign-in" value={method?.id ?? ""} onChange={setMethodId} options={methods.map((each) => ({
           value: each.id,
-          label: each.label,
-          description: each.id === "chatgpt-local" && info?.localCodex ? [info.localCodex.email, info.localCodex.plan && `ChatGPT ${info.localCodex.plan}`].filter(Boolean).join(" · ") || each.description : each.description,
+          label: <span className="setup-option">{each.label}{each.recommended && <span className="soon">Recommended</span>}</span>,
+          description: each.description,
         }))} />
       </Screen>
     );
@@ -239,73 +228,26 @@ function ModelStep({ sub, go, keys, refresh, onDone }: { sub: number; go: (sub: 
 }
 
 function KeyConnect({ method, keys, back, refresh, onDone }: { method: KeyMethod; keys: KeyView[]; back: () => void; refresh: () => Promise<void>; onDone: (key: KeyDraft) => void }) {
-  const [value, setValue] = useState("");
-  const [login, setLogin] = useState<DeviceLoginView>();
   const action = useAction();
   const name = freeName(keys.map((key) => key.name), method.name);
-  const { input } = method;
   const draft = (pasted?: string): KeyDraft => ({ name, provider: method.provider, label: method.label, ...(pasted ? { pasted } : {}) });
-
-  // A ChatGPT sign-in under way: asked about every two seconds until it ends. One Household no longer knows (it
-  // restarted) is said, and the screen starts over; leaving the screen cancels one still running.
-  useEffect(() => {
-    if (!login) return;
-    let stopped = false;
-    let over = false;
-    const timer = setInterval(() => {
-      void api.chatgptLogin(login.id).then((state) => {
-        if (stopped || state.status === "waiting") return;
-        over = true;
-        clearInterval(timer);
-        setLogin(undefined);
-        if (state.status === "failed") action.fail(state.error);
-        else void action.run(async () => { await refresh(); onDone(draft()); });
-      }, (error) => {
-        if (stopped || !(error instanceof Error) || !error.message.startsWith("no such")) return;
-        over = true;
-        clearInterval(timer);
-        setLogin(undefined);
-        action.fail(error.message);
-      });
-    }, 2000);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      if (!over) void api.cancelChatgptLogin(login.id).catch(() => undefined);
-    };
-  }, [login]); // eslint-disable-line react-hooks/exhaustive-deps -- one poll per sign-in
-
-  const connect = () => action.run(async () => {
-    if (input.kind === "local") {
-      await api.importCodex(name);
-      await refresh();
-      return onDone(draft());
-    }
-    if (input.kind === "device") return setLogin(await api.startChatgptLogin(name));
-    const token = value.trim();
-    if (!token.startsWith(input.prefix)) throw new Error(input.wrong);
-    onDone(draft(token));
+  const signedIn = () => action.run(async () => { await refresh(); onDone(draft()); });
+  const connect = useKeyConnect(method, name, () => void signedIn());
+  const go = () => action.run(async () => {
+    const result = await connect.submit();
+    if (result === "signed-in") return signedIn();
+    if (typeof result === "object") onDone(draft(result.pasted));
   });
-  const label = input.kind === "device" ? "Sign in with ChatGPT" : input.kind === "local" ? "Use this login" : "Next";
-
   return (
     <Screen
       title={method.label}
-      hint={input.kind === "paste" ? <>Saved as key <span className="id">{name}</span> when you set it all up. Manage keys later in Settings.</> : <>Saved as key <span className="id">{name}</span> as soon as you are signed in.</>}
-      back={login ? undefined : back}
-      primary={login
-        ? <button className="btn" onClick={() => setLogin(undefined)}>Cancel sign-in</button>
-        : <button className="btn primary" disabled={action.busy || (input.kind === "paste" && !value.trim())} onClick={connect}>{action.busy ? "Connecting…" : label}</button>}
+      hint={method.input.kind === "paste" ? <>Saved as key <span className="id">{name}</span> when you set it all up. Manage keys later in Settings.</> : <>Saved as key <span className="id">{name}</span> as soon as you are signed in.</>}
+      back={connect.waiting ? undefined : back}
+      primary={connect.waiting
+        ? <button className="btn" onClick={connect.cancel}>Cancel sign-in</button>
+        : <button className="btn primary" disabled={action.busy || connect.empty} onClick={go}>{action.busy ? connect.busyLabel : method.input.kind === "paste" ? "Next" : connect.label}</button>}
     >
-      <Guide steps={method.steps} />
-      {input.kind === "paste" && <TextField label={input.label} type="password" mono value={value} onChange={setValue} placeholder={input.placeholder} />}
-      {login && (
-        <div className="setup-code">
-          <span>Open <a className="text-link" href={login.url} target="_blank" rel="noreferrer">{login.url}</a> and enter</span>
-          <code className="setup-code-value">{login.code}</code>
-          <span className="hint">Waiting for you to finish…</span>
-        </div>
-      )}
+      {connect.body}
       {action.shown}
     </Screen>
   );

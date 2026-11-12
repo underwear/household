@@ -65,7 +65,7 @@ test("a capability-only secret: who gets it is chosen, its capabilities ticked, 
 });
 
 test("provider keys can be restricted to the only existing workspace, excluding future workspaces", () => {
-  const key = { name: "claude", provider: "anthropic" as const, kind: "subscription", value: "sk-ant-oat01-x", note: null, pets: [], houses: ["work"], allowOverage: false, allowance: null };
+  const key = { name: "claude", provider: "anthropic" as const, kind: "subscription", value: "sk-ant-oat01-x", note: null, pets: [], houses: ["work"], allowOverage: false, allowance: null, accountConnectors: false, signin: null };
   expect(renderToStaticMarkup(<KeyDialog houses={["work", "home"]} providers={["anthropic"]} keyView={key} onClose={() => {}} save={async () => {}} />)).toContain("Only bots in work.");
   expect(renderToStaticMarkup(<KeyDialog houses={["work"]} providers={["anthropic"]} onClose={() => {}} save={async () => {}} />)).toContain(">Workspaces<");
 });

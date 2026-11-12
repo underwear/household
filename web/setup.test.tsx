@@ -49,7 +49,8 @@ test("the model: saved keys apart from adding a new one; each way to sign in has
   expect(known).toContain('<legend class="field-label">Add a new key</legend>');
   expect(known.indexOf("Saved keys")).toBeLessThan(known.indexOf("Add a new key"));
   for (const method of KEY_METHODS) expect(method.steps.length).toBeGreaterThan(1);
-  expect(KEY_METHODS.filter((method) => method.provider === "openai").map((method) => method.input.kind)).toEqual(["local", "device", "paste"]);
+  expect(KEY_METHODS.filter((method) => method.provider === "openai").map((method) => method.input.kind)).toEqual(["device", "paste"]);
+  expect(KEY_METHODS.filter((method) => method.provider === "anthropic").map((method) => method.input.kind)).toEqual(["claude-signin", "paste", "paste"]);
 });
 
 test("channels: a Telegram group with topics recommended, the bot's own threads marked beta, plain DM and Slack too", () => {

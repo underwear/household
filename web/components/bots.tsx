@@ -249,7 +249,12 @@ export function useHarnessForm(agents: HarnessView[], keys: KeyView[], pet?: Pic
       {/* On/off settings under the selects, full width: a switch and the line on what it allows. */}
       {availableSettings.some((setting) => setting.checkbox) && (
         <SwitchList label="Harness options"
-          options={availableSettings.filter((setting) => setting.checkbox).map((setting) => ({ value: setting.key, label: setting.label, description: setting.description }))}
+          options={availableSettings.filter((setting) => setting.checkbox).map((setting) => {
+            // The account's connectors come with a signed-in key only: on another, the switch says how to get one.
+            const blocked = setting.needsAccountConnectors && !!key && !keys.find((each) => each.name === key)?.accountConnectors;
+            const why = agent?.providers.includes("anthropic") ? "Needs a key signed in to Claude (Settings → Keys → Add key → Sign in to Claude); a pasted token has no connectors." : "Needs a key signed in to ChatGPT (Settings → Keys → Add key → Sign in to ChatGPT); an API key has no apps.";
+            return { value: setting.key, label: setting.label, description: blocked ? (settings[setting.key] === "true" ? `On, but off in effect: ${why}` : why) : setting.description, disabled: blocked };
+          })}
           on={availableSettings.filter((setting) => settings[setting.key] === "true").map((setting) => setting.key)}
           onToggle={(key) => setSettings((current) => ({ ...current, [key]: current[key] === "true" ? null : "true" }))} />
       )}

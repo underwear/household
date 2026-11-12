@@ -62,8 +62,7 @@ function setup(overrides: Partial<OnboardDeps> = {}) {
     checkGroup: async (_token, chat) => ({ id: chat, title: "Home", problems: [] }),
     botName: async (token) => BOTS[token],
     codexLogin: async (name) => { calls.push(`codex ${name}`); await config.addKey(name, { provider: "openai", value: "sk-codex-test" }); },
-    localCodex: () => undefined,
-    codexImport: async (name) => { calls.push(`import ${name}`); await config.addKey(name, { provider: "openai", value: "codex-chatgpt:local" }); },
+    claudeSignin: async (name) => { calls.push(`claude-signin ${name}`); await config.addKey(name, { provider: "anthropic", value: "claude-signin:org-1" }); },
     claudeHere: async () => false,
     claudeSetupToken: async () => { calls.push("setup-token"); return true; },
     missing: async () => [],
@@ -90,7 +89,7 @@ const GROUP = "-1001234567890";
  * suggested budget, a Telegram group (recommended, the first offered) found by watching the bot; then the bot.
  */
 const FIRST = [
-  "", "", "sk-ant-oat01-onboard-test", // Claude, its subscription, the token
+  "", "2", "sk-ant-oat01-onboard-test", // Claude, its subscription token, the token
   "", "", "",                          // home, 4 vCPU, 8 GiB (half of the 8 / 16 GiB machine)
   "", TOKEN, "",                       // a group: the bot; Igor wrote, "that's me"; the group was found
   "n",
@@ -99,7 +98,7 @@ const FIRST = [
 test("Enter all the way: a Claude key, a workspace with a budget, a group found by itself with its owner, and the workspace's bot", async () => {
   const { config, calls, run, house } = setup();
   const io = await run([...FIRST.slice(0, -1), ""]);
-  expect((await config.load()).keys).toMatchObject([{ name: "claude", provider: "anthropic", value: "sk-ant-oat01-onboard-test", note: "Claude subscription" }]);
+  expect((await config.load()).keys).toMatchObject([{ name: "claude", provider: "anthropic", value: "sk-ant-oat01-onboard-test", note: "Claude subscription token" }]);
   const home = await house();
   expect(home.resources).toEqual({ cpus: 4, memoryMiB: 8192 });
   expect(home.people.owners).toMatchObject([{ platform: "telegram", id: "777" }]);
@@ -162,7 +161,7 @@ test("run again with Enter: saved keys apart from new ones; what there is is pic
 test("run again with a new key: an Anthropic API key, with its guide; the bot stays as it is", async () => {
   const { config, run, house } = setup();
   await run(FIRST);
-  const io = await run(["2", "2", "sk-ant-api03-second", "", "", "n"]); // add Claude, by an API key; home; keep the channel
+  const io = await run(["2", "3", "sk-ant-api03-second", "", "", "n"]); // add Claude, by an API key; home; keep the channel
   expect(io.said()).toContain("API keys in the Claude Console (https://platform.claude.com/settings/keys)");
   expect((await config.load()).keys.map((key) => key.name)).toEqual(["claude", "anthropic"]);
   expect((await house()).pets.map((pet) => [pet.name, pet.key])).toEqual([["assistant", "claude"]]);
@@ -240,23 +239,16 @@ test("the channel can wait: the bot joins none, and the summary says so", async 
   expect(io.said()).toContain("bot assistant, no channel yet");
 });
 
-test("Codex here: its login is offered first and copied; if that fails, a ChatGPT sign-in follows", async () => {
-  const local = { file: "/home/me/.codex/auth.json", email: "me@example.com", plan: "pro" };
-  const answers = ["2", "", ...FIRST.slice(3)];
-  const copied = setup({ localCodex: () => local });
-  const io = await copied.run(answers);
-  expect(io.said()).toContain("ChatGPT login of Codex on this machine — me@example.com, ChatGPT pro");
-  expect(copied.calls[0]).toBe("import chatgpt");
-  expect((await copied.house()).pets).toMatchObject([{ key: "chatgpt", agent: "codex-app-server" }]);
-  const failing = setup({ localCodex: () => local, codexImport: async () => { throw new Error("that Codex login has ended"); } });
-  const after = await failing.run(answers);
-  expect(after.said()).toContain("that Codex login has ended; sign in with ChatGPT instead");
-  expect(failing.calls[0]).toBe("codex chatgpt");
+test("Enter at the sign-in question: the Claude sign-in, through the daemon (started first), saved as key claude", async () => {
+  const { calls, config, run } = setup();
+  await run(["", "", ...FIRST.slice(3)]);
+  expect(calls.slice(0, 2)).toEqual(["start", "claude-signin claude"]);
+  expect((await config.load()).keys).toMatchObject([{ name: "claude", value: "claude-signin:org-1" }]);
 });
 
 test("Claude Code here: the wizard offers claude setup-token, then takes the token it printed", async () => {
   const { calls, config, run } = setup({ claudeHere: async () => true });
-  await run(["", "", "", "sk-ant-oat01-made-here", ...FIRST.slice(3)]);
+  await run(["", "2", "", "sk-ant-oat01-made-here", ...FIRST.slice(3)]);
   expect(calls[0]).toBe("setup-token");
   expect((await config.load()).keys).toMatchObject([{ name: "claude", value: "sk-ant-oat01-made-here" }]);
 });

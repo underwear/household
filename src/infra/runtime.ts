@@ -48,6 +48,8 @@ export interface ContainerSpec {
   labels?: Record<string, string>;
   mounts?: Mount[];
   limits?: { pids: number; memory: string };
+  /** Skip the guest services (nested Docker and its readiness): a throwaway VM that runs one command needs none. */
+  noGuestServices?: boolean;
 }
 
 /**

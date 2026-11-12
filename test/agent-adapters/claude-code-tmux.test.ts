@@ -41,7 +41,8 @@ test("provisioning: CA trust in env; the key's placeholder by its kind, the real
   expect(PLACEHOLDER_API_KEY).toHaveLength(108);
   const anthropic = { host: "api.anthropic.com", port: 443 };
   expect(claudeCodeTmux.providers).toEqual(["anthropic"]);
-  expect(claudeCodeTmux.credentialHeaders).toEqual([{ target: anthropic, headers: ["authorization", "x-api-key"] }]); // all stripped
+  const mcpProxy = { host: "mcp-proxy.anthropic.com", port: 443 };
+  expect(claudeCodeTmux.credentialHeaders).toEqual([{ target: anthropic, headers: ["authorization", "x-api-key"] }, { target: mcpProxy, headers: ["authorization", "x-api-key"] }]); // all stripped
   // A subscription's OAuth token (`claude setup-token`): Bearer; an API key: x-api-key. The value is never in env.
   expect(claudeCodeTmux.useKey("anthropic", "sk-ant-oat01-real")).toEqual({
     kind: "subscription",

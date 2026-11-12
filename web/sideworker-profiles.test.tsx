@@ -8,8 +8,8 @@ const agents: HarnessView[] = [
   { name: "beta", models: ["beta-deep"], defaultModel: "beta-deep", providers: ["openai"], modes: [{ id: "auto", label: "Automatic" }], defaultMode: "auto", settings: [] },
 ];
 const keys: KeyView[] = [
-  { name: "alpha-key", provider: "anthropic", kind: "API key", value: "", note: null, pets: [], houses: null, allowOverage: false, allowance: null },
-  { name: "beta-key", provider: "openai", kind: "subscription", value: "", note: null, pets: [], houses: ["work"], allowOverage: false, allowance: null },
+  { name: "alpha-key", provider: "anthropic", kind: "API key", value: "", note: null, pets: [], houses: null, allowOverage: false, allowance: null, accountConnectors: false, signin: null },
+  { name: "beta-key", provider: "openai", kind: "subscription", value: "", note: null, pets: [], houses: ["work"], allowOverage: false, allowance: null, accountConnectors: false, signin: null },
 ];
 const house: WorkspaceView = { name: "work", allow: [], owners: [], channels: [], pets: [], sideworkerProfiles: [] };
 

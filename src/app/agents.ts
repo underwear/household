@@ -3,7 +3,7 @@ import { systemPrompt, type PromptRole } from "../core/prompts";
 import { householdTimezone } from "../core/timezone";
 import { codexAppServer } from "../agent-adapters/codex-app-server";
 import { claudeCodeTmux } from "../agent-adapters/claude-code-tmux";
-import type { AgentAdapter, KeyUse } from "../core/agent";
+import { placedKeyUse, type AgentAdapter, type KeyUse } from "../core/agent";
 import type { PetEnvironment } from "../core/environment";
 import { HouseholdError } from "../core/errors";
 import type { House, Household, Pet } from "../core/household";
@@ -68,7 +68,7 @@ export function placePets(agents: Agents, { houses, keys, timezone }: Pick<House
       const role: PromptRole = pet.scout ? { kind: "scout", name: pet.scout.definition, parent: pet.scout.parent, house: house.name, instructions: pet.scout.instructions }
         : pet.sideworker ? { kind: "sideworker", name: pet.name, parent: pet.sideworker.parent, house: house.name, cwd: pet.sideworker.cwd, ...(pet.sideworker.branch ? { branch: pet.sideworker.branch } : {}) }
         : { kind: "pet" };
-      return [{ instructions: systemPrompt({ role, features: houseFeatures(house), ...(role.kind === "pet" && pet.lifecycle ? { lifecycle: pet.lifecycle, timezone: householdTimezone(timezone) } : {}) }), house: house.name, pet: pet.name, ...(pet.sideworker ? { sideworker: pet.sideworker } : {}), ...(pet.scout ? { scout: pet.scout } : {}), ...(pet.enabled === undefined ? {} : { enabled: pet.enabled }), ...(pet.cpus === undefined ? {} : { cpus: pet.cpus }), ...(pet.memoryMiB === undefined ? {} : { memoryMiB: pet.memoryMiB }), ...(pet.environment === undefined ? {} : { environment: pet.environment }), agent: found.agent, model: found.model, ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...mode, ...(found.settings === undefined ? {} : { settings: found.settings }), key: found.key.name, keyUse: found.use, secrets: pet.scout ? (pet.scout.gatewaySecrets ?? []).filter(selected => secrets.some(secret => secret.name === selected.name && !!secret.onlyForCapabilities?.some(capability => pet.scout!.capabilities?.includes(capability)))) : houseSecrets(secrets) }];
+      return [{ instructions: systemPrompt({ role, features: houseFeatures(house), ...(role.kind === "pet" && pet.lifecycle ? { lifecycle: pet.lifecycle, timezone: householdTimezone(timezone) } : {}) }), house: house.name, pet: pet.name, ...(pet.sideworker ? { sideworker: pet.sideworker } : {}), ...(pet.scout ? { scout: pet.scout } : {}), ...(pet.enabled === undefined ? {} : { enabled: pet.enabled }), ...(pet.cpus === undefined ? {} : { cpus: pet.cpus }), ...(pet.memoryMiB === undefined ? {} : { memoryMiB: pet.memoryMiB }), ...(pet.environment === undefined ? {} : { environment: pet.environment }), agent: found.agent, model: found.model, ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...mode, ...(found.settings === undefined ? {} : { settings: found.settings }), key: found.key.name, keyUse: placedKeyUse(found.use, found.agent, found.settings, !!pet.scout), secrets: pet.scout ? (pet.scout.gatewaySecrets ?? []).filter(selected => secrets.some(secret => secret.name === selected.name && !!secret.onlyForCapabilities?.some(capability => pet.scout!.capabilities?.includes(capability)))) : houseSecrets(secrets) }];
     }),
   );
   if (unknown.length > 0) throw new HouseholdError(unknown.join("\n"));

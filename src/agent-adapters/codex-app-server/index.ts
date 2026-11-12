@@ -44,10 +44,21 @@ export const codexAppServer: AgentAdapter = {
     if (value.startsWith("sk-") && value.length > 10) return { kind: "API key", env: { HOUSEHOLD_CODEX_AUTH: "apiKey", HOUSEHOLD_CODEX_TOKEN: PLACEHOLDER_API_KEY }, wire: [{ target: OPENAI_API, header: "authorization", prefix: "Bearer " }] };
     const account = parseSubscriptionMarker(value);
     if (!account) return { problem: "use an OpenAI API key (sk-…) or host-managed ChatGPT subscription reference (codex-chatgpt:<account-id>)" };
-    return { kind: "subscription", env: { HOUSEHOLD_CODEX_ACCOUNT: account, HOUSEHOLD_CODEX_TOKEN: createPlaceholderJwt(account) }, wire: [{ target: CHATGPT, header: "authorization", prefix: "Bearer " }] };
+    return { kind: "subscription", accountConnectors: true, env: { HOUSEHOLD_CODEX_ACCOUNT: account, HOUSEHOLD_CODEX_TOKEN: createPlaceholderJwt(account) }, wire: [{ target: CHATGPT, header: "authorization", prefix: "Bearer " }] };
   },
   credentialHeaders: [{ target: CHATGPT, headers: ["authorization", "x-api-key"] }, { target: OPENAI_API, headers: ["authorization", "x-api-key"] }],
-  env: ({ caCertPath, eventsUrl, mcpUrl, instructions, model, mode, reasoningEffort, home, workspace }) => ({
+  settings: [{
+    key: "chatgptApps",
+    label: "ChatGPT apps",
+    description: "The bot and its sideworkers use the apps connected in the ChatGPT account its key signed in to (Drive, GitHub…), as that account. Scouts never do.",
+    checkbox: true,
+    petOnly: true,
+    needsAccountConnectors: true,
+    options: [{ id: "true", label: "Enabled" }, { id: "false", label: "Disabled" }],
+    defaultLabel: "disabled",
+  }],
+  env: ({ caCertPath, eventsUrl, mcpUrl, instructions, model, mode, reasoningEffort, settings, home, workspace, scout }) => ({
+    HOUSEHOLD_CODEX_APPS: !scout && settings?.chatgptApps === "true" ? "true" : "false",
     ...(home === undefined ? {} : { HOME: home }),
     ...(workspace === undefined ? {} : { HOUSEHOLD_WORKSPACE: workspace }), CODEX_CA_CERTIFICATE: caCertPath, NODE_EXTRA_CA_CERTS: caCertPath,
     HOUSEHOLD_EVENTS_URL: eventsUrl, HOUSEHOLD_MCP_URL: mcpUrl, HOUSEHOLD_INSTRUCTIONS: instructions, HOUSEHOLD_MODEL: model, ...(reasoningEffort === undefined ? {} : { HOUSEHOLD_REASONING_EFFORT: reasoningEffort }), HOUSEHOLD_PERMISSION_MODE: mode ?? CODEX_MODES.default }),

@@ -7,7 +7,6 @@ import { assertName } from "../core/names";
 import { CHANNELS, DEFAULT_BOT, KEY_METHODS, SETUP_FEATURES, PROVIDERS, SLACK_MEMBER_STEPS, TELEGRAM_GROUP_ID, TELEGRAM_USER_ID, defaultBotSize, guidePieces, suggestedBudget, type ChannelOption, type KeyMethod, type Provider } from "../core/onboarding";
 import { gib, petCpuSchema, petMemorySchema, workspaceBudget, type HostCapacity } from "../core/resources";
 import type { AlsoChannel, ConfigStore } from "../infra/config-store";
-import type { LocalCodexLogin } from "../app/codex-login";
 import { askOr, bold, choose, confirm, dim, green, until, yellow, type Terminal } from "./terminal";
 
 export interface OnboardDeps {
@@ -25,10 +24,8 @@ export interface OnboardDeps {
   checkGroup(token: string, chat: string): Promise<FoundGroup>;
   /** Household's own ChatGPT sign-in, saved as key `name`. */
   codexLogin(name: string): Promise<void>;
-  /** The ChatGPT login of the Codex on this machine, if it has one. */
-  localCodex(): LocalCodexLogin | undefined;
-  /** A copy of that login, saved as key `name`. */
-  codexImport(name: string): Promise<void>;
+  /** A Claude sign-in through the daemon (it boots the sign-in VM), saved as key `name`. */
+  claudeSignin(name: string, terminal: Terminal): Promise<void>;
   /** Whether Claude Code is on this machine. */
   claudeHere(): Promise<boolean>;
   /** `claude setup-token` on this terminal; whether it finished. */
@@ -181,34 +178,36 @@ async function modelKey(deps: OnboardDeps, outcome: Outcome): Promise<{ key: str
     return { key: known.name, provider: known.provider as Provider };
   }
   const provider = picked as Provider;
-  const local = deps.localCodex();
-  const methods = KEY_METHODS.filter((method) => method.provider === provider && (!method.needsLocalCodex || local));
+  const methods = KEY_METHODS.filter((method) => method.provider === provider);
   const methodId = await choose(t, `How will ${provider === "openai" ? "Codex" : "Claude Code"} sign in?`, methods.map((method) => ({
     value: method.id,
-    label: option(method.label, method.id === "chatgpt-local" && local ? [local.email, local.plan && `ChatGPT ${local.plan}`].filter(Boolean).join(", ") || method.description : method.description),
+    label: option(method.label, method.description, method.recommended ? ["recommended"] : []),
   })));
   const method = methods.find((each) => each.id === methodId)!;
   const name = freeName(household.keys.map((key) => key.name), method.name);
-  await connectKey(deps, method, name, local);
+  await connectKey(deps, method, name);
   outcome.added.push(`key ${name}`);
   return { key: name, provider };
 }
 
-/** Key `name` by `method`: its guide, then what it takes (a paste, a ChatGPT sign-in, a copy of Codex's login). */
-async function connectKey(deps: OnboardDeps, method: KeyMethod, name: string, local: LocalCodexLogin | undefined): Promise<void> {
+/** Key `name` by `method`: its guide, then what it takes (a paste, a ChatGPT sign-in, a Claude sign-in). */
+async function connectKey(deps: OnboardDeps, method: KeyMethod, name: string): Promise<void> {
   const { terminal: t, config } = deps;
   t.say(bold(method.label));
-  if (method.input.kind === "local") {
-    guide(t, method.steps);
-    try {
-      await deps.codexImport(name);
-      t.say(`${green("✓")} connected${local?.email ? ` as ${local.email}` : ""}.`);
-      return t.say();
-    } catch (error) {
-      t.say(yellow(`  ${(error as Error).message}; sign in with ChatGPT instead:`));
+  if (method.input.kind === "claude-signin") {
+    // The sign-in VM is the daemon's: it runs first.
+    if (!(await deps.daemonUp())) await deps.startDaemon();
+    for (;;) {
+      try {
+        await deps.claudeSignin(name, t);
+        return t.say();
+      } catch (error) {
+        t.say(yellow(`  ${(error as Error).message}`));
+        if (!(await confirm(t, "Try again?"))) throw new HouseholdError("no key, so no bot: run `house onboard` again, or paste a `claude setup-token` token instead");
+      }
     }
   }
-  if (method.input.kind === "local" || method.input.kind === "device") {
+  if (method.input.kind === "device") {
     guide(t, KEY_METHODS.find((each) => each.id === "chatgpt")!.steps);
     for (;;) {
       try {

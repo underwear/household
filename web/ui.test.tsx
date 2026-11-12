@@ -56,8 +56,8 @@ const agents: HarnessView[] = [
 const kinds = [telegramPrivate];
 const platforms = [{ platform: telegram.platform, label: telegram.label, icon: telegram.icon, ownerId: telegram.ownerId }];
 const keys: KeyView[] = [
-  { name: "claude", provider: "anthropic", kind: "subscription", value: "sk-ant-oat01-ui-test", note: "Max", pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null },
-  { name: "gpt", provider: "openai", kind: null, value: "sk-openai-ui-test", note: null, pets: [], houses: null, allowOverage: false, allowance: null },
+  { name: "claude", provider: "anthropic", kind: "subscription", value: "sk-ant-oat01-ui-test", note: "Max", pets: ["work/sibling"], houses: null, allowOverage: false, allowance: null, accountConnectors: false, signin: null },
+  { name: "gpt", provider: "openai", kind: null, value: "sk-openai-ui-test", note: null, pets: [], houses: null, allowOverage: false, allowance: null, accountConnectors: false, signin: null },
 ];
 const lab: WorkspaceView = { name: "lab", allow: [], owners: [], channels: [], pets: [] };
 // A 10-core, 32 GiB host; work's two bots take the defaults (2 vCPU, 1 GiB each).
@@ -237,11 +237,11 @@ test("the forms render with what they edit: a channel's bots to tick and its def
   expect(form(<HarnessFields agents={agents} keys={[]} />)).toContain("No anthropic key yet (add one under Keys)");
 });
 
-test("the Keys section: each key's name, provider, kind, value masked (first five characters), note and bots; its form", () => {
+test("the Keys section: each key's name, provider, kind, value masked (first ten characters), note and bots; its form", () => {
   const page = renderToStaticMarkup(<KeysSection keys={keys} houses={["work"]} providers={["anthropic", "openai"]} refresh={async () => {}} notify={() => {}} />);
   expect(page).toContain("anthropic · subscription");
   expect(page).toContain("openai · unknown kind");
-  expect(page).toContain('<span class="id">sk-an••</span>');
+  expect(page).toContain('<span class="id">sk-ant-oat••</span>');
   expect(page).not.toContain("sk-ant-oat01-ui-test"); // whole only on Reveal
   expect(page).toContain('<span class="label">Used in</span><span><span class="strong">work</span> · sibling</span>');
   expect(page).toContain("Not used by any bot.");
@@ -601,6 +601,21 @@ test("Claude connectors render as a bot switch and are absent from scout setting
   const scout = renderToStaticMarkup(<Form scope="scout" enabled />);
   expect(scout).not.toContain("Claude.ai connectors");
   expect(scout).not.toContain("claudeAiConnectors");
+});
+
+test("Claude connectors need a signed-in key: on a pasted token the switch is off, disabled, and says where to get one", () => {
+  const claude = { ...agents[0]!, settings: [...claudeCodeTmux.settings!] };
+  const signedIn: KeyView = { ...keys[0]!, name: "signed", kind: "sign-in", value: "claude-signin:org-1", accountConnectors: true,
+    signin: { email: "me@example.com", orgName: "Home", subscriptionType: "max", expiresAt: 0, endsAt: null, renewedAt: null } };
+  function Form({ chosen }: { chosen: string }) {
+    return <>{useHarnessForm([claude], [keys[0]!, signedIn], { ...work.pets[0]!, agent: claude.name, key: chosen, settings: {} }).fields}</>;
+  }
+  const pasted = renderToStaticMarkup(<Form chosen="claude" />);
+  expect(pasted).toMatch(/role="switch"[^>]* disabled=""/);
+  expect(pasted).toContain("Needs a key signed in to Claude (Settings → Keys → Add key → Sign in to Claude)");
+  const signed = renderToStaticMarkup(<Form chosen="signed" />);
+  expect(signed).not.toMatch(/role="switch"[^>]* disabled=""/);
+  expect(signed).toContain("The bot and its sideworkers use the connectors of the Claude account");
 });
 
 test("a Google account's services in words, in the catalog's order", () => {

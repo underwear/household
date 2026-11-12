@@ -2,7 +2,9 @@ import { covers, entryReach, formatEndpoint, isIpLiteral, reachOf, sameEndpoint,
 import { isLocalName, isPublicAddress } from "./private-address";
 
 /** Who owns a source subnet. Only houses exist now; scouts will add a kind. */
-export type Subject = { kind: "house"; name: string } | { kind: "scout"; name: string; pet: string };
+export type Subject = { kind: "house"; name: string } | { kind: "scout"; name: string; pet: string }
+  /** A throwaway VM of Household's own (a Claude sign-in's): no house, no bot, its own narrow allowlist. */
+  | { kind: "household"; name: string; pet: string };
 
 /** Who is calling: a pet of a house. */
 export interface PetIdentity {
@@ -77,7 +79,7 @@ export function describeSubject(subject: Subject): string {
 
 /** The rule of the calling pet's house. */
 export function ruleOf(rules: SubjectRule[], pet: PetIdentity): SubjectRule | undefined {
-  return rules.find(({ subject }) => subject.kind === "scout" && subject.name === pet.house && subject.pet === pet.pet)
+  return rules.find(({ subject }) => (subject.kind === "scout" || subject.kind === "household") && subject.name === pet.house && subject.pet === pet.pet)
     ?? rules.find(({ subject }) => subject.kind === "house" && subject.name === pet.house);
 }
 

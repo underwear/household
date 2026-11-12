@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Contact, FoundGroup } from "../channel-adapters/telegram/first-contact";
 import { HouseholdError } from "../core/errors";
 import { NotFoundError } from "../infra/config-store";
-import type { DeviceLogin, LocalCodexLogin } from "./codex-login";
+import type { DeviceLogin } from "./codex-login";
 
 /** How long the web's setup keeps a sign-in or a wait for a first message it is no longer asked about. */
 const KEPT_MS = 20 * 60_000;
@@ -10,10 +10,6 @@ const KEPT_MS = 20 * 60_000;
 const LISTEN_MS = 10 * 60_000;
 
 export interface OnboardingDeps {
-  /** The ChatGPT login of the Codex on this machine, if it has one. */
-  localCodex?: () => LocalCodexLogin | undefined;
-  /** A copy of that login, saved as key `name`. */
-  importCodex?: (name: string) => Promise<unknown>;
   /** Household's own ChatGPT sign-in for key `name`, by a device code. */
   deviceLogin?: (name: string) => Promise<DeviceLogin>;
   /** Watches a new bot for its owner (the first to write in private) and, with `group`, its group (telegram/first-contact.ts). */
@@ -60,17 +56,6 @@ export class Onboarding {
     this.now = deps.now ?? Date.now;
     this.sweeper = setInterval(() => this.sweep(), 60_000);
     this.sweeper.unref?.();
-  }
-
-  localCodex(): { email: string | null; plan: string | null } | null {
-    const found = this.deps.localCodex?.();
-    return found ? { email: found.email ?? null, plan: found.plan ?? null } : null;
-  }
-
-  async importCodex(name: string): Promise<void> {
-    if (!this.deps.importCodex) throw new HouseholdError("this Household cannot copy a Codex login");
-    await this.deps.importCodex(name);
-    await this.deps.apply();
   }
 
   async startLogin(key: string): Promise<{ id: string; url: string; code: string }> {

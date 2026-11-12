@@ -4,6 +4,14 @@
 # root-owned files. Account connectors are opt-in; the default isolates all other MCP sources.
 set -eu
 trap 'exit 0' TERM
+# A throwaway VM of Household's own: Claude Code's sign-in waiting in tmux (`signin`), or nothing but the VM kept up
+# while Household runs its one command (`renew`). Never a bot: no seed, no session.
+case "${HOUSEHOLD_UTILITY:-}" in
+  signin)
+    tmux new-session -d -s signin -x 600 -y 40 -e CLAUDE_CONFIG_DIR="$HOME/.household-signin" "claude auth login --claudeai"
+    exec sleep infinity ;;
+  renew) exec sleep infinity ;;
+esac
 cp -rn /opt/household/seed/. "$HOME/"
 # An API key's placeholder, approved on every start (claude asks about a key once, by its last 20 characters),
 # also in a home from before: a pet moved to an API key must not sit at "use this API key?".
