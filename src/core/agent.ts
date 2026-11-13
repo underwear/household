@@ -198,3 +198,6 @@ export interface PetContext {
   /** The agent's own settings the config sets (each one of its `settings`, a valid option); absent when none. */
   settings?: Readonly<Record<string, string>>;
 }
+
+/** The harness of a bot whose config names none (the claude-code-tmux adapter's name). */
+export const DEFAULT_HARNESS = "claude-code-tmux";

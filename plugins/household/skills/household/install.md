@@ -41,8 +41,11 @@ doing them (it needs a real terminal, it asks questions).
    Other kinds, the same way: `telegram-private` (the bot's own threads: Telegram's Threaded Mode, still beta,
    turned on in BotFather's Mini App → Bot Settings → Threads Settings; the chat is the user's id),
    `telegram-dm` (one plain chat; the chat is the user's id) or a Slack DM (see docs/slack.md).
-9. **Running for good**: `house start` as a launchd / systemd user service that restarts on failure and whose
-   `PATH` finds `openssl` and `python3`. Only one daemon at a time.
+9. **Running for good**: `house start` as a launchd / systemd user service that restarts it whenever it exits,
+   a clean exit too (an update's restart, a stop that is not the service's own): launchd `KeepAlive` `true`
+   (not `SuccessfulExit` false), systemd `Restart=always` with `RestartSec=5`. Its `PATH` finds `openssl` and
+   `python3`. Only one daemon at a time. Stop it through the service (`launchctl bootout …`, `systemctl --user
+   stop household`), or the service starts it again.
 10. **Check**: `house doctor` all ✓, `house status` shows the bot `running` (the first start downloads its image).
 11. **Web UI**: `house dashboard` prints a one-time sign-in link (60 s) and opens it; the UI is at
     http://127.0.0.1:8780, on that machine only. On a remote one: `ssh -L 8780:127.0.0.1:8780 <host>` (the same

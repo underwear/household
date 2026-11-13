@@ -1070,6 +1070,43 @@ test("topic creation refusal cannot loop through typing, status, replies or daem
   expect(api.sent("createForumTopic")).toHaveLength(2);
 });
 
+test("a topic Telegram refused outright (chat not found: Start not pressed yet) is tried again a minute later, a block kept by 0.9.0 too", async () => {
+  const { api, state, open } = setup();
+  api.fail("createForumTopic", 400, "Bad Request: chat not found");
+  const now = Date.now();
+  await expect(open().ensurePlace(sibling)).rejects.toThrow("chat not found");
+  await expect(open().ensurePlace(sibling)).rejects.toThrow(/blocked for \d+s more \(createForumTopic: 400 Bad Request: chat not found\)/);
+  expect(api.sent("createForumTopic")).toHaveLength(1);
+  const clock = spyOn(Date, "now").mockReturnValue(now + 61_000);
+  try {
+    await open().ensurePlace(sibling); // Start pressed meanwhile
+    expect(api.sent("createForumTopic")).toHaveLength(2);
+  } finally { clock.mockRestore(); }
+  // What 0.9.0 kept for such a refusal (no retryAt): a block for good then, tried again now.
+  const other = { ...sibling, id: "pet:other", title: "Other" };
+  state.set(`telegram.123456.${OWNER}.creation.${other.id}`, JSON.stringify({ attemptedAt: now, failure: "createForumTopic: 400 Bad Request: chat not found" }));
+  await open().ensurePlace(other);
+  expect(api.sent("createForumTopic")).toHaveLength(3);
+});
+
+test("a topic refused again and again waits twice as long each time, an hour at most", async () => {
+  const { api, state, open } = setup();
+  const key = `telegram.123456.${OWNER}.creation.${sibling.id}`;
+  const waits: number[] = [];
+  let now = Date.now();
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  try {
+    for (let i = 0; i < 8; i++) {
+      api.fail("createForumTopic", 400, "Bad Request: chat not found");
+      await expect(open().ensurePlace(sibling)).rejects.toThrow("chat not found");
+      const { wait, retryAt } = JSON.parse(state.get(key)!);
+      waits.push(wait);
+      now = retryAt + 1;
+    }
+  } finally { clock.mockRestore(); }
+  expect(waits.map((ms) => ms / 60_000)).toEqual([1, 2, 4, 8, 16, 32, 60, 60]);
+});
+
 test("a lost create response leaves one topic and a durable stop instead of creating duplicates", async () => {
   const { api, open, bot } = setup();
   const owner = bot();

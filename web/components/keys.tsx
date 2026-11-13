@@ -92,7 +92,7 @@ export function KeysSection({ keys, houses, providers, noteMax, refresh, notify 
               <span className="strong ellipsis">{key.name}</span>
               <span className="muted">
                 {key.provider} · {key.kind ?? "unknown kind"}
-                {key.houses && ` · ${key.houses.join(", ")} only`}
+                {key.houses ? ` · ${key.houses.join(", ")} only` : houses.length > 1 ? " · every workspace" : ""}
               </span>
               {key.note && <span className="hint">{key.note}</span>}
             </Cell>

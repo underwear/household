@@ -43,11 +43,12 @@ test("the config keeps settings under the pet, checked by its agent; one is remo
   await config.updatePet("work", "pet", { settings: { subagentModel: "haiku" } });
   await config.updatePet("work", "pet", { settings: null });
   expect((await config.load()).houses[0]!.pets[0]).not.toHaveProperty("settings");
-  // A pet moved to an agent without settings keeps none.
+  // A pet moved to another agent leaves the settings of the one before behind, whether or not it says so.
   await config.updatePet("work", "pet", { settings: { subagentModel: "haiku" } });
-  await expect(config.updatePet("work", "pet", { agent: plain.name })).rejects.toThrow("has no settings");
-  await config.updatePet("work", "pet", { agent: plain.name, settings: null });
+  await config.updatePet("work", "pet", { agent: plain.name });
   expect((await config.load()).houses[0]!.pets[0]).toMatchObject({ agent: plain.name });
+  expect((await config.load()).houses[0]!.pets[0]).not.toHaveProperty("settings");
+  await expect(config.updatePet("work", "pet", { settings: { subagentModel: "haiku" } })).rejects.toThrow("has no settings");
 });
 
 test("a key's overage switch: off unless written, written only when on", async () => {

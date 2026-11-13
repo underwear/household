@@ -13,6 +13,7 @@ import { isMap, isNode, isScalar, isSeq, Pair, parseDocument, Scalar, type Docum
 import { normalLifecycle, type PetLifecycle } from "../core/lifecycle";
 import { emojiOf } from "../core/emoji";
 import { HouseholdError } from "../core/errors";
+import { DEFAULT_HARNESS } from "../core/agent";
 import { joining, PLATFORMS, type ChannelConfig } from "../core/channels";
 import { assertCanAddPet, assertCanCreateHouse, findHouse, sameOwner, type House, type Household, type Owner } from "../core/household";
 import { PROVIDERS, type Provider } from "../core/keys";
@@ -454,6 +455,11 @@ export class ConfigStore {
         doc.setIn(path, map);
       }
       const { environment, lifecycle, settings, ...plain } = petFields(fields);
+      // Another harness: the settings of the one it had are not its (codex's chatgptApps on claude), so they go.
+      const before = knownPet(household, house, pet).pets.find(({ name }) => name === pet)!;
+      // Removed (null or ""): the default harness again.
+      const next = plain.agent === undefined ? undefined : plain.agent || DEFAULT_HARNESS;
+      if (next !== undefined && next !== (before.agent ?? DEFAULT_HARNESS)) doc.deleteIn([...path, "settings"]);
       setFields(doc, path, plain);
       setPetSettings(doc, path, settings);
       setPetEnvironment(doc, path, environment);

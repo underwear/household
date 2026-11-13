@@ -23,6 +23,9 @@ const NOTICE = "🏠 Household:";
 const CARD_HEADING = "🏠 Notification from Household";
 /** A post waits out this much of Telegram's rate limit (429) per piece, so a cut message is not sent twice. */
 const MAX_POST_WAIT_S = 30;
+/** After Telegram refused to make a topic outright (no topic made), how long until it is asked again: doubled each time, up to the cap. */
+const REFUSED_TOPIC_RETRY_MS = 60_000;
+const REFUSED_TOPIC_RETRY_MAX_MS = 60 * 60_000;
 /** How often a use of a place tries again a rename of its thread that failed passingly. */
 const RENAME_RETRY_MS = 60_000;
 /** Messages with buttons whose text is kept, so a choice can be written under it. */
@@ -644,11 +647,23 @@ export class TelegramChannel implements Channel, BotChat {
     const { state } = this.bot.options;
     const key = this.keys.creation(place.id);
     const previous = state.get(key);
+    /** How long the last outright refusal waited (0: none yet): the next waits twice as long. */
+    let refusedWait = 0;
     if (previous) {
       let retryAt: number | undefined;
       let failure: string | undefined;
-      try { const attempt = JSON.parse(previous); retryAt = attempt.retryAt; failure = typeof attempt.failure === "string" ? attempt.failure : undefined; } catch { /* An unreadable attempt is uncertain too. */ }
-      if (typeof retryAt !== "number" || !Number.isFinite(retryAt) || retryAt > Date.now()) {
+      try {
+        const attempt = JSON.parse(previous);
+        retryAt = attempt.retryAt;
+        failure = typeof attempt.failure === "string" ? attempt.failure : undefined;
+        refusedWait = typeof attempt.wait === "number" && Number.isFinite(attempt.wait) ? attempt.wait : 0;
+      } catch { /* An unreadable attempt is uncertain too. */ }
+      if (typeof retryAt === "number" && Number.isFinite(retryAt) && retryAt > Date.now()) {
+        throw new Error(`Topic creation for ${place.id} is blocked for ${Math.ceil((retryAt - Date.now()) / 1000)}s more${failure ? ` (${failure})` : ""}; it is tried again then.`);
+      }
+      // A refusal 0.9.0 kept as a block for good (no retryAt): Telegram made no topic then either.
+      const refusedBefore = /^createForumTopic: (400|403) /.test(failure ?? "");
+      if (!refusedBefore && (typeof retryAt !== "number" || !Number.isFinite(retryAt))) {
         throw new Error(`Topic creation for ${place.id} is blocked after an earlier attempt${failure ? ` (${failure})` : ""}; inspect existing Telegram topics before repairing its mapping. No new topic was requested.`);
       }
     }
@@ -666,6 +681,11 @@ export class TelegramChannel implements Channel, BotChat {
       if (error instanceof TelegramError && error.code === 429) {
         const seconds = Number.isFinite(error.retryAfter) && error.retryAfter! > 0 ? error.retryAfter! : 60;
         state.set(key, JSON.stringify({ retryAt: Date.now() + seconds * 1000 }));
+      } else if (error instanceof TelegramError && (error.code === 400 || error.code === 403)) {
+        // Refused outright ("chat not found" before the person pressed Start, the bot blocked or without rights):
+        // Telegram made no topic, so trying again cannot make a second one. Again after a short wait, kept with why.
+        const wait = Math.min(REFUSED_TOPIC_RETRY_MAX_MS, refusedWait > 0 ? refusedWait * 2 : REFUSED_TOPIC_RETRY_MS);
+        state.set(key, JSON.stringify({ retryAt: Date.now() + wait, wait, failure: error.message }));
       } else if (error instanceof TelegramError) {
         state.set(key, JSON.stringify({ attemptedAt: Date.now(), failure: error.message }));
       }

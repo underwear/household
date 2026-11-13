@@ -689,6 +689,25 @@ test("Telegram forum groups persist negative supergroup ids and reject private/b
   }
 });
 
+test("another harness drops the settings of the one before; the same harness keeps them", async () => {
+  const { config, text } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {agent: codex-app-server, settings: {chatgptApps: \"true\"}}\n");
+  await config.updatePet("work", "sibling", { agent: "codex-app-server", model: "gpt-6" });
+  expect((await config.load()).houses[0]!.pets[0]!.settings).toEqual({ chatgptApps: "true" });
+  await config.updatePet("work", "sibling", { agent: "claude-code-tmux", model: "sonnet", settings: { subagentModel: "haiku" } });
+  expect((await config.load()).houses[0]!.pets[0]!.settings).toEqual({ subagentModel: "haiku" });
+  expect(await text()).not.toContain("chatgptApps");
+  // Named for the first time, the default harness is not another one.
+  const plain = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {settings: {subagentModel: haiku}}\n");
+  await plain.config.updatePet("work", "sibling", { agent: "claude-code-tmux" });
+  expect((await plain.config.load()).houses[0]!.pets[0]!.settings).toEqual({ subagentModel: "haiku" });
+  // Removed (null or ""): back on the default harness, which is no other one for it.
+  await plain.config.updatePet("work", "sibling", { agent: null });
+  expect((await plain.config.load()).houses[0]!.pets[0]!.settings).toEqual({ subagentModel: "haiku" });
+  const codex = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {agent: codex-app-server, settings: {chatgptApps: \"true\"}}\n");
+  await codex.config.updatePet("work", "sibling", { agent: null });
+  expect((await codex.config.load()).houses[0]!.pets[0]!.settings).toBeUndefined();
+});
+
 test("forwarding General: written as true when on, removed when off; refused for a plain Telegram DM", async () => {
   const { config, text } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {}\n");
   await config.addChannel("work", { kind: "telegram-group", token: "123456:fake-token", chat: "-1001234567890", pets: ["sibling"], forwardGeneral: true });

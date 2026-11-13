@@ -59,6 +59,7 @@ const USAGE = `usage:
   house key codex <name>         sign in to ChatGPT for Household (its own login: a code for any browser)
   house key rm <name>            remove a key (refused while a bot runs on it)
                                  key add and key set take --workspaces a,b: only those workspaces' bots may run on it
+                                 ('*': every workspace, as a key added without it is)
   house key set <name> --allow-overage on|off
                                  a subscription key: whether its bots go on once its allowance is used up, spending
                                  what the provider bills apart (credits); off (the default) refuses them until it resets
@@ -76,7 +77,8 @@ const USAGE = `usage:
   house channel add <workspace> --kind telegram-dm|telegram-private|telegram-group|slack-private [--app-token <xapp-token>] [--token <bot token>] --chat <id> [--bots a,b] [--default a] [--name <name>] [--note <text>]
                                  a chat of the workspace: a private chat with a bot (its token from @BotFather, from
                                  stdin when --token is left out, checked with Telegram as the web UI does; chat:
-                                 your Telegram user id), its bots (default: who gets General; needed with two or more)
+                                 your Telegram user id), its bots (default: who gets unaddressed messages, and General
+                                 with --forward-general on; needed with two or more)
   house channel rm <workspace> <chat>  remove the workspace's channel of that chat
   house owner add|rm <workspace> <platform> <id> [--note <text>]
                                  an owner of the workspace on a platform, by the id it knows them by
@@ -358,8 +360,10 @@ async function main(argv: string[]): Promise<void> {
   // The old secret files: an agent's key and a bot's token moved into household.yaml.
   if (command === "secret" && !["add", "set", "rm"].includes(args[0] ?? "")) throw new HouseholdError("`house secret add|set|rm` is for your own secrets; a harness's key is `house key add`, a bot's token `house channel add --token`");
   if (command === "key" && args[0] === "add" && args.length === 2 && values.provider) {
-    await config.addKey(args[1]!, { provider: values.provider, value: await keyValue(values.value), note: values.note, houses: listOf(values.houses) });
-    console.log(`key '${args[1]}' added`);
+    const houses = keyWorkspaces(values.houses);
+    const after = await config.addKey(args[1]!, { provider: values.provider, value: await keyValue(values.value), note: values.note, houses });
+    // Said every time: a key for every workspace is easy to put a bot of the wrong account on.
+    console.log(`key '${args[1]}' added: ${houses ? `only bots in ${houses.join(", ")} may run on it` : after.houses.length > 1 ? `every workspace's bots may run on it (${after.houses.map(({ name }) => name).join(", ")}); limit it with --workspaces a,b` : "every workspace's bots may run on it"}`);
     return notifyDaemon(paths);
   }
   if (command === "key" && args[0] === "codex" && args.length === 2) {
@@ -381,8 +385,9 @@ async function main(argv: string[]): Promise<void> {
     return notifyDaemon(paths);
   }
   if (command === "key" && args[0] === "set" && args.length === 2 && values.houses !== undefined && values.note === undefined && values.value === undefined) {
-    await config.updateKey(args[1]!, { houses: listOf(values.houses) ?? null });
-    console.log(`key '${args[1]}' ${values.houses ? `is for ${values.houses}` : "is for every workspace"}`);
+    const houses = keyWorkspaces(values.houses) ?? null;
+    await config.updateKey(args[1]!, { houses });
+    console.log(`key '${args[1]}' ${houses ? `is for ${houses.join(", ")} only` : "is for every workspace"}`);
     return notifyDaemon(paths);
   }
   if (command === "secret" && values.houses !== undefined) throw new HouseholdError("Secrets belong to one workspace: use house secret add|set|rm <workspace> <name>, without --workspaces");
@@ -503,6 +508,18 @@ async function main(argv: string[]): Promise<void> {
   if (await runMigrate(paths, command, args, values)) return;
   if (await runMore(paths, command, args, values)) return;
   throw new HouseholdError(USAGE);
+}
+
+/**
+ * A key's `--workspaces`: names (a,b), or `*` for every workspace, said so; empty is refused, never taken as every
+ * workspace without a word.
+ */
+function keyWorkspaces(text: string | undefined): string[] | null | undefined {
+  if (text === undefined) return undefined;
+  if (text.trim() === "*") return null;
+  const names = listOf(text);
+  if (!names) throw new HouseholdError("--workspaces takes workspace names (a,b), or '*' for every workspace");
+  return names;
 }
 
 /** A comma list (`--houses a,b`); undefined when not given or empty. */

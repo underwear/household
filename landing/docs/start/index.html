@@ -222,7 +222,7 @@
 <pre><code class="language-sh">house start
 </code></pre>
 <p>The first start downloads the bot's VM image, so give it a minute. <code>house status</code> shows your bot as <code>running</code> when it is ready.</p>
-<p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.</p>
+<p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux) that starts it again whenever it exits, a clean exit too: launchd <code>KeepAlive</code> set to <code>true</code>, systemd <code>Restart=always</code>. Only &quot;on failure&quot; leaves it down after an update's restart. Stop it through the service. Only one daemon at a time.</p>
 <h2 id="4-say-hi">4. Say hi</h2>
 <p>For a shared group with a topic per bot, see <a href="../telegram-groups/">Telegram groups with topics</a>.</p>
 <p>Write to your bot where you connected it: in a Telegram group, in its own topic; in a private chat with threads, in its own thread; in a plain chat or a Slack DM, right there. 🤖</p>

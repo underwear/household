@@ -59,7 +59,7 @@ house start
 
 The first start downloads the bot's VM image, so give it a minute. `house status` shows your bot as `running` when it is ready.
 
-To keep Household running after you close the terminal, run `house start` as a service (launchd on a Mac, a systemd user service on Linux). Only one daemon at a time.
+To keep Household running after you close the terminal, run `house start` as a service (launchd on a Mac, a systemd user service on Linux) that starts it again whenever it exits, a clean exit too: launchd `KeepAlive` set to `true`, systemd `Restart=always`. Only "on failure" leaves it down after an update's restart. Stop it through the service. Only one daemon at a time.
 
 ## 4. Say hi
 

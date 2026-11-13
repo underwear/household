@@ -2,7 +2,7 @@ import { houseFeatures } from "../core/house-features";
 import { systemPrompt, type PromptRole } from "../core/prompts";
 import { codexAppServer } from "../agent-adapters/codex-app-server";
 import { claudeCodeTmux } from "../agent-adapters/claude-code-tmux";
-import { placedKeyUse, type AgentAdapter, type KeyUse } from "../core/agent";
+import { DEFAULT_HARNESS, placedKeyUse, type AgentAdapter, type KeyUse } from "../core/agent";
 import type { PetEnvironment } from "../core/environment";
 import { HouseholdError } from "../core/errors";
 import type { House, Household, Pet } from "../core/household";
@@ -14,7 +14,7 @@ import { volumesOf, type Volume } from "../core/volumes";
 export type Agents = ReadonlyMap<string, AgentAdapter>;
 
 /** The agent of a pet whose config does not name one. */
-export const DEFAULT_AGENT = claudeCodeTmux.name;
+export const DEFAULT_AGENT = DEFAULT_HARNESS;
 
 /** The adapters this build knows. A new agent kind is one more entry here. */
 export function knownAgents(): Agents {
