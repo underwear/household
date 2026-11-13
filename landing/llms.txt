@@ -1,8 +1,16 @@
 # Household
 
-> Household runs personal assistant bots in Telegram, powered by Claude Code or Codex harnesses. Each bot
+> Household runs personal assistant bots in Telegram or Slack, powered by Claude Code or Codex harnesses. Each bot
 > lives in its own microVM within a workspace; a daemon on the user's Mac or Linux machine proxies its traffic
 > through an allowlist and puts API keys into requests on the way out, so bots only ever see placeholders.
+
+Each bot is a real Claude Code or Codex session that stays: it has its own computer (a microVM with a persistent
+home), its own memory, skills, schedule and thread in the chat, and it takes orders only from the workspace's owners.
+Household is self-hosted and open source (AGPL-3.0): the maintainers run no service that receives conversations,
+files or keys, Household sends no telemetry, and the web admin listens only on `127.0.0.1:8780` (over SSH port
+forwarding on a server). The models themselves are the user's provider (Anthropic or OpenAI), not local.
+
+## Set it up
 
 Setting it up is done when the user writes to their Telegram bot and a bot answers. Work through the
 [setup checklist](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md).
@@ -10,10 +18,82 @@ Household installs with `curl -fsSL https://agents-household.dev/install.sh | sh
 `house onboard` then walks the user through the rest in their terminal (a model key, a workspace and its budget, a Telegram or Slack channel, a first bot), and `house update`
 moves to a newer release.
 
+What the machine needs:
+
+- A Mac on Apple silicon, or Linux with `/dev/kvm`: the user's own machine, a VM with nested virtualization, or a
+  KVM-enabled VPS. An Intel Mac only through such a Linux VM. `house doctor` checks that microVMs can run.
+- `python3` and `openssl`. The installer brings the rest into `~/.household`: microsandbox (the microVM runtime),
+  Codex and the web UI.
+- A key for the harness: a Claude subscription (sign in to Claude, or a `claude setup-token` token) or an Anthropic
+  API key for Claude Code; a ChatGPT subscription or an OpenAI API key for Codex.
+
 Install the `household` skill too, for running Household afterwards:
 
 - Claude Code: `claude plugin marketplace add underwear/household && claude plugin install household@household`
 - Codex: `codex plugin marketplace add underwear/household && codex plugin add household@household`
+
+## Concepts
+
+- **Daemon** (`house`): runs on the user's machine (launchd on a Mac, a systemd user service on Linux), starts the
+  VMs, talks to the messengers and is the only way out to the network for every VM. Config:
+  `~/.config/household/household.yaml`; the CLI and the web admin (`house dashboard`) edit it.
+- **Workspace**: a trust zone with its own network allowlist, secrets, channels, owners and CPU/RAM budget.
+- **Bot**: a long-lived assistant in a workspace, on a harness (Claude Code or Codex), in its own microVM. Its home
+  folder survives restarts and new VMs; Household memory keeps its notes even across harness changes. It has its
+  own instructions (`CLAUDE.md` / `AGENTS.md`), skills, scheduled tasks, setup and on-start scripts.
+- **Sideworker**: extra hands a bot starts for a long or parallel job; it shares its parent's home, memory, network
+  and secrets, and is closed when the job is done.
+- **Scout**: a specialist a bot calls for one risky or privileged task ("find this movie on a torrent site", "buy
+  two bus tickets"). It runs in a fresh throwaway VM built only from the **capabilities** the owner set (install
+  script, network, keys), sees nothing of the bot, starts only when the owner presses **Run**, and is deleted after.
+- **Channel**: where people talk to bots: a Telegram group with a topic per bot, a Telegram private chat (threaded
+  or plain), or a Slack DM.
+- **Inbox**: something that wakes bots on its own: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,
+  Telegram bot updates, custom HTTP.
+- **Connectors**: accounts a workspace connects and gives to chosen bots, read-only or read-write: Google (Gmail,
+  Drive, Calendar), Slack, Microsoft To Do, any MCP server. Tokens stay in the host's private database.
+- **claude.ai connectors and ChatGPT apps**: a bot on a subscription sign-in key (Sign in to Claude, or a ChatGPT
+  sign-in by code) can use the connectors or apps already connected in that account (Drive, Jira, GitHub…), as that
+  account. It is one switch per bot, off by default: **Claude.ai connectors** or **ChatGPT apps** on its Harness
+  tab, or `--setting claudeAiConnectors=true` / `--setting chatgptApps=true`. Its sideworkers get it too, scouts
+  never. A pasted token or an API key has none.
+
+## Isolation and security model
+
+- **A microVM per bot.** Every bot, sideworker and scout runs in its own hardware-virtualized microVM
+  with its own Linux kernel, not a container: microsandbox (libkrun) on Apple's Hypervisor.framework on a Mac and on
+  KVM on Linux. A bot sees none of the host's files and
+  none of the other bots', except folders the owner shares on purpose at `/volumes/<name>` (read-only or
+  read-write).
+- **No direct route out.** A VM's only way to the network is the Household proxy (`HTTP_PROXY` / `HTTPS_PROXY`,
+  plus HTTP CONNECT tunnels for SSH, databases and other TCP). It lets through only the hosts and ports on the
+  workspace allowlist. UDP and anything that ignores the proxy do not work.
+- **Asking for more.** When a bot needs a new host it calls `network_request` with one exact domain, one port and a
+  reason; the owner answers in the chat: 15 minutes, permanently, or no. `house workspace allow|disallow|revoke`
+  does the same from the CLI.
+- **Secrets the bot never sees.** Model keys and workspace secrets stay on the host. Inside the VM a secret is a
+  placeholder (`household-secret-<name>` in an env var); for that secret's hosts only, the proxy terminates TLS
+  with a Household CA trusted inside the VM and puts the real value into the request header on the way out.
+  Anywhere else the placeholder goes out as plain text. Bots ask for new secrets with `secret_request`; the owner
+  sends the value with `/secret` (deleted from the chat before processing) or adds it in the admin. Credentials the
+  proxy cannot inject (an SSH key, a database password) have to live in the VM, and the bot is told to say so first.
+- **Owners decide.** Only workspace owners can give a bot orders; everyone else in a chat is a guest. Network grants,
+  secrets, shared folders, scout runs and HTTP previews of a bot's web app (a 15-minute link) each need the owner's
+  approval in the chat.
+- **Scouts for what a bot should not hold.** The untrusted internet, a production key or a closed network go to a
+  scout. A scout with an access capability reaches only that capability's hosts; its keys never reach the bot, and
+  its words and files reach the bot only when the owner passes them, as untrusted input.
+- **Budgets.** Each workspace has one CPU/RAM budget (8 vCPU / 8 GiB by default); bots reserve their share and
+  scouts and sideworkers draw from the rest.
+- **Logs.** Each bot's page shows its messages, turns, every network request (allowed, denied or failed, and whether the proxy intercepted it) and its
+  VM; the Console tab shows its terminal read-only.
+
+## Everyday commands
+
+`house status`, `house ls`, `house bot …`, `house channel …`, `house secret …`, `house volume …`,
+`house scout …`, `house capability …`, `house features <workspace> scouts|preview|sideworkers=on|off`,
+`house export` / `house import` (config with keys, database, bots' homes), `house update`, `house doctor`.
+`house --help` and `--help` on every group list the rest.
 
 ## Docs
 
@@ -22,10 +102,13 @@ Install the `household` skill too, for running Household afterwards:
 - [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra assistants a bot starts for one job: another project's CLAUDE.md or AGENTS.md, a thread you can talk in, limits and profiles
 - [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-bot subscriptions and silent delivery; the custom HTTP format
 - [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; capabilities, network limits, owner approval (Run), secrets, results and threads
+- [Workspace resources](https://agents-household.dev/docs/resources/): one CPU/RAM budget per workspace, what bots reserve and what scouts and sideworkers share
 - [HTTP previews](https://agents-household.dev/docs/previews/): a bot shows a web app from its VM by a 15-minute link you approve; who can open it; limits
 - [Shared folders](https://agents-household.dev/docs/volumes/): share folders of your computer with bots at /volumes/<name>, read-only or read-write; bots ask with volume_request, you approve in the chat; files stay when one is removed
 - [MCP servers](https://agents-household.dev/docs/mcp/): give a bot any MCP server by asking it; hosts and keys it needs, what persists, limits
 - [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, what a backup holds, moving to another machine
+
+## Skill
 
 - [Setup](https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md): the checklist from a bare machine to a bot answering in Telegram
 - [Operating](https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md): what Household can do (bots, network, secrets, scouts), updates, backups
@@ -35,4 +118,5 @@ Install the `household` skill too, for running Household afterwards:
 ## Source
 
 - [Repository](https://github.com/underwear/household): TypeScript on Bun; `house --help` lists every command
+- [Releases](https://github.com/underwear/household/releases): release notes
 - [License](https://github.com/underwear/household/blob/main/LICENSE): AGPL-3.0
