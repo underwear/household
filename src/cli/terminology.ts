@@ -12,7 +12,7 @@ export function normalizeCliArgs(argv: string[]): string[] {
     if (arg === "--") { positional = true; return arg; }
     const match = /^--([^=]+)(=.*)?$/.exec(arg);
     // Every option except these booleans consumes its next token, even when it starts with --.
-    const booleans = ["help", "version", "force", "local", "no-open", "now", "deleted", "follow", "problems", "json", "wait", "link"];
+    const booleans = ["help", "version", "force", "local", "no-open", "now", "deleted", "follow", "problems", "json", "wait", "link", "yes"];
     if (match && match[2] === undefined && !booleans.includes(match[1]!)) value = true;
     if (["-n"].includes(arg)) value = true;
     return match && FLAGS[match[1]!] ? `--${FLAGS[match[1]!]}${match[2] ?? ""}` : arg;

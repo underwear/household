@@ -211,6 +211,40 @@ export interface HouseView {
   pets: PetView[];
 }
 
+/** A shared host folder, as the Volumes pages show it. */
+export interface VolumeView {
+  name: string;
+  /** The host folder. */
+  path: string;
+  access: import("../core/volumes").VolumeAccess;
+  bots: string[];
+  note: string | null;
+  /** Where its bots see it: /volumes/<name>. */
+  target: string;
+  /** Whether the folder can be mounted now: not when it is gone (an unplugged disk) or no longer the plain folder that was shared. */
+  present: boolean;
+  /** Why it is not mounted: `missing`, or `unsafe` (its path is a link now, or leads into Household's own data); null when it can be. */
+  problem: "missing" | "unsafe" | null;
+}
+
+/** A bot's home: Household's own, shown so the owner sees what is where; never edited here. */
+export interface HomeView {
+  bot: string;
+  /** The bot a sideworker works for; none for a bot. */
+  parent: string | null;
+  /** On this computer. */
+  hostPath: string;
+  /** In its VM. */
+  guestPath: string;
+  /** The sideworkers that also see it (their parent's home), and where. */
+  sharedWith: { bot: string; at: string }[];
+}
+
+export interface VolumesView {
+  volumes: VolumeView[];
+  homes: HomeView[];
+}
+
 /** A write's answer: the house after it (not for a delete). */
 export interface WriteView {
   house?: HouseView;

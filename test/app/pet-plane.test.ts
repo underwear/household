@@ -650,3 +650,43 @@ test("staged reductions remain reserved across daemon adoption until the VM rest
   await adopted.restart(small);
   expect(workspaceBudget(house, adopted.resourceAllocations("work")).available).toEqual({ cpus: 6, memoryMiB: 7168 });
 });
+
+test("volumes: mounted at /volumes/<name>; a folder gone or back recreates nothing on reload, but Restart remounts it", async () => {
+  const { mkdir, rm, realpath } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const dir = await realpath(tempDir());
+  const folder = join(dir, "photos");
+  await mkdir(folder);
+  const { runtime, plane } = setup();
+  const pet: PlacedPet = { ...pets[0]!, volumes: [{ name: "photos", path: folder, access: "read" }] };
+  await plane.reconcile([pet]);
+  expect(runtime.specs[0]!.mounts).toContainEqual({ type: "bind", source: folder, target: "/volumes/photos", readOnly: true });
+  expect(runtime.specs[0]!.labels!["household.volumes"]).toBe("photos:ro");
+  await rm(folder, { recursive: true });
+  runtime.specs.length = 0;
+  await plane.reconcile([pet]);
+  expect(runtime.specs).toEqual([]); // an unplugged disk restarts no bot
+  await plane.restart(pet);
+  expect(runtime.specs[0]!.mounts!.some((mount) => mount.target === "/volumes/photos")).toBe(false); // a new VM without it
+  await mkdir(folder);
+  runtime.specs.length = 0;
+  await plane.restart(pet);
+  expect(runtime.specs[0]!.mounts).toContainEqual({ type: "bind", source: folder, target: "/volumes/photos", readOnly: true });
+});
+
+test("volumes: a stopped VM whose folder is gone is made anew without it, so it still starts", async () => {
+  const { mkdir, rm, realpath } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const dir = await realpath(tempDir());
+  const folder = join(dir, "nas");
+  await mkdir(folder);
+  const { runtime, plane } = setup();
+  const pet: PlacedPet = { ...pets[0]!, volumes: [{ name: "nas", path: folder, access: "write" }] };
+  await plane.reconcile([pet]);
+  await runtime.stopContainer("household.work.sibling");
+  await rm(folder, { recursive: true });
+  runtime.specs.length = 0;
+  await plane.reconcile([pet]);
+  expect(runtime.specs).toHaveLength(1);
+  expect(runtime.specs[0]!.mounts!.some((mount) => mount.target === "/volumes/nas")).toBe(false);
+});

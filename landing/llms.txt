@@ -23,6 +23,7 @@ Install the `household` skill too, for running Household afterwards:
 - [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-bot subscriptions and silent delivery; the custom HTTP format
 - [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; capabilities, network limits, owner approval (Run), secrets, results and threads
 - [HTTP previews](https://agents-household.dev/docs/previews/): a bot shows a web app from its VM by a 15-minute link you approve; who can open it; limits
+- [Shared folders](https://agents-household.dev/docs/volumes/): share folders of your computer with bots at /volumes/<name>, read-only or read-write; bots ask with volume_request, you approve in the chat; files stay when one is removed
 - [MCP servers](https://agents-household.dev/docs/mcp/): give a bot any MCP server by asking it; hosts and keys it needs, what persists, limits
 - [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, what a backup holds, moving to another machine
 

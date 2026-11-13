@@ -696,3 +696,28 @@ test("ordinary Telegram DM persists and cannot duplicate a threaded connection t
   await expect(config.addChannel("work", { kind: "telegram-private", token: "123456:fake-token", chat: "123", pets: [] })).rejects.toThrow("choose one private-chat mode");
   await expect(config.addChannel("work", { kind: "telegram-dm", token: "123456:fake-token", chat: "-100123", pets: [] })).rejects.toThrow();
 });
+
+test("volumes: added, changed and removed in the YAML; a removed bot leaves its volumes; unknown bots and bad paths refused", async () => {
+  const { config, text } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling:\n      helper:\n");
+  await config.putVolume("work", "photos", { path: "/Users/me/Pictures", access: "read", bots: ["sibling", "helper"], note: "family" }, { create: true });
+  expect((await config.load()).houses[0]!.volumes).toEqual([{ name: "photos", path: "/Users/me/Pictures", access: "read", bots: ["sibling", "helper"], note: "family" }]);
+  expect(await text()).toContain("volumes:\n      photos:\n        path: /Users/me/Pictures");
+  await expect(config.putVolume("work", "photos", { path: "/x", access: "read", bots: [] }, { create: true })).rejects.toThrow("already exists");
+  await expect(config.putVolume("work", "other", { path: "/x", access: "read", bots: ["ghost"] }, { create: true })).rejects.toThrow("unknown bot");
+  await expect(config.putVolume("work", "other", { path: "relative", access: "read", bots: [] }, { create: true })).rejects.toThrow("absolute");
+  await expect(config.putVolume("work", "Bad", { path: "/x", access: "read", bots: [] }, { create: true })).rejects.toThrow();
+  await expect(config.putVolume("work", "photos", { path: "/x", access: "write", bots: [] }, { expected: null })).rejects.toThrow("changed while awaiting approval");
+  await config.removePet("work", "helper");
+  expect((await config.load()).houses[0]!.volumes![0]!.bots).toEqual(["sibling"]);
+  await config.putVolume("work", "photos", { path: "/Users/me/Pictures", access: "write", bots: ["sibling"] });
+  expect((await config.load()).houses[0]!.volumes![0]).toMatchObject({ access: "write" });
+  await config.removeVolume("work", "photos");
+  expect((await config.load()).houses[0]).not.toHaveProperty("volumes");
+  expect(await text()).not.toContain("volumes");
+});
+
+test("a volume naming a bot the workspace has not is a config problem", () => {
+  const { config, path } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling:\n    volumes:\n      a:\n        path: /x\n        access: read\n        bots: [ghost]\n");
+  void path;
+  return expect(config.load()).rejects.toThrow("volume 'work/a' is for unknown bot 'ghost'");
+});

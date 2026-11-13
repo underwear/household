@@ -3,8 +3,9 @@ import { HOUSE_FEATURES, type HouseFeatures } from "./house-features";
 import { describeLifecycle, type PetLifecycle } from "./lifecycle";
 import {
   ENVIRONMENT_GET_TOOL, ENVIRONMENT_SETUP_TOOL, ENVIRONMENT_UPDATE_TOOL, HISTORY_TOOL, MCP_SERVER, NETWORK_LIST_TOOL,
-  NETWORK_REQUEST_TOOL, REACT_TOOL, REPLY_TOOL,
+  NETWORK_REQUEST_TOOL, REACT_TOOL, REPLY_TOOL, VOLUME_REQUEST_TOOL,
 } from "./instructions";
+import { volumeTarget, type VolumeAccess } from "./volumes";
 import { ATTACHMENTS_TAG, BATCH_TAG, CLOCK_TAG, CONTENT_TAG, HEADER_TAG, MESSAGE_TAG } from "./tags";
 
 /**
@@ -33,6 +34,8 @@ export interface PromptContext {
    * zone reaches the pet without changing its instructions (which would restart it).
    */
   lifecycle?: PetLifecycle;
+  /** The host folders mounted in its VM (a sideworker's are its parent's). */
+  volumes?: readonly { name: string; access: VolumeAccess }[];
 }
 
 type Kind = PromptRole["kind"];
@@ -226,6 +229,19 @@ const SECTIONS: readonly Section[] = [
     title: "Your VM",
     for: ["scout"],
     text: () => "- Your working directory is /work (your scout's repository, when it has one). Your capabilities' software was installed before you started; their skills are in your skills directory. Nothing you leave behind survives the run: deliver what matters with `reply`, `send_file` or `parent_send`.",
+  },
+  {
+    title: "Shared folders",
+    for: PET_AND_WORKER,
+    when: ({ role, volumes = [] }) => role.kind === "pet" || volumes.length > 0,
+    text: ({ role, volumes = [] }) => [
+      volumes.length
+        ? `- Your human shared folders of their own computer with you: ${volumes.map(({ name, access }) => `\`${volumeTarget(name)}\` (${access === "write" ? "read-write" : "read-only"})`).join(", ")}. They are their files, not your home: what you write there is on their machine at once, Household keeps no copy and cannot undo it, and backups do not include them. Change only what your task needs; never delete there unless your human asked for it.`
+        : "- No folders of your human's computer are shared with you.",
+      role.kind === "sideworker"
+        ? "- Your shared folders are your parent's: ask it when you need another."
+        : `- To ask for a folder (an existing one, or a new one Household creates), a change of its access or which bots get it, or its removal, use \`${VOLUME_REQUEST_TOOL}\`: your human approves each request in the chat. A folder is mounted at \`/volumes/<name>\`; mounts are fixed when your VM starts, so after an approval Household asks you to finish your turn and restarts your VM (your home stays). Removing a folder only unmounts it: its files stay on your human's computer.`,
+    ].join("\n"),
   },
   {
     title: "Skills",

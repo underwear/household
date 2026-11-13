@@ -12,6 +12,9 @@
 - **Network**: `house workspace allow|disallow`; `house workspace revoke` ends a temporary grant a bot got in the chat.
 - **Secrets**: `house secret add <name> --host … --env VAR --workspaces …` (value on stdin). The bot sees a placeholder
   in `$VAR`; the gateway swaps in the value for those hosts only.
+- **Shared folders** (`house volume ls|add|set|rm`): a folder of this computer at `/volumes/<name>` in the VMs of the
+  bots listed (`--bots a,b`), `--access read|write`; a change restarts those bots; `rm` unmounts and keeps the files.
+  Bots can ask with `volume_request`; the owner approves in the chat.
 - **Scouts and capabilities** (`house scout …`, `house capability …`, `--json` on both): capabilities are install
   scripts with network (`--network any` for a tool, `--network host1,host2` for an access capability) and keys
   (`--via gateway` or `--via vm`); `capability test` installs one in a fresh VM; bots can propose drafts. Scouts are

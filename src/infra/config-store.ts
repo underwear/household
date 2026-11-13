@@ -4,6 +4,7 @@ import { CAPABILITY_TEMPLATES, GENERAL_SCOUT } from "../builtin-capabilities";
 import { houseFeatureSettingsSchema, type HouseFeatures, type PreviewSettings } from "../core/house-features";
 import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, type PetResources } from "../core/resources";
 import type { SideworkerProfile } from "../core/household";
+import { nestingIn, volumeFieldsSchema, volumeNameSchema, volumePathProblem, type Volume, type VolumeFields } from "../core/volumes";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
@@ -196,6 +197,43 @@ export class ConfigStore {
     return this.edit((doc, household) => {
       knownHouse(household, name);
       setIn(doc, ["houses", name, "sideworkerProfiles"], doc.createNode(value));
+    });
+  }
+
+  /**
+   * Adds a volume (`create`) or replaces one whole; its path is the caller's to have checked on disk (absolute, links
+   * resolved). `expected`: the volume as an approval saw it, refused when it changed since.
+   */
+  async putVolume(house: string, name: string, fields: VolumeFields, { create = false, expected }: { create?: boolean; expected?: Volume | null } = {}): Promise<Household> {
+    const parsedName = volumeNameSchema.safeParse(name);
+    if (!parsedName.success) throw new HouseholdError(parsedName.error.issues[0]!.message);
+    const parsed = volumeFieldsSchema.safeParse(fields);
+    if (!parsed.success) throw new HouseholdError(parsed.error.issues.map(issue => issue.message).join("; "));
+    const value = parsed.data;
+    const problem = volumePathProblem(value.path);
+    if (problem) throw new HouseholdError(problem);
+    return this.edit((doc, household) => {
+      const h = knownHouse(household, house);
+      const current = h.volumes?.find(volume => volume.name === name);
+      if (expected !== undefined && JSON.stringify(current ?? null) !== JSON.stringify(expected)) throw new HouseholdError("The volume changed while awaiting approval");
+      if (create && current) throw new HouseholdError(`volume '${name}' already exists`);
+      if (!create && !current) throw new NotFoundError(`unknown volume '${house}/${name}'`);
+      const nested = nestingIn(household.houses, house, name, value.path, value.access);
+      if (nested) throw new HouseholdError(nested);
+      const unknown = value.bots.filter(bot => !h.pets.some(pet => pet.name === bot));
+      if (unknown.length) throw new HouseholdError(`unknown bot${unknown.length > 1 ? "s" : ""} ${unknown.join(", ")} in workspace '${house}'`);
+      setIn(doc, ["houses", house, "volumes", name], doc.createNode({ path: value.path, access: value.access, bots: value.bots, ...(value.note ? { note: value.note } : {}) }));
+    });
+  }
+
+  /** Removes a volume: it is unmounted from its bots' VMs; its folder and files stay as they are. */
+  async removeVolume(house: string, name: string, expected?: Volume): Promise<Household> {
+    return this.edit((doc, household) => {
+      const current = knownHouse(household, house).volumes?.find(volume => volume.name === name);
+      if (!current) throw new NotFoundError(`unknown volume '${house}/${name}'`);
+      if (expected !== undefined && JSON.stringify(current) !== JSON.stringify(expected)) throw new HouseholdError("The volume changed while awaiting approval");
+      doc.deleteIn(["houses", house, "volumes", name]);
+      if (!knownHouse(household, house).volumes?.some(volume => volume.name !== name)) doc.deleteIn(["houses", house, "volumes"]);
     });
   }
 
@@ -444,6 +482,8 @@ export class ConfigStore {
         }
         removeItems(doc, [...path, "pets"], (item) => item === pet);
       });
+      // Its volumes stay for their other bots (or none): the folders are the owner's, not the bot's.
+      for (const volume of knownHouse(household, house).volumes ?? []) if (volume.bots.includes(pet)) removeItems(doc, ["houses", house, "volumes", volume.name, "bots"], (item) => item === pet);
       doc.deleteIn(["houses", house, "pets", pet]);
     });
   }

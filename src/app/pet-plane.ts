@@ -9,6 +9,8 @@ import { createHash } from "node:crypto";
 import type { AgentAdapter, Exec } from "../core/agent";
 import type { ContainerInfo, ContainerRuntime, ContainerSpec, Mount, PetRuntime } from "../infra/runtime";
 import type { PlacedPet } from "./agents";
+import { VOLUMES_ROOT, volumeTarget } from "../core/volumes";
+import { mountable } from "../infra/volume-folders";
 
 /** House and pet names cannot contain `.`, so no two (house, pet) pairs share a container or volume name. */
 export const petContainer = (house: string, pet: string) => `household.${house}.${pet}`;
@@ -18,7 +20,7 @@ export const petVolume = (house: string, pet: string) => `${petContainer(house, 
 export const petDockerDisk = (house: string, pet: string) => `${petContainer(house, pet)}.docker`;
 export const agentImage = (agent: AgentAdapter) => `household-agent-${agent.name}`;
 
-const LABEL = { owner: "household.owner", house: "household.house", pet: "household.pet", identity: "household.identity", launch: "household.launch" };
+const LABEL = { owner: "household.owner", house: "household.house", pet: "household.pet", identity: "household.identity", launch: "household.launch", volumes: "household.volumes" };
 /** Labels Household's own throwaway VMs (`runUtility`), by instance: never `LABEL.owner`, whose strays reconcile removes. */
 const UTILITY_LABEL = "household.utility";
 /** Runtime states of a pet that lives: a paused one (an export reading its home) is not recreated. */
@@ -149,6 +151,10 @@ export class PetPlane {
     this.mine = `${LABEL.owner}=${owner}`;
   }
 
+  /** Host folders no volume may reach (infra/volume-folders.ts `protectedFolders`), checked again at every mount. */
+  private protectedDirs: readonly string[] = [];
+  protectFolders(dirs: readonly string[]) { this.protectedDirs = dirs; }
+
   private beforeStop: (house: string, pet: string) => Promise<void> = async () => {};
   onBeforeStop(callback: (house: string, pet: string) => Promise<void>) { this.beforeStop = callback; }
 
@@ -206,7 +212,10 @@ export class PetPlane {
       await this.prepareInstructions(placed);
       const vm = await this.vm(placed);
       this.runtime.configureEnvironmentSetup?.(name, placed.scout?.setup ?? placed.environment?.setup, placed.environment?.onStart);
-      const change = petChange(current, vm);
+      // A VM that is not running gets its folders as they can be mounted now: a stored mount of a folder gone since (an
+      // unplugged disk) would keep it from starting, and one that came back is mounted. A running one is left as it is.
+      const remount = !!current && !ALIVE.has(current.state) && (current.labels[LABEL.volumes] ?? "") !== (vm.spec.labels?.[LABEL.volumes] ?? "");
+      const change = remount && current?.labels[LABEL.identity] === vm.identity ? "recreate" : petChange(current, vm);
       const before = this.launched.get(name);
       this.launched.set(name, vm.spec.env ?? {});
       if (current && current.state !== "stopped" && (change === "recreate" || change === "relaunch")) {
@@ -269,6 +278,14 @@ export class PetPlane {
     await onLeave();
     const wasStopped = current.state === "stopped";
     await this.beforeStop(placed.house, placed.pet);
+    // Its folders are fixed when its VM is made: one that came back (or went) since needs a new VM, home and disks kept.
+    if ((current.labels[LABEL.volumes] ?? "") !== (vm.spec.labels?.[LABEL.volumes] ?? "")) {
+      await this.runtime.removeContainer(name);
+      if (!wasStopped) await onStopped();
+      if (placed.agent.sessionFile) await this.runtime.resetSession!(petVolume(placed.house, placed.pet), placed.agent.sessionFile);
+      await this.runtime.runContainer(vm.spec);
+      return;
+    }
     await this.runtime.stopContainer(name);
     if (!wasStopped) await onStopped();
     if (placed.agent.sessionFile) await this.runtime.resetSession!(petVolume(placed.house, placed.pet), placed.agent.sessionFile);
@@ -462,20 +479,38 @@ export class PetPlane {
       ...(skillsPath ? [{ type: "bind" as const, source: skillsPath, target: GUEST_SKILLS }, { type: "bind" as const, source: BUILTIN_SKILLS, target: GUEST_BUILTIN_SKILLS, readOnly: true }] : []),
       ...(placed.scout ? [{ type: "bind" as const, source: placed.scout.homePath, target: agent.home }, { type: "bind" as const, source: `${placed.scout.homePath}/../secrets`, target: "/run/household/secrets", readOnly: true }] : [{ type: "volume" as const, source: petVolume(house, pet), target: effectivePetHome(placed, agent.home) }]),
       ...(placed.sideworker ? [{ type: "volume" as const, source: petVolume(house, placed.sideworker.parent), target: placed.sideworker.parentHome ?? agent.home }] : []),
+      ...await this.volumeMounts(placed),
       { type: "bind", source: this.caCert, target: PET_CA_CERT, readOnly: true },
       { type: "disk", source: petDockerDisk(house, pet), target: "/var/lib/docker", size: DOCKER_DISK_SIZE },
     ];
     // Resource allocations are staged on the same VM, outside its identity.
-    const identity = hash({ image: image.ref, imageId: image.id, labels, mounts, gateway: { host, proxyPort, relayPort } });
+    // Its volumes as configured, not as mounted now: a folder that goes missing or comes back recreates no VM.
+    const configured = { mounts: mounts.filter(mount => !mount.target.startsWith(`${VOLUMES_ROOT}/`)), volumes: placed.volumes ?? [] };
+    const identity = hash({ image: image.ref, imageId: image.id, labels, ...(placed.volumes?.length ? configured : { mounts }), gateway: { host, proxyPort, relayPort } });
     const launch = hash(env);
     const { cpus, memoryMiB } = petResources(placed);
     const spec: ContainerSpec = {
-      name, image: image.ref, env, labels: { ...labels, [LABEL.identity]: identity, [LABEL.launch]: launch }, mounts,
+      name, image: image.ref, env, labels: { ...labels, [LABEL.identity]: identity, [LABEL.launch]: launch, ...(mountedVolumes(mounts) ? { [LABEL.volumes]: mountedVolumes(mounts) } : {}) }, mounts,
       cpus, limits: { ...PET_LIMITS, memory: `${memoryMiB}M` },
       ...(placed.environment?.onStart === undefined ? {} : { environmentOnStart: placed.environment.onStart }),
       ...(placed.scout?.setup !== undefined ? { environmentSetup: placed.scout.setup } : placed.environment?.setup === undefined ? {} : { environmentSetup: placed.environment.setup }),
     };
     return { spec, identity, launch };
+  }
+
+  /**
+   * The bot's volumes whose folders may be mounted now: one that is gone (an unplugged disk, a folder deleted on the
+   * host) or is no longer the folder that was shared (a part of its path swapped for a link) is left out, so the bot
+   * still starts; it is mounted again once it is back and the bot's VM is recreated.
+   */
+  private async volumeMounts(placed: PlacedPet): Promise<Mount[]> {
+    const mounts: Mount[] = [];
+    for (const volume of placed.volumes ?? []) {
+      const state = await mountable(volume.path, this.protectedDirs);
+      if (state === "ok") mounts.push({ type: "bind", source: volume.path, target: volumeTarget(volume.name), readOnly: volume.access === "read" });
+      else console.warn(`bot ${placed.house}/${placed.pet}: volume ${volume.name} not mounted: ${state === "missing" ? `${volume.path} is not there` : `${volume.path} is no longer the plain folder that was shared (a link, or Household's own)`}`);
+    }
+    return mounts;
   }
 
   private async waitReady({ house, pet, agent, mode }: PlacedPet): Promise<Omit<PetStart, "house" | "pet">> {
@@ -495,6 +530,9 @@ export class PetPlane {
     }
   }
 }
+
+/** The volumes a VM has mounted, by target, as its label keeps them. */
+const mountedVolumes = (mounts: Mount[]) => mounts.filter(mount => mount.target.startsWith(`${VOLUMES_ROOT}/`)).map(mount => `${mount.target.slice(VOLUMES_ROOT.length + 1)}:${"readOnly" in mount && mount.readOnly ? "ro" : "rw"}`).join(",");
 
 /**
  * What the guest skills setup (infra/guest-skills.ts) links, for every harness Household knows, not only the pet's

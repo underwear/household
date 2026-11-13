@@ -29,6 +29,8 @@ import { PetTokenRegistry } from "../src/infra/pet-token-registry";
 import { SqliteStore } from "../src/infra/sqlite-store";
 import { fakeTelegram } from "./fake-telegram";
 import { waitFor } from "./helpers";
+import { callControl } from "../src/infra/control-socket";
+import type { ApiAnswer } from "../src/app/daemon";
 
 const enabled = process.env.E2E_MICROVM === "1";
 const root = mkdtempSync(join(tmpdir(), "household-microvm-e2e-"));
@@ -229,6 +231,41 @@ test.skipIf(!enabled)("CPU and RAM resize on next boot without discarding VM sys
   expect(smaller.memory.total).toBeLessThan(2.1 * 1024 ** 3);
   expect(await exec(["cat", "/tmp/resource-proof"])).toBe("kept\n");
 }, 120_000);
+
+test.skipIf(!enabled)("a shared folder is mounted at /volumes/<name>, read-only then read-write, and unmounted with its files kept", async () => {
+  const folder = join(root, "shared");
+  mkdirSync(folder);
+  writeFileSync(join(folder, "hello.txt"), "from host\n");
+  const api = async (method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown) => (await callControl<ApiAnswer>(paths.socket, "/api", { method, path, ...(body === undefined ? {} : { body }) }))!;
+  const at = `/api/houses/${house}/volumes`;
+  /** Polls a command in the VM (it is recreated meanwhile) until it prints what is wanted. */
+  const until = async (command: string, wanted: (output: string, ok: boolean) => boolean, ms = 120_000) => {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const result = await runtime!.exec(pet, ["sh", "-c", command]).catch(() => ({ ok: false, output: "" }));
+      if (wanted(result.output, result.ok)) return result.output;
+      if (Date.now() > deadline) throw new Error(`timed out: ${command} → ${result.output}`);
+      await Bun.sleep(1000);
+    }
+  };
+  expect((await api("POST", `${at}/check`, { path: folder })).body).toMatchObject({ exists: true, files: 1, capped: false });
+  expect((await api("POST", `${at}/check`, { path: paths.stateDir })).status).toBe(400);
+  expect((await api("POST", at, { name: "shared", path: folder, access: "read", bots: ["probe"] })).status).toBeLessThan(300);
+  expect(await until("cat /volumes/shared/hello.txt", (out) => out === "from host\n")).toBe("from host\n");
+  expect((await runtime!.exec(pet, ["sh", "-c", "echo vm > /volumes/shared/vm.txt"])).ok).toBe(false);
+  expect((await api("PUT", `${at}/shared`, { path: folder, access: "write", bots: ["probe"] })).status).toBeLessThan(300);
+  await until("echo vm > /volumes/shared/vm.txt && echo ok", (out) => out === "ok\n");
+  expect(readFileSync(join(folder, "vm.txt"), "utf8")).toBe("vm\n");
+  const view = (await api("GET", at)).body as { volumes: { name: string; present: boolean }[]; homes: { bot: string; hostPath: string }[] };
+  expect(view.volumes).toEqual([expect.objectContaining({ name: "shared", present: true })]);
+  expect(view.homes).toEqual([expect.objectContaining({ bot: "probe", hostPath: join(homesDirectory(paths), petVolume(house, "probe")) })]);
+  // A bot cannot ask for Household's own folders: refused before any card.
+  expect(JSON.parse((await mcp("volume_request", { name: "state", path: paths.stateDir, reason: "test" })).result.content[0].text)).toMatchObject({ status: "refused" });
+  expect((await api("DELETE", `${at}/shared`)).status).toBeLessThan(300);
+  await until("test -e /volumes/shared && echo there || echo gone", (out) => out === "gone\n");
+  expect(readFileSync(join(folder, "hello.txt"), "utf8")).toBe("from host\n");
+  expect(readFileSync(join(folder, "vm.txt"), "utf8")).toBe("vm\n");
+}, 600_000);
 
 test.skipIf(!enabled)("production host backup pauses/resumes a real VM and restores its home and CA into another state directory", async () => {
   await exec(["sh", "-c", 'mkdir -p "$HOME/memory"; printf "portable mémoire\\n" > "$HOME/memory/portable"; chmod 600 "$HOME/memory/portable"']);

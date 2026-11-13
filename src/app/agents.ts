@@ -9,6 +9,7 @@ import type { House, Household, Pet } from "../core/household";
 import { keyFor, type AgentKey } from "../core/keys";
 import { sameEndpoint, type Endpoint } from "../core/network-policy";
 import { houseSecrets, type PlacedSecret } from "../core/secrets";
+import { volumesOf, type Volume } from "../core/volumes";
 
 export type Agents = ReadonlyMap<string, AgentAdapter>;
 
@@ -48,6 +49,8 @@ export interface PlacedPet {
   keyUse: KeyUse;
   /** Its house's secrets: their placeholders go into its VM, their hosts are opened for it. */
   secrets?: PlacedSecret[];
+  /** The host folders mounted for it at /volumes/<name> (its parent's, for a sideworker). */
+  volumes?: Pick<Volume, "name" | "path" | "access">[];
 }
 
 /**
@@ -67,7 +70,8 @@ export function placePets(agents: Agents, { houses, keys }: Pick<Household, "hou
       const role: PromptRole = pet.scout ? { kind: "scout", name: pet.scout.definition, parent: pet.scout.parent, house: house.name, instructions: pet.scout.instructions }
         : pet.sideworker ? { kind: "sideworker", name: pet.name, parent: pet.sideworker.parent, house: house.name, cwd: pet.sideworker.cwd, ...(pet.sideworker.branch ? { branch: pet.sideworker.branch } : {}) }
         : { kind: "pet" };
-      return [{ instructions: systemPrompt({ role, features: houseFeatures(house), ...(role.kind === "pet" && pet.lifecycle ? { lifecycle: pet.lifecycle } : {}) }), house: house.name, pet: pet.name, ...(pet.sideworker ? { sideworker: pet.sideworker } : {}), ...(pet.scout ? { scout: pet.scout } : {}), ...(pet.enabled === undefined ? {} : { enabled: pet.enabled }), ...(pet.cpus === undefined ? {} : { cpus: pet.cpus }), ...(pet.memoryMiB === undefined ? {} : { memoryMiB: pet.memoryMiB }), ...(pet.environment === undefined ? {} : { environment: pet.environment }), agent: found.agent, model: found.model, ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...mode, ...(found.settings === undefined ? {} : { settings: found.settings }), key: found.key.name, keyUse: placedKeyUse(found.use, found.agent, found.settings, !!pet.scout), secrets: pet.scout ? (pet.scout.gatewaySecrets ?? []).filter(selected => secrets.some(secret => secret.name === selected.name && !!secret.onlyForCapabilities?.some(capability => pet.scout!.capabilities?.includes(capability)))) : houseSecrets(secrets) }];
+      const volumes = volumesOf(house, pet).map(({ name, path, access }) => ({ name, path, access }));
+      return [{ instructions: systemPrompt({ role, features: houseFeatures(house), volumes, ...(role.kind === "pet" && pet.lifecycle ? { lifecycle: pet.lifecycle } : {}) }), house: house.name, pet: pet.name, ...(volumes.length ? { volumes } : {}), ...(pet.sideworker ? { sideworker: pet.sideworker } : {}), ...(pet.scout ? { scout: pet.scout } : {}), ...(pet.enabled === undefined ? {} : { enabled: pet.enabled }), ...(pet.cpus === undefined ? {} : { cpus: pet.cpus }), ...(pet.memoryMiB === undefined ? {} : { memoryMiB: pet.memoryMiB }), ...(pet.environment === undefined ? {} : { environment: pet.environment }), agent: found.agent, model: found.model, ...(found.reasoningEffort === undefined ? {} : { reasoningEffort: found.reasoningEffort }), ...mode, ...(found.settings === undefined ? {} : { settings: found.settings }), key: found.key.name, keyUse: placedKeyUse(found.use, found.agent, found.settings, !!pet.scout), secrets: pet.scout ? (pet.scout.gatewaySecrets ?? []).filter(selected => secrets.some(secret => secret.name === selected.name && !!secret.onlyForCapabilities?.some(capability => pet.scout!.capabilities?.includes(capability)))) : houseSecrets(secrets) }];
     }),
   );
   if (unknown.length > 0) throw new HouseholdError(unknown.join("\n"));

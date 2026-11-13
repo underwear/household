@@ -32,6 +32,7 @@ import { hostCapacity } from "../infra/host";
 import { MICROSANDBOX_VERSION } from "../infra/microsandbox-runtime";
 import { CAPABILITY_USAGE, FEATURES_USAGE, SCOUT_USAGE, groupUsage, runScouts } from "./scouts";
 import { MIGRATE_USAGE, runMigrate } from "./migrate";
+import { VOLUME_USAGE, runVolumes } from "./volumes";
 import { formatHosts } from "../core/secrets";
 import { DEFAULT_LIFECYCLE } from "../core/lifecycle";
 import { msbCommand } from "../infra/release";
@@ -100,6 +101,7 @@ const USAGE = `usage:
   house import <file> [--force]  restore a backup (daemon stopped); --force moves the config and the database
                                  aside and replaces the bots' homes
 ${MORE_USAGE}
+${VOLUME_USAGE}
 ${FEATURES_USAGE}
 ${CAPABILITY_USAGE}
 ${SCOUT_USAGE}
@@ -244,6 +246,7 @@ async function list(paths: Paths): Promise<void> {
       const placed = channel.pets.map((pet) => (pet === first && channel.pets.length > 1 ? `${pet} (default)` : pet)).join(", ");
       console.log(`  ${index + 1}. ${channelName(knownChannelKinds(), channel)}  ${channel.kind}  chat ${channel.chat}  bots: ${placed || "-"}`);
     });
+    for (const volume of house.volumes ?? []) console.log(`  volume ${volume.name}  ${volume.path} → /volumes/${volume.name}  ${volume.access === "write" ? "read-write" : "read-only"}  bots: ${volume.bots.join(", ") || "-"}`);
   }
 }
 
@@ -325,6 +328,9 @@ async function main(argv: string[]): Promise<void> {
       placement: { type: "string" },
       wait: { type: "boolean" },
       via: { type: "string" },
+      path: { type: "string" },
+      access: { type: "string" },
+      yes: { type: "boolean", short: "y" },
     } as const;
     parsed = parseArgs({ args: normalizeCliArgs(argv), allowPositionals: true, options });
   } catch (error) {
@@ -491,6 +497,7 @@ async function main(argv: string[]): Promise<void> {
     process.exitCode = await attachPet(paths, args[1]!, args[2]!);
     return;
   }
+  if (command === "volume" && await runVolumes(paths, config, () => notifyDaemon(paths), args, values)) return;
   if (await runScouts(paths, command, args, values)) return;
   if (await runMigrate(paths, command, args, values)) return;
   if (await runMore(paths, command, args, values)) return;

@@ -50,6 +50,12 @@ import type { Allowance } from "../core/allowance";
 import { LOG_KINDS, readLog, type LogKind } from "./household-log";
 import { isPetLogSource, PET_LOG_SOURCES, type PetLogSource, type PetLogView } from "./pet-logs";
 import { DEFAULT_LIFECYCLE, lifecycleSchema } from "../core/lifecycle";
+import { nestingIn, volumeFieldsSchema, volumeNameSchema, volumeTarget, type Volume } from "../core/volumes";
+import { effectivePetHome } from "../core/household";
+import { ensureFolder, inspectFolder, mountable } from "../infra/volume-folders";
+import { petVolume } from "./pet-plane";
+import { join } from "node:path";
+import type { VolumesView } from "./web-views";
 
 const RESERVED_SKILL = "Names starting with household- are Household's own skills";
 /** The skill a newly written file starts, when it is a skill's SKILL.md. */
@@ -111,6 +117,10 @@ export interface WebRoutesDeps {
   signins?: (key: string) => KeySignin | undefined;
   /** Removes a key's Claude sign-in files, if it had any. */
   forgetSignin?: (key: string) => Promise<void>;
+  /** Where the bots' homes are on this computer (shown on the Volumes pages). */
+  homesDir?: string;
+  /** Host folders no volume may be (infra/volume-folders.ts `protectedFolders`). */
+  protectedDirs?: readonly string[];
 }
 
 /** The web routes, and the same API without a browser session for the daemon's own control socket (the CLI). */
@@ -548,6 +558,53 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       if (problems.length) throw new HouseholdError(problems.join("; "));
       return written(await config.setSideworkerProfiles(house!, profiles), house!, "sideworker profiles changed");
     }],
+    ["GET", at("/volumes"), async ({ params: [name] }) => {
+      const house = findHouse(await loadEffective(), name!);
+      if (!house) throw new NotFoundError("workspace not found");
+      const homeOf = (pet: (typeof house.pets)[number]) => effectivePetHome(pet, deps.agents.get(pet.agent ?? DEFAULT_AGENT)?.home ?? "/home/agent");
+      const view: VolumesView = {
+        volumes: await Promise.all((house.volumes ?? []).map(async volume => {
+          const state = await mountable(volume.path, deps.protectedDirs ?? []);
+          return { ...volume, note: volume.note ?? null, target: volumeTarget(volume.name), present: state === "ok", problem: state === "ok" ? null : state };
+        })),
+        homes: house.pets.filter(pet => !pet.scout).map(pet => ({
+          bot: pet.name,
+          parent: pet.sideworker?.parent ?? null,
+          hostPath: deps.homesDir ? join(deps.homesDir, petVolume(house.name, pet.name)) : petVolume(house.name, pet.name),
+          guestPath: homeOf(pet),
+          sharedWith: house.pets.filter(other => other.sideworker?.parent === pet.name).map(other => ({ bot: other.name, at: other.sideworker!.parentHome ?? deps.agents.get(pet.agent ?? DEFAULT_AGENT)?.home ?? "/home/agent" })),
+        })),
+      };
+      return json(view);
+    }],
+    // What is at a folder before it is shared: whether it exists, how many files it holds (never their names).
+    ["POST", at("/volumes/check"), async ({ request, params: [name] }) => {
+      const { path } = await bodyOf(request, z.strictObject({ path: z.string().min(1).max(1024) }));
+      if (!findHouse(await config.load(), name!)) throw new NotFoundError("workspace not found");
+      return json(await inspectFolder(path, deps.protectedDirs ?? []));
+    }],
+    ["POST", at("/volumes"), async ({ request, params: [house] }) => {
+      const { name, ...fields } = await bodyOf(request, volumeFieldsSchema.extend({ name: volumeNameSchema }));
+      const folder = await inspectFolder(fields.path, deps.protectedDirs ?? []);
+      const household = await config.load();
+      if (!findHouse(household, house!)) throw new NotFoundError("workspace not found");
+      const nested = nestingIn(household.houses, house!, name, folder.path, fields.access);
+      if (nested) throw new HouseholdError(nested);
+      await ensureFolder(folder.path);
+      return written(await config.putVolume(house!, name, { ...fields, path: folder.path }, { create: true }), house!, `volume ${name} added`, 201);
+    }],
+    ["PUT", at("/volumes/([^/]+)"), async ({ request, params: [house, name] }) => {
+      const fields = await bodyOf(request, volumeFieldsSchema);
+      const current = findHouse(await config.load(), house!)?.volumes?.find((volume: Volume) => volume.name === name);
+      if (!current) throw new NotFoundError("volume not found");
+      const path = fields.path === current.path ? current.path : (await inspectFolder(fields.path, deps.protectedDirs ?? [])).path;
+      // Made only for a new folder: an unplugged disk's mount point is not filled with an empty one.
+      const nested = nestingIn((await config.load()).houses, house!, name!, path, fields.access);
+      if (nested) throw new HouseholdError(nested);
+      if (path !== current.path) await ensureFolder(path);
+      return written(await config.putVolume(house!, name!, { ...fields, path }), house!, `volume ${name} changed`);
+    }],
+    ["DELETE", at("/volumes/([^/]+)"), async ({ params: [house, name] }) => written(await config.removeVolume(house!, name!), house!, `volume ${name} removed (its folder stays)`)],
     ["GET", at("/resources"), async ({ params: [name] }) => {
       const house = findHouse(await config.load(), name!);
       if (!house) throw new NotFoundError("workspace not found");

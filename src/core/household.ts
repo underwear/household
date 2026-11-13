@@ -92,6 +92,8 @@ export interface House {
   features?: Partial<HouseFeatures>;
   preview?: PreviewSettings;
   sideworkerProfiles?: SideworkerProfile[];
+  /** Host folders shared with some of its bots (core/volumes.ts), in the config's order. */
+  volumes?: import("./volumes").Volume[];
   name: string;
   network: NetworkPolicy;
   pets: Pet[];

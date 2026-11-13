@@ -16,6 +16,7 @@ import { DEFAULT_SECRET_HEADER, envProblem, secretHost } from "../core/secrets";
 import { scoutProblems, blueprintCapabilities } from "../core/scouts";
 import { NAME_PATTERN, PET_NAME_HINT, PET_NAME_PATTERN } from "../core/names";
 import { allowEntryError, parseAllowEntry, parseEndpoint } from "../core/network-policy";
+import { nestingIn, volumeFieldsSchema, volumePathProblem } from "../core/volumes";
 
 const name = z.string().regex(NAME_PATTERN, `must match ${NAME_PATTERN.source}`);
 const petName = z.string().regex(PET_NAME_PATTERN, PET_NAME_HINT);
@@ -313,6 +314,10 @@ const house = z.strictObject({
   /** Legacy: sideworkers' default VM size. Bots size each one now; dropped on load, and migration 6 removes it. */
   sideworkerLimits: z.unknown().optional(),
   sideworkerProfiles: sideworkerProfilesSchema.optional(),
+  volumes: map(volumeFieldsSchema.superRefine((volume, ctx) => {
+    const problem = volumePathProblem(volume.path);
+    if (problem) ctx.addIssue({ code: "custom", path: ["path"], message: problem });
+  })),
   network: z.strictObject({ allow: list(endpoint), granted: list(granted) }),
   pets: map(pet, petName),
   people: people.nullish(),
@@ -351,6 +356,7 @@ export function parseHousehold(raw: unknown, source: string): Household {
       ...(value.features ? { features: value.features } : {}),
       ...(value.preview ? { preview: value.preview } : {}),
       ...(value.sideworkerProfiles ? { sideworkerProfiles: value.sideworkerProfiles } : {}),
+      ...(Object.keys(value.volumes).length ? { volumes: Object.entries(value.volumes).map(([name, { path, access, bots, note: said }]) => ({ name, path, access, bots, ...(said === undefined ? {} : { note: said }) })) } : {}),
       network: { kind: "allowlist", allow: [...value.network.allow, ...value.network.granted] },
       pets: Object.entries(value.pets).map(([petName, { enabled, cpus, memoryMiB, environment, lifecycle, agent, model, reasoningEffort, mode, settings: own, key: keyName, title, emoji: mark, aliases }]) => ({
         name: petName,
@@ -386,6 +392,12 @@ export function parseHousehold(raw: unknown, source: string): Household {
   for (const house of household.houses) {
     const budget = workspaceBudget(house);
     if (budget.reserved.cpus > budget.total.cpus || budget.reserved.memoryMiB > budget.total.memoryMiB) problems.push(`workspace '${house.name}': pet reservations exceed the CPU/RAM budget`);
+    for (const volume of house.volumes ?? []) for (const bot of volume.bots) if (!house.pets.some(pet => pet.name === bot))
+      problems.push(`volume '${house.name}/${volume.name}' is for unknown bot '${bot}'`);
+    for (const volume of house.volumes ?? []) {
+      const nested = nestingIn(household.houses, house.name, volume.name, volume.path, volume.access);
+      if (nested) problems.push(`volume '${house.name}/${volume.name}': ${nested}`);
+    }
     for (const capability of house.capabilities ?? []) for (const key of capability.keys) {
       const secret = (house.secrets ?? []).find(item => item.name === key.secret);
       if (!secret || !secret.onlyForCapabilities?.includes(capability.name))

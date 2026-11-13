@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
 /** A workspace's pages, in navigation order; capabilities sit beside scouts (a tab of the Scouts page). */
-export const WORKSPACE_TABS = ["overview", "bots", "channels", "inboxes", "connectors", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "resources", "secrets", "settings"] as const;
+export const WORKSPACE_TABS = ["overview", "bots", "channels", "inboxes", "connectors", "skills", "sideworkers", "scouts", "capabilities", "previews", "network", "resources", "secrets", "volumes", "settings"] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 /** A bot's pages (tabs on its page), in order. */
-export const BOT_TABS = ["overview", "harness", "instructions", "lifecycle", "channels", "inboxes", "tasks", "skills", "environment", "memory", "resources"] as const;
+export const BOT_TABS = ["overview", "harness", "instructions", "lifecycle", "channels", "inboxes", "tasks", "skills", "environment", "volumes", "memory", "resources"] as const;
 export type BotTab = (typeof BOT_TABS)[number];
 /** A scout's pages (tabs on its page), in order. */
 export const SCOUT_TABS = ["overview", "instructions", "access", "runs"] as const;

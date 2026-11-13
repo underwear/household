@@ -26,6 +26,12 @@ export type { BuiltinSkill, SkillEntry, SkillFile };
 import type { EnvironmentView } from "../src/app/environment";
 import type { EnvironmentSetupResult } from "../src/infra/environment-setup";
 export type { EnvironmentView };
+import type { VolumesView, VolumeView, HomeView } from "../src/app/web-views";
+import type { FolderInfo } from "../src/infra/volume-folders";
+import type { VolumeAccess } from "../src/core/volumes";
+export type { VolumesView, VolumeView, HomeView, FolderInfo, VolumeAccess };
+/** A volume as a form sends it (its name apart). */
+export interface VolumeFields { path: string; access: VolumeAccess; bots: string[]; note?: string | null }
 // The web UI's only way to the daemon: its JSON API. The types are the server's (type-only: nothing of it is bundled).
 import type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView } from "../src/app/web-views";
 export type { BotListenStatus, BotListenView, DeviceLoginStatus, DeviceLoginView };
@@ -236,6 +242,11 @@ export const api = {
   addKey: (name: string, key: KeyFields) => call<KeysView>("POST", "/api/keys", { name, ...key }),
   updateKey: (name: string, key: KeyFields) => call<KeysView>("PATCH", `/api/keys/${encodeURIComponent(name)}`, key),
   removeKey: (name: string) => call<KeysView>("DELETE", `/api/keys/${encodeURIComponent(name)}`),
+  volumes: (house: string) => call<VolumesView>("GET", `${housePath(house)}/volumes`),
+  checkVolume: (house: string, path: string) => call<FolderInfo>("POST", `${housePath(house)}/volumes/check`, { path }),
+  addVolume: (house: string, name: string, fields: VolumeFields) => call<WriteView>("POST", `${housePath(house)}/volumes`, { name, ...fields }),
+  updateVolume: (house: string, name: string, fields: VolumeFields) => call<WriteView>("PUT", under(house, "volumes", name), fields),
+  removeVolume: (house: string, name: string) => call<WriteView>("DELETE", under(house, "volumes", name)),
   secrets: (house: string) => call<SecretView[]>("GET", `/api/houses/${encodeURIComponent(house)}/secrets`),
   addSecret: (house: string, name: string, secret: SecretFields) => call<{ secrets: SecretView[] }>("POST", `/api/houses/${encodeURIComponent(house)}/secrets`, { name, ...secret }),
   updateSecret: (house: string, name: string, secret: Partial<SecretFields>) => call<{ secrets: SecretView[] }>("PATCH", `/api/houses/${encodeURIComponent(house)}/secrets/${encodeURIComponent(name)}`, secret),

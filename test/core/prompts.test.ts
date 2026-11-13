@@ -11,7 +11,7 @@ const headings = (text: string) => text.split("\n\n").map(part => part.split("\n
 
 test("a pet's prompt: its sections in order; every on feature its own section, none of the off ones", () => {
   const text = systemPrompt({ role: pet, features: all });
-  expect(headings(text)).toEqual(["Household runs you in a VM of your own and connects you to your human's chats.", "Messages", "Who to trust", "Answering", "Your workspace", "Memory", "Scouts", "Sideworkers", "HTTP previews", "Schedules", "Network", "Secrets", "Your VM", "Skills"]);
+  expect(headings(text)).toEqual(["Household runs you in a VM of your own and connects you to your human's chats.", "Messages", "Who to trust", "Answering", "Your workspace", "Memory", "Scouts", "Sideworkers", "HTTP previews", "Schedules", "Network", "Secrets", "Your VM", "Shared folders", "Skills"]);
   expect(text).toContain("household-scouts block");
   expect(text).toContain("Calling one hands a task over"); // delegation, not a promise of its own
   expect(text).toContain("Do not promise a result of your own");
@@ -62,4 +62,17 @@ test("every tool a scout's prompt names is one a scout has", () => {
   expect(named.length).toBeGreaterThan(5);
   for (const tool of new Set(named)) expect(SCOUT_TOOLS).toContain(tool);
   expect(SCOUT_TOOLS).toContain("send_file"); // it shows its human what it made
+});
+
+test("shared folders: a pet hears which are mounted where and how, and how to ask for more; a sideworker only of its parent's", () => {
+  const text = systemPrompt({ role: pet, features: all, volumes: [{ name: "photos", access: "read" }, { name: "projects", access: "write" }] });
+  expect(text).toContain("`/volumes/photos` (read-only), `/volumes/projects` (read-write)");
+  expect(text).toContain("volume_request");
+  expect(text).toContain("its files stay on your human's computer");
+  expect(systemPrompt({ role: pet, features: all })).toContain("No folders of your human's computer are shared with you.");
+  expect(systemPrompt({ role: worker, features: all })).not.toContain("Shared folders");
+  const shared = systemPrompt({ role: worker, features: all, volumes: [{ name: "photos", access: "read" }] });
+  expect(shared).toContain("`/volumes/photos` (read-only)");
+  expect(shared).toContain("ask it when you need another");
+  expect(shared).not.toContain("volume_request");
 });

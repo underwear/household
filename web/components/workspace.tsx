@@ -1,4 +1,5 @@
 import { SecretsPage } from "./secrets";
+import { VolumesPage } from "./volumes";
 import { ResourcesPage } from "./workspace-resources";
 import { WorkspaceConnectors } from "./workspace-connectors";
 import { WorkspaceInboxesPage } from "./workspace-inboxes";
@@ -93,6 +94,7 @@ export function WorkspacePage({ house, tab, known, keys, capacity, refresh, noti
         </Page>
       )}
       {tab === "secrets" && <SecretsPage key={house.name} house={house.name} allow={house.allow} noteMax={known.noteMax} refresh={refresh} notify={notify} />}
+      {tab === "volumes" && <VolumesPage key={house.name} house={house} notify={notify} />}
       {tab === "resources" && <ResourcesPage key={house.name} house={house} host={capacity.host} refresh={refresh} notify={notify} />}
       {tab === "settings" && (
         <Page title="Settings">

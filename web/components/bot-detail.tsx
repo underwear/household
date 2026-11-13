@@ -10,6 +10,7 @@ import { BotResourceSummary, useWorkspaceMetrics } from "./bot-resource-summary"
 import { BotInstructions } from "./bot-instructions";
 import { BotLifecycleTab } from "./bot-lifecycle";
 import { BotEnvironment } from "./bot-environment";
+import { BotVolumes } from "./volumes";
 import { Link } from "./link";
 import { BotMemory } from "./bot-memory";
 import { CalendarClock, Gauge, MessagesSquare, Pickaxe } from "lucide-react";
@@ -158,6 +159,7 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
           { label: "Scheduled tasks", href: botPath(house.name, pet.name, "tasks"), current: tab === "tasks", count: scheduledCount(crons.view) },
           { label: "Skills", href: botPath(house.name, pet.name, "skills"), current: tab === "skills" },
           { label: "Environment", href: botPath(house.name, pet.name, "environment"), current: tab === "environment" },
+          { label: "Volumes", href: botPath(house.name, pet.name, "volumes"), current: tab === "volumes" },
           { label: "Memory", href: botPath(house.name, pet.name, "memory"), current: tab === "memory" },
           { label: "Resources", href: botPath(house.name, pet.name, "resources"), current: tab === "resources" },
           { label: "Dreaming", disabled: true as const },
@@ -275,6 +277,7 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
       {tab === "harness" && <BotHarness key={`${house.name}/${pet.name}`} house={house.name} pet={pet} agents={agents} keys={keys} refresh={refresh} notify={notify} />}
       {tab === "resources" && worker && <BotUsage house={house.name} pet={pet.name} />}
       {tab === "resources" && !worker && <BotResources key={`${house.name}/${pet.name}`} house={house.name} pet={pet} capacity={capacity} refresh={refresh} notify={notify} />}
+      {tab === "volumes" && !worker && <BotVolumes key={`${house.name}/${pet.name}`} house={house} pet={pet} notify={notify} />}
       {tab === "environment" && <BotEnvironment key={`${house.name}/${pet.name}`} house={house.name} pet={pet} />}
       {dialog.element}
       {logsOpen && <LogsDialog house={house.name} pet={pet} title={pet.title} onClose={() => setLogsOpen(false)} />}

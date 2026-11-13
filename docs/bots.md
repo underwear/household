@@ -57,6 +57,8 @@ A disabled bot shows a bar with **Enable** on every tab.
 
 **Environment** — two Bash scripts: **Setup** once per new VM (packages, tools), **On start** at every boot (services). Its home survives a new VM; these rebuild the rest. **Run now** tries the saved script.
 
+**Volumes** — folders of your computer it sees at `/volumes/<name>`: a switch per shared folder of the workspace, **+ Share folder** for a new one, and where its home is. See [Shared folders](../volumes/).
+
 **Memory** — its notes by key. `core` is loaded at the start of every session; the rest it looks up. Search, edit and browse a note's versions.
 
 **Resources** — what its VM uses (CPU, memory, disk; 7 days) next to what it is given. A new allocation applies on its next Restart or Enable.
@@ -65,4 +67,4 @@ A disabled bot shows a bar with **Enable** on every tab.
 
 A sideworker's page has only Overview, Skills, Memory and Resources: what runs it, its channels and its tasks are its parent's. **Close** on its Overview removes its VM; the shared files stay.
 
-More: [Adding MCP servers](../mcp/) · [Back up and move](../backup/).
+More: [Shared folders](../volumes/) · [Adding MCP servers](../mcp/) · [Back up and move](../backup/).

@@ -170,7 +170,7 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="./" aria-current="page">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="./" aria-current="page">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Bots</h1>
 <p>A bot is your own assistant, running on a Claude Code or Codex harness in its own microVM and talking to you in a messenger. It is not a chat session that forgets you — it stays.</p>
@@ -217,11 +217,12 @@
 <p><strong>Scheduled tasks</strong> — instructions it gets on a schedule, once or repeating, in its own session. Recent runs show what it answered. Times in the Household time zone; failed runs are not retried.</p>
 <p><strong>Skills</strong> — its own skills, besides the workspace's <strong>Shared Skills</strong> and the built-in ones. It writes and edits skills itself too.</p>
 <p><strong>Environment</strong> — two Bash scripts: <strong>Setup</strong> once per new VM (packages, tools), <strong>On start</strong> at every boot (services). Its home survives a new VM; these rebuild the rest. <strong>Run now</strong> tries the saved script.</p>
+<p><strong>Volumes</strong> — folders of your computer it sees at <code>/volumes/&lt;name&gt;</code>: a switch per shared folder of the workspace, <strong>+ Share folder</strong> for a new one, and where its home is. See <a href="../volumes/">Shared folders</a>.</p>
 <p><strong>Memory</strong> — its notes by key. <code>core</code> is loaded at the start of every session; the rest it looks up. Search, edit and browse a note's versions.</p>
 <p><strong>Resources</strong> — what its VM uses (CPU, memory, disk; 7 days) next to what it is given. A new allocation applies on its next Restart or Enable.</p>
 <p><strong>Dreaming</strong> — soon.</p>
 <p>A sideworker's page has only Overview, Skills, Memory and Resources: what runs it, its channels and its tasks are its parent's. <strong>Close</strong> on its Overview removes its VM; the shared files stay.</p>
-<p>More: <a href="../mcp/">Adding MCP servers</a> · <a href="../backup/">Back up and move</a>.</p>
+<p>More: <a href="../volumes/">Shared folders</a> · <a href="../mcp/">Adding MCP servers</a> · <a href="../backup/">Back up and move</a>.</p>
 </article>
 
     <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-a-bot-is">What a bot is</a></li><li><a href="#bots-sideworkers-scouts">Bots, sideworkers, scouts</a></li><li><a href="#add-a-bot">Add a bot</a></li><li><a href="#its-page">Its page</a></li><li><a href="#tabs">Tabs</a></li></ul></nav>
