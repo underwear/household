@@ -6,6 +6,7 @@ import type { MessageRef } from "../../src/core/channel";
 import type { Header } from "../../src/core/header";
 import type { Message } from "../../src/core/message";
 import type { DialogAnswer, DialogQuestion } from "../../src/core/dialog";
+import { claudeCodeTmux } from "../../src/agent-adapters/claude-code-tmux";
 import { Delivery, type AskPerson, type DeliveryUpdate } from "../../src/app/delivery";
 import type { AttachmentFetcher } from "../../src/app/attachments";
 import type { Attachment, FileRef } from "../../src/core/attachment";
@@ -38,6 +39,7 @@ const contentsIn = (prompt: string) => [...prompt.matchAll(/<household-content>\
  */
 function setup(
   options: {
+    nativeClaude?: boolean;
     memory?: () => {revision: number | string; text: string};
     sanitizeEvent?: (house: string, pet: string, event: AgentEvent) => AgentEvent;
     sends?: (SendResult | Promise<SendResult>)[];
@@ -64,8 +66,8 @@ function setup(
     credentialHeaders: [],
     isReady: async () => ({ ready: true }),
     isIdle: options.idle ?? (async () => true),
-    translate: (payload) => ("waits" in (payload as object) ? [dialog] : [payload as AgentEvent]),
-    dialogs: {
+    translate: options.nativeClaude ? claudeCodeTmux.translate : (payload) => ("waits" in (payload as object) ? [dialog] : [payload as AgentEvent]),
+    dialogs: options.nativeClaude ? claudeCodeTmux.dialogs : {
       ask: (payload) => (payload as { waits?: DialogQuestion }).waits,
       answer: (_, answer) => ({ answered: answer }),
     },
@@ -494,24 +496,25 @@ test("a dialog left to the agent's session gets no decision; over the event rate
   }
 });
 
-test("a dialog that closes some other way (answered in the agent's session) stops its wait only; so does the agent's abort", async () => {
+test("a global terminal closure cancels all pending waits; a transport abort cancels its own wait", async () => {
   const waits: PromiseWithResolvers<DialogAnswer | undefined>[] = [];
   const waiting = (signal?: AbortSignal) => {
-    waits.push(Promise.withResolvers());
-    signal!.addEventListener("abort", () => waits.at(-1)!.resolve(undefined));
-    return waits.at(-1)!.promise;
+    const wait = Promise.withResolvers<DialogAnswer | undefined>();
+    waits.push(wait);
+    signal!.addEventListener("abort", () => wait.resolve(undefined));
+    return wait.promise;
   };
   const { delivery, post, has } = setup({ answer: waiting, visible: async () => true });
   try {
     const first = delivery.onPayload("work", "sibling", { waits: question });
     const second = delivery.onPayload("work", "sibling", { waits: question });
     await Bun.sleep(5);
-    await post({ kind: "dialog-closed" }); // e.g. the tool finished: the terminal's answer won
-    expect(await second).toEqual({}); // the newest one closed
+    await post({ kind: "dialog-closed" }); // the screen or session reports no dialogs left
+    expect(await second).toEqual({}); // every outstanding dialog closed
     await post({ kind: "dialog-opened", dialog: "question", summary: "first, still on screen" });
     waits[0]!.resolve({ kind: "approve" });
-    expect(await first).toEqual({ answered: { kind: "approve" } });
-    expect(has("dialog closed")).toBe(2); // the agent's close, then Household's own once none waits
+    expect(await first).toEqual({}); // a global close cancels every pending dialog
+    expect(has("dialog closed")).toBe(1); // the global closure; a late response never closes the new dialog
 
     const aborted = new AbortController();
     const dropped = delivery.onPayload("work", "sibling", { waits: question }, aborted.signal);
@@ -1270,4 +1273,115 @@ test('failed inbox turn does not leave catch-up delivery blocked forever',async(
   await s.post({kind:'turn-failed',error:'session disappeared',scope:'session'});
   await waitFor(()=>s.sent.length===2);expect(s.sent[1]!.text).toContain('inbox_catchup');
  }finally{s.delivery.stop();}
+});
+
+test("Claude parallel Bash completion cannot close a pending Read permission; exact completion cancels only its own request", async () => {
+  const pending: { signal: AbortSignal; resolve: (answer: DialogAnswer | undefined) => void }[] = [];
+  const { delivery, sent, send } = setup({ nativeClaude: true, visible: async () => true, answer: signal => {
+    const wait = Promise.withResolvers<DialogAnswer | undefined>();
+    pending.push({ signal: signal!, resolve: wait.resolve });
+    signal!.addEventListener("abort", () => wait.resolve(undefined), { once: true });
+    return wait.promise;
+  } });
+  const post = (hook_event_name: string, tool_name: string, tool_input: object, tool_use_id?: string, prompt_id = "turn") =>
+    delivery.onPayload("work", "sibling", { hook_event_name, tool_name, tool_input, tool_use_id, prompt_id });
+  const read = { file_path: "/volumes/server/memory.md" }, other = { file_path: "/volumes/server/other.md" }, bash = { command: "sleep 1" };
+  try {
+    await post("PreToolUse", "Bash", bash, "bash");
+    await post("PreToolUse", "Read", read, "read");
+    const first = post("PermissionRequest", "Read", read);
+    await post("PreToolUse", "Read", other, "other");
+    const second = post("PermissionRequest", "Read", other);
+    send("queued behind permissions");
+    await post("PostToolUse", "Bash", bash, "bash");
+    expect(pending.map(p => p.signal.aborted)).toEqual([false, false]);
+    await post("PostToolUse", "Read", read, "read", "older-turn");
+    expect(pending[0]!.signal.aborted).toBe(false);
+    await post("PostToolUse", "Read", read, "read");
+    expect(await first).toEqual({});
+    expect(pending.map(p => p.signal.aborted)).toEqual([true, false]);
+    expect(sent).toHaveLength(0);
+    pending[1]!.resolve({ kind: "deny" });
+    expect(await second).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
+    await waitFor(() => sent.length === 1);
+  } finally { delivery.stop(); }
+});
+
+test("Claude identical parallel calls remain ambiguous until a matching id or terminal closure resolves them", async () => {
+  const signals: AbortSignal[] = [];
+  const { delivery, post } = setup({ nativeClaude: true, visible: async () => true, answer: signal => {
+    signals.push(signal!);
+    return new Promise(resolve => signal!.addEventListener("abort", () => resolve(undefined)));
+  } });
+  const payload = { prompt_id: "turn", tool_name: "Read", tool_input: { file_path: "/outside" } };
+  try {
+    for (const tool_use_id of ["first", "second"]) await delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PreToolUse", tool_use_id });
+    const waiting = delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PermissionRequest" });
+    await delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PostToolUse", tool_use_id: "first" });
+    expect(signals[0]!.aborted).toBe(false);
+    // A repeated completion of the other identical call must not claim the remaining call's dialog.
+    await delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PostToolUse", tool_use_id: "first" });
+    expect(signals[0]!.aborted).toBe(false);
+    await delivery.onPayload("work", "sibling", { hook_event_name: "Stop", prompt_id: "turn" });
+    expect(await waiting).toEqual({});
+  } finally { delivery.stop(); }
+});
+
+test("late allow after a session closes is discarded, including callbacks that ignore abort", async () => {
+  const answer = Promise.withResolvers<DialogAnswer>();
+  const { delivery, post } = setup({ answer: () => answer.promise, visible: async () => true });
+  try {
+    const waiting = delivery.onPayload("work", "sibling", { waits: question });
+    await post({ kind: "dialog-closed" });
+    answer.resolve({ kind: "allow" });
+    expect(await waiting).toEqual({});
+  } finally { delivery.stop(); }
+});
+
+test("closing a mailbox aborts its pending permissions and rejects late approvals", async () => {
+  const answer = Promise.withResolvers<DialogAnswer>();
+  let signal: AbortSignal | undefined;
+  const { delivery } = setup({ answer: s => { signal = s; return answer.promise; }, visible: async () => true });
+  const waiting = delivery.onPayload("work", "sibling", { waits: question });
+  delivery.setPets([]);
+  expect(signal!.aborted).toBe(true);
+  answer.resolve({ kind: "allow" });
+  expect(await waiting).toEqual({});
+  delivery.stop();
+});
+
+test("a second dialog invalidates an older terminal probe even while the first was already open", async () => {
+  const probe = Promise.withResolvers<boolean>();
+  const { delivery, post, sent, send } = setup({ visible: () => probe.promise });
+  try {
+    await post({ kind: "dialog-opened", dialog: "permission", summary: "first", input: "first" });
+    await Bun.sleep(20); // watch started but has not returned
+    await post({ kind: "dialog-opened", dialog: "permission", summary: "second", input: "second" });
+    send("queued");
+    probe.resolve(false);
+    // Let the old probe complete; a fresh probe is scheduled separately.
+    await Bun.sleep(1);
+    expect(sent).toHaveLength(0);
+  } finally { delivery.stop(); }
+});
+
+test("matching permission closure survives throttling while unrelated completions remain rate limited", async () => {
+  let signal: AbortSignal | undefined;
+  const { delivery, updates } = setup({ nativeClaude: true, eventsPerSecond: 0.1, visible: async () => true, answer: s => {
+    signal = s;
+    return new Promise(resolve => s!.addEventListener("abort", () => resolve(undefined)));
+  } });
+  const payload = { prompt_id: "turn", tool_name: "Read", tool_input: { file_path: "/memory" }, tool_use_id: "read" };
+  try {
+    for (const tool_use_id of ["one", "two"]) await delivery.onPayload("work", "sibling", { ...payload, tool_use_id, hook_event_name: "PostToolUse" });
+    const progressBefore = updates.filter(u => u.kind === "progress").length;
+    await delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PreToolUse" });
+    const waiting = delivery.onPayload("work", "sibling", { ...payload, tool_use_id: undefined, hook_event_name: "PermissionRequest" });
+    await delivery.onPayload("work", "sibling", { ...payload, tool_name: "Bash", tool_input: { command: "sleep 1" }, tool_use_id: "unrelated", hook_event_name: "PostToolUse" });
+    expect(signal!.aborted).toBe(false);
+    expect(updates.filter(u => u.kind === "progress")).toHaveLength(progressBefore);
+    await delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PostToolUseFailure" });
+    expect(signal!.aborted).toBe(true);
+    expect(await waiting).toEqual({});
+  } finally { delivery.stop(); }
 });

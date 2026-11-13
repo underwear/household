@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AgentEvent } from "../../core/agent-events";
+import type { AgentEvent, DialogIdentity } from "../../core/agent-events";
 import { actionOf, short as cut } from "./actions";
 
 // Claude Code hook payloads → agent-neutral events. Payload shapes: test/agent-adapters/fixtures/.
@@ -7,7 +7,7 @@ import { actionOf, short as cut } from "./actions";
 //
 // Dialogs open on PermissionRequest and Elicitation, and already on PreToolUse of the tools that always ask
 // (it is synchronous, so it arrives before the dialog is drawn). They close on a new prompt, a new session, the
-// end of the turn, or a tool of the main thread finishing; subagents (`agent_id`) never close them. A dialog
+// end of the turn, or their own tool finishing. Parallel tools never close one another’s dialogs. A dialog
 // dismissed with Esc fires no hook: Delivery then looks at the screen.
 //
 // A turn is named by `prompt_id`, which every hook of it carries. Subagents' tool hooks carry `agent_id`; their text never comes.
@@ -40,8 +40,8 @@ const canonical = (value: unknown): string =>
 export const fingerprint = (tool: string, input: Payload): string => createHash("sha256").update(`${tool}\n${canonical(input)}`).digest("hex").slice(0, 16);
 const CLOSED: AgentEvent = { kind: "dialog-closed" };
 
-function dialogFor(tool: string, input: Payload): AgentEvent {
-  const call = { input: fingerprint(tool, input) };
+function dialogFor(tool: string, input: Payload, identity: DialogIdentity): AgentEvent {
+  const call = { input: fingerprint(tool, input), ...identity };
   if (tool === "AskUserQuestion") {
     const questions = Array.isArray(input.questions) ? input.questions : [];
     return { kind: "dialog-opened", dialog: "question", summary: short(questions.map((q) => text(record(q).question)).join(" / ")), ...call };
@@ -61,7 +61,6 @@ export function translateHook(payload: unknown): AgentEvent[] {
   const hook = record(payload);
   const tool = text(hook.tool_name);
   const input = record(hook.tool_input);
-  const mainThread = !text(hook.agent_id);
   const turn = present({ turn: text(hook.prompt_id) });
   const call = present({ ...turn, call: text(hook.tool_use_id), agent: text(hook.agent_id) });
   const ms = typeof hook.duration_ms === "number" && hook.duration_ms >= 0 ? { ms: hook.duration_ms } : {};
@@ -76,14 +75,14 @@ export function translateHook(payload: unknown): AgentEvent[] {
 
       const { action, summary, internal } = actionOf(tool, input);
       const started: AgentEvent = { kind: "tool-started", tool, summary, action, ...call, ...(internal ? { internal: true as const } : {}), input: fingerprint(tool, input) };
-      return DIALOG_TOOLS.includes(tool) ? [started, dialogFor(tool, input)] : [started];
+      return DIALOG_TOOLS.includes(tool) ? [started, dialogFor(tool, input, call)] : [started];
     }
     case "PostToolUse":
-      return [...(mainThread ? [CLOSED] : []), { kind: "tool-finished", tool, ...call, ...ms }];
+      return [...(tool && hook.tool_input ? [{ kind: "dialog-closed" as const, input: fingerprint(tool, input), ...call }] : []), { kind: "tool-finished", tool, ...call, ...ms }];
     case "PostToolUseFailure":
-      return [...(mainThread ? [CLOSED] : []), { kind: "tool-finished", tool, ...call, ...ms, failed: true }];
+      return [...(tool && hook.tool_input ? [{ kind: "dialog-closed" as const, input: fingerprint(tool, input), ...call }] : []), { kind: "tool-finished", tool, ...call, ...ms, failed: true }];
     case "PermissionRequest":
-      return [dialogFor(tool, input)];
+      return [dialogFor(tool, input, call)];
     case "PermissionDenied": {
       // Native auto-mode denial, including classifier unavailability/no-verdict denials.
       // No equivalent approved/start hook exists in pinned Claude 2.1.296: a successful

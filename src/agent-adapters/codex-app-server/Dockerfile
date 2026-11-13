@@ -4,7 +4,7 @@ ARG BASE_IMAGE=oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759b
 FROM ${BASE_IMAGE}
 # Codex and everything it pulls in come at the versions and checksums of codex/bun.lock (bump with `bun add` there).
 COPY codex/package.json codex/bun.lock /opt/codex/
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git procps curl ripgrep sudo tmux \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssh-client procps curl ripgrep sudo tmux \
  && rm -rf /var/lib/apt/lists/* \
  && bun install --cwd /opt/codex --frozen-lockfile --production \
  && printf '#!/bin/sh\nexec bun /opt/codex/node_modules/@openai/codex/bin/codex.js "$@"\n' > /usr/local/bin/codex \

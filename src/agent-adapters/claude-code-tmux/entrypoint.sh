@@ -30,7 +30,13 @@ jq --arg p "$workspace" ' .projects[$p].hasTrustDialogAccepted = true ' "$HOME/.
 mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
 set -- --strict-mcp-config
 if [ "${ENABLE_CLAUDEAI_MCP_SERVERS:-false}" = "true" ]; then set --; fi
-tmux new-session -d -s main -x 160 -y 48 -c "$workspace" claude --settings /etc/household/claude-settings.json \
+# Session-only permissions: use exact shared guest paths and retain the root-owned hooks.
+# Never persist grants in HOME: a removed volume must lose its native working-directory grant.
+# Keep the launch environment stable when an external disk disappears; inspect the actual guest on boot.
+directories=$(python3 -I -c 'import json, os; print(json.dumps([p for p in json.loads(os.environ.get("HOUSEHOLD_ADDITIONAL_DIRECTORIES", "[]")) if os.path.isdir(p)]))')
+settings=$(jq --argjson dirs "$directories" \
+  '.permissions.additionalDirectories = $dirs' /etc/household/claude-settings.json)
+tmux new-session -d -s main -x 160 -y 48 -c "$workspace" claude --settings "$settings" \
   --mcp-config /etc/household/mcp.json "$@" --model "$HOUSEHOLD_MODEL" \
   --permission-mode "$HOUSEHOLD_PERMISSION_MODE" --append-system-prompt "$HOUSEHOLD_INSTRUCTIONS"
 while tmux has-session -t main 2>/dev/null; do sleep 2; done

@@ -17,6 +17,7 @@ const READY = ` ▐▛███▜▌   Claude Code v2.1.296
 test("provisioning: CA trust in env; the key's placeholder by its kind, the real value only on the gateway's wire", () => {
   const context = { caCertPath: "/etc/household/ca.crt", eventsUrl: "http://gw:8080/events", mcpUrl: "http://gw:8080/mcp", instructions: "Be brief.", model: "sonnet" };
   expect(claudeCodeTmux.env(context)).toEqual({
+    HOUSEHOLD_ADDITIONAL_DIRECTORIES: "[]",
     NODE_EXTRA_CA_CERTS: "/etc/household/ca.crt",
     HOUSEHOLD_EVENTS_URL: "http://gw:8080/events",
     HOUSEHOLD_MCP_URL: "http://gw:8080/mcp",
@@ -116,7 +117,7 @@ test("ready means an empty input prompt and no dialog, whatever mode the footer 
   expect(isClaudeReady(READY.replace("❯\n", "❯ say hi\n"))).toBe(false); // someone is typing
   expect(isClaudeReady("")).toBe(false);
   expect(isClaudeReady(" Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit")).toBe(false);
-  expect(isClaudeReady(`${READY}\n Make auto mode your default permission mode?`)).toBe(false);
+  expect(isClaudeReady(`Make auto mode your default permission mode?\n${READY}`)).toBe(true); // quoted transcript text is not a dialog
 });
 
 test("readiness reads the tmux pane through exec; a failed or hung capture is not ready", async () => {
@@ -126,7 +127,7 @@ test("readiness reads the tmux pane through exec; a failed or hung capture is no
     return { ok, output };
   };
   expect(await claudeCodeTmux.isReady(exec(true, READY))).toEqual({ ready: true, output: READY });
-  expect(seen[0]).toEqual(["tmux", "capture-pane", "-p", "-t", "main"]);
+  expect(seen[0]).toEqual(["tmux", "capture-pane", "-p", "-e", "-t", "=main:0.0"]);
   expect((await claudeCodeTmux.isReady(exec(false, READY))).ready).toBe(false);
   expect(claudeCodeTmux.attach).toEqual(["tmux", "attach-session", "-t", "main"]);
 });
@@ -151,13 +152,13 @@ test("hook payloads from a real session become agent-neutral events", async () =
   expect(await events("PreToolUse-1")).toEqual([{ kind: "tool-started", tool: "Read", summary: "/home/agent/work/note.txt", action: { kind: "read", target: "note.txt" }, turn, call: "toolu_01WAQ8t8M141SoYLmZamswGZ", input: expect.any(String) }]);
   expect(await events("PreToolUse-2")).toEqual([ // before the dialog is drawn: PreToolUse is synchronous
     { kind: "tool-started", tool: "AskUserQuestion", summary: "", action: { kind: "ask" }, turn, call: "toolu_01UpZ1YjgNDEtm9Qj7ydiBNz", input: expect.any(String) },
-    { kind: "dialog-opened", dialog: "question", summary: "Which color do you prefer?", input: expect.any(String) },
+    { kind: "dialog-opened", dialog: "question", summary: "Which color do you prefer?", turn, call: "toolu_01UpZ1YjgNDEtm9Qj7ydiBNz", input: expect.any(String) },
   ]);
-  expect(await events("PostToolUse-0")).toEqual([closed, { kind: "tool-finished", tool: "Bash", turn, call: bash, ms: 30 }]);
+  expect(await events("PostToolUse-0")).toEqual([{ kind: "dialog-closed", turn, call: bash, input: expect.any(String) }, { kind: "tool-finished", tool: "Bash", turn, call: bash, ms: 30 }]);
   const fromSubagent = { ...(await fixture("PostToolUse-0")), agent_id: "a1b2", agent_type: "Explore" };
-  expect(claudeCodeTmux.translate(fromSubagent)).toEqual([{ kind: "tool-finished", tool: "Bash", turn, call: bash, agent: "a1b2", ms: 30 }]);
+  expect(claudeCodeTmux.translate(fromSubagent)).toEqual([{ kind: "dialog-closed", turn, call: bash, agent: "a1b2", input: expect.any(String) }, { kind: "tool-finished", tool: "Bash", turn, call: bash, agent: "a1b2", ms: 30 }]);
   expect(await events("PermissionRequest-0")).toEqual([
-    { kind: "dialog-opened", dialog: "question", summary: "Which color do you prefer?", input: expect.any(String) },
+    { kind: "dialog-opened", dialog: "question", summary: "Which color do you prefer?", turn, input: expect.any(String) },
   ]);
   expect(await events("PermissionRequest-plan")).toEqual([{ kind: "dialog-opened", dialog: "plan", summary: "Add a README", input: expect.any(String) }]);
   expect(await events("Elicitation-0")).toEqual([{ kind: "dialog-opened", dialog: "form", summary: "elic: Who are you?" }]);
@@ -180,7 +181,7 @@ function fakeExec(screens: string[], failing = "") {
   const exec: Exec = async (command, stdin) => {
     calls.push(`${command.join(" ")}${stdin === undefined ? "" : ` < ${stdin}`}`);
     const ok = !failing || !command.includes(failing);
-    const output = command.includes("capture-pane") ? (screens.length > 1 ? screens.shift()! : screens[0]!) : "";
+    const output = command.includes("capture-pane") ? (screens.length > 1 ? screens.shift()! : screens[0]!) : command.includes("display-message") ? "0" : "";
     return { ok, output };
   };
   return { exec, calls };
@@ -195,25 +196,27 @@ test("send pastes through a tmux buffer into an empty input box and presses Ente
   const text = "héllo wörld, $HOME `x`\nsecond line\twith a tab";
   expect(await claudeCodeTmux.send(exec, text, yes)).toEqual({ status: "sent" });
   expect(calls).toEqual([
-    "tmux capture-pane -p -t main",
+    "tmux display-message -p -t =main:0.0 #{pane_in_mode}",
+    "tmux capture-pane -p -e -t =main:0.0",
     `tmux load-buffer -b household - < ${text}`,
-    "tmux paste-buffer -p -d -b household -t main",
-    "tmux capture-pane -p -t main",
-    "tmux send-keys -t main Enter",
+    "tmux paste-buffer -p -d -b household -t =main:0.0",
+    "tmux capture-pane -p -e -t =main:0.0",
+    "tmux display-message -p -t =main:0.0 #{pane_in_mode}",
+    "tmux send-keys -t =main:0.0 Enter",
   ]);
 });
 
 test("control characters never reach the agent as keys", async () => {
   const { exec, calls } = fakeExec([READY]);
   await claudeCodeTmux.send(exec, "a\u001b[201~b\r\u0007c\u009bd\n", yes);
-  expect(calls[1]).toBe("tmux load-buffer -b household - < a[201~bcd\n");
+  expect(calls[2]).toBe("tmux load-buffer -b household - < a[201~bcd\n");
 });
 
 test("send refuses, typing nothing, while a dialog is on screen, the box is not empty or the screen is unreadable", async () => {
   for (const name of ["ask", "plan", "perm"]) {
     const dialog = fakeExec([screen(name)]);
     expect(await claudeCodeTmux.send(dialog.exec, "x", yes)).toEqual({ status: "refused", reason: "a dialog is on screen" });
-    expect(dialog.calls).toEqual(["tmux capture-pane -p -t main"]);
+    expect(dialog.calls).toEqual(["tmux display-message -p -t =main:0.0 #{pane_in_mode}", "tmux capture-pane -p -e -t =main:0.0"]);
   }
   const typing = fakeExec([READY.replace("❯\n", "❯ someone types\n")]);
   expect(await claudeCodeTmux.send(typing.exec, "x", yes)).toEqual({ status: "refused", reason: "the input box is not empty" });
@@ -235,7 +238,7 @@ test("a dialog that opens during the paste gets no Enter, and the message is rep
 
 test("the input box is the dialog marker on real screens; past prompts and menu lines are not the box", async () => {
   expect(inputBox(screen("idle"))).toBe(""); // its transcript has the past prompt `❯ 1. say only the word ok`
-  expect(inputBox(screen("busy-queued"))).toBe(""); // only the placeholder shown while a message waits
+  expect(inputBox(screen("busy-queued-2.1.323"))).toBe(""); // real attributes distinguish the placeholder from a draft
   for (const name of ["ask", "plan", "perm"]) expect(inputBox(screen(name))).toBeUndefined();
   const lastOption = screen("ask").replace("❯ 1. Red", "  1. Red").replace("  4. Chat about this", "❯ 4. Chat about this");
   expect(inputBox(lastOption)).toBeUndefined(); // the selected option sits right under a rule
@@ -250,7 +253,7 @@ test("failed tools and Household's own tools become agent-neutral events; the ag
   expect(claudeCodeTmux.translate({ hook_event_name: "MessageDisplay", prompt_id: turn, message_id: "m", index: 0, final: true, delta: "x" })).toEqual([]);
   // A failed tool ends its dialog, as a finished one does.
   expect(await events("PostToolUseFailure-0")).toEqual([
-    { kind: "dialog-closed" },
+    { kind: "dialog-closed", turn, call: "toolu_01Fa1LedXq9w2kVb7nTzR3Yc", input: expect.any(String) },
     { kind: "tool-finished", tool: "Bash", turn, call: "toolu_01Fa1LedXq9w2kVb7nTzR3Yc", ms: 59, failed: true },
   ]);
   const reply = { ...(await fixture("PreToolUse-0")), tool_name: "mcp__household__reply", tool_input: { text: "Done" } };
@@ -303,7 +306,8 @@ test("hooks come from a root-owned --settings file for all supported events, thr
   expect(settings.permissions).toEqual({ allow: ["mcp__household"] });
   expect(settings.skipAutoPermissionPrompt).toBe(true);
   const entrypoint = await Bun.file(join(claudeCodeTmux.imageContext, "entrypoint.sh")).text();
-  expect(entrypoint).toContain("claude --settings /etc/household/claude-settings.json");
+  expect(entrypoint).toContain('claude --settings "$settings"');
+  expect(settings.promptSuggestionEnabled).toBe(false);
   const dockerfile = await Bun.file(join(claudeCodeTmux.imageContext, "Dockerfile")).text();
   expect(dockerfile).toContain("COPY --chmod=644 claude-settings.json /etc/household/claude-settings.json");
 });
@@ -487,9 +491,9 @@ test("stopping claude: out of copy mode, Escape once on a claude that works, and
   const stopped = await run([BUSY, BUSY, READY], "1");
   expect(stopped.result).toEqual({ status: "stopped" });
   expect(stopped.calls.filter((call) => !call.includes("capture-pane"))).toEqual([
-    "tmux display-message -p -t main #{pane_in_mode}",
-    "tmux send-keys -t main -X cancel", // copy mode first: a scrolled pane would take the key
-    "tmux send-keys -t main Escape",
+    "tmux display-message -p -t =main:0.0 #{pane_in_mode}",
+    "tmux send-keys -t =main:0.0 -X cancel", // copy mode first: a scrolled pane would take the key
+    "tmux send-keys -t =main:0.0 Escape",
   ]);
   // Idle already: no key at all.
   const idle = await run([READY]);
@@ -581,4 +585,59 @@ test("account connectors are opt-in for pets and always off for scouts, includin
     expect(args.includes("--strict-mcp-config")).toBe(!expected);
     expect(args).toContain("/etc/household/mcp.json");
   }
+});
+
+test("startup ghost text is empty only with placeholder attributes; identical user text stays a draft", () => {
+  const text = 'Try "refactor <filepath>"';
+  const ghost = READY.replace("❯\n", `❯ \x1b[38;5;246m${text}\x1b[39m\n`);
+  expect(inputBox(ghost)).toBe("");
+  expect(isClaudeReady(ghost)).toBe(true);
+  expect(inputBox(READY.replace("❯\n", `❯ ${text}\n`))).toBe(text);
+  expect(inputBox(READY.replace("❯\n", `❯ \x1b[39m${text}\n`))).toBe(text);
+});
+
+test("copy mode before paste refuses; copy mode appearing after paste never gets Enter", async () => {
+  for (const initially of [true, false]) {
+    let modes = 0;
+    const fake = fakeExec([READY]);
+    const exec: Exec = async (args, stdin) => args.includes("display-message")
+      ? { ok: true, output: initially || modes++ > 0 ? "1" : "0" } : fake.exec(args, stdin);
+    expect((await claudeCodeTmux.send(exec, "hello", yes)).status).toBe(initially ? "refused" : "stuck");
+    expect(fake.calls.some(call => call.includes("send-keys"))).toBe(false);
+    expect(fake.calls.some(call => call.includes("paste-buffer"))).toBe(!initially);
+  }
+});
+
+
+test("placeholder-like user drafts are preserved even if an earlier transcript contains gray ghost text", () => {
+  for (const text of ['Try "refactor <filepath>"', "Press up to edit queued messages"]) {
+    const draft = READY.replace("❯\n", `❯ ${text}\n`);
+    expect(inputBox(`❯ \x1b[38;5;246m${text}\x1b[39m\n${draft}`)).toBe(text);
+    expect(inputBox(READY.replace("❯\n", `❯ \x1b[7m${text[0]}\x1b[0;2m${text.slice(1)}\x1b[0m\n`))).toBe("");
+  }
+});
+
+
+test("ANSI attributes between footer words cannot hide the active mode or a running turn", async () => {
+  const colored = READY.replace("bypass permissions on", "\x1b[38;5;220mauto\x1b[39m mode\x1b[38;5;220m on\x1b[39m");
+  expect(modeMismatch(colored, "auto")).toBeUndefined();
+  expect(await claudeCodeTmux.isIdle!(fakeExec([`${colored}\nesc \x1b[38;5;246mto\x1b[39m interrupt`]).exec)).toBe(false);
+});
+
+test("quoting a first-run dialog in a real prompt or transcript cannot block delivery", async () => {
+  const quoted = 'Explain "Do you trust the files in this folder" and "Bypass Permissions mode"';
+  const draft = READY.replace("❯\n", `❯ ${quoted}\n`);
+  expect(inputBox(draft)).toBe(quoted);
+  expect((await claudeCodeTmux.send(fakeExec([READY, draft]).exec, quoted, yes)).status).toBe("sent");
+  expect(inputBox(`❯ ${quoted}\n${READY}`)).toBe("");
+});
+
+
+test("real 2.1.323 first-run trust menu has no input box and never receives a paste", async () => {
+  const trust = screen("first-run-trust-2.1.323");
+  expect(inputBox(trust)).toBeUndefined();
+  expect(isClaudeReady(trust)).toBe(false);
+  const fake = fakeExec([trust]);
+  expect((await claudeCodeTmux.send(fake.exec, "must not accept trust", yes)).status).toBe("refused");
+  expect(fake.calls.some(call => call.includes("paste-buffer") || call.includes("send-keys"))).toBe(false);
 });

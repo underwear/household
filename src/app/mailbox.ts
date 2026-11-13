@@ -2,6 +2,7 @@ import type { AgentAdapter } from "../core/agent";
 import { CLOCK, type Clock } from "../core/clock";
 import { PetInbox } from "../core/inbox";
 import type { Message } from "../core/message";
+import { DialogState, type OpenDialog } from "./dialog-state";
 import { Backoff } from "./backoff";
 import { TokenBucket } from "./token-bucket";
 
@@ -49,8 +50,9 @@ export class Mailbox {
   refusal?: string;
   /** Bumped on every dialog opened, so a screen look that started before it cannot close it. */
   dialogs = 0;
-  /** Dialogs put to the person and not answered yet, oldest first; the newest is the one on the agent's screen. */
-  readonly asking: AbortController[] = [];
+  /** Dialogs put to the person, each with its own identity and cancellation. */
+  readonly asking: { controller: AbortController; dialog?: OpenDialog }[] = [];
+  readonly dialogState = new DialogState();
   private readonly events: TokenBucket;
   private dropped = 0;
   private report?: ReturnType<typeof setTimeout>;
@@ -109,6 +111,8 @@ export class Mailbox {
   }
 
   close(): void {
+    for (const asking of this.asking) asking.controller.abort();
+    this.dialogState.clear();
     this.retry.cancel();
     this.watch.cancel();
     this.cancelBatch?.();

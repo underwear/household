@@ -88,7 +88,7 @@ export class FakeRuntime implements ContainerRuntime {
 
   async exec(container: string, command: string[], stdin?: string): Promise<{ ok: boolean; output: string }> {
     this.execs.push(`${container}: ${command.join(" ")}${stdin === undefined ? "" : ` < ${stdin}`}`);
-    return { ok: this.containers.has(container), output: this.output(container) };
+    return { ok: this.containers.has(container), output: command[0] === "tmux" && command[1] === "display-message" ? "0" : this.output(container) };
   }
 
   async attach(): Promise<number> {

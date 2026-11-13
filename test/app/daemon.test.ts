@@ -382,7 +382,7 @@ test("agent events reach the log; a send waits while a dialog is open and goes o
     await Bun.sleep(50);
     expect(runtime.execs.some((exec) => exec.includes("paste-buffer"))).toBe(false);
 
-    await postEvent(paths, "sibling", { hook_event_name: "PostToolUse", tool_name: "AskUserQuestion" });
+    await postEvent(paths, "sibling", { ...question, hook_event_name: "PostToolUse" });
     await waitFor(() => runtime.execs.some((exec) => exec.includes("send-keys")));
     expect(runtime.execs).toContain("household.work.sibling: tmux load-buffer -b household - < next");
     expect(lines.some((line) => line.includes("PET   work/sibling dialog closed"))).toBe(true);
@@ -842,6 +842,8 @@ test("failed startup setup starts repair through normal delivery and exposes a s
   try {
     await waitFor(() => runtime.execs.some((entry) => entry.includes("Household: environment setup failed on this boot")), 5_000);
     expect(channels.get("work")!.calls.some((entry) => entry.includes("The setup script failed"))).toBe(true);
+    expect(channels.get("work")!.calls.some((entry) => entry.includes("Environment is not ready"))).toBe(true);
+    expect(channels.get("work")!.calls.some((entry) => /sibling started\./i.test(entry))).toBe(false);
     const launches = runtime.calls.filter((entry) => entry.startsWith("run "));
     const saved = await callMcp(paths, "sibling", { method: "tools/call", params: { name: "environment_update", arguments: { setup: "printf configured" } } });
     expect(saved.result.isError).toBeUndefined();
@@ -1036,4 +1038,20 @@ test("a bot that did not get ready is logged with what it showed, never an empty
   expect(notReady({ ...pet, exited: true, output: "Codex startup failed while signing in: Codex request timed out" }))
     .toBe("started, but its agent exited before it got ready: Codex startup failed while signing in: Codex request timed out; `house bot restart work sibling` starts it again");
   expect(notReady({ ...pet, exited: true })).toBe("started, but its agent exited before it got ready without saying why; `house bot restart work sibling` starts it again");
+});
+
+test("a previously failed setup is still announced as degraded without automatic retry on restart", async () => {
+  const { config, runtime, deps, channels } = setup();
+  runtime.output = () => READY;
+  Object.assign(runtime, { environmentSetupResult: (_name: string, phase: string) => phase === "setup"
+    ? { status: "failed", attempted: false, logPath: "~/environment/setup.log", statusPath: "~/environment/setup.status" }
+    : { status: "skipped", logPath: "~/environment/on-start.log", statusPath: "~/environment/on-start.status" } });
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { key: "claude" });
+  await connect(config, "work");
+  const daemon = await startDaemon(deps);
+  try {
+    expect(channels.get("work")!.calls.some(call => call.includes("Environment is not ready (setup failed)"))).toBe(true);
+    expect(runtime.execs.some(call => call.includes("Household: environment setup failed on this boot"))).toBe(false);
+  } finally { await daemon.stop(); }
 });

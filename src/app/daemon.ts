@@ -529,15 +529,18 @@ export async function startDaemon(deps: DaemonDeps) {
     const results = await pets.awaitReady(started);
     for (const start of results) {
       const name = `bot ${start.house}/${start.pet}`;
-      if (start.ready) events.info(`${name} started`);
+      const setupResult = pets.environmentSetupResult(start.house, start.pet);
+      const onStartResult = pets.environmentSetupResult(start.house, start.pet, "onStart");
+      const failedPhases = [setupResult?.status === "failed" ? "setup" : "", onStartResult?.status === "failed" ? "on-start" : ""].filter(Boolean);
+      const degraded = failedPhases.length ? `Environment is not ready (${failedPhases.join(" and ")} failed); the agent is running for repair.` : undefined;
+      if (start.ready) events.info(degraded ? `${name}: ${degraded}` : `${name} started`);
       if (start.warning) events.error(`${name}: ${start.warning}`);
       else if (!start.ready) events.error(`${name} ${notReady(start)}`);
       const title = lifecycleTitle(start.house, start.pet);
-      await chat.notice(start.house, start.pet, start.ready ? `${title} started.` : start.exited
+      await chat.notice(start.house, start.pet, start.ready ? degraded ? `${title}: ${degraded}` : `${title} started.` : start.exited
         ? `${title}: the VM is up, but the agent stopped while starting${compact(start.output ?? "") ? ` (${compact(start.output!)})` : ""}. \`house bot restart ${start.house} ${start.pet}\``
         : `${title}: the VM is up, but the agent is not responding. \`house bot attach ${start.house} ${start.pet}\``);
       const parent = sideworkers.worker(start.house, start.pet)?.parent;
-      const setupResult = pets.environmentSetupResult(start.house, start.pet);
       if (start.ready && setupResult?.status === "failed" && setupResult.attempted !== false) {
         delivery.send(start.house, start.pet, { origin: parent ? "internal" : "cli", text: parent ? `Household: Your inherited setup script failed. Inspect ~/environment/setup.log as diagnostic data. Ask parent ${parent} through house_send to repair the shared script, then call environment_setup to retry. Do not retry unchanged failures indefinitely.` : ENVIRONMENT_SETUP_RECOVERY_PROMPT });
         void chat.notice(start.house, start.pet, "The setup script failed. The agent will look into it and run it again.");

@@ -13,6 +13,7 @@ import type { MessageStore } from "../infra/sqlite-store";
 import type { PlacedPet } from "./agents";
 import type { AttachmentFetcher } from "./attachments";
 import { CLOCK, type Clock } from "../core/clock";
+import type { OpenDialog } from "./dialog-state";
 import { Mailbox, TIMING } from "./mailbox";
 
 
@@ -160,14 +161,25 @@ export class Delivery {
     const { dialogs } = box.agent;
     const dialog = dialogs?.ask(payload);
     const events = box.agent.translate(payload);
+    // Correlation survives progress throttling; the bounded tracker holds no raw tool input.
+    for (const event of events) if (event.kind === "tool-started") box.dialogState.started(event);
+    const closesDialog = events.some(event => event.kind === "dialog-closed" && box.dialogState.matching(event).length > 0);
     // Over the rate, progress goes; turns' ends and starts and dialogs never.
-    if (!box.admit(dialog !== undefined || events.some((event) => VITAL.includes(event.kind) || event.kind === "tool-review" || (event.kind === "notification" && event.audience === "chat")))) return {};
-    for (const event of events) this.record(house, pet, box, event);
+    if (!box.admit(closesDialog || dialog !== undefined || events.some((event) => VITAL.includes(event.kind) || event.kind === "tool-review" || (event.kind === "notification" && event.audience === "chat")))) {
+      for (const event of events) if (event.kind === "tool-finished") box.dialogState.finished(event);
+      return {};
+    }
+    let opened: OpenDialog | undefined;
+    for (const event of events) opened = this.record(house, pet, box, event) ?? opened;
     void this.flush(house, pet);
     if (!dialogs || !dialog) return {};
-    const answer = await this.ask(house, pet, box, dialog, signal);
+    const answer = await this.ask(house, pet, box, dialog, opened, signal);
     if (!answer) return {}; // it stays with the person in the agent's session
-    if (this.boxes.get(key(house, pet)) === box && box.asking.length === 0) {
+    if (this.boxes.get(key(house, pet)) !== box) return {};
+    if (opened) box.dialogState.remove(opened);
+    const remaining = box.dialogState.open.at(-1);
+    if (remaining) this.report({ kind: "dialog", house, pet, dialog: remaining.dialog, ...(remaining.input ? { input: remaining.input } : {}) });
+    if (box.dialogState.open.length === 0 && box.asking.length === 0) {
       // Answered here, the dialog is gone; waiting messages need not wait for a look at the screen.
       this.record(house, pet, box, { kind: "dialog-closed" });
       void this.flush(house, pet);
@@ -180,13 +192,17 @@ export class Delivery {
    * some other way (`record`): answered in the agent's session, the agent may keep waiting on a request whose
    * answer it will ignore (claude does), so its closing is what tells.
    */
-  private async ask(house: string, pet: string, box: Mailbox, dialog: DialogQuestion, signal?: AbortSignal): Promise<DialogAnswer | undefined> {
+  private async ask(house: string, pet: string, box: Mailbox, dialog: DialogQuestion, opened?: OpenDialog, signal?: AbortSignal): Promise<DialogAnswer | undefined> {
     const closed = new AbortController();
-    box.asking.push(closed);
+    const pending = { controller: closed, dialog: opened };
+    box.asking.push(pending);
+    const combined = signal ? AbortSignal.any([signal, closed.signal]) : closed.signal;
     try {
-      return await this.askPerson(house, pet, dialog, signal ? AbortSignal.any([signal, closed.signal]) : closed.signal);
+      if (combined.aborted) return undefined;
+      const answer = await this.askPerson(house, pet, dialog, combined);
+      return combined.aborted ? undefined : answer;
     } finally {
-      box.asking.splice(box.asking.indexOf(closed), 1);
+      box.asking.splice(box.asking.indexOf(pending), 1);
     }
   }
 
@@ -259,7 +275,7 @@ export class Delivery {
     if (!box) return;
     box.retry.cancel();
     box.watch.cancel();
-    for (const asking of box.asking) asking.abort();
+    for (const asking of box.asking) asking.controller.abort();
     while (box.flushing) await Bun.sleep(10);
     this.restarted(house, pet);
     box.inbox.stopped();
@@ -279,6 +295,8 @@ export class Delivery {
   restarted(house: string, pet: string): void {
     const box = this.boxes.get(key(house, pet));
     if (!box) return;
+    for (const asking of box.asking) asking.controller.abort();
+    box.dialogState.clear();
     this.recoverInbox(box);
     for (const message of box.awaiting) this.mark(message, "failed");
     box.awaiting = [];
@@ -409,13 +427,33 @@ export class Delivery {
     this.report({ kind: "failed", house, pet, messages, why });
   }
 
-  private record(house: string, pet: string, box: Mailbox, event: AgentEvent): void {
+  private record(house: string, pet: string, box: Mailbox, event: AgentEvent): OpenDialog | undefined {
+    if (event.kind === "tool-finished") box.dialogState.finished(event);
+    const opened = event.kind === "dialog-opened" ? box.dialogState.opened(event) : undefined;
+    if (opened) {
+      // Even a second dialog invalidates an in-flight terminal probe.
+      box.dialogs += 1;
+      box.watch.reset();
+      box.watch.schedule(() => void this.watchDialog(house, pet, box));
+    }
+    if (event.kind === "dialog-closed") {
+      const closed = box.dialogState.closed(event);
+      const all = !(event.call || event.input || event.turn || event.agent);
+      for (const asking of box.asking) if (all || (asking.dialog && closed.includes(asking.dialog))) asking.controller.abort();
+      if (!all && closed.length === 0) return;
+      const remaining = box.dialogState.open.at(-1);
+      if (remaining) {
+        this.report({ kind: "dialog", house, pet, dialog: remaining.dialog, ...(remaining.input ? { input: remaining.input } : {}) });
+        return;
+      }
+    }
+    if (event.kind === "session-started") box.dialogState.clear();
     if (event.kind === "session-started") { box.memoryRevision = undefined; box.memoryEpoch++; }
     this.restarting.get(key(house, pet))?.(event);
     if (!box.inbox.observe(event)) {
       // Another dialog while one is open (permissions for calls in parallel) is its own; a screen-only one is the same.
       if (event.kind === "dialog-opened" && event.dialog !== "unknown") this.report({ kind: "dialog", house, pet, dialog: event.dialog, ...(event.input ? { input: event.input } : {}) });
-      return;
+      return opened;
     }
     // The agent's text is for the person to glimpse (the live message); the answer is logged with the turn's end.
     const visible = this.sanitizeEvent?.(house, pet, event) ?? event;
@@ -453,11 +491,7 @@ export class Delivery {
     if (event.kind === "session-started" && !event.continues) this.report({ kind: "turn-lost", house, pet, why: "session" });
     if (event.kind === "dialog-opened") this.report({ kind: "dialog", house, pet, dialog: event.dialog, ...(event.input ? { input: event.input } : {}) });
     if (event.kind === "dialog-closed") this.report({ kind: "dialog", house, pet });
-    if (event.kind === "dialog-closed") box.asking.at(-1)?.abort(); // the newest dialog is the one that closed
-    if (event.kind !== "dialog-opened") return;
-    box.dialogs += 1;
-    box.watch.reset();
-    box.watch.schedule(() => void this.watchDialog(house, pet, box));
+    return opened;
   }
 
   /**

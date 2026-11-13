@@ -79,9 +79,10 @@ beforeAll(async () => {
   await Promise.all(ports.map((server) => server.stop(true)));
   const context = join(root, "image");
   mkdirSync(context);
-  await new DockerCli().buildImage("household-agent-claude-code-tmux", claudeCodeTmux.imageContext);
+  const baseImage = process.env.HOUSEHOLD_QA_BASE_IMAGE ?? "household-agent-claude-code-tmux";
+  if (!process.env.HOUSEHOLD_QA_BASE_IMAGE) await new DockerCli().buildImage(baseImage, claudeCodeTmux.imageContext);
   const workload = `printf '%s\\n' '${house}' > /tmp/ready; echo $$ > /tmp/main.pid; exec sleep infinity`;
-  writeFileSync(join(context, "Dockerfile"), `FROM household-agent-claude-code-tmux\nENTRYPOINT ${JSON.stringify(["sh", "-c", workload])}\n`);
+  writeFileSync(join(context, "Dockerfile"), `FROM ${baseImage}\nENTRYPOINT ${JSON.stringify(["sh", "-c", workload])}\n`);
   runtime = new MicrosandboxRuntime({ builder: new DockerCli(), homesDir: homesDirectory(paths), proxyPort: proxyPort!, relayPort: relayPort! });
   const target = { host: "localhost", port: upstream.port! };
   const agent: AgentAdapter = {
@@ -126,11 +127,13 @@ afterAll(async () => {
     await shell(["msb", "image", "remove", imageName]);
     await shell(["docker", "image", "rm", imageName]);
   }
+  if (enabled && existsSync(paths.eventLog)) writeFileSync("/tmp/household-qa-microvm-events.jsonl", readFileSync(paths.eventLog));
+  if (enabled && telegram) writeFileSync("/tmp/household-qa-microvm-telegram.json", JSON.stringify(telegram.calls));
   rmSync(root, { recursive: true, force: true });
 });
 
 test.skipIf(!enabled)("the actual daemon delivers fake Telegram and MCP through a token-authenticated VM; only the host sees the fake API key", async () => {
-  telegram!.push({ message: { message_id: 500, chat: { id: 42 }, from: { id: 42, first_name: "Owner" }, text: "microVM message" } });
+  telegram!.push({ message: { message_id: 500, message_thread_id: 100, is_topic_message: true, chat: { id: 42 }, from: { id: 42, first_name: "Owner" }, text: "microVM message" } });
   const inbox = join(homesDirectory(paths), petVolume(house, "probe"), "memory", "inbox");
   await waitFor(() => existsSync(inbox) && readFileSync(inbox, "utf8").includes("microVM message"), 15_000);
   const response = await mcp("reply", { text: "reply from the isolated VM" });
@@ -141,7 +144,7 @@ test.skipIf(!enabled)("the actual daemon delivers fake Telegram and MCP through 
   expect(requests).toEqual([{ key: `Bearer ${FAKE_KEY}`, capability: false }]);
   expect((await exec(["env"])).includes(FAKE_KEY)).toBe(false);
   expect(readFileSync(paths.eventLog, "utf8").includes(FAKE_KEY)).toBe(false);
-});
+}, 30_000);
 
 test.skipIf(!enabled)("the actual VM cannot bypass the host proxy or reach arbitrary host ports", async () => {
   for (const target of ["https://1.1.1.1/", `http://${runtime!.host}:${upstream!.port}/private`]) {
@@ -266,6 +269,25 @@ test.skipIf(!enabled)("a shared folder is mounted at /volumes/<name>, read-only 
   expect(readFileSync(join(folder, "hello.txt"), "utf8")).toBe("from host\n");
   expect(readFileSync(join(folder, "vm.txt"), "utf8")).toBe("vm\n");
 }, 600_000);
+
+test.skipIf(!enabled)("recreating a VM restores configured system dependencies even when HOME says setup was complete", async () => {
+  const setup = 'set -eu\nsudo sh -c \'printf "#!/bin/sh\\nprintf restored\\n" > /usr/local/bin/qa-restored; chmod 755 /usr/local/bin/qa-restored\'\necho installed >> "$HOME/restoration-count"\n';
+  await new ConfigStore(paths.configFile).updatePetEnvironment(house, "probe", { setup });
+  await runtime!.removeContainer(pet);
+  await callControl(paths.socket, "/reload");
+  expect(await exec(["/usr/local/bin/qa-restored"])).toBe("restored");
+  expect(await exec(["sh", "-c", "ssh -V 2>&1"])).toContain("OpenSSH");
+  expect(await exec(["cat", "/home/agent/restoration-count"])).toBe("installed\n");
+  expect(runtime!.environmentSetupResult(pet)?.status).toBe("complete");
+  // Simulates replacing the root filesystem with a new image, retaining the persistent home.
+  await runtime!.removeContainer(pet);
+  await callControl(paths.socket, "/reload");
+  expect(await exec(["/usr/local/bin/qa-restored"])).toBe("restored");
+  expect(await exec(["cat", "/home/agent/restoration-count"])).toBe("installed\ninstalled\n");
+  await runtime!.stopContainer(pet); await runtime!.startContainer(pet);
+  expect(await exec(["cat", "/home/agent/restoration-count"])).toBe("installed\ninstalled\n");
+  expect(runtime!.environmentSetupResult(pet)).toMatchObject({ status: "complete", attempted: false });
+}, 120_000);
 
 test.skipIf(!enabled)("production host backup pauses/resumes a real VM and restores its home and CA into another state directory", async () => {
   await exec(["sh", "-c", 'mkdir -p "$HOME/memory"; printf "portable mémoire\\n" > "$HOME/memory/portable"; chmod 600 "$HOME/memory/portable"']);

@@ -43,19 +43,17 @@ function useKey(provider: Provider, value: string): KeyUse | { problem: string }
   return { problem: "not an Anthropic key: a Household sign-in (`house key claude`), a subscription token (sk-ant-oat01-…, from `claude setup-token`) or an API key (sk-ant-api03-…)" };
 }
 
-const SESSION = "main";
-const CAPTURE = ["tmux", "capture-pane", "-p", "-t", SESSION];
+const PANE = "=main:0.0";
+const CAPTURE = ["tmux", "capture-pane", "-p", "-e", "-t", PANE];
 
-// First-run dialogs (the seed files keep them away).
+// First-run overlays can occupy the area below an otherwise drawn input box. Never scan the
+// transcript or the draft for these phrases: a person may legitimately quote any of them.
 const FIRST_RUN = [
-  "Do you trust the files in this folder",
-  "Select login method",
-  "Bypass Permissions mode",
-  "Make auto mode your default", // auto mode's (its opt-in, skipAutoPermissionPrompt keeps away)
-  "Teach auto mode about your environment?",
-  "Choose the text style",
-  "Detected a custom API key", // the entrypoint approves the placeholder; should claude ask anyway, it is a dialog
+  "Do you trust the files in this folder", "Select login method", "Bypass Permissions mode",
+  "Make auto mode your default", "Teach auto mode about your environment?", "Choose the text style",
+  "Detected a custom API key",
 ];
+
 /**
  * The input box: `❯` lines between two full-width rules. Every dialog (question, permission, plan, form) takes
  * its place, so its absence is the dialog marker (claude 2.1.296 screens in test/agent-adapters). Past prompts are not
@@ -65,12 +63,48 @@ const INPUT_BOX = /^─{20,}\n❯([^]*?)\n─{20,}$/m;
 
 /** Shown in an empty input box while claude works through messages queued earlier. */
 const PLACEHOLDER = "Press up to edit queued messages";
+const plainScreen = (screen: string) => screen.replace(/\x1b\[[0-9;]*m/g, "");
 
 /** What the input box holds (`""`: empty), or undefined when no input box is on screen: a dialog is. */
 export function inputBox(screen: string): string | undefined {
-  if (FIRST_RUN.some((dialog) => screen.includes(dialog))) return undefined;
-  const typed = INPUT_BOX.exec(screen)?.[1]!.trim();
-  return typed === PLACEHOLDER ? "" : typed;
+  // Keep attributes long enough to distinguish ghost text from someone typing the same words.
+  const plain = plainScreen(screen);
+  const match = INPUT_BOX.exec(plain);
+  if (match && FIRST_RUN.some(dialog => plain.slice(match.index + match[0].length).includes(dialog))) return undefined;
+  const typed = match?.[1]!.trim();
+  const firstLine = match ? plain.slice(0, match.index).split("\n").length : 0;
+  const rawInput = match ? screen.split("\n").slice(firstLine, firstLine + match[1]!.split("\n").length).join("\n") : "";
+  if (typed && (typed === PLACEHOLDER || /^Try ["“«].+["”»]$/.test(typed)) && ghostInput(rawInput)) return "";
+  return typed;
+}
+
+/** Ghost text is dim/muted. tmux's reverse-video cursor can split its first letter from the rest. */
+function ghostInput(raw: string): boolean {
+  let dim = false, muted = false, prompt = false, first = true, seen = false;
+  for (const token of raw.matchAll(/\x1b\[([0-9;]*)m|([^\x1b])/gu)) {
+    if (token[1] !== undefined) {
+      const codes = token[1].split(";").map(Number);
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i];
+        if (code === 0) { dim = false; muted = false; }
+        else if (code === 2) dim = true;
+        else if (code === 22) dim = false;
+        else if (code === 39 || (code! >= 30 && code! <= 37) || (code! >= 90 && code! <= 97)) muted = code === 90;
+        else if (code === 38 || code === 48) {
+          if (codes[i + 1] === 5) { if (code === 38) muted = [242, 244, 246].includes(codes[i + 2]!); i += 2; }
+          else if (codes[i + 1] === 2) { if (code === 38) muted = false; i += 4; }
+        }
+      }
+      continue;
+    }
+    const char = token[2]!;
+    if (!prompt) { if (char === "❯") prompt = true; continue; }
+    if (/\s/u.test(char)) continue;
+    if (first) { first = false; continue; }
+    seen = true;
+    if (!dim && !muted) return false;
+  }
+  return seen;
 }
 
 /** claude's status line while it works on a turn. */
@@ -81,7 +115,7 @@ const STOP_LOOK_MS = 300;
 
 /** Waiting for input: no turn going on, and its input box on screen (no dialog); undefined when it is not. */
 function idleBox(screen: string | undefined): string | undefined {
-  return screen === undefined || screen.includes(WORKING) ? undefined : inputBox(screen);
+  return screen === undefined || plainScreen(screen).includes(WORKING) ? undefined : inputBox(screen);
 }
 
 /**
@@ -90,12 +124,12 @@ function idleBox(screen: string | undefined): string | undefined {
  * for input.
  */
 async function interrupt(exec: Exec): Promise<{ status: "stopped" | "idle" | "failed"; leftover?: string }> {
-  const mode = await exec(["tmux", "display-message", "-p", "-t", SESSION, "#{pane_in_mode}"]);
-  if (mode.ok && mode.output.trim() === "1") await exec(["tmux", "send-keys", "-t", SESSION, "-X", "cancel"]);
+  const mode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
+  if (mode.ok && mode.output.trim() === "1") await exec(["tmux", "send-keys", "-t", PANE, "-X", "cancel"]);
   const before = await screen(exec);
   if (before === undefined) return { status: "failed" };
   if (idleBox(before) !== undefined) return { status: "idle" };
-  if (!(await exec(["tmux", "send-keys", "-t", SESSION, "Escape"])).ok) return { status: "failed" };
+  if (!(await exec(["tmux", "send-keys", "-t", PANE, "Escape"])).ok) return { status: "failed" };
   for (let look = 0; look < STOP_LOOKS; look++) {
     await Bun.sleep(STOP_LOOK_MS);
     const box = idleBox(await screen(exec));
@@ -123,6 +157,8 @@ async function screen(exec: Exec): Promise<string | undefined> {
  * only if the box is still there and the caller agrees: a dialog opening meanwhile would take the Enter.
  */
 async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promise<SendResult> {
+  const mode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
+  if (!mode.ok || mode.output.trim() !== "0") return { status: "refused", reason: "the terminal is in copy mode or unavailable" };
   const before = await screen(exec);
   if (before === undefined) return { status: "refused", reason: "cannot read the session" };
   const box = inputBox(before);
@@ -132,7 +168,7 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promis
   if (!(await exec(["tmux", "load-buffer", "-b", "household", "-"], typeable(text))).ok) {
     return { status: "refused", reason: "load-buffer failed" };
   }
-  if (!(await exec(["tmux", "paste-buffer", "-p", "-d", "-b", "household", "-t", SESSION])).ok) {
+  if (!(await exec(["tmux", "paste-buffer", "-p", "-d", "-b", "household", "-t", PANE])).ok) {
     return { status: "stuck", reason: "paste-buffer failed" };
   }
   await Bun.sleep(300); // let the TUI take the paste before Enter
@@ -140,7 +176,9 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promis
   if (after === undefined || inputBox(after) === undefined || !canSubmit()) {
     return { status: "stuck", reason: "the input box was gone after the paste (a dialog?), so no Enter" };
   }
-  const enter = await exec(["tmux", "send-keys", "-t", SESSION, "Enter"]);
+  const afterMode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
+  if (!afterMode.ok || afterMode.output.trim() !== "0" || !canSubmit()) return { status: "stuck", reason: "the terminal changed after the paste, so no Enter" };
+  const enter = await exec(["tmux", "send-keys", "-t", PANE, "Enter"]);
   return enter.ok ? { status: "sent" } : { status: "stuck", reason: "send-keys failed after the paste" };
 }
 
@@ -209,6 +247,7 @@ const FOOTERS: Record<string, string> = { auto: "auto mode on", acceptEdits: "ac
  */
 export function modeMismatch(screen: string, mode: string | undefined): string | undefined {
   if (mode === undefined) return undefined;
+  screen = plainScreen(screen);
   const shown = Object.entries(FOOTERS).find(([, footer]) => screen.includes(footer))?.[0];
   if (shown === mode || (shown === undefined && FOOTERS[mode] === undefined)) return undefined;
   return `claude runs in ${shown ?? "a mode without a footer (manual?)"}, not ${mode}`;
@@ -222,8 +261,9 @@ export const claudeCodeTmux: AgentAdapter = {
   skillsDirectory: ".claude/skills",
   workspaceSkillsDirectory: ".claude/skills",
   home: HOME,
-  env: ({ caCertPath, eventsUrl, mcpUrl, instructions, model, mode, reasoningEffort, settings, home, workspace, scout }) => ({
+  env: ({ caCertPath, eventsUrl, mcpUrl, instructions, model, mode, reasoningEffort, settings, home, workspace, scout, additionalDirectories }) => ({
     ...(home === undefined ? {} : { HOME: home }),
+    HOUSEHOLD_ADDITIONAL_DIRECTORIES: JSON.stringify(additionalDirectories ?? []),
     ...(workspace === undefined ? {} : { HOUSEHOLD_WORKSPACE: workspace }),
     // Household's timer is the only one on claude's permission dialogs (it puts them to the person, then refuses).
     // No official plugin marketplace fetched on every start (downloads.claude.ai, then a git clone from github.com):
@@ -264,7 +304,7 @@ export const claudeCodeTmux: AgentAdapter = {
     const { ok, output } = await exec(CAPTURE);
     const ready = ok && isClaudeReady(output);
     const warning = ready ? modeMismatch(output, mode) : undefined;
-    return { ready, output, ...(warning ? { warning } : {}) };
+    return { ready, output: plainScreen(output), ...(warning ? { warning } : {}) };
   },
   translate: translateHook,
   dialogs: { ask: askOf, answer: answerFor },
@@ -275,6 +315,6 @@ export const claudeCodeTmux: AgentAdapter = {
     const shown = await screen(exec);
     return shown === undefined || inputBox(shown) === undefined;
   },
-  attach: ["tmux", "attach-session", "-t", SESSION],
+  attach: ["tmux", "attach-session", "-t", "main"],
   terminalSnapshot: ["tmux", "capture-pane", "-p", "-t", "=main:0.0", "-S", "-200"],
 };

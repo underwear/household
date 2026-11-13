@@ -690,3 +690,14 @@ test("volumes: a stopped VM whose folder is gone is made anew without it, so it 
   expect(runtime.specs).toHaveLength(1);
   expect(runtime.specs[0]!.mounts!.some((mount) => mount.target === "/volumes/nas")).toBe(false);
 });
+
+test("native additional directories name only configured guest shares; absent shares are not mounted", async () => {
+  const { plane, runtime } = setup();
+  const folder = await (await import("node:fs/promises")).realpath(tempDir());
+  const contexts: import("../../src/core/agent").PetContext[] = [];
+  const adapter = { ...agent, env: (context: import("../../src/core/agent").PetContext) => { contexts.push(context); return agent.env(context); } };
+  await plane.reconcile([{ ...pets[0]!, agent: adapter, volumes: [{ name: "server", path: folder, access: "read" }, { name: "missing", path: `${folder}/missing`, access: "write" }] }]);
+  expect(contexts[0]!.additionalDirectories).toEqual(["/volumes/server", "/volumes/missing"]);
+  expect(runtime.specs[0]!.mounts).toContainEqual({ type: "bind", source: folder, target: "/volumes/server", readOnly: true });
+  expect(JSON.stringify(contexts[0]!.additionalDirectories)).not.toContain(folder);
+});

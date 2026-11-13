@@ -23,6 +23,8 @@ export type DialogKind = "permission" | "question" | "plan" | "form" | "unknown"
  * `input`: a fingerprint of a tool call's tool and input, the same on its start and on a dialog asking about it
  * (which carries no call id), when the adapter can tell.
  */
+export interface DialogIdentity { call?: string; input?: string; turn?: string; agent?: string }
+
 export type AgentEvent =
   /**
    * `model`: the model the session runs, as the agent names it, when it says. `continues`: the agent goes on in
@@ -41,8 +43,9 @@ export type AgentEvent =
   | { kind: "tool-finished"; tool: string; turn?: string; call?: string; agent?: string; ms?: number; failed?: boolean }
   /** A native automatic review decision, correlated only by its exact target call id when available. */
   | { kind: "tool-review"; review: string; call?: string; turn?: string; agent?: string; status: "inProgress" | "approved" | "denied" | "timedOut" | "aborted"; scope?: string }
-  | { kind: "dialog-opened"; dialog: DialogKind; summary: string; input?: string }
-  | { kind: "dialog-closed" }
+  | ({ kind: "dialog-opened"; dialog: DialogKind; summary: string } & DialogIdentity)
+  /** No identity: all dialogs ended (session/turn boundary or an empty terminal). */
+  | ({ kind: "dialog-closed" } & DialogIdentity)
   | { kind: "notification"; text: string; audience?: "chat" }
   /** `text`: the turn's last message. */
   | { kind: "turn-finished"; text: string; turn?: string }

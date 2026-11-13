@@ -20,7 +20,7 @@ RUN case "$(dpkg --print-architecture)" in \
  && /claude --version | grep -q "^$CLAUDE_VERSION "
 
 FROM ${BASE_IMAGE}
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git tmux procps curl jq sudo \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssh-client tmux procps curl jq sudo \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /claude /usr/local/bin/claude
 COPY seed/ /opt/household/seed/

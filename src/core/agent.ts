@@ -181,6 +181,8 @@ export interface PetContext {
   /** Override the native home and initial cwd for an isolated sideworker session. */
   home?: string;
   workspace?: string;
+  /** Exact configured guest shares, never their parent or host paths. The adapter skips absent folders at launch. */
+  additionalDirectories?: readonly string[];
   /** Path inside the container of the CA certificate the gateway's interception certificates chain to. */
   caCertPath: string;
   /** Where the agent posts its events (JSON, POST). The answer body goes back to the agent. */
