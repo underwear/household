@@ -132,6 +132,7 @@ export function openChannels({ state, events, telegramApi }: ChannelDeps): OpenC
           const channel = before?.token === token ? before.channel : new TelegramChannel(bot, Number(config.chat), `house ${house.name} ${channelName(knownChannelKinds(), config)}`, config.kind === "telegram-group" ? "group" : config.kind === "telegram-dm" ? "dm" : "private");
           const primary = house.pets.filter(pet => config.pets.includes(pet.name) && !pet.sideworker && !pet.scout);
           (channel as TelegramChannel).setSoloPlace(primary.length === 1 ? petPlaceKey(primary[0]!.name, key) : undefined);
+          (channel as TelegramChannel).setForwardGeneral(config.forwardGeneral === true);
           nextChannels.set(name, { token, channel });
           results.set(key, { channel });
         }

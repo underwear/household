@@ -689,6 +689,19 @@ test("Telegram forum groups persist negative supergroup ids and reject private/b
   }
 });
 
+test("forwarding General: written as true when on, removed when off; refused for a plain Telegram DM", async () => {
+  const { config, text } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {}\n");
+  await config.addChannel("work", { kind: "telegram-group", token: "123456:fake-token", chat: "-1001234567890", pets: ["sibling"], forwardGeneral: true });
+  expect((await config.load()).houses[0]!.channels[0]).toMatchObject({ kind: "telegram-group", forwardGeneral: true });
+  expect(await text()).toContain("forwardGeneral: true");
+  await config.updateChannel("work", "-1001234567890", { forwardGeneral: null });
+  expect((await config.load()).houses[0]!.channels[0]!.forwardGeneral).toBeUndefined();
+  expect(await text()).not.toContain("forwardGeneral");
+  await config.addChannel("work", { kind: "telegram-private", token: "123456:fake-token", chat: "123", pets: ["sibling"], forwardGeneral: true });
+  expect((await config.load()).houses[0]!.channels[1]).toMatchObject({ kind: "telegram-private", forwardGeneral: true });
+  await expect(config.addChannel("work", { kind: "telegram-dm", token: "123456:fake-token", chat: "124", pets: [], forwardGeneral: true })).rejects.toThrow();
+});
+
 test("ordinary Telegram DM persists and cannot duplicate a threaded connection to the same bot chat", async () => {
   const { config } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {}\n");
   await config.addChannel("work", { kind: "telegram-dm", token: "123456:fake-token", chat: "123", pets: ["sibling"] });

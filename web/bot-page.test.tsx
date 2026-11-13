@@ -21,7 +21,7 @@ test("joining and leaving a channel: who stays the default", () => {
 
 const owl: BotView = { name: "owl", title: "Owl", ownTitle: "Owl", display: "🦉 Owl", emoji: "🦉", ownEmoji: "🦉", aliases: [], agent: "a", model: "m", settings: {}, mode: null, key: "k", problem: null, state: "running" };
 const cat: BotView = { ...owl, name: "cat", title: "Cat", ownTitle: null, display: "🐈 Cat", emoji: "🐈" };
-const channel = (chat: string, pets: string[], first: string | null) => ({ kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: chat, ownName: chat, note: null, fields: {}, shown: {}, chat, pets, default: first, problem: null });
+const channel = (chat: string, pets: string[], first: string | null) => ({ kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: chat, ownName: chat, note: null, fields: {}, shown: {}, chat, pets, default: first, forwardGeneral: false, problem: null });
 const house: WorkspaceView = { name: "work", allow: [], owners: [], pets: [owl, cat], channels: [channel("home", ["owl", "cat"], "cat"), channel("lab", [], null)] };
 const capacity = { host: { cpus: 10, memoryMiB: 32768 }, houses: [house] };
 

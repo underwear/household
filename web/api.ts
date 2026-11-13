@@ -53,6 +53,8 @@ export interface ChannelFields {
   note: string | null;
   pets: string[];
   default: string | null;
+  /** General's messages forwarded to the default bot's thread (kinds with `forwardsGeneral` only). */
+  forwardGeneral?: boolean;
 }
 
 /** A pet's settings as the forms send them: `title` null for its name's. */

@@ -7,6 +7,7 @@ import { Brain, MessagesSquare, Pickaxe } from "lucide-react";
 import { api, type HarnessModelsView, type HarnessView, type WorkspaceView, type KeyView, type BotFields, type BotView } from "../api";
 import { botPath } from "../router";
 import { Dialog } from "./dialog";
+import { EmojiField } from "./emoji-field";
 import { CheckList, ChoiceList, SelectField, StepperField, SwitchList, TextField } from "./fields";
 import { FormGrid, Page } from "./layout";
 import { channelLabel } from "./workspaces";
@@ -379,7 +380,7 @@ function EditBotDialog({ pet, onClose, save }: { pet: BotView; onClose: () => vo
           <>
             <FormGrid>
               <TextField label="Display name" maxLength={64} value={names.title} onChange={names.setTitle} placeholder={pet.name} />
-              <TextField label="Emoji" value={names.emoji} onChange={names.setEmoji} placeholder="🤖" />
+              <EmojiField value={names.emoji} onChange={names.setEmoji} />
             </FormGrid>
             {names.aliasesField}
           </>
@@ -435,7 +436,7 @@ function AddBotDialog({ agents, keys = [], house, capacity, onClose, save }: { a
               <>
                 <FormGrid>
                   <TextField label="Name" mono value={name} onChange={setName} placeholder="my_bot" maxLength={31} hint={BOT_NAME_HINT} error={name && !BOT_NAME_PATTERN.test(name) ? "Use a lowercase Latin letter first, then a–z, 0–9, _ or -." : undefined} />
-                  <TextField label="Emoji" value={names.emoji} onChange={names.setEmoji} placeholder="🤖" />
+                  <EmojiField value={names.emoji} onChange={names.setEmoji} />
                 </FormGrid>
                 <FormGrid>
                   <TextField label="Display name" maxLength={64} value={names.title} onChange={names.setTitle} placeholder={name || "Sibling"} />

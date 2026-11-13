@@ -8,7 +8,7 @@
 - **Bots** (`house bot …`): set model, effort, mode, CPUs and memory; restart, disable/enable, attach to the
   terminal, send a message, instructions, setup / on-start scripts (`bot env`), scheduled prompts (`bot tasks`),
   memory. Shared skills of a workspace: `house skills`.
-- **Channels**: more bots or chats per workspace with `house channel add|set` (`--default` picks who gets General).
+- **Channels**: more bots or chats per workspace with `house channel add|set` (`--default` picks who gets unaddressed messages; `--forward-general on` forwards what people write in a Telegram General to that bot's thread instead of ignoring it).
 - **Network**: `house workspace allow|disallow`; `house workspace revoke` ends a temporary grant a bot got in the chat.
 - **Secrets**: `house secret add <name> --host … --env VAR --workspaces …` (value on stdin). The bot sees a placeholder
   in `$VAR`; the gateway swaps in the value for those hosts only.

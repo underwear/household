@@ -57,7 +57,8 @@ const looksLikeNotice = (text: string) => /^[^\p{L}\p{N}]*(⚠|household)/iu.tes
  */
 export class TelegramChannel implements Channel, BotChat {
   get inbox(): string { return this.mode === "dm" ? "Chat" : "General"; }
-  get ignoreInboxMessages(): boolean { return this.mode !== "dm"; }
+  get ignoreInboxMessages(): boolean { return this.mode !== "dm" && !this.forwardGeneral; }
+  get forwardsInbox(): boolean { return this.forwardGeneral; }
   get stopDefaultPet(): boolean { return this.mode === "dm"; }
   readonly removePlace?: (place: Place) => Promise<boolean>;
   inInbox(place: Place): boolean { return this.mode === "dm" || place.kind === "house-inbox"; }
@@ -80,8 +81,13 @@ export class TelegramChannel implements Channel, BotChat {
   private readonly prefix: string;
   private soloPlace?: string;
 
+  /** General's messages go to a bot (forwarded into its thread) rather than being ignored: the channel's `forwardGeneral`. */
+  private forwardGeneral = false;
+
   /** Refreshed on every config reload, including when the channel connection is reused. */
   setSoloPlace(id?: string): void { this.soloPlace = id; }
+  /** Refreshed on every config reload, like `setSoloPlace`. */
+  setForwardGeneral(on: boolean): void { this.forwardGeneral = this.mode !== "dm" && on; }
 
   private attributeDm(place: Place): boolean {
     const solo = this.soloPlace !== undefined && (place.id === this.soloPlace || place.kind === "house-inbox");
@@ -564,6 +570,15 @@ export class TelegramChannel implements Channel, BotChat {
     this.shown.delete(messageId);
     this.shown.set(messageId, shown);
     if (this.shown.size > MAX_SHOWN) this.shown.delete(this.shown.keys().next().value!);
+  }
+
+  /** A person's message of General, forwarded into a place's thread (made if it is not yet). */
+  async forward(ref: MessageRef, place: Place): Promise<PostRef[]> {
+    const messageId = messageIdOf(this.prefix, ref);
+    if (messageId === undefined || this.mode === "dm" || place.kind === "house-inbox") return [];
+    const where = await this.where(place);
+    const sent = await this.sendPiece({ chat_id: this.chat, from_chat_id: this.chat, message_id: messageId, ...where }, "forwardMessage");
+    return [postRef(this.prefix, sent.message_id)];
   }
 
   async removeMessage(ref: MessageRef): Promise<void> {

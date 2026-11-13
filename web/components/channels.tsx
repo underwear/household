@@ -2,7 +2,7 @@ import { SlackSetup, slackUrl } from "./slack-setup";
 import { useState } from "react";
 import { api, type ChannelFields, type ChannelKindView, type ChannelView, type WorkspaceView, type PlatformView } from "../api";
 import { Dialog } from "./dialog";
-import { CheckList, ChoiceList, SelectField, TextField } from "./fields";
+import { CheckList, ChoiceList, SelectField, Switch, TextField } from "./fields";
 import { channelLabel } from "./workspaces";
 import { PlatformIcon } from "./icon";
 import { Cell, FormGrid, List, ListRow, Page, Section } from "./layout";
@@ -55,7 +55,7 @@ export function ChannelsPage({ house, ask, save, kinds, platforms, noteMax }: Ch
                   <span className="strong ellipsis">{channelLabel(channel)}</span>
                   <span className="id ellipsis">
                     {/* A field that says what it is (a token: its bot) shows that, not the value. */}
-                    {[...Object.entries(channel.fields).map(([key, value]) => (key in channel.shown ? (channel.shown[key] ?? "") : value)).filter(Boolean), ...(channel.kind === "slack-private" ? [] : [`chat ${channel.chat}`])].join(" · ")}
+                    {[...Object.entries(channel.fields).map(([key, value]) => (key in channel.shown ? (channel.shown[key] ?? "") : value)).filter(Boolean), ...(channel.kind === "slack-private" ? [] : [`chat ${channel.chat}`]), ...(channel.forwardGeneral ? ["General → default bot"] : [])].join(" · ")}
                     {/* A Slack DM's id says nothing to a person: a way to it instead. */}
                     {channel.kind === "slack-private" && (
                       <>
@@ -144,6 +144,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
   const [note, setNote] = useState(channel?.note ?? "");
   const [pets, setBots] = useState(channel?.pets ?? []);
   const [first, setFirst] = useState(channel?.default ?? "");
+  const [forwardGeneral, setForwardGeneral] = useState(channel?.forwardGeneral ?? false);
   const toggle = (pet: string) => setBots(pets.includes(pet) ? pets.filter((other) => other !== pet) : [...pets, pet]);
   // The channel's own order (who was there first), new ones at the end.
   const chosen = pets.flatMap((name) => house.pets.filter((pet) => pet.name === name));
@@ -197,6 +198,7 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
             pets: chosen.map((pet) => pet.name),
             // Only with two bots or more: one is the default anyway.
             default: chosen.length > 1 && pets.includes(first) ? first : null,
+            ...(spec.forwardsGeneral ? { forwardGeneral } : {}),
           }),
         children: (
           <>
@@ -264,6 +266,16 @@ export function ChannelDialog({ house, kinds, platforms = [], noteMax, channel, 
                 onChange={setFirst}
                 options={[{ value: "", label: "Who gets unaddressed messages…", disabled: true }, ...chosen.map((pet) => ({ value: pet.name, label: pet.display }))]}
               />
+            )}
+            {spec.forwardsGeneral && (
+              <div>
+                <Switch label="Forward General to the default bot" on={forwardGeneral} onChange={setForwardGeneral} />
+                <p className="hint">
+                  {forwardGeneral
+                    ? `Messages written in General are forwarded to ${chosen.length > 1 ? "the default bot" : "the bot"}'s own ${spec.kind === "telegram-group" ? "topic" : "thread"}, and it answers there.${spec.kind === "telegram-group" ? " Everyone in the group can reach it from General." : ""}`
+                    : "Messages written in General are ignored: nobody gets them."}
+                </p>
+              </div>
             )}
             <TextField label="Note" hint="Only you see this." value={note} onChange={setNote} placeholder="test bot, delete later" maxLength={noteMax} />
           </>

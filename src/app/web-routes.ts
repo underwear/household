@@ -177,10 +177,17 @@ const petBody = z.strictObject(petFields);
 // The fields every channel has, and its chat (given when it is added, never changed: another chat is another
 // channel); its kind's own (token, …) are strings, checked against the kind's descriptor (`ownFields`), then by
 // the config's rules.
-const commonChannel = { name: optional, note: optional, pets: z.array(z.string()).optional(), default: optional };
+const commonChannel = { name: optional, note: optional, pets: z.array(z.string()).optional(), default: optional, forwardGeneral: z.boolean().nullish() };
 const newChannelBody = z.object({ kind: z.string(), chat: z.string(), slackMember: z.string().optional(), ...commonChannel }).catchall(z.string());
 const NO_NEW_CHAT = "a channel's chat names it: another chat is another channel (remove this one, add that one)";
 const channelBody = z.object({ chat: z.never({ error: NO_NEW_CHAT }).optional(), ...commonChannel }).catchall(z.string());
+
+/** `forwardGeneral` on is refused for a kind without a General to forward from. */
+function generalForwarding(kinds: ChannelKinds, kind: string, on: boolean | null | undefined): void {
+  if (on && !kinds.get(kind)?.forwardsGeneral) throw new HouseholdError("forwarding General is only for Telegram threaded DMs and groups with topics");
+}
+/** As the config keeps it: written when on, removed when off; left as it is when not given. */
+const forwarding = (on: boolean | null | undefined) => (on === undefined ? {} : { forwardGeneral: on ? true : null });
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 const failure = (status: number, error: string) => json({ error }, status);
@@ -274,6 +281,7 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
           chat: channel.chat,
           pets: channel.pets.filter(name => !house.pets.find(pet => pet.name === name)?.sideworker),
           default: defaultPet(channel) ?? null,
+          forwardGeneral: channel.forwardGeneral === true,
           problem: deps.channelProblem(house.name, channelKey(channel)) ?? null,
         })),
       pets: house.pets.map((pet) => {
@@ -749,30 +757,32 @@ export function webRoutes(deps: WebRoutesDeps): ApiHandler {
       return json(await resolveSlackDm(token.trim(), member));
     }],
     ["POST", at("/channels"), async ({ request, params: [name] }) => {
-      const { kind, chat, slackMember, name: shown, note, pets, default: first, ...own } = await bodyOf(request, newChannelBody);
+      const { kind, chat, slackMember, name: shown, note, pets, default: first, forwardGeneral, ...own } = await bodyOf(request, newChannelBody);
       if (slackMember !== undefined && kind !== "slack-private") throw new HouseholdError("Slack member is only for Slack channels.");
+      generalForwarding(deps.channelKinds, kind, forwardGeneral);
       ownFields(kind, own, { chat });
       const household = await config.load();
       if (!findHouse(household, name!)) throw new NotFoundError(`unknown workspace '${name}'`); // before Telegram is asked
       const { own: kept, also } = await checkFields(deps.channelKinds, deps.checks, kind, own, { household, house: name! });
       const destination = slackMember === undefined ? undefined : await resolveSlackDm(kept.token!, slackMember);
       if (destination && destination.chat !== chat) throw new HouseholdError("Slack destination changed. Go back and find your DM again.");
-      const channel = { kind, chat, ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }) };
+      const channel = { kind, chat, ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }), ...forwarding(forwardGeneral) };
       const after = await config.addChannel(name!, channel, also, destination ? { platform: "slack", id: destination.owner } : undefined);
       if (kept.token) deps.onboarding?.release(kept.token); // a setup's wait on this bot would take the daemon's updates
       return written(after, name!, `is in a ${kind} chat`, 201);
     }],
     ["PATCH", at("/channels/([^/]+)"), async ({ request, params: [name, chat] }) => {
-      const { chat: _, name: shown, note, pets, default: first, ...own } = await bodyOf(request, channelBody);
+      const { chat: _, name: shown, note, pets, default: first, forwardGeneral, ...own } = await bodyOf(request, channelBody);
       const household = await config.load();
       const house = findHouse(household, name!);
       if (!house) throw new NotFoundError(`unknown workspace '${name}'`); // before Telegram is asked
       const known = house.channels.find((channel) => channel.chat === chat!.trim());
       if (!known) throw new NotFoundError(`workspace '${name}' has no channel of chat '${chat}'`);
       ownFields(known.kind, own);
+      generalForwarding(deps.channelKinds, known.kind, forwardGeneral);
       // A new token of its bot goes to the house's other channels on that bot too (`also`): one token per bot.
       const { own: kept, also } = await checkFields(deps.channelKinds, deps.checks, known.kind, own, { household, house: name!, chat: known.chat });
-      const fields = { ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }) };
+      const fields = { ...kept, ...(shown === undefined ? {} : { name: shown }), ...(note === undefined ? {} : { note: note?.trim() || null }), ...(pets === undefined ? {} : { pets }), ...(first === undefined ? {} : { default: first }), ...forwarding(forwardGeneral) };
       const after = await config.updateChannel(name!, chat!.trim(), fields, also);
       if (kept.token) deps.onboarding?.release(kept.token);
       if (also.length > 0) events.info(`web: workspace ${name}: its bot's new token also went to its channels of chat ${also.map((other) => other.chat).join(", ")}`);

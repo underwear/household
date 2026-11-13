@@ -252,7 +252,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
     owners: [{ platform: "telegram", id: "100200300", note: null, problem: null }],
     channels: [
       // Its token in full (the owner's own screen), and what it is: its bot (its id until Telegram has said its @username).
-      { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "DM", ownName: "DM", note: null, fields: { token: BOT }, shown: { token: expect.stringMatching(/^(bot 4242|@fake_bot)$/) as never }, chat: "100200300", pets: ["sibling"], default: "sibling", problem: null },
+      { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "DM", ownName: "DM", note: null, fields: { token: BOT }, shown: { token: expect.stringMatching(/^(bot 4242|@fake_bot)$/) as never }, chat: "100200300", pets: ["sibling"], default: "sibling", forwardGeneral: false, problem: null },
     ],
     pets: [{ name: "sibling", cpus: 2, memoryMiB: 1024, enabled: true, title: "Sibling", ownTitle: null, display: "🤖 Sibling", emoji: "🤖", ownEmoji: null, aliases: [], agent: "claude-code-tmux", model: "opus", reasoningEffort: null, settings: {}, lifecycle: null, mode: "bypassPermissions", key: "claude", problem: null, state: "running" }],
   };
@@ -437,12 +437,17 @@ test("channels, owners and pets: added, changed and removed in household.yaml (c
   // Channels: a second one with both pets (default required), changed, a problem shown.
   const channel = { kind: "telegram-private", token: OTHER_BOT, chat: "555", name: "Home", note: "test bot", pets: ["sibling", "chair"], default: "chair" };
   const two = await house(await call("POST", "/api/houses/work/channels", channel));
-  expect(two.channels[1]).toEqual({ kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "Home", ownName: "Home", note: "test bot", fields: { token: OTHER_BOT }, shown: { token: "@fake_bot" }, chat: "555", pets: ["sibling", "chair"], default: "chair", problem: null });
+  expect(two.channels[1]).toEqual({ kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "Home", ownName: "Home", note: "test bot", fields: { token: OTHER_BOT }, shown: { token: "@fake_bot" }, chat: "555", pets: ["sibling", "chair"], default: "chair", forwardGeneral: false, problem: null });
   const noDefault = await call("POST", "/api/houses/work/channels", { ...channel, chat: "556", default: null });
   expect(((await noDefault.json()) as { error: string }).error).toContain("default is required when a channel has two bots or more");
   problems.set("work/telegram-private:555", "bot secret 'telegram-home' is missing or unreadable");
   const edited = await house(await call("PATCH", "/api/houses/work/channels/555", { name: null }));
   expect(edited.channels[1]).toMatchObject({ name: "Telegram Bot DM (threaded)", ownName: null, chat: "555", problem: "bot secret 'telegram-home' is missing or unreadable" });
+  // Forwarding General: a switch of a threaded channel; refused for a plain DM, which has no General.
+  expect((await house(await call("PATCH", "/api/houses/work/channels/555", { forwardGeneral: true }))).channels[1]).toMatchObject({ forwardGeneral: true });
+  expect((await house(await call("PATCH", "/api/houses/work/channels/555", { forwardGeneral: false }))).channels[1]).toMatchObject({ forwardGeneral: false });
+  const plainDm = await call("POST", "/api/houses/work/channels", { kind: "telegram-dm", token: OTHER_BOT, chat: "557", pets: [], forwardGeneral: true });
+  expect(((await plainDm.json()) as { error: string }).error).toContain("forwarding General is only for");
 
   // Removing chair, the default of a channel that keeps one pet: it leaves that channel, sibling is its default now.
   const removed = await house(await call("DELETE", "/api/houses/work/pets/chair"));
@@ -455,7 +460,7 @@ test("channels, owners and pets: added, changed and removed in household.yaml (c
   expect(yaml).toContain("# the first");
   expect(yaml).toContain("# keep me");
   expect(yaml).not.toContain("chair");
-  expect(applied).toHaveLength(12); // every write but the refused ones
+  expect(applied).toHaveLength(14); // every write but the refused ones
 });
 
 test("a pet that is the default of a channel keeping two pets or more is not removed: the owner picks another default", async () => {

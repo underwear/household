@@ -17,6 +17,7 @@ import {
 } from "../scout-api";
 import { capabilityPath, workspacePath, navigate, botPath, scoutPath, type ScoutTab } from "../router";
 import { Dialog, useDialog } from "./dialog";
+import { EmojiField } from "./emoji-field";
 import { CheckList, ChoiceList, FormGroup, StepperField, TextField } from "./fields";
 import { FeatureOff } from "./workspace";
 import { Cell, Cluster, FormGrid, List, ListRow, Page, Panel, Section, Stack, Tabs } from "./layout";
@@ -420,7 +421,7 @@ export function ScoutDialog({
             {!scout && <TextField label="Name" mono value={name} onChange={setName} error={nameError || undefined} maxLength={31} placeholder="prod-ops" hint="Bots call it by this name." />}
             <FormGrid>
               <TextField label="Title" value={title} onChange={setTitle} placeholder="Prod Ops" />
-              <TextField label="Emoji" value={emoji} onChange={setEmoji} />
+              <EmojiField value={emoji} onChange={setEmoji} fallback="🧭" />
             </FormGrid>
             <TextField label="Description" value={description} onChange={setDescription} placeholder="Prod incidents through Heroku: logs, config, database" hint="Bots choose a scout by it: it is in their prompt (its first 300 characters). Say when to call it." />
           </FormGroup>

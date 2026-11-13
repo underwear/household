@@ -191,6 +191,8 @@ export interface ChannelView {
   pets: string[];
   /** The pet that gets what is addressed to none; none for a channel without pets. */
   default: string | null;
+  /** General's messages are forwarded to the default bot's own thread (kinds with `forwardsGeneral`). */
+  forwardGeneral: boolean;
   /** Why it is not open (its token not a bot's, …); null when it is. */
   problem: string | null;
 }

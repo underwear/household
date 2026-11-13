@@ -8,7 +8,9 @@ Each bot gets its own topic. Topics created manually in Telegram are discovered 
 
 The `places` tool lists discovered topics and advertises `canCreatePlace`. On supporting channels, `place_create({title, place?})` creates another shared topic; `place` selects its channel, or the current request channel is used. This is an optional adapter capability: private Telegram chats and Slack do not advertise it. Only the channel default bot can list, create, read or write these topics. Other bots, sideworkers and scouts cannot access them, even by passing a known place id. Helpers cannot be spawned into these topics; select the parent bot’s own place instead.
 
- Messages written in General are ignored: they are not delivered to any bot, including mentions, replies and commands. This also applies to General in private Telegram Threaded Mode. Scouts and sideworkers spawned from the group use that channel; a sideworker with `placement: "thread"` gets its own topic, while `placement: "same"` shares the requesting place. A failed destination prevents the sideworker's task from starting.
+By default, messages written in General are ignored: they are not delivered to any bot, including mentions, replies and commands. This also applies to General in private Telegram Threaded Mode.
+
+Turn on **Forward General to the default bot** in the channel's settings (or `forwardGeneral: true` in the config, or `house channel set <workspace> <chat> --forward-general on`) to change that. Each message written in General is then forwarded into the default bot's own topic (a message naming another bot of the channel goes to that bot's), and the bot answers there. General gets a short note under the message with a link to the topic, at most once every ten minutes per person. Edits in General are passed to the bot but not forwarded again. In a group, everyone who writes in General reaches the bot this way, as a guest unless they are an owner. The bot needs no extra rights for this. Turn it off and General is ignored again. Scouts and sideworkers spawned from the group use that channel; a sideworker with `placement: "thread"` gets its own topic, while `placement: "same"` shares the requesting place. A failed destination prevents the sideworker's task from starting.
 
 Visible copies of communication between bots and helpers use collapsed, expandable quotes in Telegram.
 
@@ -25,4 +27,5 @@ token: <bot token>
 chat: "-1001234567890"
 pets: [sibling]
 default: sibling
+forwardGeneral: true # optional: General's messages go to sibling's topic
 ```

@@ -38,8 +38,8 @@ const work: WorkspaceView = {
     { platform: "telegram", id: "@oleg", note: null, problem: "'@oleg' is not a Telegram user id" },
   ],
   channels: [
-    { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "DM", ownName: "DM", note: "test bot, delete later", fields: { token: TOKEN }, shown: { token: "@my_household_bot" }, chat: "100200300", pets: ["sibling", "chair"], default: "sibling", problem: null },
-    { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "Telegram Bot DM (threaded)", ownName: null, note: null, fields: { token: "pasted wrong" }, shown: { token: null }, chat: "42", pets: [], default: null, problem: "its token is not a bot token" },
+    { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "DM", ownName: "DM", note: "test bot, delete later", fields: { token: TOKEN }, shown: { token: "@my_household_bot" }, chat: "100200300", pets: ["sibling", "chair"], default: "sibling", forwardGeneral: false, problem: null },
+    { kind: "telegram-private", platform: "telegram", label: "Telegram Bot DM (threaded)", name: "Telegram Bot DM (threaded)", ownName: null, note: null, fields: { token: "pasted wrong" }, shown: { token: null }, chat: "42", pets: [], default: null, forwardGeneral: false, problem: "its token is not a bot token" },
   ],
   pets: [
     { name: "sibling", title: "Sibling", ownTitle: "Sibling", display: "🦉 Sibling", emoji: "🦉", ownEmoji: "🦉", aliases: ["Sib"], agent: "claude-code-tmux", model: "opus", settings: {}, mode: "manual", key: "claude", problem: null, state: "running" },
@@ -182,7 +182,7 @@ test("the forms render with what they edit: a channel's bots to tick and its def
   const fresh = form(<ChannelDialog house={work} kinds={kinds} onClose={() => {}} save={async () => {}} />);
   expect(fresh).toContain("Add channel");
   expect(fresh).toMatch(/type="radio"[^>]*checked=""[^>]*value="telegram-private"/);
-  expect(fresh).toContain("a thread per bot. Messages in General are ignored."); // its line, from the kind
+  expect(fresh).toContain("a thread per bot. Messages in General are ignored, or forwarded to the default bot&#x27;s thread."); // its line, from the kind
   expect(fresh).toContain(">Next<");
   expect(fresh).not.toContain("Bot token");
   expect(renderToStaticMarkup(<ChannelDialog house={work} kinds={kinds} platforms={platforms} onClose={() => {}} save={async () => {}} />)).toContain('<span class="avatar icon small" aria-hidden="true"><svg'); // the kind's platform icon
@@ -205,8 +205,13 @@ test("the forms render with what they edit: a channel's bots to tick and its def
   expect(pet).not.toContain("<select"); // what runs it and its size have their own tabs
   expect(form(<HarnessFields agents={agents} pet={{ ...work.pets[1]!, model: "haiku", problem: null }} />)).toContain('<option value="haiku" selected="">haiku</option>');
   const owl = form(<BotDialog agents={agents} pet={work.pets[0]!} onClose={() => {}} save={async () => {}} />);
-  expect(owl).toMatch(/<label[^>]*>Emoji<\/label><input[^>]*placeholder="🤖"[^>]*value="🦉"/); // its own, the default as the hint
-  expect(form(<BotDialog agents={agents} pet={work.pets[1]!} onClose={() => {}} save={async () => {}} />)).toMatch(/placeholder="🤖"[^>]*value=""/);
+  // Its emoji on a button that opens the picker; none: the default, dimmed.
+  expect(owl).toMatch(/<label[^>]*>Emoji<\/label><button[^>]*class="control emoji-trigger"[^>]*aria-expanded="false"[^>]*><span class="emoji-trigger-mark"[^>]*>🦉<\/span><span class="emoji-trigger-text">Change<\/span>/);
+  expect(form(<BotDialog agents={agents} pet={work.pets[1]!} onClose={() => {}} save={async () => {}} />)).toMatch(/<span class="emoji-trigger-mark faint"[^>]*>🤖<\/span><span class="emoji-trigger-text">Choose…<\/span>/);
+  // A threaded channel has the switch to forward General; a plain DM has not.
+  const groupForm = form(<ChannelDialog house={work} kinds={[telegramGroup]} channel={{ ...work.channels[0]!, kind: "telegram-group", forwardGeneral: true }} onClose={() => {}} save={async () => {}} />);
+  expect(groupForm).toMatch(/Forward General to the default bot<\/span><button type="button" role="switch" aria-checked="true"/);
+  expect(groupForm).toContain("forwarded to the default bot&#x27;s own topic");
   const wizard = form(<BotDialog agents={agents} keys={keys} house={work} capacity={capacity} onClose={() => {}} save={async () => {}} />);
   expect(wizard).toContain('<li class="current" aria-current="step">Bot</li><li>Harness</li><li>Resources</li>'); // three steps, the first one now
   expect(wizard).toContain(">Display name<");

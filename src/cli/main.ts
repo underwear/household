@@ -283,6 +283,7 @@ async function main(argv: string[]): Promise<void> {
       kind: { type: "string" },
       token: { type: "string" },
       "app-token": { type: "string" },
+      "forward-general": { type: "string" },
       key: { type: "string" },
       provider: { type: "string" },
       value: { type: "string" },

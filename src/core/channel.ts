@@ -131,6 +131,13 @@ export interface Channel {
   readonly inbox: string;
   /** User messages in the inbox are discarded before routing, journaling or commands. */
   readonly ignoreInboxMessages?: boolean;
+  /**
+   * Optional: copies a person's message of the inbox (`ref`) into `place` as a forward, so it reads there as it
+   * was written (files too). Resolves to the copy's refs.
+   */
+  forward?(ref: MessageRef, place: Place): Promise<PostRef[]>;
+  /** What people write in the inbox goes to a bot, forwarded into its place (`forward`): the channel's `forwardGeneral`, now. */
+  readonly forwardsInbox?: boolean;
   /** Stop controls in a shared conversation target its configured default pet. */
   readonly stopDefaultPet?: boolean;
   /** Adapter-discovered shared topics, persisted by the adapter; routed to the channel's default bot. */

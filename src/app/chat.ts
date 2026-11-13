@@ -84,6 +84,8 @@ const REACTIONS_PER_MINUTE = 20;
 const MAX_CARDS = 1000;
 /** How often one person is told, at most, that a message where no bot reads goes to nobody. */
 const MISDIRECTED_EVERY_MS = 60 * 60 * 1000;
+/** How often General is told, under a person's message, where its forwarded copy went. */
+const FORWARDED_NOTE_EVERY_MS = 10 * 60 * 1000;
 /** A reply's buttons: at most this many rows of this many, each label one line of this many characters. */
 export const BUTTONS = { rows: 4, perRow: 4, labelChars: 64 };
 
@@ -195,6 +197,8 @@ export class Chat {
   private readonly told = new Set<string>();
   /** When a person was last told that their message where no bot reads goes to nobody, by `house/channel/sender`. */
   private readonly misdirectedAt = new Map<string, number>();
+  /** When General was last told where a person's forwarded messages went, by `house/place/sender`. */
+  private readonly forwardedAt = new Map<string, number>();
   private readonly budgets = new Map<string, TokenBucket>();
   /**
    * Household's cards this run follows (a press goes to whoever posted it). A press on one from an earlier run is
@@ -985,7 +989,8 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     }
     // `/stop` in the pet's own place (not relayed, not an edit): Household stops the pet; the pet never gets it.
     // Kept by its ref in no journal, so a channel replaying it stops nothing twice.
-    if (message.kind === "text" && (topic || thread === pet || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && message.edits === undefined && !message.relayed && !message.attachments && STOP_COMMAND.test(message.text.trim())) {
+    const fromGeneral = !thread && !topic && place.kind === "house-inbox" && channel.forwardsInbox === true;
+    if (message.kind === "text" && (topic || thread === pet || fromGeneral || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && message.edits === undefined && !message.relayed && !message.attachments && STOP_COMMAND.test(message.text.trim())) {
       const stopping = channel.stopDefaultPet ? configured.pets.find(candidate => candidate.name === defaultPet(config)) : pet;
       if (!stopping) return;
       if (this.records.recordByRef(house, message.ref)) return;
@@ -997,6 +1002,8 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       if ((await this.stopPet(house, stopping.name)) === "idle") await this.noticeIn(house, stopping.name, at, `${petTitle(stopping)} is not doing anything right now`);
       return;
     }
+    // A replay of a message already taken (the poller after a crash): forwarded once only.
+    const replay = !!this.records.recordByRef(house, message.ref);
     const { record, edit } = this.remembered(house, pet.name, place, message, { ...(shown ? { shown } : {}), ...(where.facts ? { kept: where.facts } : {}) });
     const own = { channel, place: petPlace(pet, petPlaceKey(pet.name, key)) };
     if (message.kind === "unsupported") return this.noticeIn(house, pet.name, own, `${UNSUPPORTED_NAMES[message.what] ?? message.what} can't be passed on yet`);
@@ -1009,7 +1016,39 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       ? { kind: "interaction", id: record.id, on: { id: quoted.id, excerpt: quoted.excerpt }, relayed: true }
       : { kind: edit ? "edit" : "message", id: record.id, ...(relayed ? { relayed } : {}) };
     const files = attachments ? { attachments } : {};
+    // Written in General of a channel that forwards it: a copy goes first where the pet answers it (its own thread;
+    // a helper's shared place). Never again for an edit or a replay, nor for a message the security system took
+    // out and the owner sent anyway (`rawApproved`: the original is gone, and its words must not be shown).
+    const answersIn = this.channels.placeOf(pet, key);
+    if (fromGeneral && channel.forward && !rawApproved && !replay && edits === undefined && !message.interaction && answersIn.kind !== "house-inbox") {
+      await this.forwarded(house, pet.name, channel, { channel, place: answersIn }, message);
+    }
     this.delivery.send(house, pet.name, { text, origin: "chat", ref, ...(edits === undefined ? {} : { edits }), header: { event, ...envelope }, ...where, ...files });
+  }
+
+  /**
+   * A person's message of General, forwarded into the pet's own place (the channel's `forwardGeneral`): the pet
+   * answers there, so the copy shows what it answers. General is told where it went, under the message, once in
+   * a while per person (never every message: people may talk there). A copy that fails is said in the place
+   * instead, as an excerpt. Never throws.
+   */
+  private async forwarded(house: string, pet: string, channel: Channel, own: { channel: Channel; place: Place }, message: InboundMessage & { kind: "text" }): Promise<void> {
+    try {
+      await channel.forward!(message.ref, own.place);
+    } catch (error) {
+      this.events.error(`workspace ${house}: a message of ${channel.inbox} was not forwarded to ${own.place.title}: ${(error as Error).message}`);
+      await this.noticeIn(house, pet, own, `From ${channel.inbox}: "${headAndTail(withFiles(message.text, message.attachments))}"`);
+      return;
+    }
+    const name = `${house}/${own.place.id}/${message.from.ref}`;
+    const last = this.forwardedAt.get(name);
+    if (!channel.answer || (last !== undefined && Date.now() - last < FORWARDED_NOTE_EVERY_MS)) return;
+    keep(this.forwardedAt, name, () => this.forwardedAt.set(name, Date.now()));
+    // Not in the delivery's way.
+    void (async () => {
+      const link = await channel.placeLink?.(own.place, { create: false }).catch(() => undefined);
+      await channel.answer!(message, `Forwarded to ${own.place.title}${link ? `: ${link}` : ""}`);
+    })().catch((error: Error) => this.events.error(`workspace ${house}: a note under a message in ${channel.inbox} was not posted: ${error.message}`));
   }
 
   /**
@@ -1066,7 +1105,8 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const at = first?.place === undefined ? undefined : this.channels.spotAt(house, first.place);
     const own = at && this.channels.spotsOf(house, pet).spots.find((spot) => spot.key === at.key);
     if (!first || !at?.channel || !own) return;
-    if (at.channel.inInbox?.(own.place)) return;
+    // A channel that forwards General's messages has shown them in the place already (`forwarded`).
+    if (at.channel.inInbox?.(own.place) || at.channel.forwardsInbox) return;
     const batch = fresh.filter(({ place }) => place === first.place);
     for (const message of batch) keep(this.noted, noted(message), () => this.noted.add(noted(message)));
     const more = batch.length - 1;

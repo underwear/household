@@ -32,7 +32,8 @@ export const telegramPrivate: ChannelKindSpec = {
   platform: "telegram",
   audience: "private",
   label: "Telegram Bot DM (threaded)",
-  description: "Your private chat with the workspace's bot: a thread per bot. Messages in General are ignored.",
+  description: "Your private chat with the workspace's bot: a thread per bot. Messages in General are ignored, or forwarded to the default bot's thread.",
+  forwardsGeneral: true,
   chat: { key: "chat", label: "Chat id", placeholder: "your Telegram user id", mono: true },
   fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather; the bot needs Threaded Mode on." }],
 };
@@ -43,15 +44,16 @@ export const telegramGroup: ChannelKindSpec = {
   kind: "telegram-group",
   audience: "group",
   label: "Telegram Bot Group (topics)",
-  description: "A private group with Topics on: a topic per bot, more topics for the default bot. Messages in General are ignored; everyone in the group sees the rest.",
+  description: "A private group with Topics on: a topic per bot, more topics for the default bot. Messages in General are ignored, or forwarded to the default bot's topic; everyone in the group sees the rest.",
   replyFormat: { name: telegramPrivate.replyFormat!.name, instructions: telegramPrivate.replyFormat!.instructions },
   chat: { key: "chat", label: "Group chat id", placeholder: "-1001234567890", mono: true, hint: "A negative number, starting with -100.", help: { title: "Where do I find it?", steps: ["Open https://web.telegram.org/a in a browser and sign in.", "Open your group: the address now ends in #-100…", "Copy everything after #, the minus too, and paste it here."] } },
   fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather. Make the bot a group admin with Manage topics and Delete messages." }],
 };
 
 /** An ordinary private chat: all pets speak in the same conversation. */
+const { forwardsGeneral: _threadedOnly, ...withoutGeneral } = telegramPrivate;
 export const telegramDm: ChannelKindSpec = {
-  ...telegramPrivate,
+  ...withoutGeneral,
   kind: "telegram-dm",
   label: "Telegram Bot DM",
   description: "Your private chat with the workspace's bot, without threads. Reply to a bot's message or address it by name; otherwise the default bot answers.",

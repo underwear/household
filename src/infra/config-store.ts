@@ -92,8 +92,10 @@ export interface ChannelFields {
   name?: string | null;
   pets?: string[];
   default?: string | null;
+  /** General's messages forwarded to the default bot's thread; null removes it (off). */
+  forwardGeneral?: boolean | null;
   /** Its kind's own fields (Telegram's `bot`, `chat`): strings, checked by the config's rules. */
-  [own: string]: string | string[] | null | undefined;
+  [own: string]: string | string[] | boolean | null | undefined;
 }
 
 /**

@@ -315,6 +315,27 @@ test("the inbox is General: posts and notices there have no thread, and none is 
   expect(api.sent("sendMessage").map((params) => [params.message_thread_id, params.text])).toEqual([[undefined, "🏠 Household: declined"]]);
 });
 
+test("forwarding General: off by default, a switch per channel; a person's message is forwarded into a place's thread, never in a plain DM", async () => {
+  const { api, open, bot } = setup();
+  const channel = open();
+  expect(channel.ignoreInboxMessages).toBe(true);
+  channel.setForwardGeneral(true);
+  expect(channel.ignoreInboxMessages).toBe(false);
+  const copies = await channel.forward(ref(42), sibling);
+  const thread = Number([...api.topics.keys()].find((key) => key.startsWith(`${OWNER}/`))!.split("/")[1]);
+  expect(api.sent("forwardMessage")).toEqual([{ chat_id: OWNER, from_chat_id: OWNER, message_id: 42, message_thread_id: thread }]);
+  expect(copies).toHaveLength(1);
+  expect(await channel.forward(ref(43), inbox)).toEqual([]); // General into General: nothing
+  channel.setForwardGeneral(false);
+  expect(channel.ignoreInboxMessages).toBe(true);
+  const dm = new TelegramChannel(bot(), 777, "dm", "dm");
+  stops.push(() => dm.stop());
+  dm.setForwardGeneral(true);
+  expect(dm.ignoreInboxMessages).toBe(false); // a plain DM has no General to ignore
+  expect(await dm.forward("telegram.123456.777.5" as MessageRef, sibling)).toEqual([]);
+  expect(api.sent("forwardMessage")).toHaveLength(1);
+});
+
 test("unformatted posts preserve text cut to Telegram's limit, and give the last piece's ref; seen mark", async () => {
   const { api, open } = setup();
   const channel = open();

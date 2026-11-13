@@ -197,6 +197,82 @@ test("General's notes: once a batch from the inbox is delivered, one pair (where
   await chat.stop();
 });
 
+test("forwarding General: a copy goes to the bot's own thread before the bot gets it; General is told where, once in a while; edits are not forwarded again", async () => {
+  const { chat, calls, opened } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const forwarded: string[] = [];
+  const answers: string[] = [];
+  Object.assign(channel, {
+    forwardsInbox: true,
+    forward: async (from: string, place: Place) => {
+      forwarded.push(`${from} → ${place.title}`);
+      calls.push(`forward ${from}`);
+      return [];
+    },
+    answer: async (message: { ref: string }, note: string) => {
+      answers.push(`${message.ref}: ${note}`);
+      return [];
+    },
+  });
+  await channel.say(text("in General"));
+  await channel.say(text("again", { external: {} }));
+  await channel.say(text("again!", { edits: ref("again"), external: {} }));
+  await channel.say(text("Chair, sit", { external: {} })); // called by name: its thread
+  await channel.say(text("in thread", { place: CHAIR, external: {} })); // not General: no copy
+  expect(forwarded).toEqual([`${ref("in General")} → 🤖 Sibling`, `${ref("again")} → 🤖 Sibling`, `${ref("Chair, sit")} → 🤖 Chair`]);
+  // The copy is there before the bot gets it.
+  expect(calls.map((call) => call.split(":")[0])).toEqual([
+    `forward ${ref("in General")}`, "send work/sibling in General",
+    `forward ${ref("again")}`, "send work/sibling again",
+    "send work/sibling again!",
+    `forward ${ref("Chair, sit")}`, "send work/chair Chair, sit",
+    "send work/chair in thread",
+  ]);
+  await waitFor(() => answers.length === 2);
+  expect(answers).toEqual([`${ref("in General")}: Forwarded to 🤖 Sibling: https://chat.example/pet%3Asibling%40telegram-private%3A1`, `${ref("Chair, sit")}: Forwarded to 🤖 Chair: https://chat.example/pet%3Achair%40telegram-private%3A1`]);
+  // Delivered: no "Passed to the thread" pair, the copy said it already.
+  chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("in General"), place: INBOX })] });
+  await Bun.sleep(20);
+  expect(channel.calls.filter((call) => call.startsWith("notice"))).toEqual([]);
+  await chat.stop();
+});
+
+test("forwarding General: a copy that fails is said in the bot's thread as an excerpt, and the bot still gets the message", async () => {
+  const { chat, calls, opened, lines } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const answers: string[] = [];
+  Object.assign(channel, { forwardsInbox: true, forward: async () => { throw new Error("not enough rights"); }, answer: async (_: unknown, note: string) => { answers.push(note); return []; } });
+  await channel.say(text("in General"));
+  expect(calls.map((call) => call.split(":")[0])).toEqual(["send work/sibling in General"]);
+  await Bun.sleep(20);
+  expect(answers).toEqual([]); // General is not told it went where it did not
+  expect(channel.calls).toContain('notice 🤖 Sibling: From General: "in General"');
+  expect(lines.some((line) => line.includes("was not forwarded to 🤖 Sibling: not enough rights"))).toBe(true);
+  await chat.stop();
+});
+
+test("forwarding General: a replay is not forwarded again; /stop in General stops the bot; switched off, nothing is forwarded", async () => {
+  const { chat, calls, opened, stops } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const forwarded: string[] = [];
+  Object.assign(channel, { forwardsInbox: true, forward: async (from: string) => { forwarded.push(from); return []; } });
+  const once = text("in General");
+  await channel.say(once);
+  await channel.say({ ...once }); // the poller again, after a crash
+  expect(forwarded).toEqual([ref("in General")]);
+  stops.push({ status: "stopped" });
+  await channel.say(text("/stop", { external: {} }));
+  expect(calls).toContain("interrupt work/sibling");
+  expect(forwarded).toHaveLength(1); // a command, not a message: not forwarded
+  Object.assign(channel, { forwardsInbox: false });
+  await channel.say(text("off now", { external: {} }));
+  expect(forwarded).toHaveLength(1);
+  await chat.stop();
+});
+
 test("routing in a channel: a pet's thread, a quote of a pet's line, a pet's name at the start; anything else to the default", async () => {
   const { chat, calls, opened } = setup();
   await chat.setHouses([work()]);

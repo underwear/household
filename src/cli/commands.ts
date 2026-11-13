@@ -23,7 +23,7 @@ export const MORE_USAGE = `  house workspace show <workspace>             a work
   house timezone [<zone>]        the Household timezone (IANA, e.g. Europe/Madrid): show it, or set it
   house key set <name> [--note <text>] [--value <value>]
                                  change a key's note or value (the value from stdin when neither is given)
-  house channel set <workspace> <chat> [--bots a,b] [--default a] [--name <name>] [--note <text>] [--token <token>] [--app-token <xapp-token>]
+  house channel set <workspace> <chat> [--bots a,b] [--default a] [--name <name>] [--note <text>] [--token <token>] [--app-token <xapp-token>] [--forward-general on|off]
   house owner set <workspace> <platform> <id> --note <text>
   house bot show <workspace> <bot>   a bot: what runs it, its allocation, its state and what it uses now
   house bot enable <workspace> <bot>
@@ -62,6 +62,7 @@ export interface MoreValues {
   name?: string;
   token?: string;
   "app-token"?: string;
+  "forward-general"?: string;
   now?: boolean;
   at?: string;
   cron?: string;
@@ -256,7 +257,9 @@ export async function runMore(paths: Paths, command: string | undefined, args: s
   }
   if (command === "channel" && a === "set" && args.length === 3) {
     const pets = values.pets?.split(",").map((pet) => pet.trim()).filter(Boolean);
-    const fields = { pets, default: values.default, name: values.name, note: values.note, token: values.token, appToken: values["app-token"] };
+    const forward = values["forward-general"];
+    if (forward !== undefined && forward !== "on" && forward !== "off") throw new HouseholdError("--forward-general takes on or off");
+    const fields = { pets, default: values.default, name: values.name, note: values.note, token: values.token, appToken: values["app-token"], forwardGeneral: forward === undefined ? undefined : forward === "on" };
     await api(paths, "PATCH", `${housePath(b!)}/channels/${enc(c!)}`, Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
     say(`workspace '${b}': channel of chat ${c} changed`);
     return true;

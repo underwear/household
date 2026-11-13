@@ -89,6 +89,8 @@ export interface ChannelKindSpec {
   description: string;
   chat: ChannelKindField;
   fields: ChannelKindField[];
+  /** The kind can pass what people write in its inbox (Telegram: General) on to the default bot's own place: the `forwardGeneral` switch. */
+  forwardsGeneral?: true;
 }
 
 /** The kinds of channel a build knows, by kind (the app's registry). */
@@ -130,6 +132,11 @@ export interface ChannelConfig {
   chat: string;
   pets: string[];
   default?: string;
+  /**
+   * What people write in the inbox (Telegram: General), which is ignored otherwise, is forwarded into the default
+   * bot's own place and goes to that bot (or to the bot it addresses). Only kinds with `forwardsGeneral`.
+   */
+  forwardGeneral?: boolean;
 }
 
 /** The channel's name: the config's, or its kind's label. Shown to pets in the header, and in the UI. */
