@@ -155,7 +155,7 @@ const MODELS = ["opus", "sonnet", "haiku", "fable"] as const;
  * https://code.claude.com/docs/en/model-config#adjust-effort-level */
 function claudeModelOptions(model: string) {
   if (!(MODELS as readonly string[]).includes(model)) return { id: model, label: model };
-  return { id: model, label: model, defaultReasoningEffort: model === "fable" ? "high" : "medium",
+  return { id: model, label: model, defaultReasoningEffort: "medium",
     supportedReasoningEfforts: [
       { reasoningEffort: "low", description: "Quick exchanges and small changes" },
       { reasoningEffort: "medium", description: "Day-to-day engineering work with a clear scope" },
@@ -190,7 +190,7 @@ const SETTINGS = [
   },
 ] as const;
 
-/** `claude --permission-mode` choices (2.1.296 `--help`), as its own screens call them. */
+/** `claude --permission-mode` choices (2.1.323 `--help`), as its own screens call them. */
 const MODES = [
   { id: "auto", label: "Auto" },
   { id: "manual", label: "Manual" },
@@ -235,6 +235,8 @@ export const claudeCodeTmux: AgentAdapter = {
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
     // Fast mode is billed to credits whatever the plan, and nothing in a pet asks for it: no `/fast`, ever.
     CLAUDE_CODE_DISABLE_FAST_MODE: "1",
+    // No telemetry, but in auto mode: claude 2.1.323 has no auto-mode classifier without it, and refuses every action.
+    ...(mode === "auto" ? {} : { DISABLE_TELEMETRY: "1" }),
     // Setup may use its full five-minute guest limit plus termination grace and transport time.
     MCP_TOOL_TIMEOUT: "330000",
     CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: "330000",

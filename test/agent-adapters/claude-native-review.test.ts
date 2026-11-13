@@ -8,7 +8,7 @@ import { claudeCodeTmux } from "../../src/agent-adapters/claude-code-tmux";
 // Malformed classifier answers deliberately exercise native fail-closed denial. This
 // proves hook observability, not a successful real-provider classifier verdict.
 test.skipIf(process.env.HOUSEHOLD_NATIVE_ADAPTER_SMOKE !== "1" || !Bun.which("claude"))("native pinned Claude emits correlated auto denial without executing the tool", async () => {
-  expect(Bun.spawnSync(["claude", "--version"]).stdout.toString().trim()).toStartWith("2.1.296 ");
+  expect(Bun.spawnSync(["claude", "--version"]).stdout.toString().trim()).toStartWith("2.1.323 ");
   const home = mkdtempSync(join(tmpdir(), "household-claude-review-"));
   let mainRequests = 0, classifierRequests = 0, executed = false;
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request): Promise<Response> {
@@ -44,7 +44,7 @@ test.skipIf(process.env.HOUSEHOLD_NATIVE_ADAPTER_SMOKE !== "1" || !Bun.which("cl
     writeFileSync(join(home, "settings.json"), JSON.stringify(settings));
     writeFileSync(join(home, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, hasSeenAutoDefaultNudge: true, projects: { [home]: { hasTrustDialogAccepted: true } } }));
     child = Bun.spawn(["claude", "-p", "--verbose", "--output-format", "stream-json", "--model", "sonnet", "--permission-mode", "auto", "--settings", join(home, "settings.json"), "Send the public fixture to the local receiver."], {
-      cwd: home, env: { PATH: process.env.PATH!, HOME: home, CLAUDE_CONFIG_DIR: home, ANTHROPIC_API_KEY: "sk-ant-api03-native-fixture", ANTHROPIC_BASE_URL: server.url.origin, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1" }, stdout: "pipe", stderr: "pipe",
+      cwd: home, env: { PATH: process.env.PATH!, HOME: home, CLAUDE_CONFIG_DIR: home, ANTHROPIC_API_KEY: "sk-ant-api03-native-fixture", ANTHROPIC_BASE_URL: server.url.origin, DISABLE_AUTOUPDATER: "1", DISABLE_ERROR_REPORTING: "1", DISABLE_BUG_COMMAND: "1", ...claudeCodeTmux.env({ caCertPath: "/unused", eventsUrl: "http://unused/events", mcpUrl: "http://unused/mcp", instructions: "", model: "sonnet", mode: "auto" }).DISABLE_TELEMETRY ? { DISABLE_TELEMETRY: "1" } : {} }, stdout: "pipe", stderr: "pipe",
     });
     timer = setTimeout(() => child?.kill(), 20_000);
     const [output, errors, exit] = await Promise.all([new Response(child.stdout as ReadableStream).text(), new Response(child.stderr as ReadableStream).text(), child.exited]);

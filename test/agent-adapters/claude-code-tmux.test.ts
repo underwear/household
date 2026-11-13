@@ -31,9 +31,14 @@ test("provisioning: CA trust in env; the key's placeholder by its kind, the real
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
     // Fast mode is billed to credits whatever the plan: never in a pet.
     CLAUDE_CODE_DISABLE_FAST_MODE: "1",
+    // No telemetry (the image no longer turns it off for every bot).
+    DISABLE_TELEMETRY: "1",
     MCP_TOOL_TIMEOUT: "330000",
     CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: "330000",
   });
+  // But in auto mode: since 2.1.323, no telemetry means no auto-mode classifier, and every action refused.
+  expect(claudeCodeTmux.env({ ...context, mode: "auto" })).not.toHaveProperty("DISABLE_TELEMETRY");
+  expect(claudeCodeTmux.env({ ...context, mode: "manual" }).DISABLE_TELEMETRY).toBe("1");
   // A pet's permission mode, one of claude's own (2.1.296 --help), goes to every launch.
   expect(claudeCodeTmux.modes!.options.map(({ id }) => id)).toEqual(["auto", "manual", "acceptEdits", "plan", "bypassPermissions", "dontAsk"]);
   expect(claudeCodeTmux.modes!.default).toBe("bypassPermissions");
@@ -502,7 +507,7 @@ test("Claude's pinned Anthropic aliases expose native effort levels and pass onl
   const context = { caCertPath: "/ca", eventsUrl: "http://unused/events", mcpUrl: "http://unused/mcp", instructions: "", model: "haiku" };
   for (const model of claudeCodeTmux.models) {
     expect(claudeCodeTmux.modelOptions!(model).supportedReasoningEfforts!.map(option => option.reasoningEffort)).toEqual(["low", "medium", "high", "xhigh", "max"]);
-    expect(claudeCodeTmux.modelOptions!(model).defaultReasoningEffort).toBe(model === "fable" ? "high" : "medium");
+    expect(claudeCodeTmux.modelOptions!(model).defaultReasoningEffort).toBe("medium");
     expect(claudeCodeTmux.acceptsReasoningEffort!(model, "ultra")).toBe(false);
     expect(claudeCodeTmux.acceptsReasoningEffort!(model, "ultracode")).toBe(false);
     for (const reasoningEffort of ["low", "medium", "high", "xhigh", "max"]) {
@@ -530,7 +535,7 @@ test.skipIf(process.env.HOUSEHOLD_NATIVE_ADAPTER_SMOKE !== "1" || !Bun.which("cl
   const home = mkdtempSync(join(tmpdir(), "household-claude-effort-native-"));
   try {
     const version = Bun.spawnSync(["claude", "--version"]);
-    expect(version.stdout.toString().trim()).toStartWith("2.1.296 ");
+    expect(version.stdout.toString().trim()).toStartWith("2.1.323 ");
     for (const model of claudeCodeTmux.models) {
       for (const reasoningEffort of [undefined, "low", "max"]) {
         const context = { caCertPath: "/unused", eventsUrl: "http://unused/events", mcpUrl: "http://unused/mcp", instructions: "", model, reasoningEffort };
@@ -543,7 +548,7 @@ test.skipIf(process.env.HOUSEHOLD_NATIVE_ADAPTER_SMOKE !== "1" || !Bun.which("cl
         });
         expect(child.exitCode).toBe(0);
         const result = child.stdout.toString().trim().split("\n").map(line => JSON.parse(line)).find(packet => packet.type === "result");
-        if (reasoningEffort === undefined) expect(result.result).toBe(`Effort level: auto (currently ${model === "fable" ? "high" : "medium"})`);
+        if (reasoningEffort === undefined) expect(result.result).toBe(`Effort level: auto (currently medium)`);
         else expect(result.result).toStartWith(`Current effort level: ${reasoningEffort}`);
         expect(result.duration_api_ms).toBe(0);
         expect(result.num_turns).toBe(0);

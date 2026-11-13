@@ -4,9 +4,9 @@ ARG BASE_IMAGE=debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687
 
 FROM ${BASE_IMAGE} AS builder
 # Bumping the version takes its checksums from https://downloads.claude.ai/claude-code-releases/<version>/manifest.json.
-ARG CLAUDE_VERSION=2.1.296
-ARG CLAUDE_SHA256_ARM64=f1f6e96e0d8342b9dbf41d7e88255397a6a52ce3d8736ad6a4c6b59c9b62fefa
-ARG CLAUDE_SHA256_X64=24972e3bc859fab2b46ed4c1e51f7d6130f06d3bd550811a114640de3370d0de
+ARG CLAUDE_VERSION=2.1.323
+ARG CLAUDE_SHA256_ARM64=452dddff140b5caf00a5410333a3d6db82c73ea2dec74b1541fae18e97d47dca
+ARG CLAUDE_SHA256_X64=604d29a6869409106b6a1110bdadcc8b72e8654a5a865d23258f938a696e348e
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 RUN case "$(dpkg --print-architecture)" in \
@@ -65,8 +65,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 iproute
  && rm -rf /var/lib/apt/lists/*
 # Containers' logs rotate (json-file keeps three files of 10 MB each): they share the VM's Docker disk.
 COPY --chmod=644 docker-daemon.json /etc/docker/daemon.json
-# Without DISABLE_AUTOUPDATER claude downloads a newer version into ~/.local despite the pin.
-ENV DISABLE_AUTOUPDATER=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 TERM=xterm-256color
+# Without DISABLE_AUTOUPDATER claude downloads a newer version into ~/.local despite the pin. No error reports, no
+# /bug. Telemetry is the adapter's to turn off (DISABLE_TELEMETRY), per bot: since 2.1.323 it also turns off auto
+# mode's classifier (every action is then refused), so a bot in auto mode keeps it on.
+ENV DISABLE_AUTOUPDATER=1 DISABLE_ERROR_REPORTING=1 DISABLE_BUG_COMMAND=1 TERM=xterm-256color
 USER agent
 WORKDIR /home/agent
 ENTRYPOINT ["household-entrypoint"]
