@@ -43,7 +43,7 @@ const pages = groups.flatMap((g) => g.pages.map((p) => ({ ...p, crumb: g.title }
 /** Pages that moved: their old address sends the reader on (with the old anchor, or a new one). */
 const moved: { from: string; to: string; hash?: string; title: string }[] = [
   { from: "pets", to: "bots", title: "Bots" },
-  { from: "mail-connector", to: "connectors", hash: "#email", title: "Connectors" },
+  { from: "mail-connector", to: "connectors", title: "Connectors" },
 ];
 const WARNING = '<svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 /** The side navigation, a list per group; links are relative to the page (the overview is one level up from the rest). */
@@ -75,6 +75,8 @@ for (const page of pages) {
     .replace(/<nav class="toc"[\s\S]*?<\/nav>/, headings.length ? `<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul>${headings.map(h => `<li><a href="#${h.id}">${h.title}</a></li>`).join("")}</ul></nav>` : `<nav class="toc" aria-hidden="true"></nav>`)
     .replace('</style>', `${PAGE_STYLE}\n</style>`)
   html = html.replace(/(<meta name="description" content=")[^"]*/, `$1${page.description}`);
+  // The page's own address on the main domain, so a copy reached another way (a mirror, a query string) counts as this one.
+  html = html.replace(/\n\s*<link rel="canonical"[^>]*>/, "").replace(/(\n(\s*)<meta property="og:url" content="([^"]*)">)/, `$1\n$2<link rel="canonical" href="$3">`);
   // A warning sign in the Markdown (readable on GitHub) is Lucide's triangle-alert on the site, as in the admin.
   html = html.replaceAll("⚠️", WARNING);
   const out = top ? "landing/docs/index.html" : `landing/docs/${page.slug}/index.html`;
