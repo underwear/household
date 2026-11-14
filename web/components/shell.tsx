@@ -292,6 +292,10 @@ function WorkspaceSwitcher({ houses, house, pet, path, onNewWorkspace }: { house
             <LayoutList className="context-mark" size={15} strokeWidth={1.75} aria-hidden />
             Manage workspaces
           </Link>
+          <Link href="/settings" className="menu-item context-action" onClick={shut}>
+            <SlidersHorizontal className="context-mark" size={15} strokeWidth={1.75} aria-hidden />
+            Manage Household
+          </Link>
         </nav>
       )}
     </div>
