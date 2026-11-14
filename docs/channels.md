@@ -1,42 +1,27 @@
 # Channels
 
-A channel connects a workspace's bots to a messenger, such as a Telegram group with a topic per bot, or your Slack DM with an app of your own. You write there; bots answer and ask for approvals there. One channel can hold several bots, and one bot can be in several channels.
+A channel connects one of your messengers to your bots: a Telegram group with a topic per bot, say, or a DM with your own Slack app. You write there, bots answer there, and their questions and approval cards come to you there. Messengers are added over time; each one is a kind of channel.
+
+The usual setup is one channel with just you in it and your bots in it. That is what [Quick start](../start/) makes, and most people never need more. Sharing a bot with other people or putting it in more chats are extras, further down.
 
 ## First, check what is already there
 
-- **A channel** is for talking. It sees only the chat you connect.
-- **A [connector](../connectors/)** lets bots act in your accounts, such as mail or your Slack workspace. A Slack channel is not a Slack connector.
+- **A channel** is for talking. Bots see only the chat you connect.
+- **A [connector](../connectors/)** lets bots act in your accounts, such as your mail or your Slack workspace. A Slack channel is not a Slack connector.
 - **An [inbox](../inboxes/)** wakes a bot on its own: new mail, an alert, a feed.
 
-## Owners and guests
+## Your channel
 
-Bots obey owners only: people listed for the workspace by their messenger id (a Telegram user id, a Slack member ID). Everyone else who writes in a channel is a guest.
+You are its **owner**: setup adds your messenger id, and bots take orders and approvals from you.
 
-**What Household enforces.** Only an owner can approve a bot's requests (network, secrets, shared folders, scout runs, previews), stop a bot, or hand over a secret with `/secret`.
+| Kind | Each bot gets | Pick it for |
+| --- | --- | --- |
+| **Telegram group with topics** | its own topic | several bots, each in its own place |
+| **Telegram private chat, threaded** | its own thread | the same, without a group |
+| **Telegram private chat, plain** | a share of one conversation | a single bot |
+| **Slack DM** | the default in Messages, others in threads | you live in Slack |
 
-**What the bot decides.** A guest's message still reaches the bot, marked as a guest's. The bot is told never to carry out their orders as yours. That is the model's judgement, not a wall: a guest's message is untrusted text, like a web page, and can talk the bot round. So a bot that shares a chat with guests should hold nothing you would mind a guest getting at: no write connectors, no private folders.
-
-- **Everyone in a group sees what bots post there.**
-- **A bot is one bot in every channel.** It carries one memory and one conversation, so what you told it in your private chat can come up in a group. Give a group its own bot.
-- **Owners are per platform.** One Telegram user id makes you an owner in every Telegram channel of the workspace.
-
-⚠️ Being an admin of a Telegram group does not make someone an owner. Only the ids under **Workspace → Channels → Owners** count, and until a platform has an owner, everyone there is a guest.
-
-## How a channel works
-
-- **Bots share it.** Address one by name (`Chef, plan dinner`), by replying to it, or in its own topic or thread. The **default** bot you choose gets the rest.
-- **Stop a bot** with **Stop** on its message, or `/stop`.
-- **[Sideworkers](../sideworkers/) and [scouts](../scouts/)** report in their bot's channel, in their own topic or thread.
-- **Forward General** (Telegram topics and threads) is off by default. On, messages in General go to the default bot; in a group, anyone can then reach it as a guest.
-
-## Choose a channel
-
-| Kind | Who is in it | Each bot gets | Pick it for |
-| --- | --- | --- | --- |
-| **Telegram group with topics** (recommended) | you, and anyone you add | its own topic | several bots, or other people |
-| **Telegram private chat, threaded** (beta) | you | its own thread | several bots, just you |
-| **Telegram private chat, plain** | you | a share of one conversation | one bot |
-| **Slack DM** | you | the default in Messages, others in threads | you live in Slack |
+Several bots share one channel. Talk to one in its topic or thread, by name (`Chef, plan dinner`), or by replying to it; the **default** bot gets the rest. **Stop** on a bot's message, or `/stop`, stops it. [Sideworkers](../sideworkers/) and [scouts](../scouts/) report in their bot's channel, each in a topic or thread of its own.
 
 ## Telegram
 
@@ -58,3 +43,20 @@ Bots see only your DM with the app, not your Slack channels, and the app's token
 Then add the channel as **Slack Bot DM**. To revoke, remove the channel and delete the app.
 
 </details>
+
+## Going further
+
+### One bot in several channels
+
+Add a channel and switch your bot on in it, and the same bot answers there too: in Telegram on your phone and in Slack at work, or in your private chat and a family group. It is still one bot, with one memory and one conversation, wherever you write to it. Add your id in each new messenger as an owner, so the bot knows it is you.
+
+In a chat with other people, everyone sees what the bot posts, and what you told it in private can come up there. If that matters, give the shared chat a bot of its own.
+
+### Owners and guests
+
+Anyone else who writes in a channel is a **guest**, unless you add them as an owner under **Workspace → Channels → Owners** (owners are per messenger: one Telegram id counts in every Telegram channel of the workspace).
+
+- **Household enforces** that only owners approve what bots ask for (hosts, secrets, folders, scout runs, previews), stop a bot or send `/secret`.
+- **The bot decides the rest.** A guest's message reaches it marked as a guest's, and it is told not to carry out their orders. That is the model's judgement, not a wall: a guest can talk it round, like a web page can. A bot that shares a chat with guests should hold nothing you would mind them getting at: no connectors that change things, no private folders.
+
+⚠️ Being an admin of a Telegram group does not make someone an owner, and until a messenger has an owner, everyone there is a guest. **Forward General** (off by default) sends messages in a Telegram group's General to the default bot, so anyone in the group can reach it as a guest.

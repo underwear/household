@@ -173,42 +173,28 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="./" aria-current="page">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Talking to bots</p><h1>Channels</h1>
-<p class="lead">A channel connects a workspace's bots to a messenger, such as a Telegram group with a topic per bot, or your Slack DM with an app of your own. You write there; bots answer and ask for approvals there. One channel can hold several bots, and one bot can be in several channels.</p>
+<p class="lead">A channel connects one of your messengers to your bots: a Telegram group with a topic per bot, say, or a DM with your own Slack app. You write there, bots answer there, and their questions and approval cards come to you there. Messengers are added over time; each one is a kind of channel.</p>
+<p>The usual setup is one channel with just you in it and your bots in it. That is what <a href="../start/">Quick start</a> makes, and most people never need more. Sharing a bot with other people or putting it in more chats are extras, further down.</p>
 <h2 id="first-check-what-is-already-there">First, check what is already there</h2>
 <ul>
-<li><strong>A channel</strong> is for talking. It sees only the chat you connect.</li>
-<li><strong>A <a href="../connectors/">connector</a></strong> lets bots act in your accounts, such as mail or your Slack workspace. A Slack channel is not a Slack connector.</li>
+<li><strong>A channel</strong> is for talking. Bots see only the chat you connect.</li>
+<li><strong>A <a href="../connectors/">connector</a></strong> lets bots act in your accounts, such as your mail or your Slack workspace. A Slack channel is not a Slack connector.</li>
 <li><strong>An <a href="../inboxes/">inbox</a></strong> wakes a bot on its own: new mail, an alert, a feed.</li>
 </ul>
-<h2 id="owners-and-guests">Owners and guests</h2>
-<p>Bots obey owners only: people listed for the workspace by their messenger id (a Telegram user id, a Slack member ID). Everyone else who writes in a channel is a guest.</p>
-<p><strong>What Household enforces.</strong> Only an owner can approve a bot's requests (network, secrets, shared folders, scout runs, previews), stop a bot, or hand over a secret with <code>/secret</code>.</p>
-<p><strong>What the bot decides.</strong> A guest's message still reaches the bot, marked as a guest's. The bot is told never to carry out their orders as yours. That is the model's judgement, not a wall: a guest's message is untrusted text, like a web page, and can talk the bot round. So a bot that shares a chat with guests should hold nothing you would mind a guest getting at: no write connectors, no private folders.</p>
-<ul>
-<li><strong>Everyone in a group sees what bots post there.</strong></li>
-<li><strong>A bot is one bot in every channel.</strong> It carries one memory and one conversation, so what you told it in your private chat can come up in a group. Give a group its own bot.</li>
-<li><strong>Owners are per platform.</strong> One Telegram user id makes you an owner in every Telegram channel of the workspace.</li>
-</ul>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Being an admin of a Telegram group does not make someone an owner. Only the ids under <strong>Workspace → Channels → Owners</strong> count, and until a platform has an owner, everyone there is a guest.</p>
-<h2 id="how-a-channel-works">How a channel works</h2>
-<ul>
-<li><strong>Bots share it.</strong> Address one by name (<code>Chef, plan dinner</code>), by replying to it, or in its own topic or thread. The <strong>default</strong> bot you choose gets the rest.</li>
-<li><strong>Stop a bot</strong> with <strong>Stop</strong> on its message, or <code>/stop</code>.</li>
-<li><strong><a href="../sideworkers/">Sideworkers</a> and <a href="../scouts/">scouts</a></strong> report in their bot's channel, in their own topic or thread.</li>
-<li><strong>Forward General</strong> (Telegram topics and threads) is off by default. On, messages in General go to the default bot; in a group, anyone can then reach it as a guest.</li>
-</ul>
-<h2 id="choose-a-channel">Choose a channel</h2>
+<h2 id="your-channel">Your channel</h2>
+<p>You are its <strong>owner</strong>: setup adds your messenger id, and bots take orders and approvals from you.</p>
 <table>
 <thead>
-<tr><th>Kind</th><th>Who is in it</th><th>Each bot gets</th><th>Pick it for</th></tr>
+<tr><th>Kind</th><th>Each bot gets</th><th>Pick it for</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>Telegram group with topics</strong> (recommended)</td><td>you, and anyone you add</td><td>its own topic</td><td>several bots, or other people</td></tr>
-<tr><td><strong>Telegram private chat, threaded</strong> (beta)</td><td>you</td><td>its own thread</td><td>several bots, just you</td></tr>
-<tr><td><strong>Telegram private chat, plain</strong></td><td>you</td><td>a share of one conversation</td><td>one bot</td></tr>
-<tr><td><strong>Slack DM</strong></td><td>you</td><td>the default in Messages, others in threads</td><td>you live in Slack</td></tr>
+<tr><td><strong>Telegram group with topics</strong></td><td>its own topic</td><td>several bots, each in its own place</td></tr>
+<tr><td><strong>Telegram private chat, threaded</strong></td><td>its own thread</td><td>the same, without a group</td></tr>
+<tr><td><strong>Telegram private chat, plain</strong></td><td>a share of one conversation</td><td>a single bot</td></tr>
+<tr><td><strong>Slack DM</strong></td><td>the default in Messages, others in threads</td><td>you live in Slack</td></tr>
 </tbody>
 </table>
+<p>Several bots share one channel. Talk to one in its topic or thread, by name (<code>Chef, plan dinner</code>), or by replying to it; the <strong>default</strong> bot gets the rest. <strong>Stop</strong> on a bot's message, or <code>/stop</code>, stops it. <a href="../sideworkers/">Sideworkers</a> and <a href="../scouts/">scouts</a> report in their bot's channel, each in a topic or thread of its own.</p>
 <h2 id="telegram">Telegram</h2>
 <p>One Telegram bot from <a href="https://t.me/BotFather">@BotFather</a> speaks for all the workspace's bots, in that workspace only. For a group, see <a href="../start/#before-you-connect-telegram">Before you connect Telegram</a>. For a threaded chat, turn on <strong>Threaded Mode</strong> in BotFather's Mini App and stop users from creating threads. For a plain chat, press <strong>Start</strong>.</p>
 <p>Bots send formatting, buttons and files up to 20 MB. In private chats they also send small widgets, such as a checklist you tap; a tap is never your approval. To revoke, remove the channel and <code>/revoke</code> the token in BotFather.</p>
@@ -223,9 +209,20 @@
 </ol>
 <p>Then add the channel as <strong>Slack Bot DM</strong>. To revoke, remove the channel and delete the app.</p>
 </details>
+<h2 id="going-further">Going further</h2>
+<h3 id="one-bot-in-several-channels">One bot in several channels</h3>
+<p>Add a channel and switch your bot on in it, and the same bot answers there too: in Telegram on your phone and in Slack at work, or in your private chat and a family group. It is still one bot, with one memory and one conversation, wherever you write to it. Add your id in each new messenger as an owner, so the bot knows it is you.</p>
+<p>In a chat with other people, everyone sees what the bot posts, and what you told it in private can come up there. If that matters, give the shared chat a bot of its own.</p>
+<h3 id="owners-and-guests">Owners and guests</h3>
+<p>Anyone else who writes in a channel is a <strong>guest</strong>, unless you add them as an owner under <strong>Workspace → Channels → Owners</strong> (owners are per messenger: one Telegram id counts in every Telegram channel of the workspace).</p>
+<ul>
+<li><strong>Household enforces</strong> that only owners approve what bots ask for (hosts, secrets, folders, scout runs, previews), stop a bot or send <code>/secret</code>.</li>
+<li><strong>The bot decides the rest.</strong> A guest's message reaches it marked as a guest's, and it is told not to carry out their orders. That is the model's judgement, not a wall: a guest can talk it round, like a web page can. A bot that shares a chat with guests should hold nothing you would mind them getting at: no connectors that change things, no private folders.</li>
+</ul>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Being an admin of a Telegram group does not make someone an owner, and until a messenger has an owner, everyone there is a guest. <strong>Forward General</strong> (off by default) sends messages in a Telegram group's General to the default bot, so anyone in the group can reach it as a guest.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#owners-and-guests">Owners and guests</a></li><li><a href="#how-a-channel-works">How a channel works</a></li><li><a href="#choose-a-channel">Choose a channel</a></li><li><a href="#telegram">Telegram</a></li><li><a href="#slack">Slack</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#your-channel">Your channel</a></li><li><a href="#telegram">Telegram</a></li><li><a href="#slack">Slack</a></li><li><a href="#going-further">Going further</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen
