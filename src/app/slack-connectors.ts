@@ -1,13 +1,19 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { slackConnectSchema, SLACK_READ_SCOPES, type SlackConnectionView } from "../core/slack-connectors";
+import { slackConnectSchema, SLACK_READ_SCOPES, SLACK_WRITE_SCOPES, type SlackConnectionView } from "../core/slack-connectors";
 import type { House } from "../core/household";
 import { HouseholdError } from "../core/errors";
 import type { PetIdentity } from "../infra/agent-api";
 import type { KeyValueStore } from "../infra/sqlite-store";
 import { slackRead, slackWrite, slackOAuth, SlackReadError, type SlackFetch } from "../infra/slack/client";
-import { slackCatalog, slackOperation } from "../infra/slack/operations";
+import { slackCatalog, slackOperation, slackHasScope } from "../infra/slack/operations";
+import { slackDownload, slackUpload, SLACK_FILE_MAX_BYTES, type SlackUploadParams } from "../infra/slack/files";
 import { TokenBucket } from "./token-bucket";
+
+export interface SlackConnectorFiles {
+  read(caller: PetIdentity, path: string, maxBytes: number): Promise<Uint8Array>;
+  save(caller: PetIdentity, name: string, bytes: Uint8Array): Promise<string>;
+}
 
 export const SLACK_REDIRECT = "https://agents-household.dev/slack/callback/";
 const KEY = "house.connectors.slack.v1";
@@ -23,7 +29,7 @@ export class SlackConnectors {
   private generation = 0;
   private pending = new Map<string, Pending>();
   private refreshes = new Map<string, Promise<string>>();
-  constructor(private store: KeyValueStore, private fetcher: SlackFetch = fetch, private clientId = process.env.HOUSEHOLD_SLACK_CLIENT_ID ?? "12549799067478.12553676041489", private now = Date.now) {}
+  constructor(private store: KeyValueStore, private fetcher: SlackFetch = fetch, private clientId = process.env.HOUSEHOLD_SLACK_CLIENT_ID ?? "12549799067478.12553676041489", private now = Date.now, private files?: SlackConnectorFiles) {}
   private read(): Connection[] { return JSON.parse(this.store.get(KEY) ?? "[]"); }
   private write(items: Connection[]) { this.store.set(KEY, JSON.stringify(items)); }
   private view(c: Connection): SlackConnectionView {
@@ -71,7 +77,7 @@ export class SlackConnectors {
     const state = nonce(), verifier = nonce(), redirect = SLACK_REDIRECT;
     this.pending.set(state, { house, pets, allowWrite: parsed.data.allowWrite, binding, redirect, verifier, expires: this.now() + 600_000 });
     const url = new URL("https://slack.com/oauth/v2/authorize");
-    url.search = new URLSearchParams({ client_id: this.clientId, scope: "", user_scope: [...SLACK_READ_SCOPES, ...(parsed.data.allowWrite ? ["chat:write"] : [])].join(","), redirect_uri: redirect, state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" }).toString();
+    url.search = new URLSearchParams({ client_id: this.clientId, scope: "", user_scope: [...SLACK_READ_SCOPES, ...(parsed.data.allowWrite ? SLACK_WRITE_SCOPES : [])].join(","), redirect_uri: redirect, state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" }).toString();
     return { url: url.toString() };
   }
   async finish(url: URL, binding: string, house?: string) {
@@ -104,10 +110,10 @@ export class SlackConnectors {
   private save(house: string, pets: string[], token: string, data: any, scopes: string[], rotation: Pick<Connection, "refreshToken" | "expiresAt" | "clientId"> = {}, allowWrite = false) {
     this.pets(house, pets);
     if (!/^T[A-Z0-9]+$/.test(data.team_id ?? "") || !/^[UW][A-Z0-9]+$/.test(data.user_id ?? "") || data.bot_id) throw new HouseholdError("Use a user token, not a Slack bot token");
-    if (!scopes.length || scopes.some(s => ![...SLACK_READ_SCOPES, "identify", "chat:write"].includes(s))) throw new HouseholdError("Use a dedicated token with only the documented Slack connector scopes");
+    if (!scopes.length || scopes.some(s => !([...SLACK_READ_SCOPES, ...SLACK_WRITE_SCOPES, "identify"] as string[]).includes(s))) throw new HouseholdError("Use a dedicated token with only the documented Slack connector scopes");
     const items = this.read(), old = items.find(c => c.house === house && c.teamId === data.team_id && c.userId === data.user_id);
     if (old) this.abort(old.id);
-    const c: Connection = { id: randomUUID(), house, token, allowWrite: allowWrite && scopes.includes("chat:write"), teamId: data.team_id, team: typeof data.team === "string" ? data.team : data.team_id, userId: data.user_id, user: typeof data.user === "string" ? data.user : data.user_id, scopes, pets, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false, ...rotation };
+    const c: Connection = { id: randomUUID(), house, token, allowWrite: allowWrite && SLACK_WRITE_SCOPES.some(scope => scopes.includes(scope)), teamId: data.team_id, team: typeof data.team === "string" ? data.team : data.team_id, userId: data.user_id, user: typeof data.user === "string" ? data.user : data.user_id, scopes, pets, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false, ...rotation };
     this.write([...items.filter(i => i !== old), c]); return this.view(c);
   }
   async connect(house: string, input: unknown) {
@@ -151,7 +157,10 @@ export class SlackConnectors {
     const parent = this.parent(caller);
     return parent ? this.read().filter(c => c.house === caller.house && c.pets.includes(parent)).map(c => this.view(c)) : [];
   }
-  catalog(caller: PetIdentity) { return slackCatalog([...new Set(this.accounts(caller).flatMap(c => c.scopes.filter(s => s !== "chat:write" || c.allowWrite)))]); }
+  catalog(caller: PetIdentity) {
+    // Evaluate each connection separately: scopes from a read-only account cannot enable writes on another.
+    return [...new Map(this.accounts(caller).flatMap(c => slackCatalog(c.scopes, c.allowWrite)).map(op => [op.name, op])).values()];
+  }
   private allowed(caller: PetIdentity, id: string) {
     const parent = this.parent(caller), c = parent && this.read().find(c => c.house === caller.house && c.id === id && c.pets.includes(parent));
     if (!c) throw new HouseholdError("Slack connection unavailable to this bot");
@@ -176,8 +185,9 @@ export class SlackConnectors {
   }
   async request(caller: PetIdentity, id: string, operation: string, params: unknown, signal?: AbortSignal) {
     const c = this.allowed(caller, id), parsed = slackOperation(operation, params);
-    if (parsed.spec.write && !c.allowWrite) throw new HouseholdError("Message sending is disabled for this Slack connection");
-    if (!parsed.spec.scopes.some(s => c.scopes.includes(s))) throw new HouseholdError("Slack token lacks the required scope; reconnect with the requested permissions");
+    if (parsed.spec.write && !c.allowWrite) throw new HouseholdError("Writing is disabled for this Slack connection");
+    if (!slackHasScope(parsed.spec, c.scopes)) throw new HouseholdError("Slack token lacks the required scope; reconnect with the requested permissions");
+    if (operation === "conversations.open" && !c.scopes.includes(String(parsed.params.users).includes(",") ? "mpim:write" : "im:write")) throw new HouseholdError("Slack token lacks the required scope for this DM type");
     // Per connection: its bots and their sideworkers share one Slack user's rate limits.
     const key = id;
     if (!this.budgets.has(key)) this.budgets.set(key, new TokenBucket(1, 10));
@@ -188,7 +198,25 @@ export class SlackConnectors {
       const token = await this.access(c);
       if (controller.signal.aborted) throw new Error("cancelled");
       this.allowed(caller, id);
-      const { data } = await (parsed.spec.write ? slackWrite : slackRead)(this.fetcher, token, operation, parsed.params, AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]));
+      const combined = AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]);
+      combined.throwIfAborted();
+      let data;
+      if (operation === "files.download") {
+        if (!this.files) throw new HouseholdError("Slack file storage is unavailable");
+        const downloaded = await slackDownload(this.fetcher, token, String(parsed.params.file), combined);
+        combined.throwIfAborted(); this.allowed(caller, id);
+        const path = await this.files.save(caller, downloaded.filename, downloaded.bytes);
+        data = { ok: true, file: parsed.params.file, path, filename: downloaded.filename, contentType: downloaded.contentType, size: downloaded.bytes.length };
+      } else if (operation === "files.upload") {
+        if (!this.files) throw new HouseholdError("Slack file storage is unavailable");
+        const { path, ...upload } = parsed.params;
+        const bytes = await this.files.read(caller, String(path), SLACK_FILE_MAX_BYTES);
+        combined.throwIfAborted(); this.allowed(caller, id);
+        ({ data } = await slackUpload(this.fetcher, token, { ...upload, filename: String(upload.filename ?? String(path).split("/").at(-1)) } as SlackUploadParams, bytes, combined));
+      } else {
+        ({ data } = await (parsed.spec.write ? slackWrite : slackRead)(this.fetcher, token, operation, parsed.params, combined));
+      }
+      combined.throwIfAborted();
       if (controller.signal.aborted) throw new Error("cancelled");
       this.allowed(caller, id);
       return { trust: "external", data };
@@ -198,7 +226,7 @@ export class SlackConnectors {
         if (current) { current.needsReconnect = true; this.write(items); }
       }
       if (error instanceof HouseholdError) throw error;
-      throw new HouseholdError(error instanceof SlackReadError ? error.message : parsed.spec.write ? "Slack send outcome is unknown; check conversation history before retrying" : "Slack request failed or was cancelled; retry shortly");
+      throw new HouseholdError(error instanceof SlackReadError ? error.message : parsed.spec.write ? "Slack write outcome is unknown; inspect the message, reactions, files or read state before retrying" : "Slack request failed or was cancelled; retry shortly");
     }
   }
   stop() { this.generation++; this.pending.clear(); for (const id of this.active.keys()) this.abort(id); }

@@ -396,7 +396,12 @@ export async function startDaemon(deps: DaemonDeps) {
   const microsoftConnectors = new MicrosoftConnectors(records);
   const microsoftRoutes = microsoftConnectorRoutes(microsoftConnectors);
   const googleConnectors = new GoogleConnectors(records);
-  const slackConnectors = new SlackConnectors(records);
+  const slackInboxFiles = new PetInboxFiles(homesDirectory(paths));
+  const slackOutboxFiles = new PetOutboxFiles(homesDirectory(paths));
+  const slackConnectors = new SlackConnectors(records, undefined, undefined, undefined, {
+    read: (caller, path, max) => slackOutboxFiles.read(petVolume(caller.house, caller.pet), path, max),
+    save: (caller, name, bytes) => slackInboxFiles.save(petVolume(caller.house, caller.pet), new Date().toISOString().slice(0, 10), name, bytes),
+  });
   const googleRoutes = googleConnectorRoutes(googleConnectors);
   const slackRoutes = slackConnectorRoutes(slackConnectors);
   const houseInboxes = new HouseInboxes(records, { post: (h, i, e) => chat.postInbox(h, i, e), pet: (h, i, p, e, at) => chat.deliverInbox(h, i, p, e, at) }, undefined, undefined, deps.inboxEvents);

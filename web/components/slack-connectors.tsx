@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type SlackConnectionView, type WorkspaceView } from "../api";
-import { SLACK_READ_SCOPES } from "../../src/core/slack-connectors";
+import { SLACK_READ_SCOPES, SLACK_WRITE_SCOPES } from "../../src/core/slack-connectors";
 import { Dialog } from "./dialog";
 import { ChoiceList, FormGroup, SwitchList, TextField } from "./fields";
 
@@ -23,13 +23,13 @@ export function useSlackConnections(house: string) {
   return { connections, error, refresh };
 }
 
-/** «read only», «read and send». */
-export const slackAccessWords = (c: Pick<SlackConnectionView, "allowWrite">) => (c.allowWrite ? "read and send" : "read only");
+/** «read only», «read and write». */
+export const slackAccessWords = (c: Pick<SlackConnectionView, "allowWrite">) => (c.allowWrite ? "read and write" : "read only");
 
 /** How far bots may go with a Slack user: read what it can, or post as it too. */
 const ACCESS = [
-  { value: "read", label: "Read only", description: "Bots search and read the conversations this Slack user can see." },
-  { value: "send", label: "Read and send", description: "Bots can also post messages and thread replies, as you." },
+  { value: "read", label: "Read only", description: "Bots search and read conversations, download files and look up people, groups and reactions." },
+  { value: "send", label: "Read and write", description: "Bots can also send, edit and delete your messages, upload files, react, open DMs and mark conversations read, as you." },
 ] as const;
 
 /** Where Slack sends the owner back: a static page that shows the result to paste (no server of ours sees the tokens). */
@@ -152,10 +152,10 @@ export function SlackSetup({ house, existing, options, back, onClose, saved }: {
                   <summary>Get a user token</summary>
                   <ol>
                     <li>Open <a className="text-link" href="https://api.slack.com/apps" target="_blank" rel="noreferrer">Slack apps ↗</a> and pick your app in the workspace to read.</li>
-                    <li>Under OAuth &amp; Permissions → User Token Scopes, add the scopes below{access === "send" ? ", and chat:write" : ""}. Leave Bot Token Scopes empty.</li>
+                    <li>Under OAuth &amp; Permissions → User Token Scopes, add the scopes below. Leave Bot Token Scopes empty.</li>
                     <li>Install the app, approve it as your Slack user, and copy the User OAuth Token. Keep token rotation off.</li>
                   </ol>
-                  <p className="hint mono">{SLACK_READ_SCOPES.join(" ")}</p>
+                  <p className="hint mono">{[...SLACK_READ_SCOPES, ...(access === "send" ? SLACK_WRITE_SCOPES : [])].join(" ")}</p>
                 </details>
               </>
             )}

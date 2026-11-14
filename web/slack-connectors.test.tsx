@@ -18,7 +18,7 @@ test("a new Slack connection starts at access and bots, like Google's; a token i
   const html = renderToStaticMarkup(<SlackSetup house="work" options={options} back={() => {}} onClose={() => {}} saved={async () => {}} />);
   expect(html).toContain('aria-current="step">Access<');
   expect(html).toContain(">Read only<");
-  expect(html).toContain(">Read and send<");
+  expect(html).toContain(">Read and write<");
   expect(html).toContain("This is not a chat channel");
   expect(html).toContain("Use a user token instead");
   expect(html).toContain("Continue to Slack");
@@ -33,6 +33,6 @@ test("a pasted connection result must be the whole callback address with its cod
   expect(resultProblem("")).toBeUndefined();
   expect(resultProblem("https://agents-household.dev/slack/callback/?code=abc&state=xyz")).toBeUndefined();
   for (const wrong of ["abc", "https://evil.test/slack/callback/?code=a&state=b", "https://agents-household.dev/slack/callback/?state=b"]) expect(resultProblem(wrong)).toContain("Paste the whole result");
-  expect(slackAccessWords({ allowWrite: true })).toBe("read and send");
+  expect(slackAccessWords({ allowWrite: true })).toBe("read and write");
   expect(slackAccessWords({})).toBe("read only");
 });

@@ -262,8 +262,8 @@
 <h2 id="slack">Slack</h2>
 <p>Connect your Slack user so bots can search and read Slack as you when they need context. Nobody messages your bots here; to talk with them in Slack, add a <a href="../channels/">channel</a>.</p>
 <ul>
-<li><strong>Read only</strong>: bots search and read what your Slack user can see — channels, direct and group messages, people. Files show details and a text preview, not full downloads.</li>
-<li><strong>Read and send</strong>: bots can also post messages and thread replies as you, without asking.</li>
+<li><strong>Read only</strong>: bots search and read what your Slack user can see — channels, direct and group messages, people. Bots can also search and download files, read reactions, resolve user groups and look up users by email.</li>
+<li><strong>Read and write</strong>: bots can also post, edit and delete your messages, upload files, add/remove reactions, open DMs and mark conversations read as you.</li>
 </ul>
 <ol>
 <li><strong>Workspace → Connectors → + Add connector → Slack.</strong></li>
@@ -273,6 +273,8 @@
 <li>Paste it into <strong>Connection result</strong> within ten minutes and press <strong>Connect</strong>.</li>
 </ol>
 <p>This works when Household runs on a server, too. The result's one-time code is useless without a key that stays on your Household computer. Prefer your own Slack app? Choose <strong>Use a user token instead</strong>; <strong>Get a user token</strong> lists the steps.</p>
+<p><code>files.download</code> takes a Slack file ID and saves the original to the bot's <code>~/.household/inbox</code>, returning a path relative to its home. The bot can open images with its local image tools. <code>files.upload</code> reads a path relative to <code>~/.household/outbox</code>; optional <code>channel_id</code>, <code>thread_ts</code> and <code>initial_comment</code> share it to a conversation or thread. Without a channel the file stays private. Both operations have a 50 MiB limit. Upload uses <a href="https://docs.slack.dev/messaging/working-with-files/">Slack's external upload flow</a>; do not automatically retry an uncertain write.</p>
+<p>Existing connections keep their granted scopes. Reconnect to grant new capabilities: <code>reactions:read</code>, <code>usergroups:read</code>, <code>users:read.email</code>, and, for write access, <code>chat:write</code>, <code>files:write</code>, <code>reactions:write</code>, <code>im:write</code>, <code>mpim:write</code>, <code>channels:write</code>, <code>groups:write</code>. With your own Slack app, add these User Token Scopes before reinstalling. All writes require <code>allowWrite</code> as well as the relevant scope; the operations tool lists capabilities available across your connections. <code>users.conversations</code> accepts combinations such as <code>im,mpim</code>.</p>
 <p>Disconnecting also revokes the token at Slack. If Slack can't be reached then, remove the app from your Slack account yourself.</p>
 <h2 id="microsoft-to-do">Microsoft To Do</h2>
 <p>Connect a personal, work or school Microsoft account.</p>

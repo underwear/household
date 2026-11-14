@@ -119,8 +119,8 @@ Disconnecting removes the account from Household only. To revoke access at Googl
 
 Connect your Slack user so bots can search and read Slack as you when they need context. Nobody messages your bots here; to talk with them in Slack, add a [channel](../channels/).
 
-- **Read only**: bots search and read what your Slack user can see — channels, direct and group messages, people. Files show details and a text preview, not full downloads.
-- **Read and send**: bots can also post messages and thread replies as you, without asking.
+- **Read only**: bots search and read what your Slack user can see — channels, direct and group messages, people. Bots can also search and download files, read reactions, resolve user groups and look up users by email.
+- **Read and write**: bots can also post, edit and delete your messages, upload files, add/remove reactions, open DMs and mark conversations read as you.
 
 1. **Workspace → Connectors → + Add connector → Slack.**
 2. Choose access, pick bots under **Bot access**, and press **Continue to Slack**.
@@ -129,6 +129,10 @@ Connect your Slack user so bots can search and read Slack as you when they need 
 5. Paste it into **Connection result** within ten minutes and press **Connect**.
 
 This works when Household runs on a server, too. The result's one-time code is useless without a key that stays on your Household computer. Prefer your own Slack app? Choose **Use a user token instead**; **Get a user token** lists the steps.
+
+`files.download` takes a Slack file ID and saves the original to the bot's `~/.household/inbox`, returning a path relative to its home. The bot can open images with its local image tools. `files.upload` reads a path relative to `~/.household/outbox`; optional `channel_id`, `thread_ts` and `initial_comment` share it to a conversation or thread. Without a channel the file stays private. Both operations have a 50 MiB limit. Upload uses [Slack's external upload flow](https://docs.slack.dev/messaging/working-with-files/); do not automatically retry an uncertain write.
+
+Existing connections keep their granted scopes. Reconnect to grant new capabilities: `reactions:read`, `usergroups:read`, `users:read.email`, and, for write access, `chat:write`, `files:write`, `reactions:write`, `im:write`, `mpim:write`, `channels:write`, `groups:write`. With your own Slack app, add these User Token Scopes before reinstalling. All writes require `allowWrite` as well as the relevant scope; the operations tool lists capabilities available across your connections. `users.conversations` accepts combinations such as `im,mpim`.
 
 Disconnecting also revokes the token at Slack. If Slack can't be reached then, remove the app from your Slack account yourself.
 

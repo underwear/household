@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { SlackConnectors } from "../../src/app/slack-connectors";
+import { SlackConnectors, type SlackConnectorFiles } from "../../src/app/slack-connectors";
 import { slackConnectorRoutes } from "../../src/app/slack-connector-routes";
 import { slackConnectorTools } from "../../src/app/slack-connector-tools";
-import { SLACK_READ_SCOPES } from "../../src/core/slack-connectors";
+import { SLACK_READ_SCOPES, SLACK_WRITE_SCOPES } from "../../src/core/slack-connectors";
 import { slackOperation } from "../../src/infra/slack/operations";
 import { slackRead, type SlackFetch } from "../../src/infra/slack/client";
 import { mcpHandler } from "../../src/infra/mcp-server";
@@ -10,7 +10,7 @@ import { SqliteStore } from "../../src/infra/sqlite-store";
 import type { House } from "../../src/core/household";
 
 const caller = { house: "home", pet: "alice" };
-function setup() {
+function setup(files?: SlackConnectorFiles) {
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const store = new SqliteStore(":memory:");
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -21,7 +21,7 @@ function setup() {
     calls.push({ url: String(url), init });
     if (new URL(url).pathname.endsWith("auth.test")) return Response.json(auth, { headers: { "x-oauth-scopes": scopes.join(",") } });
     return api(url, init);
-  });
+  }, undefined, undefined, files);
   service.setHouses([house, { ...house, name: "other" }]);
   const connect = async (home = "home") => (await service.connect(home, { token: "xoxp-private-token", pets: ["alice"] })).id;
   return { house, store, calls, service, connect, api: (f: SlackFetch) => { api = f; }, scopes: (s: string[]) => { scopes = s; }, auth: (value: Record<string, unknown>) => { auth = value; } };
@@ -85,7 +85,7 @@ test("Slack requests use a fixed host and bearer header, preserve pagination and
 
 test("scope filtering prevents unavailable operations", async () => {
   const s = setup(); s.scopes(["search:read"]); const id = await s.connect();
-  expect(s.service.catalog(caller).map(o => o.name)).toEqual(["search.messages"]);
+  expect(s.service.catalog(caller).map(o => o.name)).toEqual(["search.messages", "search.files", "chat.getPermalink"]);
   await expect(s.service.request(caller, id, "files.info", { file: "F123" })).rejects.toThrow("scope");
 });
 
@@ -157,8 +157,11 @@ test("sending requires explicit opt-in and Slack scope; private grants remain en
 test("OAuth requests write scope only on explicit opt-in", () => {
   const s = setup();
   const scopes = (allowWrite: boolean) => new URL(s.service.begin("home", { pets: ["alice"], allowWrite }, "https://vps.example", "owner").url).searchParams.get("user_scope")!.split(",");
-  expect(scopes(false)).not.toContain("chat:write");
-  expect(scopes(true)).toContain("chat:write");
+  for (const scope of SLACK_WRITE_SCOPES) {
+    expect(scopes(false)).not.toContain(scope);
+    expect(scopes(true)).toContain(scope);
+  }
+  expect(scopes(false)).toEqual([...SLACK_READ_SCOPES]);
   for (const params of [{ channel: "D123", text: "hi", username: "fake" }, { channel: "D123", text: "hi", token: "secret" }, { channel: "D123", text: "hi", unfurl_links: true }]) expect(() => slackOperation("chat.postMessage", params)).toThrow();
 });
 
@@ -185,4 +188,123 @@ test("a bot gaining access leaves reads in progress alone; one losing it stops t
 test("malformed JSON to the Slack routes is a 400-class error, not a crash", async () => {
   const s = setup(), routes = slackConnectorRoutes(s.service);
   await expect(routes(new Request("http://127.0.0.1:8780/api/houses/home/connectors/slack/connect", { method: "POST", body: "{nope" }))).rejects.toThrow("not valid JSON");
+});
+
+const writeCases: [string, Record<string, unknown>][] = [
+  ["chat.postMessage", { channel: "C123", text: "hello" }],
+  ["chat.update", { channel: "C123", ts: "123.456", text: "fixed" }],
+  ["chat.delete", { channel: "C123", ts: "123.456" }],
+  ["reactions.add", { channel: "C123", timestamp: "123.456", name: "thumbsup" }],
+  ["reactions.remove", { channel: "C123", timestamp: "123.456", name: "thumbsup" }],
+  ["conversations.open", { users: "U123" }],
+  ["conversations.mark", { channel: "C123", ts: "123.456" }],
+  ["files.upload", { path: "video.mp4", channel_id: "C123" }],
+];
+test("every Slack mutation is hidden and blocked without allowWrite before any I/O", async () => {
+  const s = setup(); s.scopes([...SLACK_READ_SCOPES, ...SLACK_WRITE_SCOPES]); const id = await s.connect();
+  const before = s.calls.length;
+  for (const [name, params] of writeCases) {
+    expect(s.service.catalog(caller).some(op => op.name === name)).toBe(false);
+    await expect(s.service.request(caller, id, name, params)).rejects.toThrow("disabled");
+  }
+  expect(s.calls.length).toBe(before);
+});
+test("new write operations dispatch as authenticated POSTs and honor their own scopes", async () => {
+  for (const [name, params] of writeCases.filter(([name]) => name !== "files.upload")) {
+    const s = setup(); s.scopes([...SLACK_READ_SCOPES, ...SLACK_WRITE_SCOPES]);
+    const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], allowWrite: true });
+    await s.service.request(caller, c.id, name, params);
+    const call = s.calls.at(-1)!;
+    expect(call.url).toBe(`https://slack.com/api/${name}`);
+    expect(call.init?.method).toBe("POST");
+    expect(JSON.parse(call.init?.body as string)).toMatchObject(params);
+    expect(s.service.catalog(caller).find(op => op.name === name)?.readOnly).toBe(false);
+  }
+  const s = setup(); s.scopes(["reactions:write"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], allowWrite: true });
+  expect(c.allowWrite).toBe(true); // write access no longer requires chat:write
+  await s.service.request(caller, c.id, "reactions.add", writeCases[3]![1]);
+  await expect(s.service.request(caller, c.id, "chat.delete", writeCases[2]![1])).rejects.toThrow("scope");
+});
+test("catalog does not combine a read-only account's scopes with another account's allowWrite", async () => {
+  const s = setup(); s.scopes(["files:write", "chat:write"]); await s.connect();
+  s.auth({ ok: true, team_id: "T456", user_id: "U456" }); s.scopes(["reactions:write"]);
+  await s.service.connect("home", { token: "xoxp-second-token", pets: ["alice"], allowWrite: true });
+  const names = s.service.catalog(caller).map(op => op.name);
+  expect(names).toContain("reactions.add");
+  expect(names).not.toContain("files.upload");
+  expect(names).not.toContain("chat.postMessage");
+  expect(s.service.catalog({ ...caller, pet: "bob" })).toEqual([]);
+});
+test("new read operations preserve parameters, defaults and Slack pagination", async () => {
+  const s = setup(), id = await s.connect();
+  for (const [name, params] of [
+    ["search.files", { query: "in:general report", page: 2 }],
+    ["usergroups.list", { include_users: true }],
+    ["usergroups.users.list", { usergroup: "S123" }],
+    ["reactions.get", { channel: "C123", timestamp: "123.456" }],
+    ["users.lookupByEmail", { email: "a@example.com" }],
+    ["chat.getPermalink", { channel: "C123", message_ts: "123.456" }],
+    ["users.conversations", { types: "im,mpim" }],
+  ] as [string, Record<string, unknown>][]) {
+    const result = await s.service.request(caller, id, name, params);
+    const url = new URL(s.calls.at(-1)!.url);
+    expect(url.pathname).toBe(`/api/${name}`);
+    for (const [key, value] of Object.entries(params)) expect(url.searchParams.get(key)).toBe(String(value));
+    expect(result.data.response_metadata.next_cursor).toBe("next");
+    expect(result.trust).toBe("external");
+  }
+});
+test("file and DM parameters reject traversal, raw URLs, mismatched sharing and invalid combinations", () => {
+  for (const path of ["/etc/passwd", "../private", "a/../b", "a//b", "a\\b", "a\0b"]) expect(() => slackOperation("files.upload", { path })).toThrow();
+  for (const params of [{ file: "F123", url: "https://evil.test" }, { file: "../F123" }]) expect(() => slackOperation("files.download", params)).toThrow();
+  expect(() => slackOperation("files.upload", { path: "report.pdf", thread_ts: "123.456" })).toThrow();
+  for (const types of ["im,im", "im,unknown", "im,", ""]) expect(() => slackOperation("users.conversations", { types })).toThrow();
+  expect(slackOperation("users.conversations", { types: "private_channel,public_channel" }).params.types).toBe("private_channel,public_channel");
+});
+test("opening group DMs requires mpim:write, not just im:write", async () => {
+  const s = setup(); s.scopes(["im:write"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], allowWrite: true });
+  await expect(s.service.request(caller, c.id, "conversations.open", { users: "U123,U456" })).rejects.toThrow("scope");
+  expect(s.calls).toHaveLength(1);
+});
+test("downloads save binary files into the caller's inbox, returning a usable path without bytes or tokens", async () => {
+  const saved: unknown[] = [];
+  const s = setup({ read: async () => { throw new Error("not used"); }, save: async (...args) => { saved.push(args); return ".household/inbox/2026-11-14/F123-screenshot.png"; } });
+  const id = await s.connect();
+  s.api(async url => new URL(url).hostname === "slack.com" ? Response.json({ ok: true, file: { name: "screenshot.png", mimetype: "image/png", url_private_download: "https://files.slack.com/files-pri/F123" } }) : new Response(new Uint8Array([137, 80, 78, 71])));
+  const result = await s.service.request({ ...caller, pet: "worker" }, id, "files.download", { file: "F123" });
+  expect(saved).toEqual([[{ ...caller, pet: "worker" }, "F123-screenshot.png", Buffer.from([137, 80, 78, 71])]]);
+  expect(result.data.path).toBe(".household/inbox/2026-11-14/F123-screenshot.png");
+  expect(result.data.size).toBe(4);
+  expect(result.trust).toBe("external");
+  expect(JSON.stringify(result)).not.toContain("private-token");
+});
+test("uploads read caller outbox and perform allocation, byte POST, completion without exposing signed URLs", async () => {
+  const reads: unknown[] = [];
+  const s = setup({ read: async (...args) => { reads.push(args); return new Uint8Array([1, 2, 3]); }, save: async () => { throw new Error("not used"); } });
+  s.scopes(["files:write"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], allowWrite: true });
+  s.api(async url => String(url).endsWith("getUploadURLExternal") ? Response.json({ ok: true, file_id: "F123", upload_url: "https://files.slack.com/upload/v1/private-signed" }) : new URL(url).hostname === "files.slack.com" ? new Response("OK - 3") : Response.json({ ok: true, files: [{ id: "F123" }] }));
+  const result = await s.service.request(caller, c.id, "files.upload", { path: "clips/demo.mp4", channel_id: "C123", thread_ts: "123.456", initial_comment: "Demo" });
+  expect(reads).toEqual([[caller, "clips/demo.mp4", 50 * 1024 * 1024]]);
+  expect(s.calls).toHaveLength(4);
+  expect(new URLSearchParams(s.calls[1]!.init?.body as URLSearchParams).get("filename")).toBe("demo.mp4");
+  expect(new URLSearchParams(s.calls[1]!.init?.body as URLSearchParams).get("length")).toBe("3");
+  expect(new Headers(s.calls[2]!.init?.headers).has("authorization")).toBe(false);
+  expect(await (s.calls[2]!.init?.body as Blob).bytes()).toEqual(new Uint8Array([1, 2, 3]));
+  expect(JSON.parse(s.calls[3]!.init?.body as string)).toEqual({ files: [{ id: "F123", title: "demo.mp4" }], channel_id: "C123", thread_ts: "123.456", initial_comment: "Demo" });
+  expect(JSON.stringify(result)).not.toContain("private-signed");
+});
+test("revoking access during outbox read prevents all upload network calls", async () => {
+  let resolve!: (bytes: Uint8Array) => void;
+  const s = setup({ read: () => new Promise(r => { resolve = r; }), save: async () => "unused" });
+  s.scopes(["files:write"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], allowWrite: true });
+  const pending = s.service.request(caller, c.id, "files.upload", { path: "video.mp4" });
+  await Bun.sleep(0);
+  s.service.setPets("home", c.id, []);
+  resolve(new Uint8Array([1]));
+  await expect(pending).rejects.toThrow();
+  expect(s.calls).toHaveLength(1);
 });
