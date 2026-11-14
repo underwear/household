@@ -420,6 +420,60 @@ test("edits (each version its own ref), forwards, non-text content, the bot's ow
   ]);
 });
 
+test("incoming rich blocks preserve lists, nested text, edits, forwards, replies and files", async () => {
+  const { api, received, open, listen } = setup();
+  const rich_message = { blocks: [
+    { type: "heading", size: 2, text: "Shopping" },
+    { type: "paragraph", text: ["Buy ", { type: "bold", text: [{ type: "italic", text: "these" }] }, ":"] },
+    { type: "list", items: [
+      { label: "•", blocks: [{ type: "paragraph", text: "Milk" }] },
+      { label: "2.", has_checkbox: true, is_checked: true, blocks: [
+        { type: "paragraph", text: [{ type: "custom_emoji", custom_emoji_id: "1", alternative_text: "🍞" }, " Bread"] },
+        { type: "list", items: [{ label: "•", blocks: [{ type: "paragraph", text: "Rye" }] }] },
+      ] },
+    ] },
+  ] };
+  const text = "Shopping\n\nBuy these:\n\n• Milk\n2. [x] 🍞 Bread\n\n  • Rye";
+  api.push({ message: fromOwner({ rich_message, reply_to_message: fromOwner({}, 40), forward_origin: { type: "hidden_user", date: 7, sender_user_name: "Someone" } }, 1) });
+  api.push({ edited_message: fromOwner({ rich_message, edit_date: 1700000000 }, 2) });
+  api.push({ message: fromOwner({ text: "plain takes precedence", rich_message }, 3) });
+  api.push({ message: fromOwner({ rich_message, document: { file_id: "doc" } }, 4) });
+  api.push({ message: fromOwner({ rich_message: { blocks: [{ type: "paragraph", text: "/start" }] } }, 5) });
+  api.push({ message: fromOwner({ document: { file_id: "start" }, caption: "/start" }, 6) });
+  listen(open());
+  await waitFor(() => received.length === 5);
+  expect(received[0]).toEqual({ kind: "text", ref: ref(1), ...owner, ...facts(1, { forward: { name: "Someone", date: 7 } }), text, relayed: true, replyTo: ref(40) });
+  expect(received[1]).toEqual({ kind: "text", ref: ref(2, 1700000000), ...owner, ...facts(2, { edited: 1700000000 }), text, edits: ref(2) });
+  expect(received[2]).toMatchObject({ kind: "text", text: "plain takes precedence" });
+  expect(received[3]).toMatchObject({ kind: "text", text, attachments: [{ kind: "document", file: "doc" }] });
+  expect(received[4]).toMatchObject({ kind: "text", text: "/start", attachments: [{ kind: "document", file: "start" }] });
+});
+
+test("unknown human content is unsupported and logs field names without content; known service events stay skipped", async () => {
+  const { api, received, lines, open, listen } = setup();
+  api.push({ message: fromOwner({ future_content: { secret: "do not log me" } }, 1) });
+  api.push({ message: fromOwner({ rich_message: { blocks: [{ type: "future_block", text: "do not lose me" }] } }, 2) });
+  api.push({ message: fromOwner({ rich_message: { blocks: [] } }, 3) });
+  api.push({ message: fromOwner({}, 4) });
+  for (const [i, fields] of [{ pinned_message: {} }, { forum_topic_created: { name: "Topic" } }, { new_chat_members: [OLEG] }, { message_auto_delete_timer_changed: { message_auto_delete_time: 60 } }].entries()) {
+    api.push({ message: fromOwner(fields, i + 5) });
+  }
+  api.push({ message: fromOwner({ rich_message: { blocks: [{ type: "photo", photo: [] }] }, document: { file_id: "doc" } }, 9) });
+  listen(open());
+  await waitFor(() => received.length === 5);
+  await waitFor(() => lines.filter(line => line.includes("skipped (a service message)")).length === 4);
+  expect(received.map(message => message.kind)).toEqual(Array(5).fill("unsupported"));
+  expect(received[0]).toMatchObject({ what: "unknown content" });
+  expect(received[1]).toMatchObject({ what: "rich_message" });
+  const diagnostics = lines.filter(line => line.includes("unsupported"));
+  expect(diagnostics).toHaveLength(5);
+  expect(diagnostics[0]).toContain("update fields: message, update_id");
+  expect(diagnostics[0]).toContain("message fields: chat, from, future_content, message_id");
+  expect(diagnostics[1]).toContain("rich_message");
+  expect(lines.join("\n")).not.toContain("do not log me");
+  expect(lines.join("\n")).not.toContain("do not lose me");
+});
+
 test("every kind of file comes as text (its caption) with its attachment; a place and a contact as text; an album as messages of its own", async () => {
   const { api, received, open, listen } = setup();
   const sizes = [{ file_id: "small", width: 90, height: 60, file_size: 1_000 }, { file_id: "large", width: 1280, height: 853, file_size: 90_000 }, { file_id: "mid", width: 320, height: 213 }];

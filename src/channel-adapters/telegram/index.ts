@@ -730,6 +730,10 @@ export class TelegramChannel implements Channel, BotChat {
     try {
       this.discoverTopic(update.message ?? update.edited_message ?? update.callback_query?.message);
       parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => this.mode === "dm" ? undefined : state.get(this.keys.place(thread)) || undefined });
+      if ("message" in parsed && parsed.message.kind === "unsupported") {
+        const message = update.edited_message ?? update.message;
+        log.info(`telegram ${name}: update ${update.update_id} unsupported (${parsed.message.what}); update fields: ${Object.keys(update).sort().join(", ")}; message fields: ${Object.keys(message ?? {}).sort().join(", ")}`);
+      }
       if (parsed && "skipped" in parsed) {
         answer = parsed.answer;
         log.info(`telegram ${name}: update ${update.update_id} skipped (${parsed.skipped})`);

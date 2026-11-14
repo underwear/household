@@ -371,11 +371,17 @@ test("chat-facing agent notifications are shown as Household notices in the pet'
 });
 
 test("content Household cannot take yet gets a notice in the pet's place", async () => {
-  const { chat, calls, opened } = setup();
+  const { chat, calls, opened, records } = setup();
   await chat.setHouses([work()]);
   await opened[0]!.say({ kind: "unsupported", ref: ref("3"), from: { ref: OWNER, name: "Oleg" }, external: {}, what: "poll" });
   expect(calls).toEqual([]);
   expect(opened[0]!.calls).toEqual(["notice 🤖 Sibling: Polls can't be passed on yet"]);
+  for (const what of ["rich_message", "unknown content"]) {
+    await opened[0]!.say({ kind: "unsupported", ref: ref(what), from: { ref: OWNER, name: "Oleg" }, external: {}, what });
+    expect(opened[0]!.calls.at(-1)).toBe("notice 🤖 Sibling: I couldn't read this message. Please resend it as plain text or a file.");
+    expect(records.recordByRef("work", ref(what))).toBeDefined();
+  }
+  expect(calls).toEqual([]);
   await chat.stop();
 });
 

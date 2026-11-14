@@ -1,6 +1,7 @@
 import type { Attachment, AttachmentKind, FileRef } from "../../core/attachment";
 import type { External, InboundMessage, MessageRef, PostRef, SenderRef } from "../../core/channel";
 import { pressedIndex, type InlineKeyboard } from "./keyboard";
+import { richMessageText } from "./rich-text";
 
 /** The parts of a Bot API Update that Household reads. */
 export interface Update {
@@ -41,6 +42,8 @@ export interface TelegramMessage {
   is_topic_message?: boolean;
   edit_date?: number;
   text?: string;
+  /** Incoming block tree, not the outgoing InputRichMessage markdown. */
+  rich_message?: unknown;
   forward_origin?: ForwardOrigin;
   /** The message this one answers; in a thread, without a reply of its own, the thread's first (service) message. */
   reply_to_message?: TelegramMessage;
@@ -85,8 +88,25 @@ type ForwardOrigin =
   | { type: "chat"; date: number; sender_chat: { id: number; title?: string; username?: string } }
   | { type: "channel"; date: number; chat: { id: number; title?: string; username?: string }; message_id: number };
 
-/** Content the person may send that Household cannot take yet; anything else without text, file or place is a service message. */
+/** Content the person may send that Household cannot take yet. */
 const UNSUPPORTED = ["poll", "dice", "game", "story"];
+
+/** Only known service events may be silently skipped. New content kinds must be reported as unsupported.
+ * https://core.telegram.org/bots/api#message
+ */
+const SERVICE = [
+  "new_chat_members", "left_chat_member", "new_chat_title", "new_chat_photo", "delete_chat_photo",
+  "group_chat_created", "supergroup_chat_created", "channel_chat_created", "message_auto_delete_timer_changed",
+  "migrate_to_chat_id", "migrate_from_chat_id", "pinned_message", "chat_owner_left", "chat_owner_changed",
+  "successful_payment", "refunded_payment", "users_shared", "chat_shared", "gift", "unique_gift", "gift_upgrade_sent",
+  "write_access_allowed", "proximity_alert_triggered", "boost_added", "chat_background_set",
+  "checklist_tasks_done", "checklist_tasks_added", "community_chat_added", "community_chat_joined", "community_chat_removed",
+  "direct_message_price_changed", "forum_topic_created", "forum_topic_edited", "forum_topic_closed", "forum_topic_reopened",
+  "general_forum_topic_hidden", "general_forum_topic_unhidden", "giveaway_created", "giveaway_completed", "managed_bot_created",
+  "paid_message_price_changed", "paid_messages_waived", "poll_option_added", "poll_option_deleted",
+  "suggested_post_approved", "suggested_post_approval_failed", "suggested_post_declined", "suggested_post_paid", "suggested_post_refunded",
+  "ton_wallet_transfer", "video_chat_scheduled", "video_chat_started", "video_chat_ended", "video_chat_participants_invited", "web_app_data",
+];
 
 /**
  * The fields with a file, in Household's kinds. An animation comes with a `document` too (for old clients): the
@@ -321,10 +341,12 @@ export function inboundMessage(update: Update, context: ChatContext): Parsed {
       ...(message.forward_origin ? { forward: forwardOf(message.forward_origin) } : {}),
     }),
   };
-  if (message.text?.trim() === "/start") return { skipped: "/start" };
+  const written = message.text ?? richMessageText(message.rich_message);
+  if (written?.trim() === "/start") return { skipped: "/start" };
   const attachment = attachmentOf(message);
   // A file's caption is its message's text.
-  const text = message.text ?? (attachment ? (message.caption ?? "") : placeOrContact(message));
+  // An unreadable rich tree must not turn into an empty file caption and lose its content.
+  const text = written ?? (message.rich_message === undefined ? (attachment ? (message.caption ?? "") : placeOrContact(message)) : undefined);
   if (text !== undefined) {
     const quoted = quotedOf(message);
     return {
@@ -340,5 +362,6 @@ export function inboundMessage(update: Update, context: ChatContext): Parsed {
     };
   }
   const what = UNSUPPORTED.find((field) => field in message);
-  return what ? { message: { ...base, kind: "unsupported", what } } : { skipped: "a service message" };
+  if (!what && message.rich_message === undefined && SERVICE.some(field => field in message)) return { skipped: "a service message" };
+  return { message: { ...base, kind: "unsupported", what: what ?? ("rich_message" in message ? "rich_message" : "unknown content") } };
 }

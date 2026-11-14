@@ -1006,7 +1006,12 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const replay = !!this.records.recordByRef(house, message.ref);
     const { record, edit } = this.remembered(house, pet.name, place, message, { ...(shown ? { shown } : {}), ...(where.facts ? { kept: where.facts } : {}) });
     const own = { channel, place: petPlace(pet, petPlaceKey(pet.name, key)) };
-    if (message.kind === "unsupported") return this.noticeIn(house, pet.name, own, `${UNSUPPORTED_NAMES[message.what] ?? message.what} can't be passed on yet`);
+    if (message.kind === "unsupported") {
+      const unreadable = message.what === "rich_message" || message.what === "unknown content";
+      return this.noticeIn(house, pet.name, own, unreadable
+        ? "I couldn't read this message. Please resend it as plain text or a file."
+        : `${UNSUPPORTED_NAMES[message.what] ?? message.what} can't be passed on yet`);
+    }
     const { ref, edits, relayed, text, attachments } = message;
     // While a dialog of the pet waits, what its owner writes in the pet's place is the answer (a guest's is a message; files are never one).
     if ((thread === pet || pet.chatPlace === place.id || this.currentTarget(house, pet.name).spot?.place.id === place.id || !thread && channel.inInbox?.(petPlace(pet, petPlaceKey(pet.name, key)))) && !message.interaction && trust === "owner" && edits === undefined && !relayed && !attachments && (await this.dialogs.text(`${house}/${pet.name}`, text))) {
