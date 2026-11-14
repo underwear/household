@@ -54,16 +54,46 @@ def message(raw, identity, truncated=False):
     except Exception: pass
     return item
 
-class BoundedIMAP(imaplib.IMAP4_SSL):
+class MailError(Exception):
+    pass
+
+def tls_context(source):
+    context = ssl.create_default_context()
+    if source.get("tlsCertificate"):
+        try: context.load_verify_locations(cadata=source["tlsCertificate"])
+        except (ssl.SSLError, ValueError): raise MailError("certificate-config") from None
+    return context
+
+class BoundedIMAPRead:
+    def __exit__(self, exc_type, exc_value, traceback):
+        # A failed TLS upgrade can leave no usable socket. Logout must not hide
+        # the original certificate/handshake error (or its safe diagnostic).
+        try: self.logout()
+        except Exception: pass
+
     def read(self, size):
         if size > MAX_MESSAGE: raise ValueError("IMAP literal too large")
         return super().read(size)
 
+class BoundedIMAP(BoundedIMAPRead, imaplib.IMAP4_SSL):
+    pass
+
+class BoundedSTARTTLSIMAP(BoundedIMAPRead, imaplib.IMAP4):
+    pass
+
 def imap_poll(source, cursor, initial):
-    context = ssl.create_default_context()
-    with BoundedIMAP(source["host"], source["port"], ssl_context=context, timeout=15) as conn:
+    context = tls_context(source)
+    starttls = source.get("security", "tls") == "starttls"
+    client = BoundedSTARTTLSIMAP if starttls else BoundedIMAP
+    options = {} if starttls else {"ssl_context": context}
+    with client(source["host"], source["port"], timeout=15, **options) as conn:
         conn.sock.settimeout(15)
-        conn.login(source["username"], source["password"])
+        if starttls:
+            if "STARTTLS" not in conn.capabilities: raise MailError("starttls")
+            try: conn.starttls(ssl_context=context)
+            except imaplib.IMAP4.error: raise MailError("starttls") from None
+        try: conn.login(source["username"], source["password"])
+        except imaplib.IMAP4.error: raise MailError("authentication") from None
         status, _ = conn.select(conn._quote(source.get("mailbox", "INBOX")), readonly=True)
         if status != "OK": raise ValueError("mailbox")
         validity = (conn.response("UIDVALIDITY")[1] or [None])[0]
@@ -91,7 +121,7 @@ def imap_poll(source, cursor, initial):
             last = uid
         return {"items": items, "cursor": json.dumps({"validity": validity, "uid": last})}
 
-class BoundedPOP(poplib.POP3_SSL):
+class BoundedPOPRead:
     def _getlongresp(self):
         response = self._getresp()
         lines = []
@@ -105,11 +135,26 @@ class BoundedPOP(poplib.POP3_SSL):
             lines.append(line)
         return response, lines, total
 
+class BoundedPOP(BoundedPOPRead, poplib.POP3_SSL):
+    pass
+
+class BoundedSTARTTLSPOP(BoundedPOPRead, poplib.POP3):
+    pass
+
 def pop_poll(source, cursor, initial):
-    conn = BoundedPOP(source["host"], source["port"], timeout=15, context=ssl.create_default_context())
+    context = tls_context(source)
+    starttls = source.get("security", "tls") == "starttls"
+    client = BoundedSTARTTLSPOP if starttls else BoundedPOP
+    options = {} if starttls else {"context": context}
+    conn = client(source["host"], source["port"], timeout=15, **options)
     try:
-        conn.user(source["username"])
-        conn.pass_(source["password"])
+        if starttls:
+            try: conn.stls(context=context)
+            except poplib.error_proto: raise MailError("starttls") from None
+        try:
+            conn.user(source["username"])
+            conn.pass_(source["password"])
+        except poplib.error_proto: raise MailError("authentication") from None
         listing = conn.uidl()[1]
         if len(listing) > MAX_MAILBOX: raise ValueError("mailbox too large")
         entries = [line.decode("ascii").split() for line in listing]
@@ -135,7 +180,9 @@ def pop_poll(source, cursor, initial):
         return {"items": items, "cursor": json.dumps({"uids": [uid for uid in all_ids if uid in old]})}
     finally:
         try: conn.quit()
-        except Exception: conn.close()
+        except Exception:
+            try: conn.close()
+            except Exception: pass
 
 def main():
     socket.setdefaulttimeout(15)
@@ -147,7 +194,13 @@ def main():
 
 if __name__ == "__main__":
     try: main()
-    except Exception:
+    except Exception as error:
         # Server messages may echo passwords or contain malicious text.
-        print(json.dumps({"error": "Mail polling failed. Check host, TLS port, app password and mailbox; the server must support stable UIDs."}))
+        code = "mail"
+        if isinstance(error, MailError): code = str(error)
+        elif isinstance(error, ssl.SSLCertVerificationError): code = "certificate"
+        elif isinstance(error, ssl.SSLError): code = "tls"
+        elif isinstance(error, (ConnectionError, socket.gaierror)): code = "connection"
+        elif isinstance(error, (TimeoutError, socket.timeout)): code = "timeout"
+        print(json.dumps({"error": code}))
         sys.exit(1)

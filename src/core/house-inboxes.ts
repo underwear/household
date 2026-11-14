@@ -11,6 +11,9 @@ const mail = {
   port: z.number().int().min(1).max(65535),
   username: z.string().min(1).max(320).refine(v => !/[\r\n\0]/.test(v)),
   password: z.string().min(1).max(8192).refine(v => !/[\r\n\0]/.test(v)),
+  /** Omitted in older configs: implicit TLS. STARTTLS is required, never opportunistic. */
+  security: z.enum(["tls", "starttls"]).optional(),
+  tlsCertificate: z.string().trim().max(32768).regex(/^(?:-----BEGIN CERTIFICATE-----\s+[A-Za-z0-9+/=\s]+\s+-----END CERTIFICATE-----\s*)+$/, "Use PEM certificates only, never a private key").optional(),
 };
 export const pollSourceSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("telegram-bot"), token: z.string().trim().max(256).regex(/^[1-9][0-9]*:[A-Za-z0-9_-]{20,}$/) }),

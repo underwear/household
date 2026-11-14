@@ -261,3 +261,25 @@ test("quiet pets must be subscribers", () => {
   expect(houseInboxSchema.parse({ ...inbox(), quiet: ["bob"] }).quiet).toEqual(["bob"]);
   expect(inbox().quiet).toEqual([]);
 });
+
+test("mail TLS mode and certificate changes preserve legacy cursor and pending events", async () => {
+  for (const kind of ["imap", "pop3"] as const) {
+    const cursors: (string | undefined)[] = [];
+    const s = setup(async (_source, cursor) => { cursors.push(cursor); return { items: [event("one")], cursor: "mail-head" }; }, "latest");
+    s.source.source = { kind, host: "127.0.0.1", port: 1143, username: "user", password: "old", ...(kind === "imap" ? { mailbox: "INBOX" } : {}) } as typeof s.source.source;
+    s.fail("post");
+    await s.service.run("work", "mail");
+    const before = s.service.list("work")[0]!.status;
+    expect(before.pendingCount).toBe(1);
+    s.source.source = { ...s.source.source, security: "starttls", tlsCertificate: "-----BEGIN CERTIFICATE-----\nZmFrZQ==\n-----END CERTIFICATE-----", password: "new" } as typeof s.source.source;
+    expect(() => s.service.assertChange("work", s.source)).not.toThrow();
+    expect(s.service.list("work")[0]!.status.pendingCount).toBe(1);
+    expect(s.service.list("work")[0]!.status.initialized).toBe(true);
+    s.fail();
+    await s.service.run("work", "mail");
+    expect(cursors).toEqual([undefined, "mail-head"]);
+    expect(s.posted).toHaveLength(1);
+    s.source.source = { ...s.source.source, port: 993 } as typeof s.source.source;
+    expect(s.service.list("work")[0]!.status.initialized).toBe(false);
+  }
+});

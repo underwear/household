@@ -9,7 +9,7 @@ import { pollInbox, type Poller } from "../infra/inbox-pollers";
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const sourceIdentity = (source: HouseInbox["source"]) => {
   if (source.kind === "telegram-bot") return hash({ kind: source.kind, bot: source.token.split(":")[0] });
-  const { password, headers, ...identity } = source as HouseInbox["source"] & { password?: string; headers?: Record<string, string> };
+  const { password, headers, security, tlsCertificate, ...identity } = source as HouseInbox["source"] & { password?: string; headers?: Record<string, string>; security?: string; tlsCertificate?: string };
   return hash(identity);
 };
 const empty = (fingerprint: string): InboxState => ({ fingerprint, initialized: false, seen: [], pending: [], recent: [], nextCheck: 0, failures: 0 });

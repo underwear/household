@@ -47,8 +47,8 @@ A bot sees only events that were addressed to it; subscribing later does not ope
 
 | Source | You enter | What arrives |
 | --- | --- | --- |
-| IMAP | Server, TLS port (993), username, password or app password, folder | New mail. Messages stay unread. |
-| POP3 | Server, TLS port (995), username, password or app password | New mail. Nothing is deleted. |
+| IMAP | Server, port (TLS: 993; STARTTLS: 143), connection security, username, password or app password, folder | New mail. Messages stay unread. |
+| POP3 | Server, port (TLS: 995; STARTTLS: 110), connection security, username, password or app password | New mail. Nothing is deleted. |
 | RSS / Atom | Feed URL | New entries |
 | Health check | URL, expected status, timeout, failures before an alert | Down and recovered |
 | JSON watcher | URL, the whole response or selected fields | Changed values |
@@ -59,7 +59,9 @@ A bot sees only events that were addressed to it; subscribing later does not ope
 
 Every URL source accepts request headers for credentials. Redirects are not followed: enter the final URL.
 
-**Mail.** Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes and STARTTLS ports (143, 110) are not supported. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.
+**Mail.** Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes are not supported. Choose **TLS** for encryption from the start, or **STARTTLS** to upgrade the connection before login (POP3 uses STLS). Encryption and certificate verification are required in both modes; there is no fallback to plaintext. Existing inboxes keep using TLS. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.
+
+**Proton Mail Bridge.** Run Bridge on the same computer as Household. In Bridge, open the account's mailbox settings and use its IMAP host (usually `127.0.0.1`), port (usually `1143`), username and generated password, not your Proton account password. Choose the connection mode configured in Bridge, usually **STARTTLS**. In Bridge's **Settings → Advanced settings → Export TLS certificates**, export the certificate, then paste its PEM contents into **Trusted certificate** in Household. Do not paste the private key. This trusts the supplied certificate for this inbox while still checking the server name and expiry. If Bridge regenerates its certificate, export and replace it here. Test the connection, then select delivery. See [Bridge settings](https://proton.me/support/comprehensive-guide-to-bridge-settings).
 
 **RSS / Atom.** RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.
 
@@ -123,6 +125,7 @@ Good to know:
 - An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a bot may get an event it had already started on: the digest tells it so.
 - Checks see snapshots: an alert that fires and clears between two checks can be missed.
 - Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.
+- Changing mail connection security or its trusted certificate also keeps the inbox's place; changing the port starts it over.
 - Switching posting on or off applies to new events; switching a bot to Silent applies at once.
 - The host can reach internal addresses your bots cannot: only you configure sources.
 

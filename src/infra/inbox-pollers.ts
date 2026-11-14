@@ -8,6 +8,17 @@ import mailHelper from "./inbox-mail.py" with { type: "text" };
 
 export type Poller = ((source: PollSource, cursor: string | undefined, initial: "new" | "latest", signal: AbortSignal) => Promise<PollResult>) & { test?: Poller };
 
+const mailErrors: Record<string, string> = {
+  mail: "Mail polling failed. Check server, port, connection security, credentials and folder; stable UIDs are required.",
+  certificate: "Mail TLS certificate could not be verified. For Proton Bridge, export its TLS certificate and add it under Trusted certificate. Check the server name and certificate expiry too.",
+  "certificate-config": "The trusted mail certificate could not be loaded. Use a PEM certificate exported by your mail server, without its private key.",
+  starttls: "The mail server did not accept STARTTLS. Check its connection mode and port. No credentials were sent.",
+  authentication: "Mail login was rejected. Check the username and app password. For Proton Bridge, use the password shown in Bridge, not your Proton account password.",
+  tls: "Mail TLS negotiation failed. Check that connection security (TLS or STARTTLS) matches the server port.",
+  connection: "Could not connect to the mail server. Check host and port. For Proton Bridge, keep Bridge running on the same computer as Household.",
+  timeout: "The mail server timed out. Check host, port and connection security (TLS or STARTTLS).",
+};
+
 const httpResult = z.strictObject({ version: z.literal(1), items: pollResultSchema.shape.items, nextCursor: z.string().max(4096).optional() });
 
 const alert = z.object({
@@ -45,7 +56,11 @@ const pollLegacy = async (source: Exclude<PollSource, { kind: "rss" | "health" |
   try {
     if (source.kind === "imap" || source.kind === "pop3") {
       const result = await runCommand(["python3", "-c", mailHelper], { stdin: JSON.stringify({ source, cursor, initial }), timeoutMs: 60_000, signal });
-      if (!result.ok) throw new InboxPollError("Mail polling failed. Check host, TLS port, app password and mailbox; stable UIDs are required.");
+      if (!result.ok) {
+        let code = "mail";
+        try { code = z.object({ error: z.enum(["mail", "certificate", "certificate-config", "starttls", "authentication", "tls", "connection", "timeout"]) }).parse(JSON.parse(result.stdout)).error; } catch {}
+        throw new InboxPollError(mailErrors[code]!);
+      }
       return pollResultSchema.parse(JSON.parse(result.stdout));
     }
     const url = new URL(source.url);

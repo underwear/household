@@ -403,6 +403,8 @@ function InboxEditor({ house, inbox, onClose, save }: { house: WorkspaceView; in
   const [url, setUrl] = useState(source && "url" in source ? source.url : "");
   const [host, setHost] = useState(source && "host" in source ? source.host : "");
   const [port, setPort] = useState(source && "port" in source ? String(source.port) : "");
+  const [security, setSecurity] = useState<"tls" | "starttls">(source && "security" in source ? source.security ?? "tls" : "tls");
+  const [tlsCertificate, setTlsCertificate] = useState(source && "tlsCertificate" in source ? source.tlsCertificate ?? "" : "");
   const [username, setUsername] = useState(source && "username" in source ? source.username : "");
   const [password, setPassword] = useState(source && "password" in source ? source.password : "");
   const [mailbox, setMailbox] = useState(source?.kind === "imap" ? source.mailbox : "INBOX");
@@ -425,6 +427,8 @@ function InboxEditor({ house, inbox, onClose, save }: { house: WorkspaceView; in
   const [suffix] = useState(() => crypto.randomUUID().slice(0, 6));
   const selected = house.channels.find((c) => c.chat === channel);
   const mail = kind === "imap" || kind === "pop3";
+  const defaultPort = kind === "imap" ? (security === "starttls" ? 143 : 993) : (security === "starttls" ? 110 : 995);
+  const mailTls = { security, ...(tlsCertificate.trim() ? { tlsCertificate: tlsCertificate.trim() } : {}) };
   const requestHeaders = () => Object.fromEntries(headers.filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), value]));
   const fields = (): WorkspaceInbox => ({
     name: inbox?.name ?? (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35).replace(/^[^a-z]+/, "") || "inbox") + "-" + suffix,
@@ -438,8 +442,8 @@ function InboxEditor({ house, inbox, onClose, save }: { house: WorkspaceView; in
     delivery,
     source:
       kind === "telegram-bot" ? { kind, token: botToken.trim() }
-      : kind === "imap" ? { kind, host: host.trim(), port: Number(port || 993), username, password, mailbox }
-      : kind === "pop3" ? { kind, host: host.trim(), port: Number(port || 995), username, password }
+      : kind === "imap" ? { kind, host: host.trim(), port: Number(port || defaultPort), username, password, mailbox, ...mailTls }
+      : kind === "pop3" ? { kind, host: host.trim(), port: Number(port || defaultPort), username, password, ...mailTls }
       : kind === "health" ? { kind, url: url.trim(), headers: requestHeaders(), timeoutMs: Number(timeout) * 1000, failures: Number(failures), expectedStatus: Number(expectedStatus) }
       : kind === "json-watch" ? { kind, url: url.trim(), headers: requestHeaders(), pointers: watchMode === "fields" ? pointers.split("\n").map((p) => p.trim()).filter(Boolean) : [] }
       : kind === "datadog" ? { kind, url: url.trim(), headers: requestHeaders(), monitor }
@@ -497,6 +501,8 @@ function InboxEditor({ house, inbox, onClose, save }: { house: WorkspaceView; in
                 onChange={(value) => {
                   setKind(value as Kind);
                   setPort("");
+                  setSecurity("tls");
+                  setTlsCertificate("");
                   setHeaders(value === "datadog" ? [["DD-API-KEY", ""], ["DD-APPLICATION-KEY", ""]] : value === "grafana" ? [["Authorization", "Bearer "]] : []);
                 }}
                 options={SOURCES.map((s) => ({ value: s.value, label: s.label, description: s.description, icon: <SourceMark kind={s.value} /> }))}
@@ -525,13 +531,26 @@ function InboxEditor({ house, inbox, onClose, save }: { house: WorkspaceView; in
                   <>
                     <FormGrid>
                       <TextField label="Mail server" mono value={host} onChange={setHost} placeholder={kind === "imap" ? "imap.example.com" : "pop.example.com"} />
-                      <TextField label="TLS port" mono value={port} onChange={setPort} inputMode="numeric" placeholder={kind === "imap" ? "993" : "995"} />
+                      <TextField label="Port" mono value={port} onChange={setPort} inputMode="numeric" placeholder={String(defaultPort)} />
                     </FormGrid>
+                    <SelectField
+                      label="Connection security"
+                      value={security}
+                      onChange={(value) => {
+                        if (port === String(defaultPort)) setPort("");
+                        setSecurity(value as "tls" | "starttls");
+                      }}
+                      options={[{ value: "tls", label: "TLS — encrypted from the start" }, { value: "starttls", label: "STARTTLS — require encryption before login" }]}
+                      hint={kind === "imap" ? "Proton Bridge: use 127.0.0.1, the IMAP port and connection mode shown in Bridge (usually STARTTLS, port 1143). Bridge must run on this computer." : "Use the mode and port specified by your mail provider."}
+                    />
                     <FormGrid>
                       <TextField label="Username" mono value={username} onChange={setUsername} placeholder="you@example.com" />
                       <TextField label="Password or app password" type="password" value={password} onChange={setPassword} />
                     </FormGrid>
                     {kind === "imap" && <TextField label="Folder" mono value={mailbox} onChange={setMailbox} placeholder="INBOX" />}
+                    <Field id="inbox-certificate" label="Trusted certificate (optional)" hint="For Proton Bridge: Settings → Advanced settings → Export TLS certificates. Paste the exported certificate here, never the private key. Leave empty for a publicly trusted mail server.">
+                      <textarea id="inbox-certificate" aria-describedby="inbox-certificate-hint" className="control mono" value={tlsCertificate} onChange={(e) => setTlsCertificate(e.target.value)} placeholder={"-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"} rows={3} spellCheck={false} />
+                    </Field>
                   </>
                 ) : (
                   <>

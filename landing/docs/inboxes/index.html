@@ -217,8 +217,8 @@
 <tr><th>Source</th><th>You enter</th><th>What arrives</th></tr>
 </thead>
 <tbody>
-<tr><td>IMAP</td><td>Server, TLS port (993), username, password or app password, folder</td><td>New mail. Messages stay unread.</td></tr>
-<tr><td>POP3</td><td>Server, TLS port (995), username, password or app password</td><td>New mail. Nothing is deleted.</td></tr>
+<tr><td>IMAP</td><td>Server, port (TLS: 993; STARTTLS: 143), connection security, username, password or app password, folder</td><td>New mail. Messages stay unread.</td></tr>
+<tr><td>POP3</td><td>Server, port (TLS: 995; STARTTLS: 110), connection security, username, password or app password</td><td>New mail. Nothing is deleted.</td></tr>
 <tr><td>RSS / Atom</td><td>Feed URL</td><td>New entries</td></tr>
 <tr><td>Health check</td><td>URL, expected status, timeout, failures before an alert</td><td>Down and recovered</td></tr>
 <tr><td>JSON watcher</td><td>URL, the whole response or selected fields</td><td>Changed values</td></tr>
@@ -229,7 +229,8 @@
 </tbody>
 </table>
 <p>Every URL source accepts request headers for credentials. Redirects are not followed: enter the final URL.</p>
-<p><strong>Mail.</strong> Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes and STARTTLS ports (143, 110) are not supported. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.</p>
+<p><strong>Mail.</strong> Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes are not supported. Choose <strong>TLS</strong> for encryption from the start, or <strong>STARTTLS</strong> to upgrade the connection before login (POP3 uses STLS). Encryption and certificate verification are required in both modes; there is no fallback to plaintext. Existing inboxes keep using TLS. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.</p>
+<p><strong>Proton Mail Bridge.</strong> Run Bridge on the same computer as Household. In Bridge, open the account's mailbox settings and use its IMAP host (usually <code>127.0.0.1</code>), port (usually <code>1143</code>), username and generated password, not your Proton account password. Choose the connection mode configured in Bridge, usually <strong>STARTTLS</strong>. In Bridge's <strong>Settings → Advanced settings → Export TLS certificates</strong>, export the certificate, then paste its PEM contents into <strong>Trusted certificate</strong> in Household. Do not paste the private key. This trusts the supplied certificate for this inbox while still checking the server name and expiry. If Bridge regenerates its certificate, export and replace it here. Test the connection, then select delivery. See <a href="https://proton.me/support/comprehensive-guide-to-bridge-settings">Bridge settings</a>.</p>
 <p><strong>RSS / Atom.</strong> RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.</p>
 <p><strong>Health check.</strong> A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the bots get one <em>down</em> event; the first passing check after it sends <em>recovered</em>. A site already down when you add it still alerts. The response body is ignored.</p>
 <p><strong>JSON watcher.</strong> Any JSON endpoint. Watch the whole response, or list fields as <a href="https://www.rfc-editor.org/rfc/rfc6901">JSON Pointer</a> paths, one per line:</p>
@@ -281,6 +282,7 @@
 <li>An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a bot may get an event it had already started on: the digest tells it so.</li>
 <li>Checks see snapshots: an alert that fires and clears between two checks can be missed.</li>
 <li>Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.</li>
+<li>Changing mail connection security or its trusted certificate also keeps the inbox's place; changing the port starts it over.</li>
 <li>Switching posting on or off applies to new events; switching a bot to Silent applies at once.</li>
 <li>The host can reach internal addresses your bots cannot: only you configure sources.</li>
 </ul>
