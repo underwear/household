@@ -8,7 +8,7 @@ A bot's VM has no way to the internet of its own. Everything it sends goes throu
 - **One allowlist per workspace,** shared by its bots and their sideworkers. Your harness's hosts, such as its model provider, are added for you.
 - **Your local network stays closed.** Only an exact entry you write yourself, such as `nas.local:445`, reaches a private address. Wildcards, `*` and chat approvals reach public addresses only, so a name someone points at your router cannot open your network.
 - **Household sees the host, not the content,** except where it fills in a key.
-- **[Connectors](../connectors/) are not on it,** so a write connector is a way out the allowlist does not cover.
+- **[Connectors](../connectors/) are not on it,** so a connector that can change things is a way out the allowlist does not cover (unless it asks you first).
 
 The allowlist limits where data can go, not what goes there:
 

@@ -50,7 +50,7 @@ Install the `household` skill too, for running Household afterwards:
   or plain), or a Slack DM.
 - **Inbox**: something that wakes bots on its own: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,
   Telegram bot updates, custom HTTP.
-- **Connectors**: accounts a workspace connects and gives to chosen bots, read-only or read-write: any IMAP/SMTP
+- **Connectors**: accounts a workspace connects and gives to chosen bots, read only, asking the owner before each change, or with full access: any IMAP/SMTP
   mailbox, Google (Gmail, Drive, Calendar), Slack, Microsoft To Do. Tokens stay in the host's private database.
   Any MCP server can be added to a bot by asking it (see MCP servers).
 - **claude.ai connectors and ChatGPT apps**: a bot on a subscription sign-in key (Sign in to Claude, or a ChatGPT

@@ -196,7 +196,7 @@
 <tr><td>Harness</td><td>What a bot runs on, such as Claude Code or Codex; whatever it can do, the bot can do.</td></tr>
 <tr><td>Key</td><td>The model account a bot uses: a subscription or an API key.</td></tr>
 <tr><td>Channel</td><td>Where you talk to the bots, such as a Telegram group or a Slack DM.</td></tr>
-<tr><td>Connector</td><td>One of your accounts, such as a mailbox, read-only or read-write.</td></tr>
+<tr><td>Connector</td><td>One of your accounts, such as a mailbox: read only, asking you before each change, or with full access.</td></tr>
 <tr><td>Inbox</td><td>Something that wakes bots on its own, such as mail or alerts.</td></tr>
 <tr><td>Sideworker</td><td>Extra hands a bot starts for one job, with its home and access.</td></tr>
 <tr><td>Scout</td><td>A specialist for one risky or privileged task, in a fresh VM, after you approve.</td></tr>
@@ -210,7 +210,7 @@
 <li><strong>One way out, through an allowlist.</strong> A VM's only route out is Household's proxy, which passes only the hosts on the workspace's allowlist. For a new host the bot asks in the chat, and you choose <strong>Allow 15 min</strong> (that bot only), <strong>Allow forever</strong> (the whole workspace) or <strong>Deny</strong>.</li>
 <li><strong>Secrets substituted at egress.</strong> Inside the VM a secret is a placeholder; the proxy swaps in the real value only in requests to that secret's own hosts. Anywhere else, a placeholder is a useless string.</li>
 <li><strong>Scouts for what a bot should not hold.</strong> The open web, a production key or a closed network go to a scout, which starts only when you press <strong>Run</strong>. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.</li>
-<li><strong>You approve the rest.</strong> New hosts, folders of your computer, preview links and, with <strong>Ask me first</strong>, outgoing email wait for an owner.</li>
+<li><strong>You approve the rest.</strong> New hosts, folders of your computer, preview links and, with <strong>Ask me first</strong>, every change a connector would make wait for an owner.</li>
 </ul>
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Placeholders don't work for SSH keys, database passwords or signed requests: those need the real value inside the VM. See <a href="network/#what-a-placeholder-cannot-do">What a placeholder cannot do</a>.</p>
 <h3 id="what-it-does-not-protect-against">What it does not protect against</h3>
@@ -218,7 +218,7 @@
 <ul>
 <li><strong>Allowed hosts.</strong> Each is a way out for your data. <code>github.com</code> opens all of GitHub, not just your repositories; <code>*</code> opens the whole internet.</li>
 <li><strong>Read-write folders.</strong> A bot can change or delete what is in them.</li>
-<li><strong>Write connectors.</strong> They work outside the allowlist. A bot with write access to Google or Slack sends mail, changes files and posts without asking; only Email has <strong>Ask me first</strong>.</li>
+<li><strong>Connectors with Full access.</strong> They work outside the allowlist, so a bot can send mail, change files and post in your name without asking. <strong>Ask me first</strong> puts each change in front of you.</li>
 <li><strong>Memory and shared skills.</strong> A bot can write false notes into its memory, or change skills every bot in the workspace reads.</li>
 </ul>
 <p>Bots are told to treat what they read as data, not instructions. That lowers the risk, no more.</p>

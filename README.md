@@ -34,7 +34,7 @@ and lets you talk to it from the messenger you already use.
 - 🔑 **Secrets it never sees.** Each workspace owns its secrets, managed in its **Secrets** page. The bot holds only placeholders; Household puts the real keys into requests on their way out, to the hosts you chose.
 - 🕵️ **Dangerous jobs go to scouts.** A bot hands risky work to a throwaway VM with only the access it needs: "find this movie on a torrent site" sends a scout onto untrusted sites without exposing the bot’s files or secrets.
 - 📬 **Wakes up on its own.** Mail, feeds and alerts trigger your bots.
-- ✅ **Microsoft To Do.** Share lists, tasks and checklists with selected bots, read-only or with permission to change them. [Standalone device-code sign-in](https://agents-household.dev/docs/connectors/#microsoft-to-do) works on your computer or a VPS.
+- ✅ **Microsoft To Do.** Share lists, tasks and checklists with selected bots: read only, asking you before each change, or with full access. [Standalone device-code sign-in](https://agents-household.dev/docs/connectors/) works on your computer or a VPS.
 - ⏰ **Its own cron.** A bot schedules its own tasks: recurring ones like a weekday 9:00 digest, or one-off ones like "remind me at 18:00". Household keeps the clock on the host, across restarts.
 
 ### Supported harnesses and messengers
@@ -75,6 +75,6 @@ Plus `openssl` and `python3`. The installer brings the rest: microsandbox, Codex
 
 ## 📚 Documentation
 
-Connect any IMAP/SMTP mailbox from **Workspace → Connectors → + Add connector → Email**: live search, attachments, replies and sending that asks you first in the bot's chat, or sends on its own. See **[Connectors](https://agents-household.dev/docs/connectors/#email)**.
+Connect any IMAP/SMTP mailbox from **Workspace → Connectors → + Add connector → Email**: live search, attachments, replies and sending that asks you first in the bot's chat, or sends on its own. See **[Connectors](https://agents-household.dev/docs/connectors/)**.
 
 Everything else — bots, scouts, sideworkers, inboxes, previews, backup — is in the **[docs](https://agents-household.dev/docs/)**.

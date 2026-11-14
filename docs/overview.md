@@ -23,7 +23,7 @@ A small program, `house`, runs on your machine. It starts each bot's VM, talks t
 | Harness | What a bot runs on, such as Claude Code or Codex; whatever it can do, the bot can do. |
 | Key | The model account a bot uses: a subscription or an API key. |
 | Channel | Where you talk to the bots, such as a Telegram group or a Slack DM. |
-| Connector | One of your accounts, such as a mailbox, read-only or read-write. |
+| Connector | One of your accounts, such as a mailbox: read only, asking you before each change, or with full access. |
 | Inbox | Something that wakes bots on its own, such as mail or alerts. |
 | Sideworker | Extra hands a bot starts for one job, with its home and access. |
 | Scout | A specialist for one risky or privileged task, in a fresh VM, after you approve. |
@@ -38,7 +38,7 @@ A bot is a capable agent with a shell and root in its VM. Household assumes it w
 - **One way out, through an allowlist.** A VM's only route out is Household's proxy, which passes only the hosts on the workspace's allowlist. For a new host the bot asks in the chat, and you choose **Allow 15 min** (that bot only), **Allow forever** (the whole workspace) or **Deny**.
 - **Secrets substituted at egress.** Inside the VM a secret is a placeholder; the proxy swaps in the real value only in requests to that secret's own hosts. Anywhere else, a placeholder is a useless string.
 - **Scouts for what a bot should not hold.** The open web, a production key or a closed network go to a scout, which starts only when you press **Run**. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.
-- **You approve the rest.** New hosts, folders of your computer, preview links and, with **Ask me first**, outgoing email wait for an owner.
+- **You approve the rest.** New hosts, folders of your computer, preview links and, with **Ask me first**, every change a connector would make wait for an owner.
 
 ⚠️ Placeholders don't work for SSH keys, database passwords or signed requests: those need the real value inside the VM. See [What a placeholder cannot do](network/#what-a-placeholder-cannot-do).
 
@@ -48,7 +48,7 @@ Household cannot stop a bot tricked by a web page, email or file (prompt injecti
 
 - **Allowed hosts.** Each is a way out for your data. `github.com` opens all of GitHub, not just your repositories; `*` opens the whole internet.
 - **Read-write folders.** A bot can change or delete what is in them.
-- **Write connectors.** They work outside the allowlist. A bot with write access to Google or Slack sends mail, changes files and posts without asking; only Email has **Ask me first**.
+- **Connectors with Full access.** They work outside the allowlist, so a bot can send mail, change files and post in your name without asking. **Ask me first** puts each change in front of you.
 - **Memory and shared skills.** A bot can write false notes into its memory, or change skills every bot in the workspace reads.
 
 Bots are told to treat what they read as data, not instructions. That lowers the risk, no more.
