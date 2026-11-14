@@ -86,8 +86,12 @@ def imap(endpoint):
 def smtp(endpoint):
     context = tls_context(endpoint)
     start = endpoint["security"] == "starttls"
-    conn = (StartSMTP if start else TLSSMTP)(endpoint["host"], endpoint["port"], timeout=15, **({} if start else {"context": context}))
+    # smtplib's implicit getfqdn() can block in the host resolver outside the socket
+    # timeout. Use the connected socket's address literal for EHLO, without local DNS.
+    conn = (StartSMTP if start else TLSSMTP)(endpoint["host"], endpoint["port"], local_hostname="[127.0.0.1]", timeout=15, **({} if start else {"context": context}))
     try:
+        address = conn.sock.getsockname()[0]
+        conn.local_hostname = "[" + ("IPv6:" if ":" in address else "") + address + "]"
         conn.ehlo_or_helo_if_needed()
         if start:
             if not conn.has_extn("starttls"): raise MailError("starttls")

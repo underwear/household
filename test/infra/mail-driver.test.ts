@@ -268,3 +268,17 @@ for (const security of ["tls", "starttls"] as const) test(`SMTP ${security}: bou
     expect(server.delivered).toHaveLength(0);
   } finally { await server.close(); }
 });
+
+for (const security of ["tls", "starttls"] as const) test(`SMTP ${security}: EHLO never resolves this machine's hostname`, async () => {
+  const server = await fixture("smtp", security), c = config(server.endpoint, server.endpoint);
+  try {
+    const wire = await mailDriver(c, "compose", message);
+    // A broken local resolver must not stall a connection to an already-known mail endpoint.
+    const source = readFileSync(new URL("../../src/infra/mail/driver.py", import.meta.url), "utf8").replace('if __name__ == "__main__":', 'def forbidden_local_dns(*args): raise RuntimeError("local hostname lookup forbidden")\nsocket.getfqdn = forbidden_local_dns\nsocket.gethostbyname = forbidden_local_dns\nif __name__ == "__main__":');
+    const proc = Bun.spawn(["python3", "-c", source], { stdin: new Blob([JSON.stringify({ config: c, operation: "send", params: { raw: wire.raw, recipients: message.to } })]), stdout: "pipe", stderr: "pipe", timeout: 4000 });
+    const output = await new Response(proc.stdout).json();
+    expect(await proc.exited).toBe(0);
+    expect(output.data.delivery).toBe("sent");
+    expect(server.commands.filter(c => /^ehlo /i.test(c.line)).every(c => c.line.toLowerCase() === "ehlo [127.0.0.1]")).toBe(true);
+  } finally { await server.close(); }
+});
