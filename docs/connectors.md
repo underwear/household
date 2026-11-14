@@ -27,7 +27,7 @@ Bots treat what they read as outside content, not your instructions. Still, a bo
 
 ## Reconnect and settings
 
-Each row shows **Connected** or **Reconnect required**; the latter means the sign-in was revoked or expired. **Reconnect** signs in again with the account's current choices, and what you pick replaces them. It is also how you change a Google, Slack or Microsoft account's permissions. An email account has **Settings** instead: the same steps as tabs (**Account**, **Permissions**, **Bots**), and **Save** checks the connection again.
+Each row shows **Connected** or **Reconnect required**; the latter means the sign-in was revoked or expired. **Reconnect** signs in again with the account's current choices, and what you pick replaces them. It is also how you change a Google, Slack or Microsoft account's permissions. An email account has **Settings** instead: the same steps as tabs (**Account**, **Sending**, **Permissions**, **Bots**), and **Save** checks the connection again.
 
 ## Disconnect
 
@@ -58,20 +58,23 @@ Your provider's help pages list its IMAP and SMTP servers, ports and security; h
 
 1. **Workspace → Connectors → + Add connector → Email.**
 2. **Account.** Enter the email address and the incoming (IMAP) server: its host, port, and **SSL/TLS** or **STARTTLS**. Both encrypt and check the server's certificate; there is never an unencrypted fallback. Leave the username empty if it is your email address, and enter the password. Press **Next**: Household signs in to check the account before you go on.
-3. **Permissions.** Choose whether bots may send (see [Sending](#sending)) and **Organize the mailbox**.
-4. **Bots.** Pick the bots, then press **Connect**.
+3. **Sending.** Enter the outgoing (SMTP) server, which Household guesses from the incoming one, and press **Next** to check it too. Or press **Skip for now**: bots will only read, and you can set up sending later.
+4. **Permissions.** Choose how bots may send (see [Sending](#sending)) and whether they may **Organize the mailbox**.
+5. **Bots.** Pick the bots, then press **Connect**.
 
-Tip: many providers don't accept your normal password from other apps and want an app password, which you create in your account's security settings and can revoke any time. A local mail bridge such as Proton Mail Bridge runs on the same computer as Household, gives you its own password, and uses its own certificate: export it from the bridge and paste it as the trusted certificate (never the private key).
+Tip: many providers don't accept your normal password from other apps and want an app password, which you create in your account's security settings and can revoke any time. A local mail bridge such as Proton Mail Bridge runs on the same computer as Household, gives you its own password, and uses its own certificate: export it from the bridge and, under **Trusted certificate**, paste it or **Choose file…** (the certificate file, never the private key).
 
 ### Sending
+
+Sending signs in like incoming mail; turn off **Same sign-in as incoming mail** to give it its own username and password. You also set the sender name recipients see and, if your provider doesn't keep a copy of sent mail by itself, a folder for Household to save one.
 
 On **Permissions**, choose how bots may send:
 
 - **Ask me first** (default): each email comes to your chat with the bot. Nothing goes out until you approve it.
 - **Send on their own**: bots send from this address without asking.
-- **Don't send**: bots only read.
+- **Don't send**: bots only read; the outgoing server stays saved for later.
 
-For sending, enter the outgoing (SMTP) server's host, port and security, and the sender name recipients see. Sending signs in like incoming mail; turn off **Same sign-in as incoming mail** to give it its own username and password. If your provider doesn't keep a copy of sent mail by itself, you can name a folder for Household to save one.
+To add sending to a mailbox connected without it, or to remove it, open its **Settings → Sending**.
 
 **Organize the mailbox** is a separate switch. It does not allow sending.
 

@@ -24,6 +24,8 @@ export interface DialogSpec {
   onConfirm: () => Promise<void | "stay">;
   /** A step back (shows Back): for a dialog of steps. */
   back?: () => void;
+  /** A step the owner may leave for later («Skip for now»): a quiet button before the confirmation. */
+  skip?: { label: string; onSkip: () => void };
   /** A form of several groups: a wider card. */
   wide?: boolean;
   /** Names the step on screen, for a dialog of steps: a new one gets the focus as a new dialog does. */
@@ -207,6 +209,19 @@ export function Dialog({ spec, onClose }: { spec: DialogSpec; onClose: () => voi
               <button type="button" name="cancel" className="btn" onClick={onClose} disabled={busy}>
                 {spec.cancelLabel ?? "Cancel"}
               </button>
+              {spec.skip && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setError(undefined);
+                    spec.skip!.onSkip();
+                  }}
+                  disabled={busy}
+                >
+                  {spec.skip.label}
+                </button>
+              )}
               <button type="submit" className={spec.danger ? "btn danger-fill" : "btn primary"} disabled={busy}>
                 {busy ? (spec.busyLabel ?? "Working…") : spec.confirmLabel}
               </button>

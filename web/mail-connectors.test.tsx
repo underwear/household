@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { MailConnectionView, MailSendView } from "./api";
 import { MAIL_NO_CHAT } from "../src/core/mail-connectors";
-import { MailSetup, mailAccessWords, mailInput, mailNotices } from "./components/mail-connectors";
+import { MailSetup, certificatesIn, mailAccessWords, mailInput, mailNotices } from "./components/mail-connectors";
 import { CONNECTOR_TYPES } from "./components/workspace-connectors";
 
 const view: MailConnectionView = {
@@ -34,6 +34,16 @@ test("editing keeps the stored passwords out of the form and shows its servers a
   expect(html).toContain("BEGIN CERTIFICATE");
   expect(html).toContain("Saving cancels the email waiting for your approval");
   expect(html).not.toContain("Next");
+  expect(html).not.toContain("Skip for now");
+  // Its parts as tabs: sending has its own.
+  expect(html).toMatch(/aria-pressed="true"[^>]*>Account<\/button><button[^>]*>Sending<\/button><button[^>]*>Permissions<\/button><button[^>]*>Bots<\/button>/);
+});
+
+test("sending is a step of its own that can be skipped for now; the server guess follows the incoming one", () => {
+  const html = renderToStaticMarkup(<MailSetup house="home" options={[]} onClose={() => {}} saved={async () => {}} />);
+  expect(html).toContain('<li class="current" aria-current="step">Account</li><li>Sending</li><li>Permissions</li><li>Bots</li>');
+  // Skipping is offered only on the Sending step, which a static render does not reach.
+  expect(html).not.toContain("Skip for now");
 });
 
 test("a saved connection saves again without its passwords", () => {
@@ -65,4 +75,16 @@ test("a connection's notices: emails waiting in a chat, and recent ones that may
   // An approval no chat could show ended at once: the row says why, since the bot had no chat to say it in.
   const noChat = mailNotices([{ ...send("8", "cancelled", "Hello"), detail: MAIL_NO_CHAT }, send("9", "cancelled", "Withdrawn")], "c1", title, now);
   expect(noChat.map((n) => n.text)).toEqual(["«Hello» wasn't sent: Owl is in no chat where you could approve it. Add it to a channel."]);
+});
+
+test("a chosen certificate file gives its certificates only: never a private key", () => {
+  const cert = "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----";
+  const key = "-----BEGIN RSA PRIVATE KEY-----\nBBBB\n-----END RSA PRIVATE KEY-----";
+  expect(certificatesIn(`${cert}\n`)).toEqual({ certificates: cert, privateKey: false });
+  expect(certificatesIn(`${key}\n${cert}\n${cert}`)).toEqual({ certificates: `${cert}\n${cert}`, privateKey: true }); // a combined file: the key stays out
+  expect(certificatesIn(key)).toEqual({ certificates: "", privateKey: true });
+  expect(certificatesIn("not a pem")).toEqual({ certificates: "", privateKey: false });
+  const html = renderToStaticMarkup(<MailSetup house="home" options={[]} onClose={() => {}} saved={async () => {}} />);
+  expect(html).toContain(">Choose file…</button>");
+  expect(html).toMatch(/<input[^>]*type="file"[^>]*accept="\.pem,\.crt,\.cer,application\/x-pem-file"/);
 });
