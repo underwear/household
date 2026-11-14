@@ -1,4 +1,9 @@
 import { MicrosoftConnectors } from "./microsoft-connectors";
+import { MailConnectors } from "./mail-connectors";
+import { mailConnectorTools } from "./mail-connector-tools";
+import { mailConnectorRoutes } from "./mail-connector-routes";
+import { mailApprovalCard } from "./mail-approval";
+import { petVolume } from "./pet-plane";
 import { microsoftConnectorTools } from "./microsoft-connector-tools";
 import { microsoftConnectorRoutes } from "./microsoft-connector-routes";
 import { SlackConnectors } from "./slack-connectors";
@@ -378,6 +383,16 @@ export async function startDaemon(deps: DaemonDeps) {
   // What each subscription key has left, read off the gateway; a used-up key's requests stop there (keys.<k>.allowOverage lets them go on).
   const allowances = new KeyAllowances(records, (text) => events.info(text));
   let appliedHousehold: Household | undefined;
+  const mailInboxFiles = new PetInboxFiles(homesDirectory(paths));
+  const mailOutboxFiles = new PetOutboxFiles(homesDirectory(paths));
+  const mailConnectors = new MailConnectors(records, {
+    read: (caller, path, max) => mailOutboxFiles.read(petVolume(caller.house, caller.pet), path, max),
+    save: (caller, name, bytes) => mailInboxFiles.save(petVolume(caller.house, caller.pet), new Date().toISOString().slice(0, 10), name, bytes),
+  }, { ask: async (caller, send, signal) => {
+    const answer = await chat.ownerCard(caller.house, caller.pet, mailApprovalCard(send), signal);
+    return answer === "approved" || answer === "denied" ? answer : undefined;
+  } });
+  const mailRoutes = mailConnectorRoutes(mailConnectors);
   const microsoftConnectors = new MicrosoftConnectors(records);
   const microsoftRoutes = microsoftConnectorRoutes(microsoftConnectors);
   const googleConnectors = new GoogleConnectors(records);
@@ -581,6 +596,7 @@ export async function startDaemon(deps: DaemonDeps) {
       volumeRequests.setPets(wanted);
       googleConnectors.setHouses(houses);
       microsoftConnectors.setHouses(houses);
+      mailConnectors.setHouses(houses);
       slackConnectors.setHouses(houses);
       await previews.reconcile(houses);
       await applyNetwork(household, wanted);
@@ -663,7 +679,7 @@ export async function startDaemon(deps: DaemonDeps) {
         homesDir: homesDirectory(paths),
         protectedDirs: protectedFolders(paths),
         resourceAllocations: house => [...sideworkers.allocations(house), ...scouts.allocations(house), ...pets.resourceAllocations(house)],
-        connectorRoutes: async request => await googleRoutes(request) ?? await slackRoutes(request) ?? await microsoftRoutes(request),
+        connectorRoutes: async request => await googleRoutes(request) ?? await slackRoutes(request) ?? await microsoftRoutes(request) ?? await mailRoutes(request),
         scoutRoutes: scoutRoutes({config,storage:scoutStorage,scouts,capabilities,tests:capabilityTests,apply:applyConfig,applySecrets,
           vm:{log:async(house,id,source,read)=>placed.some(p=>p.house===house&&p.pet===id)?readPetLog(pets.exec(house,id),source,read):undefined,
             screen:async(house,id)=>{const current=placed.find(p=>p.house===house&&p.pet===id);return current?pets.terminalSnapshot(current):undefined;}}}),
@@ -764,7 +780,7 @@ export async function startDaemon(deps: DaemonDeps) {
     const initial = await enqueue(async () => {
       const loaded = await config.load();
       const port = loaded.daemon.agentPort ?? DEFAULT_AGENT_PORT;
-      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...microsoftConnectorTools(microsoftConnectors), ...slackConnectorTools(slackConnectors), ...googleConnectorTools(googleConnectors), ...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.houses.find(item=>item.name===house)?.secrets?.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, { ...volumeRequestTool(volumeRequests), available: c => !scouts.isScout(c) && !sideworkers.worker(c.house, c.pet) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
+      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...mailConnectorTools(mailConnectors), ...microsoftConnectorTools(microsoftConnectors), ...slackConnectorTools(slackConnectors), ...googleConnectorTools(googleConnectors), ...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.houses.find(item=>item.name===house)?.secrets?.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, { ...volumeRequestTool(volumeRequests), available: c => !scouts.isScout(c) && !sideworkers.worker(c.house, c.pet) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
         // A scout's home is in its run's storage, not among the pets' homes.
         const home=placed.find(p=>p.house===house&&p.pet===pet)?.scout?.homePath;
         return home?{files:new PetOutboxFiles(dirname(home)),volume:basename(home)}:undefined;
@@ -848,6 +864,7 @@ export async function startDaemon(deps: DaemonDeps) {
       crons?.stop();
       googleConnectors.stop();
       microsoftConnectors.stop();
+      mailConnectors.stop();
       slackConnectors.stop();
       await houseInboxes.stop();
       lifecycles?.stop();

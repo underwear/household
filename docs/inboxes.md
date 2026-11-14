@@ -2,6 +2,8 @@
 
 An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a bot's VM. Event contents are treated as untrusted data, never as your instructions.
 
+For live mailbox search, attachments, replies and SMTP sending, add a separate [Mail connector](../mail-connector/). An inbox only delivers new events and exposes their delivered history; it does not grant general mailbox access.
+
 ## Add an inbox
 
 In **Workspace → Inboxes**, choose **+ Add inbox**:

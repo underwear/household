@@ -1,3 +1,5 @@
+import type { MailConnectionInput, MailConnectionView, MailConnectorsView } from "../src/core/mail-connectors";
+export type { MailConnectionInput, MailConnectionView, MailConnectorsView, MailSendView, MailEndpoint, MailSendPolicy } from "../src/core/mail-connectors";
 import type { MicrosoftConnectionView, MicrosoftConnectorsView, MicrosoftAuthorizationView, MicrosoftPollView } from "../src/core/microsoft-connectors";
 export type { MicrosoftConnectionView, MicrosoftConnectorsView, MicrosoftAuthorizationView, MicrosoftPollView };
 import type { SlackConnectionView, SlackConnectorsView } from "../src/core/slack-connectors";
@@ -210,6 +212,11 @@ export const api = {
   connectSlack: (house: string, token: string, pets: string[], allowWrite = false) => call<SlackConnectionView>("POST", `${housePath(house)}/connectors/slack/connect`, { token, pets, allowWrite }),
   shareSlack: (house: string, id: string, pets: string[]) => call<SlackConnectionView>("PATCH", `${housePath(house)}/connectors/slack/${encodeURIComponent(id)}`, { pets }),
   disconnectSlack: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/slack/${encodeURIComponent(id)}`),
+  mailConnections: (house: string) => call<MailConnectorsView>("GET", `${housePath(house)}/connectors/mail`),
+  testMail: (house: string, config: MailConnectionInput, id?: string) => call<{ ok: boolean; message: string }>("POST", `${housePath(house)}/connectors/mail/test`, { config, id }),
+  saveMail: (house: string, config: MailConnectionInput, id?: string) => call<MailConnectionView>(id ? "PUT" : "POST", `${housePath(house)}/connectors/mail${id ? `/${encodeURIComponent(id)}` : ""}`, config),
+  disconnectMail: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/mail/${encodeURIComponent(id)}`),
+  decideMail: (house: string, id: string, decision: "approved" | "denied" | "cancelled") => call<{ ok: boolean }>("POST", `${housePath(house)}/connectors/mail/sends/${encodeURIComponent(id)}`, { decision }),
   microsoftConnections: (house: string) => call<MicrosoftConnectorsView>("GET", `${housePath(house)}/connectors/microsoft`),
   authorizeMicrosoft: (house: string, pets: string[], write: boolean) => call<MicrosoftAuthorizationView>("POST", `${housePath(house)}/connectors/microsoft/authorize`, { pets, write }),
   pollMicrosoft: (house: string, id: string) => call<MicrosoftPollView>("POST", `${housePath(house)}/connectors/microsoft/poll`, { id }),

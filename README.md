@@ -75,4 +75,6 @@ Plus `openssl` and `python3`. The installer brings the rest: microsandbox, Codex
 
 ## 📚 Documentation
 
+Connect IMAP/SMTP mail from **Workspace → Connectors → Mail**: live search, attachments, replies and sending with per-message approval or automatic permission. See the **[mail connector guide](https://agents-household.dev/docs/mail-connector/)**.
+
 Everything else — bots, scouts, sideworkers, inboxes, previews, backup — is in the **[docs](https://agents-household.dev/docs/)**.

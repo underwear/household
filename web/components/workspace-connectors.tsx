@@ -1,3 +1,5 @@
+import { MailSetup, MailSends, mailAccessWords, useMailConnections } from "./mail-connectors";
+import type { MailConnectionView } from "../api";
 import { MicrosoftSetup, microsoftAccessWords, useMicrosoftConnections } from "./microsoft-connectors";
 import type { MicrosoftConnectionView } from "../api";
 import { useEffect, useState, type ReactNode } from "react";
@@ -11,7 +13,7 @@ import { Cell, List, ListRow, Page, Section } from "./layout";
 import { relative } from "./bot-crons";
 
 /** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
-export const CONNECTOR_TYPES = [{ id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }] as const;
+export const CONNECTOR_TYPES = [{ id: "mail", label: "Mail (IMAP / SMTP)", description: "Search and read mail, manage folders and send with optional approval.", mark: "@" }, { id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }] as const;
 type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
 /** A Google account's services: what the owner picks to share (and what bots may do with each), and their names. */
 const SERVICES = [
@@ -53,7 +55,8 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
   const [error, setError] = useState("");
   const slack = useSlackConnections(house.name);
   const microsoft = useMicrosoftConnections(house.name);
-  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView; microsoft?: MicrosoftConnectionView }>();
+  const mail = useMailConnections(house.name);
+  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView; microsoft?: MicrosoftConnectionView; mail?: MailConnectionView }>();
   const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView } | { microsoft: MicrosoftConnectionView }>();
   const dialog = useDialog();
   const refresh = async () => {
@@ -73,7 +76,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     }
   }, [house.name]);
   const connections = view?.connections ?? [];
-  const loaded = view !== undefined && slack.connections !== undefined && microsoft.connections !== undefined;
+  const loaded = view !== undefined && slack.connections !== undefined && microsoft.connections !== undefined && mail.connections !== undefined;
   const disconnect = (c: GoogleConnectionView) =>
     dialog.open({
       title: `Disconnect ${c.email}?`,
@@ -113,7 +116,11 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     confirmLabel: "Disconnect", danger: true,
     onConfirm: async () => { await api.disconnectMicrosoft(house.name, c.id); await microsoft.refresh(); notify(`${c.account} disconnected`); },
   });
-  const failed = [microsoft.error && { what: "Microsoft", message: microsoft.error, retry: microsoft.refresh }, error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
+  const disconnectMail = (c: MailConnectionView) => dialog.open({
+    title: `Disconnect ${c.title}?`, body: "Credentials are removed from this host. Pending approvals are cancelled. A message already being submitted cannot be recalled. Previously read mail and send history remain in Household.", confirmLabel: "Disconnect", danger: true,
+    onConfirm: async () => { await api.disconnectMail(house.name, c.id); await mail.refresh(); notify(`${c.title} disconnected`); },
+  });
+  const failed = [mail.error && { what: "Mail", message: mail.error, retry: mail.refresh },microsoft.error && { what: "Microsoft", message: microsoft.error, retry: microsoft.refresh }, error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
   return (
     <Page
       title="Connectors"
@@ -138,7 +145,11 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
             </button>
           </p>
         ))}
-        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add a Google, Slack or Microsoft To Do account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add a mail, Google, Slack or Microsoft To Do account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
+          {(mail.connections ?? []).map(c => <ListRow key={c.id} actions={<><button className="text-btn plain" onClick={() => setSetup({ type: "mail", mail: c })}>Edit settings and access</button><button className="text-btn" onClick={() => disconnectMail(c)}>Disconnect</button></>}>
+            <Cell><ConnectorMark type="mail" /><span className="cell-lines"><span className="strong">{c.title} · {c.email}</span><span className="hint">{mailAccessWords(c)}</span><span className="hint">{c.pets.length ? c.pets.join(", ") : "Private: no bots selected"}</span></span></Cell>
+            <Cell><span className="bot-state"><span className="dot idle" />Connected</span></Cell>
+          </ListRow>)}
           {connections.map((c) => (
             <ConnectionRow
               key={c.id}
@@ -172,7 +183,9 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           ))}
         </List>
       </Section>
-      {setup && setup.type !== "slack" && setup.type !== "microsoft" && <ConnectorSetup onMicrosoft={() => setSetup({ type: "microsoft" })} onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      <MailSends house={house.name} sends={mail.sends ?? []} refresh={mail.refresh} notify={notify} />
+      {setup?.type === "mail" && <MailSetup key={setup.mail?.id ?? "new"} house={house.name} existing={setup.mail} options={sharable(house)} back={setup.mail ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)} saved={async () => { await mail.refresh(); notify("Mail connection saved"); }} />}
+      {setup && setup.type !== "mail" && setup.type !== "slack" && setup.type !== "microsoft" && <ConnectorSetup onMail={() => setSetup({ type: "mail" })} onMicrosoft={() => setSetup({ type: "microsoft" })} onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
       {setup?.type === "microsoft" && <MicrosoftSetup key={setup.microsoft?.id ?? "new"} house={house.name} ready={!!microsoft.ready} existing={setup.microsoft}
         options={sharable(house)} back={setup.microsoft ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
         saved={async () => { await microsoft.refresh(); notify("Microsoft To Do connected"); }} />}
@@ -284,7 +297,7 @@ const sharable = (house: WorkspaceView) => house.pets.filter((p) => !p.sideworke
  * Add connector, in two steps: what to connect, then the provider's form (services and bots), which leaves for its
  * sign-in page. Reconnecting an account starts at the form, with that account's choices.
  */
-function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft }: { onMicrosoft: () => void; /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
+function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft, onMail }: { onMail: () => void; onMicrosoft: () => void; /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
   const [step, setStep] = useState(existing ? 1 : 0);
   const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
@@ -301,6 +314,7 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft 
         back: step === 1 && !existing ? () => setStep(0) : undefined,
         onConfirm: async () => {
           if (step === 0) {
+            if (type === "mail") { onMail(); return "stay"; }
             if (type === "slack") { onSlack(); return "stay"; }
             if (type === "microsoft") { onMicrosoft(); return "stay"; }
             setStep(1);
