@@ -4,11 +4,13 @@ Household runs your own AI assistants on your Mac or Linux machine. Each bot is 
 
 ## What you'd use it for
 
-- **Mail triage.** An [inbox](inboxes/) wakes the bot on new mail; it replies through the [Email connector](connectors/) after you approve.
-- **Night ops.** Alerts wake the bot; work that needs the production key goes to a [scout](scouts/) you approve from your phone.
-- **A coding partner.** Projects in a [shared folder](volumes/), [sideworkers](sideworkers/) for parallel jobs, a [preview](previews/) link to the app it builds.
-- **A family group.** A topic per bot in a Telegram group; you and your partner are [owners](channels/), the kids are guests.
-- **Errands on the open web.** A [scout](scouts/) reads an unfamiliar site in a throwaway VM; you pass on what the bot should see.
+- **Personal assistant** — keeps your mail, calendar and to-do list in order, briefs you every morning, and asks before it sends or changes anything.
+- **DevOps engineer** — watches your alerts, digs into your servers when something breaks, and does the routine maintenance on a schedule.
+- **Coding partner** — works on your projects while you're away from your desk and sends you a link to try what it built.
+- **Researcher** — follows the news, feeds and pages you care about, and tells you only what changed.
+- **Family helper** — lives in the family chat: the shopping list, the weekend plans, everyone's questions.
+
+Each is one bot with its own instructions and access. See [Bots](bots/).
 
 ## How it works
 
