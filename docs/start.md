@@ -64,4 +64,4 @@ To open the admin later, run `house dashboard`; it signs you in with a one-time 
 
 - [Instructions, skills and memory](../instructions/): tell your bot who it is and how to work.
 - [Connectors](../connectors/): let it use your mail, documents or calendar.
-- [Inboxes](../inboxes/): wake it on new mail, feeds or alerts.
+- [Inboxes](../inboxes/): subscribe it to new mail, feeds or alerts.

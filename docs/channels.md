@@ -8,7 +8,7 @@ The usual setup is one channel with just you in it and your bots in it. That is 
 
 - **A channel** is for talking. Bots see only the chat you connect.
 - **A [connector](../connectors/)** lets bots act in your accounts, such as your mail or your Slack workspace. A Slack channel is not a Slack connector.
-- **An [inbox](../inboxes/)** wakes a bot on its own: new mail, an alert, a feed.
+- **An [inbox](../inboxes/)** brings a bot events from outside: new mail, an alert, a feed.
 
 ## Your channel
 

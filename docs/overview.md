@@ -24,7 +24,7 @@ A small program, `house`, runs on your machine. It starts each bot's VM, talks t
 | Key | The model account a bot uses: a subscription or an API key. |
 | Channel | Where you talk to the bots, such as a Telegram group or a Slack DM. |
 | Connector | One of your accounts, such as a mailbox: read only, asking you before each change, or with full access. |
-| Inbox | Something that wakes bots on its own, such as mail or alerts. |
+| Inbox | A bot's subscription to outside events, such as new mail or alerts. |
 | Sideworker | Extra hands a bot starts for one job, with its home and access. |
 | Scout | A specialist for one risky or privileged task, in a fresh VM, after you approve. |
 

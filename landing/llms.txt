@@ -48,7 +48,7 @@ Install the `household` skill too, for running Household afterwards:
   script, network, keys), sees nothing of the bot, starts only when the owner presses **Run**, and is deleted after.
 - **Channel**: where people talk to bots: a Telegram group with a topic per bot, a Telegram private chat (threaded
   or plain), or a Slack DM.
-- **Inbox**: something that wakes bots on its own: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,
+- **Inbox**: a bot's subscription to outside events: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,
   Telegram bot updates, custom HTTP.
 - **Connectors**: accounts a workspace connects and gives to chosen bots, read only, asking the owner before each change, or with full access: any IMAP/SMTP
   mailbox, Google (Gmail, Drive, Calendar), Slack, Microsoft To Do. Tokens stay in the host's private database.
@@ -111,7 +111,7 @@ Install the `household` skill too, for running Household afterwards:
 - [Shared folders](https://agents-household.dev/docs/volumes/): folders of your computer shared with bots, read-only or read-write
 - [Previews](https://agents-household.dev/docs/previews/): a bot shows a web app from its VM by a link you approve
 - [MCP servers](https://agents-household.dev/docs/mcp/): give a bot any MCP server by asking it
-- [Inboxes](https://agents-household.dev/docs/inboxes/): watch mail, feeds, health checks, alerts and custom endpoints, and hand events to bots
+- [Inboxes](https://agents-household.dev/docs/inboxes/): subscribe bots to outside events: mail, feeds, health checks, alerts, custom endpoints
 - [Scheduled tasks](https://agents-household.dev/docs/schedules/): have a bot do something on a schedule
 - [Resources](https://agents-household.dev/docs/resources/): CPU and memory per workspace and bot
 - [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, moving to another machine

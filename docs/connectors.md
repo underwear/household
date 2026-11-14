@@ -5,7 +5,7 @@ A connector gives chosen bots one of your outside accounts, as you: a mailbox, a
 ## First, check what is already there
 
 - **A connector** lets a bot look things up and act in an account. It never wakes the bot.
-- **An inbox** wakes a bot when something new arrives, but gives no access to the account. To watch a mailbox and answer from it, use both. See [Inboxes](../inboxes/).
+- **An inbox** brings a bot events from outside, such as new mail or an alert: a subscription, not access to an account. See [Inboxes](../inboxes/).
 - **A channel** is where you talk with your bots. A chat you talk in is not a chat bots can read, and the other way round. See [Channels](../channels/).
 - **Your Claude or ChatGPT account's connectors** (Drive, Jira, GitHub…) work for a bot on that sign-in, as that account, once you turn on **Claude.ai connectors** or **ChatGPT apps** on its **Harness** tab. See [Provider keys](../keys/).
 - **An MCP server** for any other service: ask the bot to add one. See [MCP servers](../mcp/).
