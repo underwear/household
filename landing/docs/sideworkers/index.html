@@ -174,30 +174,37 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Provider keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Sideworkers</h1>
-<p class="lead">A sideworker is extra hands a bot starts for one job: a refactor, a test run, work in another project, or a second opinion from another model. It runs in a VM of its own, works on the bot's files and has its own chat thread, so the bot stays free to talk to you. For a standing job or access the bot should not hold, see <a href="../bots/">bots, sideworkers and scouts</a> compared.</p>
-<h2 id="how-it-works">How it works</h2>
-<p>Say you ask your coding bot: &quot;The site's tests fail since the framework upgrade. Get a sideworker on it, and don't touch the snapshot files.&quot;</p>
+<p class="lead">A sideworker is a second harness your bot starts for a job: a full session of a coding agent such as Claude Code or Codex, in a VM of its own, working in another project. It is not a hidden sub-agent somewhere inside your bot. You see everything it does, and you can talk to it yourself.</p>
+<h2 id="what-makes-it-different">What makes it different</h2>
+<ul>
+<li><strong>Its own project.</strong> It starts in the folder the job is about and reads that project's own <code>AGENTS.md</code> or <code>CLAUDE.md</code>, skills and conventions, as if you had opened the agent there yourself.</li>
+<li><strong>Another model, if you like.</strong> You talk to your bot on one model; it can start a worker on another, or on another harness: a cheaper one for a long refactor, a different one for a second opinion.</li>
+<li><strong>In plain sight.</strong> Each worker gets its own topic or thread in your messenger. Watch it work as it goes, and write to it directly: it answers you, and your bot is told.</li>
+<li><strong>Your bot stays free.</strong> It briefs the worker, keeps talking to you meanwhile, and reviews what the worker brings back.</li>
+</ul>
+<h2 id="how-a-job-goes">How a job goes</h2>
+<p>Say you ask your bot: &quot;The site's tests fail since the framework upgrade. Get a sideworker on it, and don't touch the snapshot files.&quot;</p>
 <ol>
-<li><strong>Brief.</strong> The bot commits its work and starts a worker in the project folder with a written brief (the failing suite, what it ruled out, your rule, what done looks like), since the worker does not know the conversation.</li>
-<li><strong>Branch.</strong> In a git repository the worker gets its own checkout on its own branch, from the bot's last commit, so the two never edit the same files. What the bot has not committed is not in it. The bot can instead share its live folder; then both edit the same files.</li>
-<li><strong>Review.</strong> The worker's thread opens in the bot's channel. What you write there goes to the worker, and the bot is told; meanwhile the bot answers you. The worker reports a green branch; the bot reviews and merges it.</li>
-<li><strong>Close.</strong> The bot closes the worker: its VM is removed, its branch and files stay. On Telegram its thread is deleted with its messages, so the bot tells you first if anything there is worth keeping.</li>
+<li><strong>Brief.</strong> The bot commits its work and starts a worker in the project with a written brief (what fails, what it ruled out, your rule, what done looks like), since the worker doesn't know your conversation.</li>
+<li><strong>Branch.</strong> In a git repository the worker gets its own checkout on its own branch, so the two never edit the same files. The bot can instead share its live folder; then both edit the same files.</li>
+<li><strong>Review.</strong> The worker reports in its thread; the bot reviews its branch and merges it.</li>
+<li><strong>Close.</strong> The bot closes the worker: its VM goes, its branch and files stay. On Telegram its thread goes too, so the bot tells you first if anything there is worth keeping.</li>
 </ol>
-<p>The worker has its bot's home, memory, shared folders, and the workspace's hosts and secrets, with its own session and Docker. It cannot start sideworkers, call scouts, have scheduled tasks or ask for new folders: those stay with the bot that answers to you.</p>
 <h2 id="what-you-decide">What you decide</h2>
 <ul>
-<li><strong>On or off.</strong> On by default; switch them under <strong>Workspace → Settings → Features</strong>. Off pauses the running ones and stops new ones.</li>
-<li><strong>Which models they may use.</strong> A worker runs on its bot's harness, key and model unless the bot picks a profile you added under <strong>Workspace → Sideworkers → Profiles</strong>, such as <code>code-review</code> on another model. Its key decides whose allowance or bill the job spends.</li>
+<li><strong>On or off.</strong> On by default; switch them under <strong>Workspace → Settings → Features</strong>.</li>
+<li><strong>Which models they may use.</strong> A worker runs on its bot's harness, key and model unless the bot picks a profile you added under <strong>Workspace → Sideworkers → Profiles</strong>, such as <code>code-review</code> on another model. The profile's key decides whose allowance or bill the job spends.</li>
 </ul>
 <h2 id="good-to-know">Good to know</h2>
 <ul>
+<li>A worker has its bot's home, memory, shared folders, and the workspace's hosts and secrets. It cannot start sideworkers, call <a href="../scouts/">scouts</a> or have scheduled tasks: those stay with the bot that answers to you.</li>
 <li>Each worker holds its full VM size from the workspace's <a href="../resources/">resources</a> until closed.</li>
 <li>When a worker shares the bot's live folder, never let both bind-mount one directory into containers: two databases on one data directory corrupt it.</li>
 <li><code>house export</code> refuses to run while a sideworker is open. See <a href="../backup/">Back up and move</a>.</li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-makes-it-different">What makes it different</a></li><li><a href="#how-a-job-goes">How a job goes</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen
