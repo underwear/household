@@ -20,6 +20,39 @@ test("activity follows events: idle → busy → dialog → busy → idle", () =
   expect(inbox.activity).toBe("idle");
 });
 
+test("subagent tool progress preserves the main session's activity", () => {
+  const inbox = new PetInbox();
+  const progress = [
+    { kind: "tool-started", tool: "Bash", summary: "check mail", agent: "background" },
+    { kind: "tool-finished", tool: "Bash", agent: "background" },
+  ] as const;
+  for (const activity of ["idle", "busy", "dialog"] as const) {
+    if (activity === "busy") inbox.observe({ kind: "prompt-accepted", text: "working" });
+    if (activity === "dialog") inbox.observe(dialog);
+    for (const event of progress) {
+      expect(inbox.observe(event)).toBe(true); // Still worth logging and showing as progress.
+      expect(inbox.activity).toBe(activity);
+    }
+  }
+  inbox.observe(closed);
+  inbox.observe({ kind: "turn-finished", text: "done" });
+  inbox.observe({ kind: "tool-started", tool: "Bash", summary: "main session work" });
+  expect(inbox.activity).toBe("busy");
+});
+
+test("a subagent dialog still blocks delivery until it closes", () => {
+  const inbox = new PetInbox();
+  inbox.push(message(1, "waiting"));
+  inbox.observe({ ...dialog, agent: "background" });
+  expect(inbox.activity).toBe("dialog");
+  expect(texts(inbox)).toEqual([]);
+  inbox.observe({ kind: "tool-finished", tool: "Bash", agent: "other-background" });
+  expect(inbox.activity).toBe("dialog");
+  inbox.observe({ ...closed, agent: "background" });
+  expect(inbox.activity).toBe("busy");
+  expect(texts(inbox)).toEqual(["waiting"]);
+});
+
 test("only dialog-closed closes a dialog: background work goes on while it waits", () => {
   const inbox = new PetInbox();
   inbox.observe(dialog);

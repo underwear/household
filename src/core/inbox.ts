@@ -111,6 +111,9 @@ export class PetInbox {
 function next(current: Activity, event: AgentEvent): Activity {
   if (event.kind === "dialog-opened") return "dialog";
   if (event.kind === "dialog-closed") return "busy";
+  // Background tools do not occupy the main session's input. In particular, they must not revoke a
+  // scheduled prompt's idle check between its paste and Enter. Their dialogs still block input above.
+  if ((event.kind === "tool-started" || event.kind === "tool-finished") && event.agent) return current;
   // A session that goes on (compacted mid-turn) is as busy as it was.
   if (current === "dialog" || event.kind === "notification" || event.kind === "tool-review") return current;
   if (event.kind === "session-started" && event.continues) return current;

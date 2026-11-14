@@ -956,6 +956,59 @@ test("two cron tasks never enter the session together before prompt-accepted arr
   } finally {delivery.stop();store.close();}
 });
 
+test("background Claude tool hooks between a scheduled paste and Enter do not strand the queue", async () => {
+  const { delivery, pet, store, send, updates } = setup({ nativeClaude: true });
+  const hook = (hook_event_name: string, fields: Record<string, unknown>) =>
+    delivery.onPayload("work", "sibling", { hook_event_name, ...fields });
+  const submitted: string[] = [];
+  const pasted: string[] = [];
+  let buffer = "", draft = "";
+  const ready = (text: string) => `──────────────────────────────\n❯ ${text}\n──────────────────────────────`;
+  pet.agent.send = (_, text, canSubmit) => claudeCodeTmux.send(async (command, stdin) => {
+    const action = command[1];
+    if (action === "display-message") return { ok: true, output: "0" };
+    if (action === "capture-pane") return { ok: true, output: ready(draft ? "[Pasted text]" : "") };
+    if (action === "load-buffer") buffer = stdin!;
+    if (action === "paste-buffer") {
+      draft = buffer;
+      pasted.push(draft);
+      if (pasted.length === 2) {
+        const call = { tool_name: "Bash", tool_input: { command: "check slack" }, prompt_id: "cron-1", agent_id: "background", tool_use_id: "background-call" };
+        await hook("PreToolUse", call);
+        await hook("PostToolUse", call);
+      }
+    }
+    if (action === "send-keys") {
+      expect(command.at(-1)).toBe("Enter");
+      submitted.push(draft);
+      draft = "";
+      await hook("UserPromptSubmit", { prompt: submitted.at(-1), prompt_id: `cron-${submitted.length}` });
+    }
+    return { ok: true, output: "" };
+  }, text, canSubmit);
+  const now = Date.now();
+  const runs = () => store.crons.view("work", "sibling").runs;
+  try {
+    for (let n = 1; n <= 2; n++) {
+      const job = store.crons.create("work", "sibling", { name: `task ${n}`, body: `check ${n}`, at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+      delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+    }
+    await waitFor(() => runs().some(run => run.status === "delivered"));
+    expect(submitted).toHaveLength(1);
+    await hook("Stop", { last_assistant_message: "Slack check is running in the background", prompt_id: "cron-1" });
+    await waitFor(() => runs().every(run => run.status !== "received" && run.status !== "dispatching"));
+    expect(runs().map(run => run.status).sort()).toEqual(["answered", "delivered"]);
+    expect(submitted).toHaveLength(2);
+    expect(draft).toBe("");
+    expect(updates.filter(update => update.kind === "progress")).toHaveLength(2);
+    expect(updates.some(update => update.kind === "failed")).toBe(false);
+    send("are you there?");
+    await waitFor(() => updates.some(update => update.kind === "delivered" && update.messages.some(message => message.text === "are you there?")));
+    expect(submitted[2]).toBe("are you there?");
+    expect(pasted).toEqual(submitted); // Every paste submitted once; no leftover blocks later messages.
+  } finally { delivery.stop(); store.close(); }
+});
+
 test("Claude's wrapped cron prompt and Stop complete the run and release the next cron and chat", async () => {
   for (const close of ['</pasted_content>', '</pasted_content id="paste-1">']) {
     const { delivery, sent, store, say, clock, updates } = setup({ nativeClaude: true, memory: () => ({ revision: 1, text: "CORE\n" }) });
