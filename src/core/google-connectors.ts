@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { connectorWritePolicySchema, type ConnectorWritePolicy } from "./connector-write-policy";
 
 export const GOOGLE_SERVICES = ["gmail", "drive", "calendar"] as const;
 export type GoogleService = typeof GOOGLE_SERVICES[number];
@@ -22,9 +23,11 @@ export const googleConnectSchema = z.strictObject({
   services: z.array(z.enum(GOOGLE_SERVICES)).min(1).max(3),
   pets: z.array(z.string().min(1).max(64)).max(100),
   /** Ask for the write scopes too; false (the old clients' default) asks to read only. */
+  writePolicy: connectorWritePolicySchema.optional(),
   write: z.boolean().default(false),
 });
 export interface GoogleConnectionView {
+  writePolicy?: ConnectorWritePolicy;
   id: string;
   email: string;
   services: GoogleService[];

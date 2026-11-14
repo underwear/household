@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { connectorWritePolicySchema, type ConnectorWritePolicy } from "./connector-write-policy";
 
 const line = z.string().max(1000).refine(v => !/[\x00-\x1f\x7f]/.test(v), "Use a single line");
 export const mailEndpointSchema = z.strictObject({
@@ -19,6 +20,7 @@ export const mailConnectionSchema = z.strictObject({
   sentFolder: mailFolder.optional(),
   draftsFolder: mailFolder.default("Drafts"),
   trashFolder: mailFolder.default("Trash"),
+  writePolicy: connectorWritePolicySchema.optional(),
   sendPolicy: z.enum(["disabled", "approval", "auto"]).default("disabled"),
   allowManage: z.boolean().default(false),
   pets: z.array(z.string().min(1).max(64)).max(100),
@@ -52,3 +54,5 @@ export interface MailSendView {
   attachments: { filename: string; contentType: string; size: number; sha256: string }[];
   state: MailSendState; messageId: string; createdAt: string; expiresAt: string; detail?: string;
 }
+
+export const mailWritePolicy = (c: { writePolicy?: ConnectorWritePolicy; sendPolicy: MailSendPolicy; allowManage: boolean }): ConnectorWritePolicy => c.writePolicy ?? (c.sendPolicy !== "disabled" ? c.sendPolicy : c.allowManage ? "auto" : "disabled");

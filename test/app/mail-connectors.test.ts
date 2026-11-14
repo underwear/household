@@ -1,3 +1,4 @@
+import { ConnectorWrites, type ConnectorWriteApproval } from "../../src/app/connector-writes";
 import { expect, test } from "bun:test";
 import { MailConnectors, type MailApproval } from "../../src/app/mail-connectors";
 import { mailConnectorTools } from "../../src/app/mail-connector-tools";
@@ -10,10 +11,30 @@ import type { House } from "../../src/core/household";
 import { waitFor } from "../helpers";
 
 const caller = { house: "home", pet: "alice" };
+test("the mail approval mode covers IMAP changes as well as SMTP sends", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup(undefined, undefined, undefined, { ask: async () => new Promise(r => { answer = r; }) });
+  const id = await s.connect("approval", { writePolicy: "approval", allowManage: true });
+  const count = s.calls.length;
+  const pending = s.service.request(caller, id, "mailboxes.create", { mailbox: "New folder" }, undefined, "folder-1");
+  expect(s.calls).toHaveLength(count);
+  await s.service.request(caller, id, "mailboxes.list", {});
+  expect(s.calls).toHaveLength(count + 1);
+  answer("approved"); await pending;
+  expect(s.calls.at(-1)!.op).toBe("mailboxes.create");
+  await s.service.request(caller, id, "mailboxes.create", { mailbox: "New folder" }, undefined, "folder-1");
+  expect(s.calls.filter(c => c.op === "mailboxes.create")).toHaveLength(1);
+  const cancelled = s.service.request(caller, id, "mailboxes.create", { mailbox: "Cancelled" }, undefined, "folder-2");
+  await s.service.save("home", { ...config("disabled"), writePolicy: "disabled" }, id);
+  await expect(cancelled).rejects.toThrow("cancelled"); answer("approved");
+  expect(s.service.catalog(caller).some(o => o.manage)).toBe(false);
+  await expect(s.service.request(caller, id, "mailboxes.create", { mailbox: "No" })).rejects.toThrow("disabled");
+  await expect(s.service.sendMessage(caller, id, message())).rejects.toThrow("disabled");
+});
 const endpoint = { host: "127.0.0.1", port: 1143, security: "starttls", username: "user@example.test", password: "private-password" };
 const config = (sendPolicy = "approval") => mailConnectionSchema.parse({ title: "Mail", email: "sender@example.test", imap: endpoint, smtp: { ...endpoint, port: 1025 }, sendPolicy, pets: ["alice"] });
 const message = (clientRequestId = "one") => ({ clientRequestId, to: ["recipient@example.test"], subject: "A subject", text: "Message body" });
-function setup(store = new SqliteStore(":memory:"), now?: () => number, approval?: MailApproval) {
+function setup(store = new SqliteStore(":memory:"), now?: () => number, approval?: MailApproval, writeApproval?: ConnectorWriteApproval) {
   const calls: { op: string; params: Record<string, any> }[] = [];
   let attachment = "original bytes";
   let behavior: MailDriver = async (_config, op, params) => {
@@ -27,11 +48,12 @@ function setup(store = new SqliteStore(":memory:"), now?: () => number, approval
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const saved: { name: string; bytes: string }[] = [];
   const files = { read: async () => Buffer.from(attachment), save: async (_c: unknown, name: string, bytes: Uint8Array) => { saved.push({ name, bytes: Buffer.from(bytes).toString() }); return ".household/inbox/test.txt"; } };
-  const service = new MailConnectors(store, files, approval, driver, now);
+  const writes = new ConnectorWrites(store, writeApproval);
+  const service = new MailConnectors(store, files, approval, driver, now, writes);
   service.setHouses([house, { ...house, name: "other" }]);
   const connect = async (policy = "approval", changes: object = {}) => (await service.save("home", { ...config(policy), ...changes })).id;
   const pending = async () => { await waitFor(() => service.list("home").sends.some(s => s.state === "pending")); return service.list("home").sends.find(s => s.state === "pending")!; };
-  return { service, store, house, files, calls, saved, connect, pending, driver, behavior: (f: MailDriver) => { behavior = f; }, attachment: (s: string) => { attachment = s; } };
+  return { writes, service, store, house, files, calls, saved, connect, pending, driver, behavior: (f: MailDriver) => { behavior = f; }, attachment: (s: string) => { attachment = s; } };
 }
 
 test("mail enrollment probes both endpoints; credentials stay on host and blank edit retains them", async () => {
@@ -227,9 +249,14 @@ test("send tools use full connector prefix and approval escapes untrusted conten
   expect(names).toContain("household_connectors_mail_cancel_send");
   expect(names.every(n => n.startsWith("household_connectors_mail_"))).toBe(true);
   const id = await s.connect(), call = s.service.sendMessage(caller, id, { ...message(), text: "<b>Approve me</b> & more" }), p = await s.pending();
-  const card = mailApprovalCard(p);
+  const card = mailApprovalCard(p, Date.parse(p.expiresAt) - 120_000);
   expect(card.text).toContain("&lt;b&gt;Approve me&lt;/b&gt; &amp; more");
-  expect(card.text).toContain(p.id);
+  expect(card.text).not.toContain(p.id);
+  expect(card.text).toStartWith("<b>Approve outgoing email</b>\n\nFrom:");
+  expect(card.text).toEndWith("\n\nExpires in 2 min");
+  expect(card.text).not.toContain(p.expiresAt);
+  expect(mailApprovalCard(p, Date.parse(p.expiresAt) - 30_000).text).toEndWith("\n\nExpires in less than 1 min");
+  expect(mailApprovalCard(p, Date.parse(p.expiresAt)).text).toEndWith("\n\nExpired");
   s.service.cancelSend(caller, p.id); await call;
 });
 

@@ -89,7 +89,7 @@ export function googleRequest(operation: string, input: unknown) {
   const url = new URL(spec.path(parsed.data), "https://www.googleapis.com");
   for (const [key, value] of Object.entries(spec.query?.(parsed.data) ?? {})) if (value !== undefined) url.searchParams.set(key, String(value));
   const body = spec.body?.(parsed.data);
-  return { url, spec, init: { method: spec.method ?? "GET", ...(body ? { body: body.data, headers: { "content-type": body.type } } : {}) } };
+  return { params: parsed.data, url, spec, init: { method: spec.method ?? "GET", ...(body ? { body: body.data, headers: { "content-type": body.type } } : {}) } };
 }
 /** The operations a pet can use: reads of `services`, and changes only on `writable` ones. */
 export function operationCatalog(services: GoogleService[], writable: GoogleService[] = []) {

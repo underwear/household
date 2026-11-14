@@ -1,3 +1,4 @@
+import { ConnectorWrites, type ConnectorWriteApproval } from "../../src/app/connector-writes";
 import { expect, test } from "bun:test";
 import { MicrosoftConnectors } from "../../src/app/microsoft-connectors";
 import { microsoftConnectorTools } from "../../src/app/microsoft-connector-tools";
@@ -8,7 +9,52 @@ import { SqliteStore } from "../../src/infra/sqlite-store";
 import type { House } from "../../src/core/household";
 
 const caller = { house: "home", pet: "alice" };
-function setup() {
+test("Microsoft modes gate mutations and cancel a pending write when access changes", async () => {
+  let answer!: (v: "approved") => void, cards = 0;
+  const s = setup({ ask: async () => { cards++; return new Promise(r => { answer = r; }); } }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval");
+  const count = s.calls.length;
+  const pending = s.service.request(caller, id, "todo.lists.create", { displayName: "New list" }, undefined, "create-1");
+  expect(s.calls).toHaveLength(count); expect(cards).toBe(1);
+  answer("approved"); await pending;
+  expect(s.calls).toHaveLength(count + 1);
+  const cancelled = s.service.request(caller, id, "todo.lists.create", { displayName: "Another" }, undefined, "create-2");
+  s.service.setPets("home", id, ["alice"], "disabled");
+  await expect(cancelled).rejects.toThrow("cancelled"); answer("approved");
+  expect(s.calls).toHaveLength(count + 1);
+  expect(s.service.catalog(caller).some(o => o.write)).toBe(false);
+  await expect(s.service.request(caller, id, "todo.lists.create", { displayName: "Blocked" })).rejects.toThrow();
+  s.service.setPets("home", id, ["alice"], "auto");
+  await s.service.request(caller, id, "todo.lists.create", { displayName: "Automatic" });
+  expect(cards).toBe(2);
+  const readOnly = await s.connect(); s.service.setPets("home", readOnly, ["alice"], "auto");
+  await expect(s.service.request(caller, readOnly, "todo.lists.create", { displayName: "No grant" })).rejects.toThrow();
+});
+
+test("Microsoft approval enrollment requests Tasks.ReadWrite", async () => {
+  const s = setup(), p = await s.service.begin("home", { pets: ["alice"], writePolicy: "approval" }, "session");
+  expect((s.calls[0]!.init!.body as URLSearchParams).get("scope")).toContain("Tasks.ReadWrite");
+  s.advance(); await s.service.poll("home", p.id, "session");
+  expect(s.service.accounts(caller)[0]!.writePolicy).toBe("approval");
+});
+
+test("Microsoft approval uses tokens refreshed by a read while the card was pending", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup({ ask: async () => new Promise(r => { answer = r; }) }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval"); s.advance(3_600_000);
+  const refreshed: string[] = [];
+  s.token(async (_url, init) => {
+    refreshed.push((init!.body as URLSearchParams).get("refresh_token")!);
+    return refreshed.length === 1 ? Response.json({ access_token: "rotated-access", refresh_token: "rotated-refresh", expires_in: 3600, scope: "User.Read Tasks.ReadWrite" }) : Response.json({ error: "invalid_grant" }, { status: 400 });
+  });
+  const pending = s.service.request(caller, id, "todo.lists.create", { displayName: "After approval" }, undefined, "rotate");
+  await s.service.request(caller, id, "todo.lists.list", {});
+  answer("approved"); await pending;
+  expect(refreshed).toEqual(["private-refresh"]);
+  expect(new Headers(s.calls.at(-1)!.init!.headers).get("authorization")).toBe("Bearer rotated-access");
+  expect(s.service.list("home").connections[0]!.needsReconnect).toBe(false);
+});
+function setup(approval?: ConnectorWriteApproval) {
   let now = 1_000_000, refreshes = 0, identity = "account-1";
   const calls: { url: string; init?: RequestInit }[] = [];
   let api: MicrosoftFetch = async () => Response.json({ value: [] });
@@ -25,12 +71,13 @@ function setup() {
   };
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const store = new SqliteStore(":memory:");
-  const service = new MicrosoftConnectors(store, { id: "client-id" }, fetcher, () => now);
+  const writes = new ConnectorWrites(store, approval);
+  const service = new MicrosoftConnectors(store, { id: "client-id" }, fetcher, () => now, writes);
   service.setHouses([house, { ...house, name: "other" }]);
   const advance = (ms = 5000) => { now += ms; };
   const begin = (write = false) => service.begin("home", { pets: ["alice"], write }, "session");
   const connect = async (write = false) => { const p = await begin(write); advance(); await service.poll("home", p.id, "session"); return service.list("home").connections.at(-1)!.id; };
-  return { service, store, house, calls, begin, connect, advance, refreshes: () => refreshes, api: (f: MicrosoftFetch) => { api = f; }, token: (f: MicrosoftFetch) => { token = f; }, identity: (s: string) => { identity = s; } };
+  return { writes, service, store, house, calls, begin, connect, advance, refreshes: () => refreshes, api: (f: MicrosoftFetch) => { api = f; }, token: (f: MicrosoftFetch) => { token = f; }, identity: (s: string) => { identity = s; } };
 }
 
 test("device enrollment asks for least privilege, no secret or callback; device code and tokens stay on host", async () => {

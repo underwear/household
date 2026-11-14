@@ -1,3 +1,5 @@
+import { connectorCallers, connectorWritePolicy, connectorWritePolicySchema, type ConnectorWritePolicy } from "../core/connector-write-policy";
+import type { ConnectorWrites } from "./connector-writes";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { slackConnectSchema, SLACK_READ_SCOPES, SLACK_WRITE_SCOPES, type SlackConnectionView } from "../core/slack-connectors";
@@ -18,9 +20,9 @@ export interface SlackConnectorFiles {
 export const SLACK_REDIRECT = "https://agents-household.dev/slack/callback/";
 const KEY = "house.connectors.slack.v1";
 interface Connection extends SlackConnectionView { house: string; token: string; refreshToken?: string; expiresAt?: number; clientId?: string }
-interface Pending { allowWrite: boolean; house: string; pets: string[]; binding: string; redirect: string; verifier: string; expires: number; consumed?: boolean }
+interface Pending { writePolicy: ConnectorWritePolicy; allowWrite: boolean; house: string; pets: string[]; binding: string; redirect: string; verifier: string; expires: number; consumed?: boolean }
 const nonce = () => randomBytes(32).toString("base64url");
-const oauthInput = z.strictObject({ allowWrite: z.boolean().default(false), pets: z.array(z.string().min(1).max(64)).max(100) });
+const oauthInput = z.strictObject({ writePolicy: connectorWritePolicySchema.optional(), allowWrite: z.boolean().default(false), pets: z.array(z.string().min(1).max(64)).max(100) });
 /** Owner-enrolled user tokens; each grant belongs to one house and explicitly selected regular bots. */
 export class SlackConnectors {
   private houses: House[] = [];
@@ -29,20 +31,21 @@ export class SlackConnectors {
   private generation = 0;
   private pending = new Map<string, Pending>();
   private refreshes = new Map<string, Promise<string>>();
-  constructor(private store: KeyValueStore, private fetcher: SlackFetch = fetch, private clientId = process.env.HOUSEHOLD_SLACK_CLIENT_ID ?? "12549799067478.12553676041489", private now = Date.now, private files?: SlackConnectorFiles) {}
+  constructor(private store: KeyValueStore, private fetcher: SlackFetch = fetch, private clientId = process.env.HOUSEHOLD_SLACK_CLIENT_ID ?? "12549799067478.12553676041489", private now = Date.now, private files?: SlackConnectorFiles, private writes?: ConnectorWrites) {}
   private read(): Connection[] { return JSON.parse(this.store.get(KEY) ?? "[]"); }
   private write(items: Connection[]) { this.store.set(KEY, JSON.stringify(items)); }
   private view(c: Connection): SlackConnectionView {
-    return { id: c.id, teamId: c.teamId, team: c.team, userId: c.userId, user: c.user, scopes: [...c.scopes], pets: [...c.pets], allowWrite: c.allowWrite === true, connectedAt: c.connectedAt, needsReconnect: c.needsReconnect };
+    return { writePolicy: connectorWritePolicy(c.writePolicy, c.allowWrite === true), id: c.id, teamId: c.teamId, team: c.team, userId: c.userId, user: c.user, scopes: [...c.scopes], pets: [...c.pets], allowWrite: c.allowWrite === true, connectedAt: c.connectedAt, needsReconnect: c.needsReconnect };
   }
   /**
    * A reload (any config write, a sideworker started or closed): only what it took away stops. Connections of a removed
    * house and those a bot can no longer use (removed, disabled) have their reads cancelled; pending sign-ins survive unless their house is gone.
    */
   setHouses(houses: House[]) {
+    const beforeCallers = new Map(this.read().map(c => [c.id, connectorCallers(this.houses, c.house, c.pets)]));
     this.generation++;
     const before = this.houses;
-    this.houses = houses;
+    this.houses = structuredClone(houses);
     const saved = this.read();
     // The bots that can use a connection now: granted, still there, enabled, neither a sideworker nor a scout.
     const usable = (all: House[], c: Connection) => c.pets.filter(p => all.find(h => h.name === c.house)?.pets.some(pet => pet.name === p && pet.enabled !== false && !pet.sideworker && !pet.scout)).join(",");
@@ -52,6 +55,10 @@ export class SlackConnectors {
       const pets = c.pets.filter(p => houses.find(h => h.name === c.house)?.pets.some(pet => pet.name === p && !pet.sideworker && !pet.scout));
       if (usable(before, c) !== usable(houses, c)) this.abort(c.id);
       c.pets = pets;
+    }
+    for (const c of kept) {
+      const after = connectorCallers(houses, c.house, c.pets);
+      if (beforeCallers.get(c.id)?.some(name => !after.includes(name))) this.abort(c.id);
     }
     this.write(kept);
     for (const [state, pending] of this.pending) if (!houses.some(h => h.name === pending.house) || pending.expires <= this.now()) this.pending.delete(state);
@@ -71,13 +78,14 @@ export class SlackConnectors {
     const parsed = oauthInput.safeParse(input);
     if (!parsed.success) throw new HouseholdError("Select bots for Slack access");
     const pets = this.pets(house, parsed.data.pets);
+    const writePolicy = connectorWritePolicy(parsed.data.writePolicy, parsed.data.allowWrite);
     if (!this.clientId) throw new HouseholdError("Slack OAuth is not configured");
     for (const [state, p] of this.pending) if (p.expires <= this.now()) this.pending.delete(state);
     if (this.pending.size >= 20) throw new HouseholdError("Too many pending Slack connections; retry in ten minutes");
     const state = nonce(), verifier = nonce(), redirect = SLACK_REDIRECT;
-    this.pending.set(state, { house, pets, allowWrite: parsed.data.allowWrite, binding, redirect, verifier, expires: this.now() + 600_000 });
+    this.pending.set(state, { house, pets, allowWrite: writePolicy !== "disabled", writePolicy, binding, redirect, verifier, expires: this.now() + 600_000 });
     const url = new URL("https://slack.com/oauth/v2/authorize");
-    url.search = new URLSearchParams({ client_id: this.clientId, scope: "", user_scope: [...SLACK_READ_SCOPES, ...(parsed.data.allowWrite ? SLACK_WRITE_SCOPES : [])].join(","), redirect_uri: redirect, state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" }).toString();
+    url.search = new URLSearchParams({ client_id: this.clientId, scope: "", user_scope: [...SLACK_READ_SCOPES, ...(writePolicy !== "disabled" ? SLACK_WRITE_SCOPES : [])].join(","), redirect_uri: redirect, state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" }).toString();
     return { url: url.toString() };
   }
   async finish(url: URL, binding: string, house?: string) {
@@ -95,7 +103,7 @@ export class SlackConnectors {
       const { data: identity, scopes } = await slackRead(this.fetcher, user.access_token, "auth.test");
       if (identity.user_id !== user.id || identity.team_id !== data.team?.id || identity.bot_id) throw new HouseholdError("Slack authorization identity mismatch");
       if (this.pending.get(state) !== p) throw new HouseholdError("Slack connection was cancelled; start again");
-      this.save(p.house, p.pets, user.access_token, identity, scopes, { refreshToken: typeof user.refresh_token === "string" ? user.refresh_token : undefined, expiresAt: this.expiry(user.expires_in), clientId: this.clientId }, p.allowWrite);
+      this.save(p.house, p.pets, user.access_token, identity, scopes, { refreshToken: typeof user.refresh_token === "string" ? user.refresh_token : undefined, expiresAt: this.expiry(user.expires_in), clientId: this.clientId }, p.allowWrite, p.writePolicy);
       return p.house;
     } catch (error) {
       if (error instanceof HouseholdError) throw error;
@@ -107,13 +115,13 @@ export class SlackConnectors {
     if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) throw new HouseholdError("Invalid Slack token lifetime");
     return this.now() + seconds * 1000;
   }
-  private save(house: string, pets: string[], token: string, data: any, scopes: string[], rotation: Pick<Connection, "refreshToken" | "expiresAt" | "clientId"> = {}, allowWrite = false) {
+  private save(house: string, pets: string[], token: string, data: any, scopes: string[], rotation: Pick<Connection, "refreshToken" | "expiresAt" | "clientId"> = {}, allowWrite = false, writePolicy = connectorWritePolicy(undefined, allowWrite)) {
     this.pets(house, pets);
     if (!/^T[A-Z0-9]+$/.test(data.team_id ?? "") || !/^[UW][A-Z0-9]+$/.test(data.user_id ?? "") || data.bot_id) throw new HouseholdError("Use a user token, not a Slack bot token");
     if (!scopes.length || scopes.some(s => !([...SLACK_READ_SCOPES, ...SLACK_WRITE_SCOPES, "identify"] as string[]).includes(s))) throw new HouseholdError("Use a dedicated token with only the documented Slack connector scopes");
     const items = this.read(), old = items.find(c => c.house === house && c.teamId === data.team_id && c.userId === data.user_id);
     if (old) this.abort(old.id);
-    const c: Connection = { id: randomUUID(), house, token, allowWrite: allowWrite && SLACK_WRITE_SCOPES.some(scope => scopes.includes(scope)), teamId: data.team_id, team: typeof data.team === "string" ? data.team : data.team_id, userId: data.user_id, user: typeof data.user === "string" ? data.user : data.user_id, scopes, pets, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false, ...rotation };
+    const c: Connection = { id: randomUUID(), house, token, writePolicy, allowWrite: allowWrite && SLACK_WRITE_SCOPES.some(scope => scopes.includes(scope)), teamId: data.team_id, team: typeof data.team === "string" ? data.team : data.team_id, userId: data.user_id, user: typeof data.user === "string" ? data.user : data.user_id, scopes, pets, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false, ...rotation };
     this.write([...items.filter(i => i !== old), c]); return this.view(c);
   }
   async connect(house: string, input: unknown) {
@@ -123,19 +131,21 @@ export class SlackConnectors {
     try {
       const { data, scopes } = await slackRead(this.fetcher, parsed.data.token, "auth.test");
       if (generation !== this.generation) throw new HouseholdError("Workspace changed during connection; try again");
-      return this.save(house, pets, parsed.data.token, data, scopes, {}, parsed.data.allowWrite);
+      return this.save(house, pets, parsed.data.token, data, scopes, {}, connectorWritePolicy(parsed.data.writePolicy, parsed.data.allowWrite) !== "disabled", connectorWritePolicy(parsed.data.writePolicy, parsed.data.allowWrite));
     } catch (error) {
       if (error instanceof HouseholdError) throw error;
       throw new HouseholdError(error instanceof SlackReadError ? error.message : "Slack connection failed; check the user token and try again");
     }
   }
-  setPets(house: string, id: string, pets: string[]) {
+  setPets(house: string, id: string, pets: string[], policy?: ConnectorWritePolicy) {
     const allowed = this.pets(house, pets), items = this.read();
     const c = items.find(c => c.house === house && c.id === id);
     if (!c) throw new HouseholdError("Connection not found");
     // Reads in progress stop only when a bot lost access (they share one controller per connection).
     const lost = c.pets.some(p => !allowed.includes(p));
-    c.pets = allowed; this.write(items); if (lost) this.abort(id); return this.view(c);
+    const changed = policy !== undefined && policy !== connectorWritePolicy(c.writePolicy, c.allowWrite === true);
+    if (policy !== undefined) { c.writePolicy = connectorWritePolicySchema.parse(policy); c.allowWrite = policy !== "disabled" && SLACK_WRITE_SCOPES.some(scope => c.scopes.includes(scope)); }
+    c.pets = allowed; this.write(items); if (lost || changed) this.abort(id); return this.view(c);
   }
   private abort(id: string) { this.active.get(id)?.abort(); this.active.delete(id); }
   disconnect(house: string, id: string) {
@@ -159,7 +169,7 @@ export class SlackConnectors {
   }
   catalog(caller: PetIdentity) {
     // Evaluate each connection separately: scopes from a read-only account cannot enable writes on another.
-    return [...new Map(this.accounts(caller).flatMap(c => slackCatalog(c.scopes, c.allowWrite)).map(op => [op.name, op])).values()];
+    return [...new Map(this.accounts(caller).flatMap(c => slackCatalog(c.scopes, c.allowWrite && c.writePolicy !== "disabled")).map(op => [op.name, op])).values()];
   }
   private allowed(caller: PetIdentity, id: string) {
     const parent = this.parent(caller), c = parent && this.read().find(c => c.house === caller.house && c.id === id && c.pets.includes(parent));
@@ -183,9 +193,9 @@ export class SlackConnectors {
     this.refreshes.set(c.id, refresh);
     try { return await refresh; } finally { this.refreshes.delete(c.id); }
   }
-  async request(caller: PetIdentity, id: string, operation: string, params: unknown, signal?: AbortSignal) {
+  async request(caller: PetIdentity, id: string, operation: string, params: unknown, signal?: AbortSignal, clientRequestId?: string) {
     const c = this.allowed(caller, id), parsed = slackOperation(operation, params);
-    if (parsed.spec.write && !c.allowWrite) throw new HouseholdError("Writing is disabled for this Slack connection");
+    if (parsed.spec.write && (!c.allowWrite || c.writePolicy === "disabled")) throw new HouseholdError("Writing is disabled for this Slack connection");
     if (!slackHasScope(parsed.spec, c.scopes)) throw new HouseholdError("Slack token lacks the required scope; reconnect with the requested permissions");
     if (operation === "conversations.open" && !c.scopes.includes(String(parsed.params.users).includes(",") ? "mpim:write" : "im:write")) throw new HouseholdError("Slack token lacks the required scope for this DM type");
     // Per connection: its bots and their sideworkers share one Slack user's rate limits.
@@ -194,40 +204,59 @@ export class SlackConnectors {
     if (!this.budgets.get(key)!.take()) throw new HouseholdError("Too many Slack requests; retry shortly");
     if (!this.active.has(id)) this.active.set(id, new AbortController());
     const controller = this.active.get(id)!;
-    try {
-      const token = await this.access(c);
-      if (controller.signal.aborted) throw new Error("cancelled");
-      this.allowed(caller, id);
+    let uploadBytes: Uint8Array | undefined;
+    const execute = async (signal?: AbortSignal) => {
+      try {
+        const token = await this.access(this.allowed(caller, id));
+        if (controller.signal.aborted) throw new Error("cancelled");
+        this.allowed(caller, id);
+        const combined = AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]);
+        combined.throwIfAborted();
+        let data;
+        if (operation === "files.download") {
+          if (!this.files) throw new HouseholdError("Slack file storage is unavailable");
+          const downloaded = await slackDownload(this.fetcher, token, String(parsed.params.file), combined);
+          combined.throwIfAborted(); this.allowed(caller, id);
+          const path = await this.files.save(caller, downloaded.filename, downloaded.bytes);
+          data = { ok: true, file: parsed.params.file, path, filename: downloaded.filename, contentType: downloaded.contentType, size: downloaded.bytes.length };
+        } else if (operation === "files.upload") {
+          if (!this.files) throw new HouseholdError("Slack file storage is unavailable");
+          const { path, ...upload } = parsed.params;
+          const bytes = uploadBytes ?? await this.files.read(caller, String(path), SLACK_FILE_MAX_BYTES);
+          combined.throwIfAborted(); this.allowed(caller, id);
+          ({ data } = await slackUpload(this.fetcher, token, { ...upload, filename: String(upload.filename ?? String(path).split("/").at(-1)) } as SlackUploadParams, bytes, combined));
+        } else {
+          ({ data } = await (parsed.spec.write ? slackWrite : slackRead)(this.fetcher, token, operation, parsed.params, combined));
+        }
+        combined.throwIfAborted();
+        if (controller.signal.aborted) throw new Error("cancelled");
+        this.allowed(caller, id);
+        return { trust: "external", data };
+      } catch (error) {
+        if (error instanceof SlackReadError && ["invalid_grant", "invalid_refresh_token", "invalid_auth", "token_revoked", "token_expired", "account_inactive", "not_authed"].includes(error.reason)) {
+          const items = this.read(), current = items.find(i => i.id === id && i.house === caller.house);
+          if (current) { current.needsReconnect = true; this.write(items); }
+        }
+        if (error instanceof HouseholdError) throw error;
+        throw new HouseholdError(error instanceof SlackReadError ? error.message : parsed.spec.write ? "Slack write outcome is unknown; inspect the message, reactions, files or read state before retrying" : "Slack request failed or was cancelled; retry shortly");
+      }
+    };
+    if (parsed.spec.write && (connectorWritePolicy(c.writePolicy, c.allowWrite === true) === "approval" || (clientRequestId !== undefined && this.writes))) {
+      if (!this.writes) throw new HouseholdError("Connector approval service is unavailable; nothing changed");
       const combined = AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]);
-      combined.throwIfAborted();
-      let data;
-      if (operation === "files.download") {
+      const prepare = operation === "files.upload" ? async () => {
         if (!this.files) throw new HouseholdError("Slack file storage is unavailable");
-        const downloaded = await slackDownload(this.fetcher, token, String(parsed.params.file), combined);
-        combined.throwIfAborted(); this.allowed(caller, id);
-        const path = await this.files.save(caller, downloaded.filename, downloaded.bytes);
-        data = { ok: true, file: parsed.params.file, path, filename: downloaded.filename, contentType: downloaded.contentType, size: downloaded.bytes.length };
-      } else if (operation === "files.upload") {
-        if (!this.files) throw new HouseholdError("Slack file storage is unavailable");
-        const { path, ...upload } = parsed.params;
-        const bytes = await this.files.read(caller, String(path), SLACK_FILE_MAX_BYTES);
-        combined.throwIfAborted(); this.allowed(caller, id);
-        ({ data } = await slackUpload(this.fetcher, token, { ...upload, filename: String(upload.filename ?? String(path).split("/").at(-1)) } as SlackUploadParams, bytes, combined));
-      } else {
-        ({ data } = await (parsed.spec.write ? slackWrite : slackRead)(this.fetcher, token, operation, parsed.params, combined));
-      }
-      combined.throwIfAborted();
-      if (controller.signal.aborted) throw new Error("cancelled");
-      this.allowed(caller, id);
-      return { trust: "external", data };
-    } catch (error) {
-      if (error instanceof SlackReadError && ["invalid_grant", "invalid_refresh_token", "invalid_auth", "token_revoked", "token_expired", "account_inactive", "not_authed"].includes(error.reason)) {
-        const items = this.read(), current = items.find(i => i.id === id && i.house === caller.house);
-        if (current) { current.needsReconnect = true; this.write(items); }
-      }
-      if (error instanceof HouseholdError) throw error;
-      throw new HouseholdError(error instanceof SlackReadError ? error.message : parsed.spec.write ? "Slack write outcome is unknown; inspect the message, reactions, files or read state before retrying" : "Slack request failed or was cancelled; retry shortly");
+        try { uploadBytes = Uint8Array.from(await this.files.read(caller, String(parsed.params.path), SLACK_FILE_MAX_BYTES)); }
+        catch { throw new HouseholdError("Could not snapshot the outbox file; nothing was uploaded"); }
+        if (!uploadBytes.length || uploadBytes.length > SLACK_FILE_MAX_BYTES) throw new HouseholdError("Slack upload must be between 1 byte and 50 MiB");
+        return { ...parsed.params, file: { size: uploadBytes.length, sha256: createHash("sha256").update(uploadBytes).digest("hex") } };
+      } : undefined;
+      return this.writes.run({ caller, provider: "slack", connection: id, account: `${c.team} · ${c.user}`, operation, requireApproval: connectorWritePolicy(c.writePolicy, c.allowWrite === true) === "approval", params: parsed.params, prepare, clientRequestId, signal: combined, validate: () => {
+        const current = this.allowed(caller, id);
+        if (!current.allowWrite || current.writePolicy === "disabled") throw new HouseholdError("Writing is disabled for this Slack connection");
+      }, execute });
     }
+    return execute(signal);
   }
   stop() { this.generation++; this.pending.clear(); for (const id of this.active.keys()) this.abort(id); }
 }

@@ -1,3 +1,4 @@
+import { CONNECTOR_ACCESS_OPTIONS, connectorAccessWords, connectorWritePolicy, type ConnectorWritePolicy } from "../../src/core/connector-write-policy";
 import { useEffect, useState } from "react";
 import { api, type SlackConnectionView, type WorkspaceView } from "../api";
 import { SLACK_READ_SCOPES, SLACK_WRITE_SCOPES } from "../../src/core/slack-connectors";
@@ -24,13 +25,10 @@ export function useSlackConnections(house: string) {
 }
 
 /** «read only», «read and write». */
-export const slackAccessWords = (c: Pick<SlackConnectionView, "allowWrite">) => (c.allowWrite ? "read and write" : "read only");
+export const slackAccessWords = (c: Pick<SlackConnectionView, "allowWrite" | "writePolicy">) => connectorAccessWords(c.allowWrite ? connectorWritePolicy(c.writePolicy, true) : "disabled");
 
 /** How far bots may go with a Slack user: read what it can, or post as it too. */
-const ACCESS = [
-  { value: "read", label: "Read only", description: "Bots search and read conversations, download files and look up people, groups and reactions." },
-  { value: "send", label: "Read and write", description: "Bots can also send, edit and delete your messages, upload files, react, open DMs and mark conversations read, as you." },
-] as const;
+const ACCESS = CONNECTOR_ACCESS_OPTIONS;
 
 /** Where Slack sends the owner back: a static page that shows the result to paste (no server of ours sees the tokens). */
 const CALLBACK = "https://agents-household.dev/slack/callback/";
@@ -62,7 +60,7 @@ export function SlackSetup({ house, existing, options, back, onClose, saved }: {
   onClose: () => void; saved: () => Promise<void>;
 }) {
   const [step, setStep] = useState<"access" | "sign-in" | "token">("access");
-  const [access, setAccess] = useState<"read" | "send">(existing?.allowWrite ? "send" : "read");
+  const [access, setAccess] = useState<ConnectorWritePolicy>(connectorWritePolicy(existing?.writePolicy, existing?.allowWrite === true));
   const [pets, setPets] = useState(existing?.pets ?? []);
   const [authorizeUrl, setAuthorizeUrl] = useState("");
   const [result, setResult] = useState("");
@@ -80,7 +78,7 @@ export function SlackSetup({ house, existing, options, back, onClose, saved }: {
         back: step !== "access" ? () => setStep("access") : back,
         onConfirm: async () => {
           if (step === "access") {
-            const { url } = await api.authorizeSlack(house, pets, access === "send");
+            const { url } = await api.authorizeSlack(house, pets, access !== "disabled", access);
             setAuthorizeUrl(url);
             setResult("");
             setStep("sign-in");
@@ -92,7 +90,7 @@ export function SlackSetup({ house, existing, options, back, onClose, saved }: {
             await api.completeSlack(house, result.trim());
           } else {
             if (!token.trim() || tokenProblem) throw new Error("Paste a Slack user token (xoxp-…).");
-            await api.connectSlack(house, token.trim(), pets, access === "send");
+            await api.connectSlack(house, token.trim(), pets, access !== "disabled", access);
           }
           await saved();
         },
@@ -117,7 +115,7 @@ export function SlackSetup({ house, existing, options, back, onClose, saved }: {
                     ? "Sign in as this Slack user again. Your choices here replace its access."
                     : "Your bots search and read Slack as you, when they need context. This is not a chat channel: nobody messages your bots here."}
                 </p>
-                <ChoiceList label="Access" value={access} onChange={(value) => setAccess(value as "read" | "send")} options={[...ACCESS]} />
+                <ChoiceList label="Access" value={access} onChange={(value) => setAccess(value as ConnectorWritePolicy)} options={[...ACCESS]} />
                 <FormGroup title="Bot access">
                   <SwitchList label="Bot access" options={options} on={pets} onToggle={(name) => setPets(toggle(pets, name))} />
                   <p className="hint">Optional: with none, the connection stays private until you grant access. Sideworkers get their parent’s; scouts never have any.</p>
@@ -155,7 +153,7 @@ export function SlackSetup({ house, existing, options, back, onClose, saved }: {
                     <li>Under OAuth &amp; Permissions → User Token Scopes, add the scopes below. Leave Bot Token Scopes empty.</li>
                     <li>Install the app, approve it as your Slack user, and copy the User OAuth Token. Keep token rotation off.</li>
                   </ol>
-                  <p className="hint mono">{[...SLACK_READ_SCOPES, ...(access === "send" ? SLACK_WRITE_SCOPES : [])].join(" ")}</p>
+                  <p className="hint mono">{[...SLACK_READ_SCOPES, ...(access !== "disabled" ? SLACK_WRITE_SCOPES : [])].join(" ")}</p>
                 </details>
               </>
             )}

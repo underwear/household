@@ -1,6 +1,7 @@
+import { CONNECTOR_ACCESS_OPTIONS, connectorAccessWords } from "../../src/core/connector-write-policy";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { MAIL_NO_CHAT } from "../../src/core/mail-connectors";
+import { MAIL_NO_CHAT, mailWritePolicy } from "../../src/core/mail-connectors";
 import { api, type MailConnectionInput, type MailConnectionView, type MailConnectorsView, type MailEndpoint, type MailSendPolicy, type MailSendView } from "../api";
 import { Dialog } from "./dialog";
 import { ChoiceList, Field, Fold, FormGroup, SwitchList, TextField } from "./fields";
@@ -15,10 +16,17 @@ const usualPort = (kind: "imap" | "smtp", security: Security) => (kind === "imap
 const server = (s: Server | undefined, kind: "imap" | "smtp"): Server => (s ? { host: s.host, port: s.port, security: s.security } : { host: "", port: usualPort(kind, "tls"), security: "tls" });
 
 /** «reads», «reads and sends with your OK», «reads, sends and organizes». */
-export const mailAccessWords = (c: Pick<MailConnectionView, "sendPolicy" | "allowManage">) => {
-  const can = ["reads", ...(c.sendPolicy === "approval" ? ["sends with your OK"] : c.sendPolicy === "auto" ? ["sends"] : []), ...(c.allowManage ? ["organizes"] : [])];
-  return can.length > 1 ? `${can.slice(0, -1).join(", ")} and ${can.at(-1)}` : "reads only";
-};
+export const mailAccessWords = (c: Pick<MailConnectionView, "sendPolicy" | "allowManage" | "writePolicy">) => connectorAccessWords(mailWritePolicy(c));
+
+/** Keep legacy SMTP/IMAP restrictions on unrelated edits; a different access mode applies to both. */
+export function mailPermissions(existing: MailConnectionView | undefined, policy: MailSendPolicy, outgoing: boolean): Pick<MailConnectionInput, "writePolicy" | "sendPolicy" | "allowManage"> {
+  const preserve = existing && policy === mailWritePolicy(existing);
+  return {
+    writePolicy: policy,
+    allowManage: policy !== "disabled" && (preserve ? existing.allowManage : true),
+    sendPolicy: !outgoing || policy === "disabled" ? "disabled" : preserve && existing.smtp ? existing.sendPolicy : policy,
+  };
+}
 
 /** A workspace's mail connections and what their bots asked to send, reloaded every 5 s (approvals come and go). */
 export function useMailConnections(house: string) {
@@ -38,7 +46,7 @@ export function useMailConnections(house: string) {
 /** A saved connection as the input that saves it again: no passwords (the host keeps them for the same server and username). */
 export const mailInput = (c: MailConnectionView, pets = c.pets): MailConnectionInput => ({
   title: c.title, email: c.email, displayName: c.displayName, imap: { ...c.imap, password: "" }, ...(c.smtp ? { smtp: { ...c.smtp, password: "" } } : {}),
-  sendPolicy: c.sendPolicy, allowManage: c.allowManage, ...(c.sentFolder ? { sentFolder: c.sentFolder } : {}), draftsFolder: c.draftsFolder, trashFolder: c.trashFolder, pets,
+  writePolicy: c.writePolicy, sendPolicy: c.sendPolicy, allowManage: c.allowManage, ...(c.sentFolder ? { sentFolder: c.sentFolder } : {}), draftsFolder: c.draftsFolder, trashFolder: c.trashFolder, pets,
 });
 
 /** What the owner should know about a connection's outgoing mail: waiting in a chat, or recently gone wrong. */
@@ -129,8 +137,9 @@ export function MailSetup({ house, existing, options, waiting = 0, onClose, save
   };
   /** Sending is set up (an outgoing server); off: skipped, bots only read. */
   const [outgoing, setOutgoing] = useState(existing ? !!existing.smtp : true);
-  const [sendPolicy, setSendPolicy] = useState<MailSendPolicy>(existing?.sendPolicy ?? "approval");
-  const [allowManage, setAllowManage] = useState(existing?.allowManage ?? false);
+  const [sendPolicy, setSendPolicy] = useState<MailSendPolicy>(existing ? mailWritePolicy(existing) : "approval");
+  const permissions = mailPermissions(existing, sendPolicy, outgoing);
+  const allowManage = permissions.allowManage;
   const [sentFolder, setSentFolder] = useState(existing?.sentFolder ?? "");
   const [draftsFolder, setDraftsFolder] = useState(existing?.draftsFolder ?? "Drafts");
   const [trashFolder, setTrashFolder] = useState(existing?.trashFolder ?? "Trash");
@@ -154,7 +163,7 @@ export function MailSetup({ house, existing, options, waiting = 0, onClose, save
     title: title.trim() || "Mail", email: email.trim(), displayName: displayName.trim(),
     imap: { ...imap, username: login, password, ...(cert ? { tlsCertificate: cert } : {}) },
     ...(outgoing ? { smtp: smtpEndpoint() } : {}),
-    sendPolicy: outgoing ? sendPolicy : "disabled", allowManage, ...(sentFolder.trim() ? { sentFolder: sentFolder.trim() } : {}), draftsFolder: draftsFolder.trim() || "Drafts", trashFolder: trashFolder.trim() || "Trash", pets,
+    ...permissions, ...(sentFolder.trim() ? { sentFolder: sentFolder.trim() } : {}), draftsFolder: draftsFolder.trim() || "Drafts", trashFolder: trashFolder.trim() || "Trash", pets,
   });
 
   // What is wrong with each part, shown once its Next (or Save) was pressed.
@@ -253,10 +262,10 @@ export function MailSetup({ house, existing, options, waiting = 0, onClose, save
       </>}
       {step === 1 && <>
         {existing && !outgoing ? <>
-          <p className="dialog-text">Sending isn't set up: bots only read {email.trim() || "this mailbox"}. Add its outgoing server to let them send.</p>
+          <p className="dialog-text">Sending isn't set up for {email.trim() || "this mailbox"}. Add its outgoing server to let them send.</p>
           <Cluster><button type="button" className="btn small" onClick={setUpSending}>Set up sending</button></Cluster>
         </> : <>
-          {!existing && <p className="dialog-text">Add the outgoing server so bots can send from {email.trim() || "this address"}. Skip it, and bots only read; you can set up sending later.</p>}
+          {!existing && <p className="dialog-text">Add the outgoing server so bots can send from {email.trim() || "this address"}. Skip it, and bots can't send; you can set up sending later.</p>}
           <FormGroup title="Outgoing mail (SMTP)">
             <ServerFields kind="smtp" server={smtp} onChange={setSmtp} errors={shown(1)} />
             <SwitchList label="Sign-in" options={[{ value: "same", label: "Same sign-in as incoming mail", description: "Off: a username and password for sending only." }]} on={sameLogin ? ["same"] : []} onToggle={() => setSameLogin(!sameLogin)} />
@@ -275,17 +284,9 @@ export function MailSetup({ house, existing, options, waiting = 0, onClose, save
       </>}
       {step === 2 && <>
         <p className="dialog-text">Bots can always search and read {email.trim() || "this mailbox"}. Choose what else they may do.</p>
-        {outgoing ? (
-          <ChoiceList label="Sending" value={sendPolicy} onChange={(v) => setSendPolicy(v as MailSendPolicy)} options={[
-            { value: "approval", label: "Ask me first", description: "Each email comes to your chat with the bot, with its recipients, text and attachments. Nothing goes out until you approve it." },
-            { value: "auto", label: "Send on their own", description: "Bots send from this address without asking you." },
-            { value: "disabled", label: "Don't send", description: "Bots only read." },
-          ]} />
-        ) : (
-          <p className="list-empty">Sending isn't set up, so bots don't send. <button type="button" className="text-btn plain text-link" onClick={() => { setUpSending(); setStep(1); }}>Set up sending</button></p>
-        )}
-        <SwitchList label="Mailbox" options={[{ value: "manage", label: "Organize the mailbox", description: "Mark mail read or flagged, move it, put it in Trash, save drafts and manage folders. Nothing is ever deleted for good." }]}
-          on={allowManage ? ["manage"] : []} onToggle={() => setAllowManage(!allowManage)} />
+        <ChoiceList label="Access" value={sendPolicy} onChange={v => setSendPolicy(v as MailSendPolicy)} options={[...CONNECTOR_ACCESS_OPTIONS]} />
+        <p className="hint">This applies to sending and mailbox changes: flags, moves, Trash, drafts and folders. Nothing is ever deleted for good.</p>
+        {!outgoing && <p className="list-empty">Sending isn't set up. <button type="button" className="text-btn plain text-link" onClick={() => { setUpSending(); setStep(1); }}>Set up sending</button></p>}
         {allowManage && <FormGrid>
           <TextField label="Drafts folder" value={draftsFolder} onChange={setDraftsFolder} />
           <TextField label="Trash folder" value={trashFolder} onChange={setTrashFolder} />

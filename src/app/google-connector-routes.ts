@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { connectorAccessSchema } from "../core/connector-write-policy";
 import { HouseholdError } from "../core/errors";
 import type { GoogleConnectors } from "./google-connectors";
 import { cookieValue, sessionCookieName } from "./web-auth";
@@ -32,9 +32,9 @@ export function googleConnectorRoutes(connectors: GoogleConnectors) {
       return Response.json(result, { headers: binding === "control-socket" ? {} : { "set-cookie": googleOAuthCookie(url.port, binding) } });
     }
     if (action && action !== "connect" && request.method === "PATCH") {
-      const parsed = z.strictObject({ pets: z.array(z.string().min(1).max(64)).max(100) }).safeParse(await request.json());
+      const parsed = connectorAccessSchema.safeParse(await request.json());
       if (!parsed.success) throw new HouseholdError("bots must be a list of this workspace's bot names");
-      return Response.json(connectors.setPets(house, decodeURIComponent(action), parsed.data.pets));
+      return Response.json(connectors.setPets(house, decodeURIComponent(action), parsed.data.pets, parsed.data.writePolicy));
     }
     if (action && action !== "connect" && request.method === "DELETE") { connectors.disconnect(house, decodeURIComponent(action)); return Response.json({ ok: true }); }
     return new Response(null, { status: 405 });

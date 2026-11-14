@@ -1,3 +1,4 @@
+import { ConnectorWrites, type ConnectorWriteApproval } from "../../src/app/connector-writes";
 import { expect, test } from "bun:test";
 import { SlackConnectors, type SlackConnectorFiles } from "../../src/app/slack-connectors";
 import { slackConnectorRoutes } from "../../src/app/slack-connector-routes";
@@ -10,21 +11,90 @@ import { SqliteStore } from "../../src/infra/sqlite-store";
 import type { House } from "../../src/core/household";
 
 const caller = { house: "home", pet: "alice" };
-function setup(files?: SlackConnectorFiles) {
+test("Slack asks once for every write operation, while read-only blocks all of them", async () => {
+  const seen: string[] = [];
+  const s = setup(undefined, { ask: async (_caller, write) => { seen.push(write.operation); return "denied"; } });
+  s.scopes([...SLACK_READ_SCOPES, ...SLACK_WRITE_SCOPES]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], writePolicy: "approval" });
+  const count = s.calls.length;
+  for (const [name, params] of writeCases.filter(([name]) => name !== "files.upload")) {
+    await expect(s.service.request(caller, c.id, name, params, undefined, name)).rejects.toThrow("denied");
+    expect(seen.at(-1)).toBe(name);
+  }
+  expect(s.calls).toHaveLength(count);
+  s.service.setPets("home", c.id, ["alice"], "disabled");
+  expect(s.service.catalog(caller).some(o => !o.readOnly)).toBe(false);
+  for (const [name, params] of writeCases) await expect(s.service.request(caller, c.id, name, params)).rejects.toThrow();
+  s.service.setPets("home", c.id, ["alice"], "auto");
+  await s.service.request(caller, c.id, "chat.postMessage", { channel: "C123", text: "Allowed" });
+  expect(s.calls).toHaveLength(count + 1);
+});
+
+test("Slack uploads snapshot the approved bytes before any upload API and cannot be replayed", async () => {
+  let answer!: (v: "approved") => void, bytes = new Uint8Array([1, 2, 3]), deleted = false;
+  const s = setup({ read: async () => { if (deleted) throw new Error("File deleted"); return bytes; }, save: async () => "unused" }, { ask: async () => new Promise(r => { answer = r; }) });
+  s.scopes(["files:write"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], writePolicy: "approval" });
+  s.api(async url => String(url).endsWith("getUploadURLExternal") ? Response.json({ ok: true, file_id: "F123", upload_url: "https://files.slack.com/upload/v1/signed" }) : new URL(url).hostname === "files.slack.com" ? new Response("OK") : Response.json({ ok: true, files: [{ id: "F123" }] }));
+  const pending = s.service.request(caller, c.id, "files.upload", { path: "video.mp4", channel_id: "C123" }, undefined, "upload-1");
+  while (!answer) await Bun.sleep(1);
+  expect(s.calls).toHaveLength(1);
+  expect(JSON.stringify(s.writes.status(caller, () => true))).toContain('"size":3');
+  bytes.fill(9); answer("approved"); await pending;
+  expect(await (s.calls[2]!.init!.body as Blob).bytes()).toEqual(new Uint8Array([1, 2, 3]));
+  deleted = true;
+  await s.service.request(caller, c.id, "files.upload", { path: "video.mp4", channel_id: "C123" }, undefined, "upload-1");
+  expect(s.calls).toHaveLength(4);
+});
+
+test("Slack revocation cancels approval and late button presses cannot post", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup(undefined, { ask: async () => new Promise(r => { answer = r; }) }); s.scopes(["chat:write"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], writePolicy: "approval" });
+  const pending = s.service.request(caller, c.id, "chat.postMessage", { channel: "C123", text: "no" }, undefined, "revoke-1");
+  s.service.setPets("home", c.id, []);
+  await expect(pending).rejects.toThrow("cancelled"); answer("approved");
+  expect(s.calls).toHaveLength(1);
+});
+
+test("Slack approval uses tokens rotated by a read while the card was pending", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup(undefined, { ask: async () => new Promise(r => { answer = r; }) }); s.scopes(["chat:write", "search:read"]);
+  const c = await s.service.connect("home", { token: "xoxp-private-token", pets: ["alice"], writePolicy: "approval" });
+  // A rotating OAuth connection with an expired access token.
+  const records = JSON.parse(s.store.get("house.connectors.slack.v1")!);
+  Object.assign(records[0], { expiresAt: 1, refreshToken: "old-refresh", clientId: "client" });
+  s.store.set("house.connectors.slack.v1", JSON.stringify(records));
+  const refreshed: string[] = [];
+  s.api(async (url, init) => {
+    if (!String(url).endsWith("oauth.v2.access")) return Response.json({ ok: true });
+    refreshed.push((init!.body as URLSearchParams).get("refresh_token")!);
+    return refreshed.length === 1 ? Response.json({ ok: true, token_type: "user", access_token: "rotated-access", refresh_token: "rotated-refresh", expires_in: 3600 }) : Response.json({ ok: false, error: "invalid_refresh_token" });
+  });
+  const pending = s.service.request(caller, c.id, "chat.postMessage", { channel: "C123", text: "After approval" }, undefined, "rotate");
+  await s.service.request(caller, c.id, "search.messages", { query: "hello" });
+  answer("approved"); await pending;
+  expect(refreshed).toEqual(["old-refresh"]);
+  expect(s.calls.at(-1)!.url).toEndWith("chat.postMessage");
+  expect(new Headers(s.calls.at(-1)!.init!.headers).get("authorization")).toBe("Bearer rotated-access");
+  expect(s.service.list("home").connections[0]!.needsReconnect).toBe(false);
+});
+function setup(files?: SlackConnectorFiles, approval?: ConnectorWriteApproval) {
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const store = new SqliteStore(":memory:");
   const calls: { url: string; init?: RequestInit }[] = [];
   let scopes: string[] = [...SLACK_READ_SCOPES];
   let auth: Record<string, unknown> = { ok: true, team_id: "T123", team: "Personal", user_id: "U123", user: "igor" };
   let api: SlackFetch = async () => Response.json({ ok: true, messages: [{ text: "external" }], response_metadata: { next_cursor: "next" } });
+  const writes = new ConnectorWrites(store, approval);
   const service = new SlackConnectors(store, async (url, init) => {
     calls.push({ url: String(url), init });
     if (new URL(url).pathname.endsWith("auth.test")) return Response.json(auth, { headers: { "x-oauth-scopes": scopes.join(",") } });
     return api(url, init);
-  }, undefined, undefined, files);
+  }, undefined, undefined, files, writes);
   service.setHouses([house, { ...house, name: "other" }]);
   const connect = async (home = "home") => (await service.connect(home, { token: "xoxp-private-token", pets: ["alice"] })).id;
-  return { house, store, calls, service, connect, api: (f: SlackFetch) => { api = f; }, scopes: (s: string[]) => { scopes = s; }, auth: (value: Record<string, unknown>) => { auth = value; } };
+  return { writes, house, store, calls, service, connect, api: (f: SlackFetch) => { api = f; }, scopes: (s: string[]) => { scopes = s; }, auth: (value: Record<string, unknown>) => { auth = value; } };
 }
 
 test("Slack enrollment validates user identity and allowed scopes without exposing tokens", async () => {

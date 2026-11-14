@@ -630,9 +630,9 @@ test("a Google account's services in words, in the catalog's order", () => {
 });
 
 test("a Google account's access in words: whole, none, or the services Google let change", () => {
-  expect(accessWords({ services: ["gmail", "drive"], writable: ["gmail", "drive"] })).toBe("read and write");
+  expect(accessWords({ services: ["gmail", "drive"], writable: ["gmail", "drive"] })).toBe("full access");
   expect(accessWords({ services: ["gmail", "drive"], writable: [] })).toBe("read only");
-  expect(accessWords({ services: ["gmail", "drive", "calendar"], writable: ["calendar"] })).toBe("Calendar writable");
+  expect(accessWords({ services: ["gmail", "drive", "calendar"], writable: ["calendar"] })).toBe("full access (Calendar)");
 });
 
 test("a new bot's config name follows its display name; harnesses go by the names people know", () => {

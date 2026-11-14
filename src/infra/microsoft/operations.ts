@@ -70,7 +70,7 @@ export function microsoftRequest(operation: string, input: unknown) {
   const headers: Record<string, string> = {};
   if (a.ifMatch) headers["if-match"] = a.ifMatch;
   if (spec.body) headers["content-type"] = "application/json";
-  return { url, spec, init: { method: spec.method ?? "GET", headers, ...(spec.body ? { body: JSON.stringify(spec.body(a)) } : {}) } };
+  return { params: parsed.data, url, spec, init: { method: spec.method ?? "GET", headers, ...(spec.body ? { body: JSON.stringify(spec.body(a)) } : {}) } };
 }
 export function microsoftCatalog(writable: boolean) {
   return Object.entries(MICROSOFT_OPERATIONS).filter(([, op]: [string, Operation]) => !op.write || writable).map(([name, op]) => ({ name, description: op.description, write: "write" in op, parameters: z.toJSONSchema(op.schema) }));

@@ -8,10 +8,10 @@ test("Microsoft is available in Add connector and defaults to read-only private 
   const html = renderToStaticMarkup(<MicrosoftSetup house="home" ready options={[{ value: "alice", label: "Alice" }]} onClose={() => {}} saved={async () => {}} />);
   expect(html).toContain("Connect Microsoft To Do");
   expect(html).toContain("Prepare Microsoft sign-in");
-  expect(html).toMatch(/checked=""[^>]*value="read"|value="read"[^>]*checked=""/);
+  expect(html).toMatch(/checked=""[^>]*value="disabled"|value="disabled"[^>]*checked=""/);
   expect(html).not.toMatch(/role="switch"[^>]*checked=""/);
   expect(html).toContain("Tokens stay on this host");
-  expect(html).toContain("delete lists and tasks");
+  expect(html).toContain("Ask me first");
 });
 
 test("Microsoft reconnection preserves selected access and bots, unavailable hosts explain setup", () => {
@@ -19,9 +19,9 @@ test("Microsoft reconnection preserves selected access and bots, unavailable hos
     existing={{ id: "a", account: "me@example.com", displayName: "Me", writable: true, pets: ["alice"], connectedAt: "", needsReconnect: true }}
     onClose={() => {}} saved={async () => {}} />);
   expect(html).toContain("Reconnect me@example.com");
-  expect(html).toMatch(/checked=""[^>]*value="write"|value="write"[^>]*checked=""/);
+  expect(html).toMatch(/checked=""[^>]*value="auto"|value="auto"[^>]*checked=""/);
   expect(html).toMatch(/role="switch"[^>]*checked=""/);
   expect(html).toContain("Microsoft isn&#x27;t set up on this host.");
-  expect(microsoftAccessWords({ writable: true })).toBe("read and write");
+  expect(microsoftAccessWords({ writable: true })).toBe("full access");
   expect(microsoftAccessWords({ writable: false })).toBe("read only");
 });

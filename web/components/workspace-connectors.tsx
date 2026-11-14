@@ -1,4 +1,6 @@
-import { MailSetup, mailAccessWords, mailInput, mailNotices, useMailConnections, type MailNotice } from "./mail-connectors";
+import { CONNECTOR_ACCESS_OPTIONS, connectorAccessWords, connectorWritePolicy, type ConnectorWritePolicy } from "../../src/core/connector-write-policy";
+import { mailWritePolicy } from "../../src/core/mail-connectors";
+import { MailSetup, mailAccessWords, mailInput, mailPermissions, mailNotices, useMailConnections, type MailNotice } from "./mail-connectors";
 import type { MailConnectionView } from "../api";
 import { MicrosoftSetup, microsoftAccessWords, useMicrosoftConnections } from "./microsoft-connectors";
 import type { MicrosoftConnectionView } from "../api";
@@ -22,13 +24,10 @@ const SERVICES = [
   { id: "calendar", label: "Calendar", read: "Read calendars and events", write: "Read, create, change and delete events", icon: CalendarDays },
 ] as const;
 /** How far bots may go with an account: read it, or act as its owner too. */
-const ACCESS = [
-  { value: "write", label: "Read and write", description: "Bots can also send mail, edit files and change events, as you." },
-  { value: "read", label: "Read only", description: "Bots search and read; nothing in the account changes." },
-] as const;
+const ACCESS = CONNECTOR_ACCESS_OPTIONS;
 /** «read and write», «read only», or which services can change when Google granted only some. */
-export const accessWords = ({ services, writable }: Pick<GoogleConnectionView, "services" | "writable">) =>
-  !writable.length ? "read only" : services.every((s) => writable.includes(s)) ? "read and write" : `${servicesWords(writable)} writable`;
+export const accessWords = ({ services, writable, writePolicy }: Pick<GoogleConnectionView, "services" | "writable" | "writePolicy">) =>
+  !writable.length || writePolicy === "disabled" ? "read only" : `${connectorAccessWords(connectorWritePolicy(writePolicy, true))}${services.every(s => writable.includes(s)) ? "" : ` (${servicesWords(writable)})`}`;
 const PRIVACY = "https://agents-household.dev/privacy/";
 const toggle = <T extends string>(values: T[], value: T) => (values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
 /** «Gmail, Drive and Calendar». */
@@ -137,7 +136,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
       <Section
         hint={
           <>
-            Connect accounts for this workspace's bots. Each account has its own bot access and read-only or read-and-write permissions. Tokens stay on this host; what a bot reads goes to its AI provider and chat.
+            Connect accounts for this workspace's bots. Each account has its own bot access and Read only, Ask me first or Full access permissions. Tokens stay on this host; what a bot reads goes to its AI provider and chat.
           </>
         }
       >
@@ -209,22 +208,22 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           }}
         />
       )}
-      {access && "mail" in access && <BotAccess key={access.mail.id} house={house} title={access.mail.email} pets={access.mail.pets}
+      {access && "mail" in access && <BotAccess key={access.mail.id} house={house} title={access.mail.email} pets={access.mail.pets} policy={mailWritePolicy(access.mail)}
         body={`Mail, ${mailAccessWords(access.mail)}. Saving checks the connection again${waiting(access.mail) ? " and cancels emails waiting for your approval" : ""}.`} onClose={() => setAccess(undefined)}
-        save={async (pets) => { await api.saveMail(house.name, mailInput(access.mail, pets), access.mail.id); await mail.refresh(); notify("Bot access saved"); }} />}
-      {access && "microsoft" in access && <BotAccess house={house} title={access.microsoft.account} pets={access.microsoft.pets}
+        save={async (pets, writePolicy) => { await api.saveMail(house.name, { ...mailInput(access.mail, pets), ...mailPermissions(access.mail, writePolicy, !!access.mail.smtp) }, access.mail.id); await mail.refresh(); notify("Bot access saved"); }} />}
+      {access && "microsoft" in access && <BotAccess house={house} title={access.microsoft.account} pets={access.microsoft.pets} policy={connectorWritePolicy(access.microsoft.writePolicy, access.microsoft.writable)}
         body={`Microsoft To Do, ${microsoftAccessWords(access.microsoft)}. Changes apply right away.`} onClose={() => setAccess(undefined)}
-        save={async pets => { await api.shareMicrosoft(house.name, access.microsoft.id, pets); await microsoft.refresh(); notify("Bot access saved"); }} />}
+        save={async (pets, writePolicy) => { await api.shareMicrosoft(house.name, access.microsoft.id, pets, writePolicy); await microsoft.refresh(); notify("Bot access saved"); }} />}
       {access && "google" in access && (
         <BotAccess
           key={access.google.id}
           house={house}
           title={access.google.email}
           body={`${servicesWords(access.google.services)}, ${accessWords(access.google)}. Changes apply on a bot's next request, no restart.`}
-          pets={access.google.pets}
+          pets={access.google.pets} policy={connectorWritePolicy(access.google.writePolicy, !!access.google.writable.length)}
           onClose={() => setAccess(undefined)}
-          save={async (names) => {
-            await api.shareGoogle(house.name, access.google.id, names);
+          save={async (names, writePolicy) => {
+            await api.shareGoogle(house.name, access.google.id, names, writePolicy);
             await refresh();
             notify("Bot access saved");
           }}
@@ -236,10 +235,10 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           house={house}
           title={`Slack ${access.slack.team}`}
           body={`${access.slack.user}, ${slackAccessWords(access.slack)}. Changes apply right away; a bot losing access stops reading at once.`}
-          pets={access.slack.pets}
+          pets={access.slack.pets} policy={connectorWritePolicy(access.slack.writePolicy, access.slack.allowWrite === true)}
           onClose={() => setAccess(undefined)}
-          save={async (names) => {
-            await api.shareSlack(house.name, access.slack.id, names);
+          save={async (names, writePolicy) => {
+            await api.shareSlack(house.name, access.slack.id, names, writePolicy);
             await slack.refresh();
             notify("Bot access saved");
           }}
@@ -323,7 +322,7 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft,
   const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
   const [pets, setBots] = useState<string[]>(existing?.pets ?? []);
-  const [access, setAccess] = useState<"read" | "write">(existing && !existing.writable.length ? "read" : "write");
+  const [access, setAccess] = useState<ConnectorWritePolicy>(connectorWritePolicy(existing?.writePolicy, !!existing?.writable.length));
   return (
     <Dialog
       onClose={onClose}
@@ -343,7 +342,7 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft,
           }
           if (!ready) throw new Error("Google isn't set up on this host: use an official release, or give a source build its own OAuth client.");
           if (!services.length) throw new Error("Choose at least one service.");
-          const { url } = await api.connectGoogle(house.name, services, pets, access === "write");
+          const { url } = await api.connectGoogle(house.name, services, pets, access !== "disabled", access);
           window.location.assign(url);
           return "stay";
         },
@@ -367,9 +366,9 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft,
                   Google isn't set up on this host.
                 </p>
               )}
-              <ChoiceList label="Access" value={access} onChange={(value) => setAccess(value as "read" | "write")} options={[...ACCESS]} />
+              <ChoiceList label="Access" value={access} onChange={(value) => setAccess(value as ConnectorWritePolicy)} options={[...ACCESS]} />
               <FormGroup title="Services">
-                <SwitchList label="Google services" options={SERVICES.map((s) => ({ value: s.id, label: s.label, description: s[access] }))} on={services} onToggle={(id) => setServices(toggle(services, id as GoogleService))} />
+                <SwitchList label="Google services" options={SERVICES.map((s) => ({ value: s.id, label: s.label, description: s[access === "disabled" ? "read" : "write"] }))} on={services} onToggle={(id) => setServices(toggle(services, id as GoogleService))} />
               </FormGroup>
               <FormGroup title="Bot access">
                 <SwitchList label="Bot access" options={sharable(house)} on={pets} onToggle={(id) => setBots(toggle(pets, id))} />
@@ -389,8 +388,9 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft,
 }
 
 /** Which bots may use one account; Google's take effect on a bot's next request, Slack's at once. */
-function BotAccess({ house, title, body, pets: initial, onClose, save }: { house: WorkspaceView; title: string; body: string; pets: string[]; onClose: () => void; save: (pets: string[]) => Promise<void> }) {
+function BotAccess({ house, title, body, pets: initial, policy: initialPolicy, onClose, save }: { house: WorkspaceView; title: string; body: string; pets: string[]; policy: ConnectorWritePolicy; onClose: () => void; save: (pets: string[], policy: ConnectorWritePolicy) => Promise<void> }) {
   const [pets, setBots] = useState(initial);
+  const [policy, setPolicy] = useState(initialPolicy);
   return (
     <Dialog
       onClose={onClose}
@@ -399,9 +399,11 @@ function BotAccess({ house, title, body, pets: initial, onClose, save }: { house
         body,
         confirmLabel: "Save access",
         busyLabel: "Saving…",
-        onConfirm: () => save(pets),
+        onConfirm: () => save(pets, policy),
         children: (
           <>
+            <ChoiceList label="Access" value={policy} onChange={value => setPolicy(value as ConnectorWritePolicy)} options={[...CONNECTOR_ACCESS_OPTIONS]} />
+            <p className="hint">Changing this mode cancels pending approvals. If the account lacks write permissions, reconnect it to grant them.</p>
             <SwitchList label="Bot access" options={sharable(house)} on={pets} onToggle={(id) => setBots(toggle(pets, id))} />
             <p className="hint">Sideworkers get their parent's access. Scouts never have any.</p>
           </>

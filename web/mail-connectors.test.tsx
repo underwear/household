@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { MailConnectionView, MailSendView } from "./api";
 import { MAIL_NO_CHAT } from "../src/core/mail-connectors";
-import { MailSetup, certificatesIn, mailAccessWords, mailInput, mailNotices } from "./components/mail-connectors";
+import { MailSetup, certificatesIn, mailAccessWords, mailInput, mailPermissions, mailNotices } from "./components/mail-connectors";
 import { CONNECTOR_TYPES } from "./components/workspace-connectors";
 
 const view: MailConnectionView = {
@@ -55,9 +55,22 @@ test("a saved connection saves again without its passwords", () => {
 });
 
 test("what bots may do, in words", () => {
-  expect(mailAccessWords({ sendPolicy: "disabled", allowManage: false })).toBe("reads only");
-  expect(mailAccessWords({ sendPolicy: "approval", allowManage: false })).toBe("reads and sends with your OK");
-  expect(mailAccessWords({ sendPolicy: "auto", allowManage: true })).toBe("reads, sends and organizes");
+  expect(mailAccessWords({ sendPolicy: "disabled", allowManage: false })).toBe("read only");
+  expect(mailAccessWords({ sendPolicy: "approval", allowManage: false })).toBe("ask me first");
+  expect(mailAccessWords({ sendPolicy: "auto", allowManage: true })).toBe("full access");
+});
+
+test("unrelated mail settings edits preserve old independent SMTP and IMAP restrictions", () => {
+  const sendOnly = { ...view, sendPolicy: "auto" as const, allowManage: false };
+  const manageOnly = { ...view, sendPolicy: "disabled" as const, allowManage: true };
+  expect(mailPermissions(sendOnly, "auto", true)).toEqual({ writePolicy: "auto", sendPolicy: "auto", allowManage: false });
+  expect(mailPermissions(manageOnly, "auto", true)).toEqual({ writePolicy: "auto", sendPolicy: "disabled", allowManage: true });
+  expect(mailPermissions(view, "approval", true)).toEqual({ writePolicy: "approval", sendPolicy: "approval", allowManage: false });
+  // Selecting a different mode applies it to all configured capabilities.
+  for (const existing of [sendOnly, manageOnly]) expect(mailPermissions(existing, "approval", true)).toEqual({ writePolicy: "approval", sendPolicy: "approval", allowManage: true });
+  expect(mailPermissions(manageOnly, "disabled", true)).toEqual({ writePolicy: "disabled", sendPolicy: "disabled", allowManage: false });
+  expect(mailPermissions(undefined, "approval", false)).toEqual({ writePolicy: "approval", sendPolicy: "disabled", allowManage: true });
+  expect(mailPermissions({ ...manageOnly, smtp: undefined }, "auto", true)).toEqual({ writePolicy: "auto", sendPolicy: "auto", allowManage: true });
 });
 
 test("a connection's notices: emails waiting in a chat, and recent ones that may not have gone out", () => {

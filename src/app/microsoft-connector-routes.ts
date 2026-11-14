@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { connectorAccessSchema } from "../core/connector-write-policy";
 import { HouseholdError } from "../core/errors";
 import type { MicrosoftConnectors } from "./microsoft-connectors";
 import { cookieValue, sessionCookieName } from "./web-auth";
@@ -22,9 +23,9 @@ export function microsoftConnectorRoutes(connectors: MicrosoftConnectors) {
     }
     if (action && !["authorize", "poll", "cancel"].includes(action)) {
       if (request.method === "PATCH") {
-        const parsed = z.strictObject({ pets: z.array(z.string().min(1).max(64)).max(100) }).safeParse(await body(request));
+        const parsed = connectorAccessSchema.safeParse(await body(request));
         if (!parsed.success) throw new HouseholdError("bots must be a list of this workspace's bot names");
-        return json(connectors.setPets(house, decodeURIComponent(action), parsed.data.pets));
+        return json(connectors.setPets(house, decodeURIComponent(action), parsed.data.pets, parsed.data.writePolicy));
       }
       if (request.method === "DELETE") { connectors.disconnect(house, decodeURIComponent(action)); return json({ ok: true }); }
     }

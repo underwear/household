@@ -1,9 +1,10 @@
+import { CONNECTOR_ACCESS_OPTIONS, connectorAccessWords, connectorWritePolicy, type ConnectorWritePolicy } from "../../src/core/connector-write-policy";
 import { useEffect, useRef, useState } from "react";
 import { api, type MicrosoftAuthorizationView, type MicrosoftConnectionView, type MicrosoftConnectorsView } from "../api";
 import { Dialog } from "./dialog";
 import { ChoiceList, FormGroup, SwitchList } from "./fields";
 
-export const microsoftAccessWords = (c: Pick<MicrosoftConnectionView, "writable">) => c.writable ? "read and write" : "read only";
+export const microsoftAccessWords = (c: Pick<MicrosoftConnectionView, "writable" | "writePolicy">) => connectorAccessWords(c.writable ? connectorWritePolicy(c.writePolicy, true) : "disabled");
 export function useMicrosoftConnections(house: string) {
   const [view, setView] = useState<MicrosoftConnectorsView>();
   const [error, setError] = useState("");
@@ -18,7 +19,7 @@ export function MicrosoftSetup({ house, ready, existing, options, onClose, saved
   options: { value: string; label: string }[]; onClose: () => void; saved: () => Promise<void>; back?: () => void;
 }) {
   const [pets, setPets] = useState(existing?.pets ?? []);
-  const [access, setAccess] = useState<"read" | "write">(existing?.writable ? "write" : "read");
+  const [access, setAccess] = useState<ConnectorWritePolicy>(connectorWritePolicy(existing?.writePolicy, existing?.writable === true));
   const [authorization, setAuthorization] = useState<MicrosoftAuthorizationView>();
   const [error, setError] = useState("");
   const current = useRef<MicrosoftAuthorizationView | undefined>(undefined);
@@ -61,7 +62,7 @@ export function MicrosoftSetup({ house, ready, existing, options, onClose, saved
     onConfirm: async () => {
       if (authorization) { reset(); return "stay"; }
       if (!ready) throw new Error("Microsoft isn't set up on this host. Use an official release or configure its OAuth client ID.");
-      const result = await api.authorizeMicrosoft(house, pets, access === "write");
+      const result = await api.authorizeMicrosoft(house, pets, access !== "disabled", access);
       if (!mounted.current) { void api.cancelMicrosoft(house, result.id).catch(() => {}); return "stay"; }
       current.current = result; setAuthorization(result); setError(""); return "stay";
     },
@@ -76,10 +77,7 @@ export function MicrosoftSetup({ house, ready, existing, options, onClose, saved
     </> : <>
       <p className="dialog-text">{existing ? "Sign in to this account again. These choices replace its bot access and permissions." : "Connect your Microsoft To Do lists, tasks and checklists. Each account has its own bot access."}</p>
       {!ready && <p className="error" role="alert">Microsoft isn't set up on this host.</p>}
-      <ChoiceList label="Access" value={access} onChange={v => setAccess(v as "read" | "write")} options={[
-        { value: "read", label: "Read only", description: "Bots can read your lists, tasks and checklists." },
-        { value: "write", label: "Read and write", description: "Bots can also create, edit, complete and delete lists and tasks, as you." },
-      ]} />
+      <ChoiceList label="Access" value={access} onChange={v => setAccess(v as ConnectorWritePolicy)} options={[...CONNECTOR_ACCESS_OPTIONS]} />
       <FormGroup title="Bot access"><SwitchList label="Bot access" options={options} on={pets} onToggle={id => setPets(values => values.includes(id) ? values.filter(v => v !== id) : [...values, id])} />
         <p className="hint">Optional: with none, the account stays private until you grant access.</p>
       </FormGroup>

@@ -18,6 +18,7 @@ const operations = {
   "mailboxes.rename": { manage: true, description: "Rename a mailbox. Existing message refs may stop working; list/search it again.", schema: z.strictObject({ mailbox: mailFolder, destination: mailFolder }) },
   "drafts.save": { manage: true, description: "Save a new text draft in the configured Drafts folder without sending. Each successful call creates one draft; do not blindly retry after an uncertain result.", schema: z.strictObject({ to: z.array(z.email().max(320)).max(50).default([]), subject: z.string().max(998).refine(v => !/[\r\n\0]/.test(v)), text: z.string().max(64000) }) },
 } satisfies Record<string, { description: string; schema: z.ZodType; manage?: boolean }>;
+export { operations as MAIL_OPERATIONS };
 
 export function mailOperation(name: string, input: unknown) {
   if (!Object.hasOwn(operations, name)) throw new HouseholdError("Unknown mail operation; use the mail operations tool");

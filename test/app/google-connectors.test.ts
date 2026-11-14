@@ -1,3 +1,4 @@
+import { ConnectorWrites, type ConnectorWriteApproval } from "../../src/app/connector-writes";
 import { expect, test } from "bun:test";
 import { GoogleConnectors } from "../../src/app/google-connectors";
 import { googleConnectorTools } from "../../src/app/google-connector-tools";
@@ -11,7 +12,95 @@ import type { House } from "../../src/core/household";
 const origin = "http://127.0.0.1:7777";
 const caller = { house: "home", pet: "alice" };
 const allScopes = [...Object.values(GOOGLE_SCOPES), ...Object.values(GOOGLE_WRITE_SCOPES)].flat().join(" ");
-function setup() {
+test("Google modes gate writes, keep reads immediate, and cannot add OAuth grants", async () => {
+  let answer!: (v: "approved") => void, cards = 0;
+  const s = setup({ ask: async () => { cards++; return new Promise(r => { answer = r; }); } }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval");
+  const count = s.calls.length;
+  const pending = s.service.request(caller, id, "gmail.messages.send", { to: ["a@example.com"], text: "original" }, undefined, "send-1");
+  expect(s.calls).toHaveLength(count); expect(cards).toBe(1);
+  await s.service.request(caller, id, "gmail.messages.list", {});
+  expect(s.calls).toHaveLength(count + 1);
+  answer("approved"); await pending;
+  expect(s.calls).toHaveLength(count + 2);
+  await s.service.request(caller, id, "gmail.messages.send", { to: ["a@example.com"], text: "original" }, undefined, "send-1");
+  expect(s.calls).toHaveLength(count + 2);
+  s.service.setPets("home", id, ["alice"], "disabled");
+  expect(s.service.catalog(caller).some(o => o.write)).toBe(false);
+  await expect(s.service.request(caller, id, "drive.files.trash", { id: "file" })).rejects.toThrow();
+  s.service.setPets("home", id, ["alice"], "auto");
+  await s.service.request(caller, id, "drive.files.trash", { id: "file" }); expect(cards).toBe(1);
+  const readOnly = await s.connect(); s.service.setPets("home", readOnly, ["alice"], "approval");
+  await expect(s.service.request(caller, readOnly, "drive.files.trash", { id: "file" }, undefined, "no-scope")).rejects.toThrow();
+});
+
+test("Google approval enrollment requests write scopes and survives persistence", async () => {
+  const s = setup();
+  const start = new URL(s.service.begin("home", { services: ["gmail"], pets: ["alice"], writePolicy: "approval" }, origin, "session").url);
+  expect(start.searchParams.get("scope")).toContain("gmail.modify");
+  await s.service.finish(s.callback(start), "session");
+  expect(s.service.accounts(caller)[0]!.writePolicy).toBe("approval");
+});
+
+test("Google approval uses tokens refreshed by a read while the card was pending", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup({ ask: async () => new Promise(r => { answer = r; }) }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval"); s.advance();
+  const refreshed: string[] = [];
+  s.token(async (_url, init) => {
+    refreshed.push((init!.body as URLSearchParams).get("refresh_token")!);
+    return refreshed.length === 1 ? Response.json({ access_token: "rotated-access", refresh_token: "rotated-refresh", expires_in: 3600, scope: allScopes }) : Response.json({ error: "invalid_grant" }, { status: 400 });
+  });
+  const pending = s.service.request(caller, id, "gmail.messages.send", { to: ["a@example.com"], text: "hello" }, undefined, "rotate");
+  await s.service.request(caller, id, "gmail.messages.list", {});
+  answer("approved"); await pending;
+  expect(refreshed).toEqual(["private-refresh"]);
+  expect(new Headers(s.calls.at(-1)!.init!.headers).get("authorization")).toBe("Bearer rotated-access");
+  expect(s.service.list("home").connections[0]!.needsReconnect).toBe(false);
+});
+
+test("Google pending approval is withdrawn when an inherited caller is disabled", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup({ ask: async () => new Promise(r => { answer = r; }) }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval");
+  const count = s.calls.length, worker = { ...caller, pet: "worker" };
+  const pending = s.service.request(worker, id, "drive.files.trash", { id: "file" }, undefined, "revoke-1");
+  s.house.pets[2]!.enabled = false; s.service.setHouses([s.house]);
+  await expect(pending).rejects.toThrow("cancelled"); answer("approved");
+  expect(s.calls).toHaveLength(count);
+});
+
+test("Gmail draft approval shows decoded content and sends the exact snapshot once", async () => {
+  let answer!: (v: "approved") => void;
+  const s = setup({ ask: async () => new Promise(r => { answer = r; }) }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval");
+  const original = Buffer.from("To: a@example.com\r\nSubject: Original\r\n\r\nOriginal text").toString("base64url");
+  s.api(async url => new URL(url).searchParams.get("format") === "raw" ? Response.json({ message: { id: "message-1", raw: original } }) : new URL(url).searchParams.get("format") === "full" ? Response.json({ message: { id: "message-1", payload: { headers: [{ name: "To", value: "a@example.com" }], mimeType: "text/plain", body: { data: Buffer.from("Original text").toString("base64url") } } } }) : Response.json({ id: "sent" }));
+  const pending = s.service.request(caller, id, "gmail.drafts.send", { id: "draft-1" }, undefined, "draft-send");
+  while (!answer) await Bun.sleep(1);
+  expect(JSON.stringify(s.writes.status(caller, () => true))).toContain("Original text");
+  expect(s.calls.some(c => c.url.endsWith("/drafts/send"))).toBe(false);
+  s.api(async () => Response.json({ id: "sent" })); // draft can change elsewhere after review
+  answer("approved"); await pending;
+  expect(JSON.parse(s.calls.at(-1)!.init!.body as string)).toEqual({ id: "draft-1", message: { raw: original } });
+  const count = s.calls.length;
+  await s.service.request(caller, id, "gmail.drafts.send", { id: "draft-1" }, undefined, "draft-send");
+  expect(s.calls).toHaveLength(count);
+});
+
+test("Gmail refuses draft approval when text is only referenced by attachmentId", async () => {
+  for (const nested of [false, true]) for (const data of [undefined, ""]) {
+    let approvals = 0;
+    const s = setup({ ask: async () => { approvals++; return "approved"; } }), id = await s.connect(true);
+    s.service.setPets("home", id, ["alice"], "approval");
+    const text = { mimeType: "text/plain", body: { attachmentId: "body-1", size: 17, data } };
+    s.api(async url => Response.json({ message: { id: "message-1", ...(new URL(url).searchParams.get("format") === "raw" ? { raw: Buffer.from("To: a@example.com\r\n\r\nCONFIDENTIAL_BODY").toString("base64url") } : { payload: nested ? { mimeType: "multipart/alternative", parts: [text] } : text }) } }));
+    await expect(s.service.request(caller, id, "gmail.drafts.send", { id: "draft-1" }, undefined, "hidden-body")).rejects.toThrow("could not be fully reviewed");
+    expect(approvals).toBe(0);
+    expect(s.calls.some(c => c.url.endsWith("/drafts/send"))).toBe(false);
+  }
+});
+function setup(approval?: ConnectorWriteApproval) {
   let now = 1000000, refreshCount = 0;
   let subject = "123", email = "me@example.com";
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -29,12 +118,13 @@ function setup() {
   };
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const store = new SqliteStore(":memory:");
-  const service = new GoogleConnectors(store, { id: "client-id", secret: "client-secret" }, fetcher, () => now);
+  const writes = new ConnectorWrites(store, approval);
+  const service = new GoogleConnectors(store, { id: "client-id", secret: "client-secret" }, fetcher, () => now, writes);
   service.setHouses([house, { ...house, name: "other" }]);
   const begin = (write = false) => new URL(service.begin("home", { services: ["gmail", "drive", "calendar"], pets: ["alice"], write }, origin, "session").url);
   const callback = (start: URL) => new URL(`${start.searchParams.get("redirect_uri")}?code=code&state=${start.searchParams.get("state")}`);
   const connect = async (write = false) => { await service.finish(callback(begin(write)), "session"); return service.list("home").connections.at(-1)!.id; };
-  return { service, house, calls, begin, callback, connect, store, identity: (id: string, address: string) => { subject = id; email = address; }, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
+  return { writes, service, house, calls, begin, callback, connect, store, identity: (id: string, address: string) => { subject = id; email = address; }, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
 }
 
 test("OAuth uses PKCE, state, exact loopback callback and selected scopes; rejects wrong session and replay", async () => {

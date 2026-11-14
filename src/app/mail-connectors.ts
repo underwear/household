@@ -1,5 +1,7 @@
+import { connectorCallers } from "../core/connector-write-policy";
+import type { ConnectorWrites } from "./connector-writes";
 import { createHash, randomUUID } from "node:crypto";
-import { MAIL_NO_CHAT, mailConnectionSchema, mailSendSchema, type MailConnectionInput, type MailConnectionView, type MailConnectorsView, type MailSendInput, type MailSendView } from "../core/mail-connectors";
+import { MAIL_NO_CHAT, mailWritePolicy, mailConnectionSchema, mailSendSchema, type MailConnectionInput, type MailConnectionView, type MailConnectorsView, type MailSendInput, type MailSendView } from "../core/mail-connectors";
 import type { House } from "../core/household";
 import { HouseholdError } from "../core/errors";
 import type { PetIdentity } from "../infra/agent-api";
@@ -31,7 +33,7 @@ export class MailConnectors {
   private sending = new Map<string, Promise<MailSendView>>();
   private budgets = new Map<string, TokenBucket>();
   private stopped = false;
-  constructor(private store: KeyValueStore, private files: MailFiles, private approval?: MailApproval, private driver: MailDriver = mailDriver, private now = Date.now) {
+  constructor(private store: KeyValueStore, private files: MailFiles, private approval?: MailApproval, private driver: MailDriver = mailDriver, private now = Date.now, private writes?: ConnectorWrites) {
     // A crash is never a reason to resend or honor an approval from a lost call.
     const sends = this.sends();
     for (const s of sends) {
@@ -66,7 +68,7 @@ export class MailConnectors {
     const { house, revision, imap, smtp, ...view } = c;
     const { password: _imapPassword, ...inbound } = imap;
     const outbound = smtp && (({ password, ...rest }) => rest)(smtp);
-    return structuredClone({ ...view, imap: inbound, ...(outbound ? { smtp: outbound } : {}) });
+    return structuredClone({ ...view, writePolicy: mailWritePolicy(c), imap: inbound, ...(outbound ? { smtp: outbound } : {}) });
   }
   private house(name: string) { const h = this.houses.find(h => h.name === name); if (!h || this.stopped) throw new HouseholdError("Workspace unavailable"); return h; }
   private pets(house: string, names: string[]) {
@@ -82,13 +84,13 @@ export class MailConnectors {
   available(caller: PetIdentity) { return !!this.parent(caller); }
   accounts(caller: PetIdentity) {
     const parent = this.parent(caller);
-    return parent ? this.connections().filter(c => c.house === caller.house && c.pets.includes(parent)).map(c => ({ id: c.id, title: c.title, email: c.email, sendPolicy: c.sendPolicy, allowManage: c.allowManage, draftsFolder: c.draftsFolder, trashFolder: c.trashFolder })) : [];
+    return parent ? this.connections().filter(c => c.house === caller.house && c.pets.includes(parent)).map(c => ({ id: c.id, title: c.title, email: c.email, sendPolicy: c.sendPolicy, writePolicy: mailWritePolicy(c), allowManage: c.allowManage, draftsFolder: c.draftsFolder, trashFolder: c.trashFolder })) : [];
   }
-  catalog(caller: PetIdentity) { const accounts = this.accounts(caller); return accounts.length ? mailCatalog(accounts.some(c => c.allowManage)) : []; }
+  catalog(caller: PetIdentity) { const accounts = this.accounts(caller); return accounts.length ? mailCatalog(accounts.some(c => c.allowManage && mailWritePolicy(c) !== "disabled")) : []; }
   private allowed(caller: PetIdentity, id: string, manage = false) {
     const parent = this.parent(caller), c = parent && this.connections().find(c => c.id === id && c.house === caller.house && c.pets.includes(parent));
     if (!c) throw new HouseholdError("Mail connection unavailable to this bot");
-    if (manage && !c.allowManage) throw new HouseholdError("Mailbox changes are disabled for this connection");
+    if (manage && (!c.allowManage || mailWritePolicy(c) === "disabled")) throw new HouseholdError("Mailbox changes are disabled for this connection");
     return c;
   }
   private accountIdentity(c: Connection) { return hash([c.id, c.imap.host, c.imap.port, c.imap.username]); }
@@ -106,12 +108,17 @@ export class MailConnectors {
     for (const s of this.sends()) if (s.connection === id && ["pending", "preparing"].includes(s.state)) this.cancel(s.id, "Connection access changed.");
   }
   setHouses(houses: House[]) {
-    this.houses = houses;
+    const beforeCallers = new Map(this.connections().map(c => [c.id, connectorCallers(this.houses, c.house, c.pets)]));
+    this.houses = structuredClone(houses);
     const all = this.connections(), kept = all.filter(c => houses.some(h => h.name === c.house));
     for (const c of all) if (!kept.includes(c)) this.abort(c.id);
     for (const c of kept) {
       const pets = c.pets.filter(name => houses.find(h => h.name === c.house)?.pets.some(p => p.name === name && !p.scout && !p.sideworker && p.enabled !== false));
       if (pets.length !== c.pets.length) { this.abort(c.id); c.pets = pets; c.revision = randomUUID(); }
+    }
+    for (const c of kept) {
+      const after = connectorCallers(houses, c.house, c.pets);
+      if (beforeCallers.get(c.id)?.some(name => !after.includes(name))) this.abort(c.id);
     }
     this.store.set(KEY, JSON.stringify(kept));
     for (const s of this.sends()) if (["preparing", "pending"].includes(s.state) && !this.parent({ house: s.house, pet: s.pet })) this.cancel(s.id, "The requesting bot is no longer available.");
@@ -120,7 +127,12 @@ export class MailConnectors {
   private input(house: string, input: unknown, old?: Connection): MailConnectionInput {
     const parsed = mailConnectionSchema.safeParse(input);
     if (!parsed.success) throw new HouseholdError("Check mail server, security, sender, permissions and bot settings");
-    const value = parsed.data; value.pets = this.pets(house, value.pets);
+    const value = parsed.data;
+    if (value.writePolicy !== undefined) {
+      if (value.writePolicy === "disabled") { value.allowManage = false; value.sendPolicy = "disabled"; }
+      else if (value.sendPolicy !== "disabled") value.sendPolicy = value.writePolicy;
+    }
+    value.pets = this.pets(house, value.pets);
     for (const kind of ["imap", "smtp"] as const) {
       const endpoint = value[kind], prior = old?.[kind];
       if (!endpoint) continue;
@@ -157,7 +169,7 @@ export class MailConnectors {
     if (!items.some(c => c.house === house && c.id === id)) throw new HouseholdError("Mail connection not found");
     this.abort(id); this.store.set(KEY, JSON.stringify(items.filter(c => c.house !== house || c.id !== id)));
   }
-  async request(caller: PetIdentity, id: string, operation: string, input: unknown, signal?: AbortSignal) {
+  async request(caller: PetIdentity, id: string, operation: string, input: unknown, signal?: AbortSignal, clientRequestId?: string) {
     const { params, manage } = mailOperation(operation, input), c = this.allowed(caller, id, manage);
     const account = this.accountIdentity(c);
     if (params.ref && (params.ref as { account: string }).account !== account) throw new HouseholdError("Message reference belongs to a different mail account; search again");
@@ -165,31 +177,39 @@ export class MailConnectors {
     if (params.cursor && ((params.cursor as { account: string }).account !== account || (params.cursor as { queryKey: string }).queryKey !== queryKey)) throw new HouseholdError("Search cursor belongs to a different account, mailbox or query");
     this.budget(caller);
     const combined = this.signal(id, signal); combined.throwIfAborted();
-    let data: any;
-    try {
-      if (operation === "drafts.save") {
-        const wire = await this.driver(c, "compose", { ...params, messageId: `<${randomUUID()}@household.local>`, date: new Date(this.now()).toUTCString() }, combined);
-        this.allowed(caller, id, true); combined.throwIfAborted();
-        data = await this.driver(c, operation, { mailbox: c.draftsFolder, raw: wire.raw }, combined);
-      } else data = await this.driver(c, operation, params, combined);
-      if (!manage) { combined.throwIfAborted(); this.allowed(caller, id); }
-      if (operation === "messages.search") {
-        data.items = data.items.map((item: any) => ({ ...item, ref: { ...item.ref, account } }));
-        if (data.next) data.next = { ...data.next, account, queryKey };
+    const execute = async (combined: AbortSignal) => {
+      let data: any;
+      try {
+        if (operation === "drafts.save") {
+          const wire = await this.driver(c, "compose", { ...params, messageId: `<${randomUUID()}@household.local>`, date: new Date(this.now()).toUTCString() }, combined);
+          this.allowed(caller, id, true); combined.throwIfAborted();
+          data = await this.driver(c, operation, { mailbox: c.draftsFolder, raw: wire.raw }, combined);
+        } else data = await this.driver(c, operation, params, combined);
+        if (!manage) { combined.throwIfAborted(); this.allowed(caller, id); }
+        if (operation === "messages.search") {
+          data.items = data.items.map((item: any) => ({ ...item, ref: { ...item.ref, account } }));
+          if (data.next) data.next = { ...data.next, account, queryKey };
+        }
+        if (operation === "attachments.download") {
+          const bytes = Buffer.from(data.data, "base64");
+          if (bytes.length > MAX_ATTACHMENT) throw new HouseholdError("Attachment exceeds 8 MiB");
+          const name = String(data.filename).replace(/[/\\\x00-\x1f]/g, "_").slice(0, 180) || "attachment";
+          const path = await this.files.save(caller, name, bytes);
+          combined.throwIfAborted(); this.allowed(caller, id);
+          data = { filename: name, contentType: data.contentType, size: bytes.length, path };
+        }
+        return { trust: "external", data };
+      } catch (error) {
+        const reason = error instanceof MailTransportError ? error.message : "Mail operation failed or was cancelled.";
+        throw new HouseholdError(manage ? `${reason} The mailbox may have changed; inspect it before retrying.` : reason);
       }
-      if (operation === "attachments.download") {
-        const bytes = Buffer.from(data.data, "base64");
-        if (bytes.length > MAX_ATTACHMENT) throw new HouseholdError("Attachment exceeds 8 MiB");
-        const name = String(data.filename).replace(/[/\\\x00-\x1f]/g, "_").slice(0, 180) || "attachment";
-        const path = await this.files.save(caller, name, bytes);
-        combined.throwIfAborted(); this.allowed(caller, id);
-        data = { filename: name, contentType: data.contentType, size: bytes.length, path };
-      }
-      return { trust: "external", data };
-    } catch (error) {
-      const reason = error instanceof MailTransportError ? error.message : "Mail operation failed or was cancelled.";
-      throw new HouseholdError(manage ? `${reason} The mailbox may have changed; inspect it before retrying.` : reason);
+    };
+    if (manage && (mailWritePolicy(c) === "approval" || (clientRequestId !== undefined && this.writes))) {
+      if (!this.writes) throw new HouseholdError("Connector approval service is unavailable; nothing changed");
+      const review = { ...params, ...(operation === "messages.trash" ? { destination: c.trashFolder } : {}), ...(operation === "drafts.save" ? { mailbox: c.draftsFolder } : {}) };
+      return this.writes.run({ caller, provider: "mail", connection: id, account: c.email, operation, requireApproval: mailWritePolicy(c) === "approval", params, review, clientRequestId, signal: combined, validate: () => { this.allowed(caller, id, true); }, execute });
     }
+    return execute(combined);
   }
   private cancel(id: string, detail = "Withdrawn before submission.") {
     const s = this.send(id);
@@ -218,7 +238,7 @@ export class MailConnectors {
   }
   async sendMessage(caller: PetIdentity, id: string, input: unknown, signal?: AbortSignal): Promise<MailSendView> {
     const c = this.allowed(caller, id);
-    if (c.sendPolicy === "disabled" || !c.smtp) throw new HouseholdError("Sending is disabled for this mail connection");
+    if ((c.sendPolicy === "disabled" || mailWritePolicy(c) === "disabled") || !c.smtp) throw new HouseholdError("Sending is disabled for this mail connection");
     const parsed = mailSendSchema.safeParse(input);
     if (!parsed.success) throw new HouseholdError("Invalid outgoing message; supply recipients, subject, text and a unique clientRequestId");
     const params = parsed.data;
@@ -260,7 +280,7 @@ export class MailConnectors {
       signal.throwIfAborted();
       s = this.send(id); if (s.state === "cancelled") return this.sendView(s);
       s.raw = composed.raw; s.attachments = summaries;
-      if (c.sendPolicy === "approval") {
+      if (mailWritePolicy(c) === "approval") {
         s.state = "pending"; this.putSend(s);
         const controller = new AbortController();
         let settle!: (decision: "approved" | "denied" | "cancelled") => void;
@@ -283,7 +303,7 @@ export class MailConnectors {
       } else this.putSend(s);
       signal.throwIfAborted();
       const current = this.allowed(caller, c.id);
-      if (current.revision !== c.revision || current.sendPolicy === "disabled") throw new HouseholdError("Mail connection changed; submit a new request");
+      if (current.revision !== c.revision || (current.sendPolicy === "disabled" || mailWritePolicy(current) === "disabled")) throw new HouseholdError("Mail connection changed; submit a new request");
       s = this.send(id);
       if (s.state === "cancelled") return this.sendView(s);
       // Synchronous boundary: cancellation and duplicate clicks cannot interleave with this claim.

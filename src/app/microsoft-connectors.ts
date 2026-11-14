@@ -1,3 +1,5 @@
+import { connectorCallers, connectorWritePolicy, connectorWritePolicySchema, type ConnectorWritePolicy } from "../core/connector-write-policy";
+import type { ConnectorWrites } from "./connector-writes";
 import { randomUUID } from "node:crypto";
 import { microsoftConnectSchema, type MicrosoftConnectionView, type MicrosoftAuthorizationView, type MicrosoftPollView } from "../core/microsoft-connectors";
 import type { House } from "../core/household";
@@ -10,7 +12,7 @@ import { TokenBucket } from "./token-bucket";
 
 const KEY = "house.connectors.microsoft.v1";
 interface Connection extends MicrosoftConnectionView { house: string; subject: string; clientId: string; accessToken: string; refreshToken: string; expiresAt: number }
-interface Pending { house: string; pets: string[]; write: boolean; binding: string; deviceCode?: string; expires: number; interval: number; nextPoll: number; busy: boolean; controller: AbortController }
+interface Pending { house: string; pets: string[]; write: boolean; writePolicy: ConnectorWritePolicy; binding: string; deviceCode?: string; expires: number; interval: number; nextPoll: number; busy: boolean; controller: AbortController }
 const grantedScopes = (value: unknown) => new Set(typeof value === "string" ? value.split(" ").map(s => s.replace(/^https:\/\/graph.microsoft.com\//i, "").toLowerCase()) : []);
 const canRead = (scopes: Set<string>) => scopes.has("tasks.read") || scopes.has("tasks.readwrite");
 
@@ -21,10 +23,10 @@ export class MicrosoftConnectors {
   private refreshes = new Map<string, Promise<string>>();
   private active = new Map<string, AbortController>();
   private budgets = new Map<string, TokenBucket>();
-  constructor(private store: KeyValueStore, private client = microsoftClient(), private fetcher: MicrosoftFetch = fetch, private now = Date.now) {}
+  constructor(private store: KeyValueStore, private client = microsoftClient(), private fetcher: MicrosoftFetch = fetch, private now = Date.now, private writes?: ConnectorWrites) {}
   private read(): Connection[] { return JSON.parse(this.store.get(KEY) ?? "[]"); }
   private write(items: Connection[]) { this.store.set(KEY, JSON.stringify(items)); }
-  private view(c: Connection): MicrosoftConnectionView { return { id: c.id, account: c.account, displayName: c.displayName, writable: c.writable, pets: [...c.pets], connectedAt: c.connectedAt, needsReconnect: c.needsReconnect || c.clientId !== this.client.id }; }
+  private view(c: Connection): MicrosoftConnectionView { return { writePolicy: connectorWritePolicy(c.writePolicy, c.writable), id: c.id, account: c.account, displayName: c.displayName, writable: c.writable, pets: [...c.pets], connectedAt: c.connectedAt, needsReconnect: c.needsReconnect || c.clientId !== this.client.id }; }
   private house(name: string) { const h = this.houses.find(h => h.name === name); if (!h) throw new HouseholdError("Workspace not found"); return h; }
   private pets(house: string, names: string[]) {
     const configured = this.house(house).pets;
@@ -32,13 +34,18 @@ export class MicrosoftConnectors {
     return [...new Set(names)];
   }
   setHouses(houses: House[]) {
-    this.houses = houses;
+    const beforeCallers = new Map(this.read().map(c => [c.id, connectorCallers(this.houses, c.house, c.pets)]));
+    this.houses = structuredClone(houses);
     const saved = this.read(), kept = saved.filter(c => houses.some(h => h.name === c.house));
     for (const c of saved) if (!kept.includes(c)) this.abort(c.id);
     for (const c of kept) {
       const pets = c.pets.filter(name => houses.find(h => h.name === c.house)?.pets.some(p => p.name === name && !p.scout && !p.sideworker && p.enabled !== false));
       if (pets.length !== c.pets.length) this.abort(c.id);
       c.pets = pets;
+    }
+    for (const c of kept) {
+      const after = connectorCallers(houses, c.house, c.pets);
+      if (beforeCallers.get(c.id)?.some(name => !after.includes(name))) this.abort(c.id);
     }
     this.write(kept);
     for (const [id, p] of this.pending) {
@@ -57,11 +64,12 @@ export class MicrosoftConnectors {
     const parsed = microsoftConnectSchema.safeParse(input);
     if (!parsed.success) throw new HouseholdError("Select access and bots for this connection");
     const pets = this.pets(house, parsed.data.pets);
+    const writePolicy = connectorWritePolicy(parsed.data.writePolicy, parsed.data.write);
     if (!this.client.id) throw new HouseholdError("Microsoft OAuth is not configured on this host");
     for (const [id, p] of this.pending) if (p.expires <= this.now()) this.drop(id);
     if (this.pending.size >= 20) throw new HouseholdError("Too many pending connections; retry later");
     const id = randomUUID();
-    const p: Pending = { house, pets, write: parsed.data.write, binding, expires: this.now() + 900_000, interval: 5, nextPoll: 0, busy: false, controller: new AbortController() };
+    const p: Pending = { house, pets, write: writePolicy !== "disabled", writePolicy, binding, expires: this.now() + 900_000, interval: 5, nextPoll: 0, busy: false, controller: new AbortController() };
     this.pending.set(id, p);
     try {
       const data = await microsoftJson(this.fetcher, `${MICROSOFT_AUTHORITY}/devicecode`, { method: "POST", body: new URLSearchParams({ client_id: this.client.id, scope: `offline_access User.Read ${p.write ? "Tasks.ReadWrite" : "Tasks.Read"}` }), signal: AbortSignal.any([p.controller.signal, AbortSignal.timeout(30_000)]) });
@@ -96,7 +104,7 @@ export class MicrosoftConnectors {
       const items = this.read(), old = items.find(c => c.house === house && c.subject === identity.id);
       if (old) this.abort(old.id);
       const account = [identity.mail, identity.userPrincipalName, identity.displayName].find(v => typeof v === "string" && v.length) ?? identity.id;
-      const c: Connection = { id: randomUUID(), house, subject: identity.id, clientId: this.client.id, account, displayName: typeof identity.displayName === "string" ? identity.displayName : account, pets: p.pets, writable: p.write && scopes.has("tasks.readwrite"), accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: this.expiry(tokens.expires_in), connectedAt: new Date(this.now()).toISOString(), needsReconnect: false };
+      const c: Connection = { id: randomUUID(), house, subject: identity.id, clientId: this.client.id, account, displayName: typeof identity.displayName === "string" ? identity.displayName : account, pets: p.pets, writable: p.write && scopes.has("tasks.readwrite"), accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: this.expiry(tokens.expires_in), writePolicy: p.writePolicy, connectedAt: new Date(this.now()).toISOString(), needsReconnect: false };
       this.write([...items.filter(i => i !== old), c]);
       this.drop(id); return { status: "connected" };
     } catch (error) {
@@ -113,9 +121,10 @@ export class MicrosoftConnectors {
     } finally { p.busy = false; }
   }
   private expiry(seconds: unknown) { return this.now() + (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : 3600) * 1000; }
-  setPets(house: string, id: string, pets: string[]) {
+  setPets(house: string, id: string, pets: string[], policy?: ConnectorWritePolicy) {
     const allowed = this.pets(house, pets), items = this.read(), c = items.find(c => c.house === house && c.id === id);
     if (!c) throw new HouseholdError("Connection not found");
+    if (policy !== undefined) c.writePolicy = connectorWritePolicySchema.parse(policy);
     c.pets = allowed; this.write(items); this.abort(id); return this.view(c);
   }
   private abort(id: string) { this.active.get(id)?.abort(); this.active.delete(id); }
@@ -132,12 +141,12 @@ export class MicrosoftConnectors {
   }
   available(caller: PetIdentity) { return this.parent(caller) !== undefined; }
   accounts(caller: PetIdentity) { const parent = this.parent(caller); return parent ? this.read().filter(c => c.house === caller.house && c.pets.includes(parent)).map(c => this.view(c)) : []; }
-  catalog(caller: PetIdentity) { const accounts = this.accounts(caller); return accounts.length ? microsoftCatalog(accounts.some(c => c.writable)) : []; }
+  catalog(caller: PetIdentity) { const accounts = this.accounts(caller); return accounts.length ? microsoftCatalog(accounts.some(c => c.writable && c.writePolicy !== "disabled")) : []; }
   private allowed(caller: PetIdentity, id: string, write = false) {
     const parent = this.parent(caller), c = parent && this.read().find(c => c.id === id && c.house === caller.house && c.pets.includes(parent));
     if (!c) throw new HouseholdError("Microsoft connection unavailable to this bot");
     if (c.needsReconnect || c.clientId !== this.client.id) throw new HouseholdError("Reconnect this Microsoft account in Connectors");
-    if (write && !c.writable) throw new HouseholdError("This Microsoft account is read only; reconnect with Read and write");
+    if (write && (!c.writable || connectorWritePolicy(c.writePolicy, c.writable) === "disabled")) throw new HouseholdError("This Microsoft account is read only; choose Ask me first or Full access; reconnect if write permission was not granted");
     return c;
   }
   private reconnect(id: string) { const items = this.read(), c = items.find(c => c.id === id); if (c) { c.needsReconnect = true; this.write(items); } }
@@ -165,33 +174,40 @@ export class MicrosoftConnectors {
     this.refreshes.set(c.id, refresh);
     try { return await refresh; } finally { this.refreshes.delete(c.id); }
   }
-  async request(caller: PetIdentity, id: string, operation: string, params: unknown, signal?: AbortSignal) {
-    const { url, spec, init } = microsoftRequest(operation, params), write = spec.write === true;
+  async request(caller: PetIdentity, id: string, operation: string, params: unknown, signal?: AbortSignal, clientRequestId?: string) {
+    const { url, spec, init, params: review } = microsoftRequest(operation, params), write = spec.write === true;
     const c = this.allowed(caller, id, write), budgetKey = `${caller.house}/${caller.pet}`;
     if (!this.budgets.has(budgetKey)) this.budgets.set(budgetKey, new TokenBucket(1, 10));
     if (!this.budgets.get(budgetKey)!.take()) throw new HouseholdError("Too many Microsoft requests; retry shortly");
     if (!this.active.has(id)) this.active.set(id, new AbortController());
     const controller = this.active.get(id)!;
-    try {
-      const access = await this.access(c, controller.signal);
-      this.allowed(caller, id, write);
-      controller.signal.throwIfAborted(); signal?.throwIfAborted();
-      const data = await microsoftJson(this.fetcher, url, { ...init, headers: { ...init.headers, authorization: `Bearer ${access}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]) });
-      // A successful mutation must be reported even if the owner removed access while it was running.
-      if (!write) { controller.signal.throwIfAborted(); this.allowed(caller, id); }
-      return { trust: "external", data: microsoftPage(data, url) };
-    } catch (error) {
-      if (error instanceof HouseholdError) throw error;
-      if (error instanceof MicrosoftHttpError) {
-        if (error.status === 401) this.reconnect(id);
-        if (error.status === 429) throw new HouseholdError(`Microsoft rate limit; retry after ${error.retryAfter ?? "a few"} seconds`);
-        if (error.status === 412) throw new HouseholdError("This task or list changed; read it again before editing");
-        throw new HouseholdError(`Microsoft returned ${error.status}. Check account permissions and reconnect if needed.${write && error.status >= 500 ? " The change may have happened; inspect the task or list before retrying." : ""}`);
+    const execute = async (signal?: AbortSignal) => {
+      try {
+        const access = await this.access(this.allowed(caller, id, write), controller.signal);
+        this.allowed(caller, id, write);
+        controller.signal.throwIfAborted(); signal?.throwIfAborted();
+        const data = await microsoftJson(this.fetcher, url, { ...init, headers: { ...init.headers, authorization: `Bearer ${access}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]) });
+        // A successful mutation must be reported even if the owner removed access while it was running.
+        if (!write) { controller.signal.throwIfAborted(); this.allowed(caller, id); }
+        return { trust: "external", data: microsoftPage(data, url) };
+      } catch (error) {
+        if (error instanceof HouseholdError) throw error;
+        if (error instanceof MicrosoftHttpError) {
+          if (error.status === 401) this.reconnect(id);
+          if (error.status === 429) throw new HouseholdError(`Microsoft rate limit; retry after ${error.retryAfter ?? "a few"} seconds`);
+          if (error.status === 412) throw new HouseholdError("This task or list changed; read it again before editing");
+          throw new HouseholdError(`Microsoft returned ${error.status}. Check account permissions and reconnect if needed.${write && error.status >= 500 ? " The change may have happened; inspect the task or list before retrying." : ""}`);
+        }
+        if (write) throw new HouseholdError("Microsoft request failed or was cancelled. The change may have happened; inspect the task or list before retrying");
+        if (error instanceof Error && error.message.startsWith("Microsoft response too large")) throw new HouseholdError(error.message);
+        throw new HouseholdError("Microsoft request failed or was cancelled; retry with a narrower request");
       }
-      if (write) throw new HouseholdError("Microsoft request failed or was cancelled. The change may have happened; inspect the task or list before retrying");
-      if (error instanceof Error && error.message.startsWith("Microsoft response too large")) throw new HouseholdError(error.message);
-      throw new HouseholdError("Microsoft request failed or was cancelled; retry with a narrower request");
+    };
+    if (write && (connectorWritePolicy(c.writePolicy, c.writable) === "approval" || (clientRequestId !== undefined && this.writes))) {
+      if (!this.writes) throw new HouseholdError("Connector approval service is unavailable; nothing changed");
+      return this.writes.run({ caller, provider: "microsoft", connection: id, account: c.account, operation, requireApproval: connectorWritePolicy(c.writePolicy, c.writable) === "approval", params: review, clientRequestId, signal: AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]), validate: () => { this.allowed(caller, id, true); }, execute });
     }
+    return execute(signal);
   }
   stop() { for (const id of this.active.keys()) this.abort(id); for (const id of this.pending.keys()) this.drop(id); }
 }

@@ -18,14 +18,14 @@ test("a new Slack connection starts at access and bots, like Google's; a token i
   const html = renderToStaticMarkup(<SlackSetup house="work" options={options} back={() => {}} onClose={() => {}} saved={async () => {}} />);
   expect(html).toContain('aria-current="step">Access<');
   expect(html).toContain(">Read only<");
-  expect(html).toContain(">Read and write<");
+  expect(html).toContain(">Full access<");
   expect(html).toContain("This is not a chat channel");
   expect(html).toContain("Use a user token instead");
   expect(html).toContain("Continue to Slack");
   expect(html).toContain(">Back<");
   const again = renderToStaticMarkup(<SlackSetup house="work" options={options} existing={{ id: "s1", teamId: "T", team: "Zendrop", userId: "U", user: "igor", scopes: [], pets: ["sibling"], allowWrite: true, connectedAt: "", needsReconnect: true }} onClose={() => {}} saved={async () => {}} />);
   expect(again).toContain("Reconnect Zendrop");
-  expect(again).toMatch(/checked=""[^>]*value="send"|value="send"[^>]*checked=""/);
+  expect(again).toMatch(/checked=""[^>]*value="auto"|value="auto"[^>]*checked=""/);
   expect(again).not.toContain(">Back<");
 });
 
@@ -33,6 +33,6 @@ test("a pasted connection result must be the whole callback address with its cod
   expect(resultProblem("")).toBeUndefined();
   expect(resultProblem("https://agents-household.dev/slack/callback/?code=abc&state=xyz")).toBeUndefined();
   for (const wrong of ["abc", "https://evil.test/slack/callback/?code=a&state=b", "https://agents-household.dev/slack/callback/?state=b"]) expect(resultProblem(wrong)).toContain("Paste the whole result");
-  expect(slackAccessWords({ allowWrite: true })).toBe("read and write");
+  expect(slackAccessWords({ allowWrite: true })).toBe("full access");
   expect(slackAccessWords({})).toBe("read only");
 });
