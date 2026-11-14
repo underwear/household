@@ -1,6 +1,6 @@
-# Keys
+# Provider keys
 
-A key is the model account your bots run on: a Claude or ChatGPT subscription or a pay-per-use API key. One Claude Max sign-in can run all the family bots. Bots never hold it; Household adds it to their requests, like any [secret](../network/).
+A provider key is the model account your bots run on: a Claude or ChatGPT subscription or a pay-per-use API key. One Claude Max sign-in can run all the family bots. Bots never hold it; Household adds it to their requests, like any [secret](../network/).
 
 ## Subscription or API key
 

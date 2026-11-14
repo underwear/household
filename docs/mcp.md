@@ -7,7 +7,7 @@ MCP servers give a bot new tools: an issue tracker, a wiki, a database. Each bot
 Some services don't need an MCP server at all:
 
 - **Connectors.** Email, Google (Gmail, Drive, Calendar), Microsoft To Do and Slack can be connected once for the workspace and given to the bots you choose. See [Connectors](../connectors/).
-- **Your Claude or ChatGPT account's connectors.** A bot that runs on a Claude or ChatGPT sign-in can use the connectors or apps already set up in that account (Drive, Jira, GitHub…). Turn on **Claude.ai connectors** or **ChatGPT apps** on the bot's **Harness** tab. See [Keys](../keys/).
+- **Your Claude or ChatGPT account's connectors.** A bot that runs on a Claude or ChatGPT sign-in can use the connectors or apps already set up in that account (Drive, Jira, GitHub…). Turn on **Claude.ai connectors** or **ChatGPT apps** on the bot's **Harness** tab. See [Provider keys](../keys/).
 
 ## Ask your bot
 

@@ -29,7 +29,7 @@ The installer puts Household into `~/.household`, without Docker or sudo, and te
 
 Setup asks for three things:
 
-1. **Model**: sign in to your subscription, or paste a token or an API key. See [Keys](../keys/).
+1. **Model**: sign in to your subscription, or paste a token or an API key. See [Provider keys](../keys/).
 2. **Workspace**: a name, and how much CPU and memory it may use.
 3. **Channel**: a **Telegram group with topics**, or another kind from [Channels](../channels/).
 

@@ -14,7 +14,7 @@ const groups: { title: string; pages: { slug: string; source: string; title: str
   ] },
   { title: "Bots", pages: [
     { slug: "bots", source: "docs/bots.md", title: "Bots", heading: "Bots", description: "What a bot is, adding one, and everything on its page: harness, instructions, channels, scheduled tasks, skills, memory, resources and more." },
-    { slug: "keys", source: "docs/keys.md", title: "Keys", heading: "Keys", description: "What your bots run on: a Claude or ChatGPT subscription you sign in to, or an API key. The bots never see it." },
+    { slug: "keys", source: "docs/keys.md", title: "Provider keys", heading: "Provider keys", description: "What your bots run on: a Claude or ChatGPT subscription you sign in to, or an API key. The bots never see it." },
     { slug: "instructions", source: "docs/instructions.md", title: "Instructions, skills and memory", heading: "Instructions, skills and memory", description: "Tell a bot who it is and how to work, give it skills, and see what it remembers." },
     { slug: "sideworkers", source: "docs/sideworkers.md", title: "Sideworkers", heading: "Sideworkers", description: "Extra assistants a bot starts for one job, in VMs of their own: coding in another project, a thread you can talk in, parallel work." },
     { slug: "scouts", source: "docs/scouts.md", title: "Scouts", heading: "Scouts", description: "Specialists your bots call for one task, each in its own VM with only the access you give it. Every run waits for your approval." },

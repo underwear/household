@@ -81,7 +81,7 @@ The bot is told not to obey guests, but that is an instruction to the model, not
 
 A Mac with Apple silicon, or Linux with KVM (your own machine, a VM with nested virtualization or a KVM VPS), with `python3` and `openssl`; no Docker or sudo. Today's harnesses are Claude Code and Codex; today's messengers, Telegram and Slack.
 
-Household is free and open source (AGPL-3.0). You pay your model provider: a subscription's bots stop answering when its allowance runs out, until it resets; an API key is billed per use. See [Keys](keys/) and [Resources](resources/).
+Household is free and open source (AGPL-3.0). You pay your model provider: a subscription's bots stop answering when its allowance runs out, until it resets; an API key is billed per use. See [Provider keys](keys/) and [Resources](resources/).
 
 ## Next steps
 

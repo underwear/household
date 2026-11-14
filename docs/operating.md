@@ -121,7 +121,7 @@ The admin shows them under **Logs** on a bot's page. Backups: [Back up and move]
 
 ### The model stops answering
 
-A Claude sign-in ends about once a month and after a restore: sign in again in **Settings → Keys**. A used-up allowance stops answers until it resets. See [Keys](../keys/).
+A Claude sign-in ends about once a month and after a restore: sign in again in **Settings → Keys**. A used-up allowance stops answers until it resets. See [Provider keys](../keys/).
 
 ### A bot can't reach a site
 

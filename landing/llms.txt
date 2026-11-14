@@ -101,7 +101,7 @@ Install the `household` skill too, for running Household afterwards:
 - [Overview](https://agents-household.dev/docs/): what Household is, how it works, the security model, where it runs
 - [Quick start](https://agents-household.dev/docs/start/): install, set up in the web admin or with house onboard, write to your first bot
 - [Bots](https://agents-household.dev/docs/bots/): what a bot is, adding one, and every tab of its page
-- [Keys](https://agents-household.dev/docs/keys/): Claude or ChatGPT subscriptions by sign-in, tokens and API keys; bots never see them
+- [Provider keys](https://agents-household.dev/docs/keys/): Claude or ChatGPT subscriptions by sign-in, tokens and API keys; bots never see them
 - [Instructions, skills and memory](https://agents-household.dev/docs/instructions/): a bot's AGENTS.md, its own and shared skills, and its memory
 - [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra assistants a bot starts for one job, in VMs of their own
 - [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; every run waits for the owner's approval
