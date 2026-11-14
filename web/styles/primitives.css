@@ -105,6 +105,11 @@ fieldset.field > legend { margin-bottom: var(--space-2); }
 .choice:has(input:checked) { border-color: var(--muted); background: var(--hover); }
 .choice:has(input:checked) .avatar.task { background: var(--sel); }
 .choice input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--ink); }
+/* ChoiceList grid: short names in tiles, three to a row (two on a phone). */
+.choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.choice-grid > .choice { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+.choice-grid:has(> .choice:nth-child(2):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (width < 600px) { .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .check { display: flex; align-items: center; gap: var(--space-3); min-height: var(--button-h-small); font: 400 var(--text-base) var(--font-sans); cursor: pointer; }
 .check input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--ink); }
 /* On/off settings (SwitchList): rows in one frame, a switch on the right of each. */
@@ -131,6 +136,13 @@ fieldset.field > legend { margin-bottom: var(--space-2); }
 .form-group + .form-group { padding-top: var(--space-5); border-top: 1px solid var(--line); }
 .form-group-title { float: left; width: 100%; padding: 0; margin-bottom: 2px; font: 600 var(--text-xs)/1 var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .form-group-title + * { clear: both; }
+/* Fold: a part of a form most owners never open; its summary says what is inside («Incoming server · imap…:993»). */
+.fold { min-width: 0; }
+.fold > summary { display: flex; align-items: center; gap: var(--space-2); min-width: 0; list-style: none; cursor: pointer; font: 500 var(--text-base)/1.4 var(--font-sans); color: var(--muted); }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary:hover { color: var(--ink); }
+.fold[open] .field-help-chevron { transform: rotate(90deg); }
+.fold-body { display: flex; flex-direction: column; gap: 14px; margin-top: var(--space-3); padding: var(--space-4) var(--space-5); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 /* Where a field's value comes from: a quiet fold under its hint, numbered steps inside. */
 .field-help { font: 400 var(--text-sm)/1.5 var(--font-sans); color: var(--muted); }
 .field-help summary { display: inline-flex; align-items: center; gap: var(--space-1); width: fit-content; list-style: none; color: var(--faint); cursor: pointer; }
@@ -167,7 +179,7 @@ html:has(.scrim) { overflow: hidden; }
 .dialog:focus { outline: none; }
 /* One with a script to write gets room for its lines. */
 .dialog:has(textarea.control) { max-width: 600px; }
-.dialog.wide { max-width: 560px; }
+.dialog.wide { max-width: 600px; }
 /* A dialog's steps: where it is in them, the done ones dimmer than the current one. */
 .steps { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: -6px 0 2px; padding: 0; list-style: none; font: 500 var(--text-sm)/1.2 var(--font-sans); color: var(--faint); }
 .steps > li + li::before { content: "›"; margin-right: var(--space-2); color: var(--faint); }

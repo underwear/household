@@ -7,7 +7,7 @@ import { channelLabel } from "./workspaces";
 
 const STEPS = ["App", "Your account", "Bots"] as const;
 const APPS = "https://api.slack.com/apps";
-const GUIDE = "https://github.com/underwear/household/blob/main/docs/slack.md#install";
+const GUIDE = "https://agents-household.dev/docs/channels/#slack";
 
 /** A Slack bot DM's page in Slack's web client, from its `workspace:DM` chat. */
 export const slackUrl = (chat: string) => `https://app.slack.com/client/${chat.replace(":", "/")}`;

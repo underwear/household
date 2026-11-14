@@ -216,7 +216,6 @@ export const api = {
   testMail: (house: string, config: MailConnectionInput, id?: string) => call<{ ok: boolean; message: string }>("POST", `${housePath(house)}/connectors/mail/test`, { config, id }),
   saveMail: (house: string, config: MailConnectionInput, id?: string) => call<MailConnectionView>(id ? "PUT" : "POST", `${housePath(house)}/connectors/mail${id ? `/${encodeURIComponent(id)}` : ""}`, config),
   disconnectMail: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/mail/${encodeURIComponent(id)}`),
-  decideMail: (house: string, id: string, decision: "approved" | "denied" | "cancelled") => call<{ ok: boolean }>("POST", `${housePath(house)}/connectors/mail/sends/${encodeURIComponent(id)}`, { decision }),
   microsoftConnections: (house: string) => call<MicrosoftConnectorsView>("GET", `${housePath(house)}/connectors/microsoft`),
   authorizeMicrosoft: (house: string, pets: string[], write: boolean) => call<MicrosoftAuthorizationView>("POST", `${housePath(house)}/connectors/microsoft/authorize`, { pets, write }),
   pollMicrosoft: (house: string, id: string) => call<MicrosoftPollView>("POST", `${housePath(house)}/connectors/microsoft/poll`, { id }),

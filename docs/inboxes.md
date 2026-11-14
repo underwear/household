@@ -1,75 +1,69 @@
-# Workspace inboxes
+# Inboxes
 
-An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a bot's VM. Event contents are treated as untrusted data, never as your instructions.
+An inbox watches a source — a mailbox, a feed, a website, your alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. A new email arrives, a site goes down, a monitor fires: the bot gets it and can act on it without you asking.
 
-For live mailbox search, attachments, replies and SMTP sending, add a separate [Mail connector](../mail-connector/). An inbox only delivers new events and exposes their delivered history; it does not grant general mailbox access.
+An inbox is not a [connector](../connectors/). A connector lets bots look things up in an account when they need to; it never wakes them. An inbox does the opposite: it brings new events to bots, but gives them no access to the account itself. Watching a mailbox in an inbox doesn't let bots search older mail or send replies. For that, also connect the mailbox as a connector.
+
+Sources are checked from Household's computer. Passwords, tokens and keys stay there and never reach a bot's VM. Bots treat event contents as outside data, never as your instructions.
 
 ## Add an inbox
 
-In **Workspace → Inboxes**, choose **+ Add inbox**:
+Open **Workspace → Inboxes → + Add inbox**. The form has three steps.
 
-1. **Source.** Pick what to watch (see [Sources](#sources)).
-2. **Connection.** Enter the address and credentials, then **Test and continue**. A test posts nothing, tells no bot and does not move the inbox forward.
-3. **Delivery.** Name it and choose how often to check: every minute, 5 or 15 minutes, or any interval from 1 minute to 24 hours. Choose a channel and:
-   - **Post events in the channel** — on: one Workspace message per event in that channel. Off: only the bots get them.
-   - **Bots** — for each bot in that channel, **Receives** and **Silent** (see [Bots](#bots)). With posting on, you may leave every bot off for a plain channel feed; with posting off, at least one bot must receive.
-   - **On the first check** — *Start from now* (default) skips what is already there; *Deliver what is there now* sends up to 50 current items, or the current state of a JSON or health check.
+1. **Source.** Pick what to watch (see the sections below).
+2. **Connection.** Enter the address and credentials, then press **Test and continue**. The test only checks the connection: it posts nothing and tells no bot. Web sources take credentials as request headers (**+ Add header**). Redirects are not followed, so enter the final address.
+3. **Delivery.**
+   - **Name** the inbox and choose how often to **Check**: every minute, every 5 or 15 minutes, or a custom interval from 1 minute to 24 hours.
+   - Pick the **Channel**. Bots reply about its events there.
+   - **Post events in the channel**: on, everyone in the channel sees one message per event. Off, only the chosen bots get them.
+   - Under **Bots**, choose who receives the events (see [Choose which bots get events](#choose-which-bots-get-events)).
+   - **On the first check**: **Start from now, skip what is there** (the default), or **Deliver what is there now (up to 50)**.
 
-Bots reply about an event in the inbox's channel.
+Press **Add inbox**. A workspace can have up to 30 inboxes.
+
+## Choose which bots get events
+
+Each bot has two switches for an inbox:
+
+- **Receives**: the bot gets the inbox's events. Only bots in the inbox's channel can receive; add a bot to the channel first.
+- **Silent**: events go to the bot's inbox history only. It isn't woken for them, but it can look them up and search them when it needs to.
+
+With posting on, you can leave every bot off and use the inbox as a plain feed in the channel. With posting off, at least one bot must receive.
+
+You can set the same switches from the bot's side: a bot's **Inboxes** tab lists every inbox of the workspace with **Receives** and **Silent**.
+
+A busy bot gets new events when it is free. A bot that was paused or stopped gets a short catch-up summary instead of a pile of messages, and reads the details from its history. A bot only sees events sent to it: switching **Receives** on later doesn't open older ones. Inbox history stays on Household's computer, survives pausing or removing an inbox, and is part of [backups](../backup/).
 
 ## Manage inboxes
 
-Each inbox shows its state (Watching, Retrying, Needs attention, Paused), when it was last checked, when it checks next, and how many events wait for delivery. **Recent events** under the list shows what arrived lately.
+Each inbox on the Inboxes page shows its state, when it was last checked, when it checks next, and how many events wait for delivery. States: **Watching**, **First check soon**, **Checking…**, **Retrying**, **Needs attention**, **Paused**. **Recent events** below the list shows what arrived lately.
 
 - **Check now** checks right away.
-- **Edit** changes anything. Changing the source or the channel is refused while events still wait for delivery: let them go out, or remove the inbox.
-- **Pause** stops checking and keeps its place; **Resume** goes on from there.
-- **Remove** stops it and drops waiting events. Posts already in the channel and the bots' event history stay.
+- **Edit** opens the delivery settings; **Back** reaches the connection. You can't change the source or channel while events still wait for delivery.
+- **Pause** stops checking and keeps the inbox's place. **Resume** carries on from there.
+- **Remove** stops it and drops events still waiting. What it already posted stays in the channel, and bots keep their history.
 
-## Bots
+Changing a password or header keeps the inbox's place. Changing the address, server, account, folder or monitor starts it over, as on a first check.
 
-A bot's **Inboxes** tab lists every inbox of its workspace with two switches:
+## Mail
 
-- **Receives** — the bot gets the inbox's events. It must be in the inbox's channel first.
-- **Silent** — events go to the bot's inbox history only: it is not woken for them and can look them up when it needs to.
+Two sources watch a mailbox for new mail: **IMAP** (a chosen folder, usually `INBOX`) and **POP3**. Neither changes your mailbox: IMAP leaves messages unread, POP3 never deletes. Mail arrives as plain text, up to 16,000 characters per event, without attachments.
 
-The same switches are in the inbox's own form. The only bot of an inbox that does not post in its channel cannot switch off there: turn posting on or add another bot first.
+Enter the **Mail server**, **Port** and **Connection security** from your provider's help pages, then your **Username** and **Password or app password**. **TLS** encrypts from the start; **STARTTLS** requires encryption before signing in. Both check the server's certificate, and neither ever falls back to an unencrypted connection. Many providers want an app password rather than your normal one. Mailboxes that allow only signing in through Google or Microsoft are not supported. Mail needs Python 3.9 or later on Household's computer.
 
-A busy bot takes events when it is idle. A paused bot, or one whose VM was down, gets a short **catch-up digest** instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.
+**Proton Mail** works through Proton Mail Bridge, running on the same computer as Household. Use the IMAP server, port and password Bridge shows for your account (usually `127.0.0.1`, port `1143`, **STARTTLS**) — not your Proton password. In Bridge, open **Settings → Advanced settings → Export TLS certificates** and paste the certificate into **Trusted certificate (optional)**; never paste the private key. If Bridge makes a new certificate, paste the new one.
 
-Bots read and search their history with three tools:
+## Feeds
 
-- `inbox_list` — the inboxes it receives, and which of them are silent.
-- `inbox_history` — events by inbox and date, newest first.
-- `inbox_search` — events by words in their title, text and metadata.
+**RSS / Atom** delivers new entries from a feed: articles, releases, changelogs. Enter the **Feed URL**. An entry that is edited later is not sent again.
 
-A bot sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.
+## Health checks
 
-## Sources
+**Health check** watches that an address answers. Enter its **Endpoint URL** and set the **Expected status** (200 by default), the **Timeout, s** (10 by default) and **Failures to alert** (3 in a row by default, 1–10). After that many failures, bots get one "down" event; the first passing check after it sends "recovered". A site that is already down when you add it still alerts.
 
-| Source | You enter | What arrives |
-| --- | --- | --- |
-| IMAP | Server, port (TLS: 993; STARTTLS: 143), connection security, username, password or app password, folder | New mail. Messages stay unread. |
-| POP3 | Server, port (TLS: 995; STARTTLS: 110), connection security, username, password or app password | New mail. Nothing is deleted. |
-| RSS / Atom | Feed URL | New entries |
-| Health check | URL, expected status, timeout, failures before an alert | Down and recovered |
-| JSON watcher | URL, the whole response or selected fields | Changed values |
-| Grafana | Base URL, `Authorization: Bearer <service account token>` | Alerts and their state changes |
-| Datadog | API URL of your region, monitor ID, `DD-API-KEY` and `DD-APPLICATION-KEY` | State changes of that monitor |
-| Telegram Bot Updates | Token of a dedicated bot | Updates the bot receives |
-| Custom HTTP | URL and headers | Events your endpoint returns ([format](#custom-http)) |
+## Changes in JSON
 
-Every URL source accepts request headers for credentials. Redirects are not followed: enter the final URL.
-
-**Mail.** Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes are not supported. Choose **TLS** for encryption from the start, or **STARTTLS** to upgrade the connection before login (POP3 uses STLS). Encryption and certificate verification are required in both modes; there is no fallback to plaintext. Existing inboxes keep using TLS. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.
-
-**Proton Mail Bridge.** Run Bridge on the same computer as Household. In Bridge, open the account's mailbox settings and use its IMAP host (usually `127.0.0.1`), port (usually `1143`), username and generated password, not your Proton account password. Choose the connection mode configured in Bridge, usually **STARTTLS**. In Bridge's **Settings → Advanced settings → Export TLS certificates**, export the certificate, then paste its PEM contents into **Trusted certificate** in Household. Do not paste the private key. This trusts the supplied certificate for this inbox while still checking the server name and expiry. If Bridge regenerates its certificate, export and replace it here. Test the connection, then select delivery. See [Bridge settings](https://proton.me/support/comprehensive-guide-to-bridge-settings).
-
-**RSS / Atom.** RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.
-
-**Health check.** A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the bots get one *down* event; the first passing check after it sends *recovered*. A site already down when you add it still alerts. The response body is ignored.
-
-**JSON watcher.** Any JSON endpoint. Watch the whole response, or list fields as [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) paths, one per line:
+**JSON watcher** watches an **Endpoint URL** that returns JSON and sends an event when the answer changes. Watch the **Whole response**, or **Selected fields**, one path per line:
 
 ```text
 /price
@@ -77,15 +71,24 @@ Every URL source accepts request headers for credentials. Redirects are not foll
 /items/0/available
 ```
 
-Key order and whitespace don't count as changes; array order does. A field appearing or disappearing is a change.
+Key order and spacing don't count as changes; the order of list items does.
 
-**Grafana and Datadog.** Give the token read access to the alerts or the monitor. One Datadog inbox watches one monitor. A Grafana alert that disappears arrives as "No longer active": it may be resolved or deleted.
+## Alerts
 
-**Telegram Bot Updates.** Use a bot made for this inbox, not one of your channels' bots: checking takes the updates off Telegram's queue, so nothing else may read that bot, and a bot with a webhook is refused. Household never sends messages as this bot. Telegram keeps waiting updates for 24 hours only.
+- **Grafana** delivers alerts and their state changes. Enter your **Grafana base URL** and put a service account token in the `Authorization` header (`Bearer <token>`).
+- **Datadog** delivers state changes of one monitor. Enter your region's **Datadog API base URL** and the **Monitor ID**, and fill in the `DD-API-KEY` and `DD-APPLICATION-KEY` headers.
+
+Give the token or keys read access only. An alert that fires and clears between two checks can be missed.
+
+## Telegram bot
+
+**Telegram Bot Updates** delivers what people send to a Telegram bot — handy for a public intake bot whose messages your own bots should handle. Create a new bot with BotFather just for this inbox and paste its **Bot token**. Don't reuse a bot from your channels: the inbox takes the bot's updates, so nothing else can read them, and a bot with a webhook is refused. Household never sends messages as this bot. Telegram keeps waiting updates for 24 hours only.
 
 ## Custom HTTP
 
-Household sends `GET <your URL>?limit=50`, adding `cursor=<value>` once you have returned one. Put credentials in headers. Answer `200` with:
+**Custom HTTP** reads events from an **Endpoint URL** you run.
+
+Household calls `GET <your URL>?limit=50`, adding `cursor=<value>` once you have returned one. Answer `200` with:
 
 ```json
 {
@@ -104,35 +107,10 @@ Household sends `GET <your URL>?limit=50`, adding `cursor=<value>` once you have
 }
 ```
 
-| Field | Meaning |
-| --- | --- |
-| `version` | Always `1` |
-| `items` | Up to 50 events, oldest first; empty when there is nothing new |
-| `id` | Required, stable, up to 512 characters. A changed event needs a new ID. |
-| `title` | Required, up to 300 characters |
-| `text` | Required plain text, up to 16,000 characters |
-| `url` | Optional HTTP(S) link |
-| `occurredAt` | Optional time with a timezone |
-| `metadata` | Optional JSON object, up to 16 KiB; bots can search it |
-| `nextCursor` | Optional, up to 4,096 characters; where to continue next time |
+`items` holds up to 50 events, oldest first. Each needs a stable `id` (a changed event needs a new one), a `title` and plain `text` (up to 16,000 characters); `url`, `occurredAt` and a small `metadata` object are optional. Without a cursor, return the latest events; with one, the events after it. If your endpoint has no cursors, return a recent window: Household remembers the last 5,000 IDs.
 
-Without a cursor, return the latest 50 events; with one, the next events after it. Endpoints without cursors can return a recent window: Household remembers the last 5,000 IDs of each inbox.
+## When an inbox fails
 
-## When something fails
+A failing source is retried with growing pauses, up to an hour (or the inbox's own interval, if longer). After 3 failed checks in a row, the inbox shows **Needs attention** with the reason, and its bots are told once; they hear again when it recovers. An inbox without bots shows the problem on the page only.
 
-A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows **Needs attention** with the reason, and its bots get one notice; they get one more when it recovers. An inbox without bots shows the problem on the page only.
-
-Good to know:
-
-- An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a bot may get an event it had already started on: the digest tells it so.
-- Checks see snapshots: an alert that fires and clears between two checks can be missed.
-- Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.
-- Changing mail connection security or its trusted certificate also keeps the inbox's place; changing the port starts it over.
-- Switching posting on or off applies to new events; switching a bot to Silent applies at once.
-- The host can reach internal addresses your bots cannot: only you configure sources.
-
-## References
-
-- [Telegram Bot API: getting updates](https://core.telegram.org/bots/api#getting-updates)
-- [Grafana Alertmanager API](https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/api/generated_base_api_alertmanager.go)
-- [Datadog monitor details API](https://docs.datadoghq.com/api/latest/monitors/get-a-monitors-details/)
+Events are saved before they are delivered, so a restart doesn't lose them. Rarely, around a crash, a channel post can appear twice.

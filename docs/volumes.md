@@ -1,22 +1,32 @@
-# Shared folders (volumes)
+# Shared folders
 
-A bot lives in its own VM and sees only its home. To give it a folder of your computer — a projects folder, your photos, a drop zone for downloads — share it as a **volume**. It appears in the bot's VM at `/volumes/<name>`.
+A bot lives in its own VM and sees only its own home. To give it a folder of your computer, such as a projects folder, your photos, or a drop zone for downloads, share it as a volume. The bot sees it at `/volumes/<name>`, and what it writes there lands on your computer at once.
 
-## How it works
+## How sharing works
 
-- **One folder, one access, a list of bots.** A volume is a folder of this computer, **read-only** or **read-write**, mounted for the bots you pick. All of them get the same access.
-- **Always at `/volumes/<name>`.** Never inside a bot's home, never over system folders, so nothing is hidden or clashes. A bot that needs it somewhere else can make a link to it.
-- **The bot is told.** Its system prompt names each mounted folder and its access. Claude Code and Codex get the same text.
-- **Sideworkers see their parent's folders.** Scouts get none.
-- **A change restarts the bots it touches.** Mounts are fixed when a VM starts. Their homes and Docker disks stay; running processes and anything installed outside home do not.
-- **Removing a volume only unmounts it.** The folder and every file in it stay on your computer.
-- **The files are yours, not Household's.** What a bot writes lands on your computer at once. Backups (`house export`) do not include shared folders, and Household cannot undo a change.
+- **One folder, one access, a list of bots.** Each shared folder is **Read-only** or **Read-write**, and every bot you pick gets the same access.
+- **Always at `/volumes/<name>`.** Never inside a bot's home or over system folders, so nothing is hidden or clashes.
+- **The bot knows.** Each bot is told which folders it has and whether it may write to them.
+- **Sideworkers see their bot's folders.** Scouts get none.
+- **A change restarts the bots it touches.** Folders are attached when a VM starts. The bots' homes stay; running programs and anything installed outside the home do not. The bot's Setup script brings software back.
+- **Stopping sharing never deletes anything.** The folder and every file in it stay on your computer.
+- **The files are yours, not Household's.** Backups (`house export`) do not include shared folders, and Household cannot undo a bot's changes.
 
 ⚠️ **Read-write means the bot can change and delete what is in the folder.** Share read-write only what you would hand to someone working for you, and keep a copy of anything you cannot lose.
 
-## Sharing a folder
+## Share a folder
 
-**In the admin:** **Workspace → Volumes → + Share folder**. Give it a name (its folder in the VM), the folder on this computer (`~/…` works), the access and the bots. A folder that does not exist yet is created. A folder that already has files shows how many before you confirm, along with a warning for folders that usually hold credentials (`~/.ssh`, `~/.config`, `~/Library`, …).
+**In the admin:** open **Workspace → Volumes → + Share folder** and fill in:
+
+- **Name** — the folder's name in the VM: `projects` becomes `/volumes/projects`.
+- **Folder on this computer** — a full path or `~/…`. A folder that does not exist yet is created.
+- **Access** — **Read-only** or **Read-write**.
+- **Bots** — who gets it.
+- **Note** — for you only.
+
+Press **Next**. Household shows how many files the folder holds and which bots will restart, and warns you about folders that often hold credentials, like `~/.ssh`, `~/.config` or `~/Library`. Confirm with **Share it**.
+
+**On a bot's page:** the **Volumes** tab lists every shared folder of the workspace with a switch to mount or unmount it for this bot, and **+ Share folder** for a new one.
 
 **From the command line:**
 
@@ -25,49 +35,36 @@ house volume add home photos --path ~/Pictures --bots sibling
 house volume add home projects --path ~/Projects/shared --access write --bots sibling,helper
 house volume set home photos --access write
 house volume ls home
-house volume rm home photos          # unmounts; the files stay
+house volume rm home photos          # stops sharing; the files stay
 ```
 
-`add` and `set` print how many files the folder holds and ask before sharing one that is not empty (`--yes` skips the question).
+`add` and `set` tell you how many files the folder holds and ask before sharing one that is not empty (`--yes` skips the question).
 
-**On a bot's page:** the **Volumes** tab lists every folder of the workspace, with a switch to mount or unmount each one for this bot, and **+ Share folder** for a new one.
+To change a folder, use **Edit** next to it in **Workspace → Volumes**. To stop sharing, use **Remove**, then **Stop sharing**, or `house volume rm`.
 
-## When a bot asks
+## When a bot asks for a folder
 
-A bot can ask for a folder itself, and for changes or removal, with its `volume_request` tool. You get a card in the chat that shows:
+A bot can ask you for a folder itself, or for a change to one it has. A card in the chat shows:
 
 - the folder, how many files it holds (or that it will be created), the access and the bots;
-- for a change, before and after;
-- which bots restart.
+- for a change, what it is now and what it would be;
+- which bots will restart.
 
-Choose **Approve** or **Deny**. The card expires after 10 minutes. On approval, Household asks the bots it touches to finish their turn, restarts them with the folder mounted, and tells the bot that asked. Household refuses requests for its own folders without asking you.
+Choose **Approve** (or **Stop sharing**, when the bot asks to give a folder up) or **Deny**. The card expires after 10 minutes. When you approve, the bots involved finish what they are doing, restart with the folder attached, and the bot that asked is told.
 
 ## What can't be shared
 
 - The root of the file system.
-- Household's own folders and any folder that holds one: its state (the bots' homes, keys and certificates), its config, its install (`~/.household`), and microsandbox's VMs (`~/.microsandbox`). This rules out sharing your whole home folder too.
-- A path with `:` or `,`, which microsandbox cannot mount.
-- A folder inside a read-write volume, or a read-write folder that holds another volume. A bot could otherwise swap the inner folder for a link to anywhere on your computer before it is mounted. Share the outer folder instead.
+- Household's own data (its config, its install, the bots' homes and keys) and the VM runtime's data, or any folder that contains them. With a standard install, this rules out your whole home folder.
+- A path with `:` or `,` in it.
+- A folder inside a read-write shared folder, or a read-write folder that contains another shared folder. Share the outer folder instead.
 
-Each time a VM starts, Household checks every folder again. One that is now a link, or leads into Household's own data, is not mounted.
+Each time a VM starts, Household checks every folder again. One that has since become a link, or leads into Household's own data, is not attached.
+
+## Unplugged disks
+
+If a folder is missing when a VM starts, such as one on an unplugged disk, it is skipped and the bot still starts. **Workspace → Volumes** marks it as **Folder missing**. Plugging the disk back in does not restart anything: press **Restart** on the bot's page to attach it again. Household creates a folder only when you first share it or move it to a new path, never for an unplugged disk.
 
 ## Bot homes
 
-**Workspace → Volumes** also lists each bot's home: where it is on this computer and where the bot sees it. The list is read-only and shows what is where. Homes are Household's own and stay when a VM is recreated. A sideworker sees its parent's home as well as its own.
-
-## In the config
-
-Volumes live under their workspace in `household.yaml`:
-
-```yaml
-houses:
-  home:
-    volumes:
-      photos:
-        path: /Users/me/Pictures
-        access: read          # or write
-        bots: [sibling]
-        note: family photos   # only you see it
-```
-
-A folder that is missing when a VM starts (an unplugged disk, say) is skipped, so the bot still starts. Plugging it back in restarts nothing: **Restart** on the bot's page mounts it again (so does any change to its folders). Household creates a folder only when it is first shared or moved to a new path, never for an unplugged disk.
+**Workspace → Volumes** also lists each bot's home: where it is on your computer and where the bot sees it. This list is for information only. Homes belong to Household and survive restarts and new VMs.

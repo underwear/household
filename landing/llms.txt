@@ -50,8 +50,9 @@ Install the `household` skill too, for running Household afterwards:
   or plain), or a Slack DM.
 - **Inbox**: something that wakes bots on its own: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,
   Telegram bot updates, custom HTTP.
-- **Connectors**: accounts a workspace connects and gives to chosen bots, read-only or read-write: Google (Gmail,
-  Drive, Calendar), Slack, Microsoft To Do, any MCP server. Tokens stay in the host's private database.
+- **Connectors**: accounts a workspace connects and gives to chosen bots, read-only or read-write: any IMAP/SMTP
+  mailbox, Google (Gmail, Drive, Calendar), Slack, Microsoft To Do. Tokens stay in the host's private database.
+  Any MCP server can be added to a bot by asking it (see MCP servers).
 - **claude.ai connectors and ChatGPT apps**: a bot on a subscription sign-in key (Sign in to Claude, or a ChatGPT
   sign-in by code) can use the connectors or apps already connected in that account (Drive, Jira, GitHub…), as that
   account. It is one switch per bot, off by default: **Claude.ai connectors** or **ChatGPT apps** on its Harness
@@ -97,16 +98,24 @@ Install the `household` skill too, for running Household afterwards:
 
 ## Docs
 
-- [Quick start](https://agents-household.dev/docs/start/): install, house onboard, house start, then write to your bot
-- [Bots](https://agents-household.dev/docs/bots/): what a bot is, how it differs from sideworkers and scouts, and every tab of its page in the admin
-- [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra assistants a bot starts for one job: another project's CLAUDE.md or AGENTS.md, a thread you can talk in, limits and profiles
-- [Inboxes](https://agents-household.dev/docs/inboxes/): mail, feeds, health checks, JSON, Grafana, Datadog, Telegram bot updates and custom HTTP sources; per-bot subscriptions and silent delivery; the custom HTTP format
-- [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; capabilities, network limits, owner approval (Run), secrets, results and threads
-- [Workspace resources](https://agents-household.dev/docs/resources/): one CPU/RAM budget per workspace, what bots reserve and what scouts and sideworkers share
-- [HTTP previews](https://agents-household.dev/docs/previews/): a bot shows a web app from its VM by a 15-minute link you approve; who can open it; limits
-- [Shared folders](https://agents-household.dev/docs/volumes/): share folders of your computer with bots at /volumes/<name>, read-only or read-write; bots ask with volume_request, you approve in the chat; files stay when one is removed
-- [MCP servers](https://agents-household.dev/docs/mcp/): give a bot any MCP server by asking it; hosts and keys it needs, what persists, limits
-- [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, what a backup holds, moving to another machine
+- [Overview](https://agents-household.dev/docs/): what Household is, how it works, the security model, where it runs
+- [Quick start](https://agents-household.dev/docs/start/): install, set up in the web admin or with house onboard, write to your first bot
+- [Bots](https://agents-household.dev/docs/bots/): what a bot is, adding one, and every tab of its page
+- [Keys](https://agents-household.dev/docs/keys/): Claude or ChatGPT subscriptions by sign-in, tokens and API keys; bots never see them
+- [Instructions, skills and memory](https://agents-household.dev/docs/instructions/): a bot's AGENTS.md, its own and shared skills, and its memory
+- [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra assistants a bot starts for one job, in VMs of their own
+- [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; every run waits for the owner's approval
+- [Channels](https://agents-household.dev/docs/channels/): connecting messengers, owners, the default bot, a section per messenger
+- [Connectors](https://agents-household.dev/docs/connectors/): letting bots use your accounts, with access per account and per bot; a section per connector
+- [Network and secrets](https://agents-household.dev/docs/network/): the allowlist, temporary access, secrets as placeholders substituted at egress
+- [Shared folders](https://agents-household.dev/docs/volumes/): folders of your computer shared with bots, read-only or read-write
+- [Previews](https://agents-household.dev/docs/previews/): a bot shows a web app from its VM by a link you approve
+- [MCP servers](https://agents-household.dev/docs/mcp/): give a bot any MCP server by asking it
+- [Inboxes](https://agents-household.dev/docs/inboxes/): watch mail, feeds, health checks, alerts and custom endpoints, and hand events to bots
+- [Scheduled tasks](https://agents-household.dev/docs/schedules/): have a bot do something on a schedule
+- [Resources](https://agents-household.dev/docs/resources/): CPU and memory per workspace and bot
+- [Back up and move](https://agents-household.dev/docs/backup/): house export / house import, moving to another machine
+- [Updates and troubleshooting](https://agents-household.dev/docs/operating/): house update, logs, common problems
 
 ## Skill
 

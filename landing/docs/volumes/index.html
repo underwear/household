@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Shared folders — Household docs</title>
-  <meta name="description" content="Share folders of your computer with bots at /volumes/<name>, read-only or read-write; bots can ask for one and you approve it in the chat.">
-  <meta property="og:title" content="Shared folders (volumes)">
+  <meta name="description" content="Share folders of your computer with bots, read-only or writable, per bot.">
+  <meta property="og:title" content="Shared folders">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/volumes/">
   <meta property="og:type" content="article">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,65 +172,64 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="./" aria-current="page">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="./" aria-current="page">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
-    <article><p class="crumb">Bots</p><h1>Shared folders (volumes)</h1>
-<p>A bot lives in its own VM and sees only its home. To give it a folder of your computer — a projects folder, your photos, a drop zone for downloads — share it as a <strong>volume</strong>. It appears in the bot's VM at <code>/volumes/&lt;name&gt;</code>.</p>
-<h2 id="how-it-works">How it works</h2>
+    <article><p class="crumb">What bots can reach</p><h1>Shared folders</h1>
+<p class="lead">A bot lives in its own VM and sees only its own home. To give it a folder of your computer, such as a projects folder, your photos, or a drop zone for downloads, share it as a volume. The bot sees it at <code>/volumes/&lt;name&gt;</code>, and what it writes there lands on your computer at once.</p>
+<h2 id="how-sharing-works">How sharing works</h2>
 <ul>
-<li><strong>One folder, one access, a list of bots.</strong> A volume is a folder of this computer, <strong>read-only</strong> or <strong>read-write</strong>, mounted for the bots you pick. All of them get the same access.</li>
-<li><strong>Always at <code>/volumes/&lt;name&gt;</code>.</strong> Never inside a bot's home, never over system folders, so nothing is hidden or clashes. A bot that needs it somewhere else can make a link to it.</li>
-<li><strong>The bot is told.</strong> Its system prompt names each mounted folder and its access. Claude Code and Codex get the same text.</li>
-<li><strong>Sideworkers see their parent's folders.</strong> Scouts get none.</li>
-<li><strong>A change restarts the bots it touches.</strong> Mounts are fixed when a VM starts. Their homes and Docker disks stay; running processes and anything installed outside home do not.</li>
-<li><strong>Removing a volume only unmounts it.</strong> The folder and every file in it stay on your computer.</li>
-<li><strong>The files are yours, not Household's.</strong> What a bot writes lands on your computer at once. Backups (<code>house export</code>) do not include shared folders, and Household cannot undo a change.</li>
+<li><strong>One folder, one access, a list of bots.</strong> Each shared folder is <strong>Read-only</strong> or <strong>Read-write</strong>, and every bot you pick gets the same access.</li>
+<li><strong>Always at <code>/volumes/&lt;name&gt;</code>.</strong> Never inside a bot's home or over system folders, so nothing is hidden or clashes.</li>
+<li><strong>The bot knows.</strong> Each bot is told which folders it has and whether it may write to them.</li>
+<li><strong>Sideworkers see their bot's folders.</strong> Scouts get none.</li>
+<li><strong>A change restarts the bots it touches.</strong> Folders are attached when a VM starts. The bots' homes stay; running programs and anything installed outside the home do not. The bot's Setup script brings software back.</li>
+<li><strong>Stopping sharing never deletes anything.</strong> The folder and every file in it stay on your computer.</li>
+<li><strong>The files are yours, not Household's.</strong> Backups (<code>house export</code>) do not include shared folders, and Household cannot undo a bot's changes.</li>
 </ul>
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>Read-write means the bot can change and delete what is in the folder.</strong> Share read-write only what you would hand to someone working for you, and keep a copy of anything you cannot lose.</p>
-<h2 id="sharing-a-folder">Sharing a folder</h2>
-<p><strong>In the admin:</strong> <strong>Workspace → Volumes → + Share folder</strong>. Give it a name (its folder in the VM), the folder on this computer (<code>~/…</code> works), the access and the bots. A folder that does not exist yet is created. A folder that already has files shows how many before you confirm, along with a warning for folders that usually hold credentials (<code>~/.ssh</code>, <code>~/.config</code>, <code>~/Library</code>, …).</p>
+<h2 id="share-a-folder">Share a folder</h2>
+<p><strong>In the admin:</strong> open <strong>Workspace → Volumes → + Share folder</strong> and fill in:</p>
+<ul>
+<li><strong>Name</strong> — the folder's name in the VM: <code>projects</code> becomes <code>/volumes/projects</code>.</li>
+<li><strong>Folder on this computer</strong> — a full path or <code>~/…</code>. A folder that does not exist yet is created.</li>
+<li><strong>Access</strong> — <strong>Read-only</strong> or <strong>Read-write</strong>.</li>
+<li><strong>Bots</strong> — who gets it.</li>
+<li><strong>Note</strong> — for you only.</li>
+</ul>
+<p>Press <strong>Next</strong>. Household shows how many files the folder holds and which bots will restart, and warns you about folders that often hold credentials, like <code>~/.ssh</code>, <code>~/.config</code> or <code>~/Library</code>. Confirm with <strong>Share it</strong>.</p>
+<p><strong>On a bot's page:</strong> the <strong>Volumes</strong> tab lists every shared folder of the workspace with a switch to mount or unmount it for this bot, and <strong>+ Share folder</strong> for a new one.</p>
 <p><strong>From the command line:</strong></p>
 <pre><code class="language-sh">house volume add home photos --path ~/Pictures --bots sibling
 house volume add home projects --path ~/Projects/shared --access write --bots sibling,helper
 house volume set home photos --access write
 house volume ls home
-house volume rm home photos          # unmounts; the files stay
+house volume rm home photos          # stops sharing; the files stay
 </code></pre>
-<p><code>add</code> and <code>set</code> print how many files the folder holds and ask before sharing one that is not empty (<code>--yes</code> skips the question).</p>
-<p><strong>On a bot's page:</strong> the <strong>Volumes</strong> tab lists every folder of the workspace, with a switch to mount or unmount each one for this bot, and <strong>+ Share folder</strong> for a new one.</p>
-<h2 id="when-a-bot-asks">When a bot asks</h2>
-<p>A bot can ask for a folder itself, and for changes or removal, with its <code>volume_request</code> tool. You get a card in the chat that shows:</p>
+<p><code>add</code> and <code>set</code> tell you how many files the folder holds and ask before sharing one that is not empty (<code>--yes</code> skips the question).</p>
+<p>To change a folder, use <strong>Edit</strong> next to it in <strong>Workspace → Volumes</strong>. To stop sharing, use <strong>Remove</strong>, then <strong>Stop sharing</strong>, or <code>house volume rm</code>.</p>
+<h2 id="when-a-bot-asks-for-a-folder">When a bot asks for a folder</h2>
+<p>A bot can ask you for a folder itself, or for a change to one it has. A card in the chat shows:</p>
 <ul>
 <li>the folder, how many files it holds (or that it will be created), the access and the bots;</li>
-<li>for a change, before and after;</li>
-<li>which bots restart.</li>
+<li>for a change, what it is now and what it would be;</li>
+<li>which bots will restart.</li>
 </ul>
-<p>Choose <strong>Approve</strong> or <strong>Deny</strong>. The card expires after 10 minutes. On approval, Household asks the bots it touches to finish their turn, restarts them with the folder mounted, and tells the bot that asked. Household refuses requests for its own folders without asking you.</p>
+<p>Choose <strong>Approve</strong> (or <strong>Stop sharing</strong>, when the bot asks to give a folder up) or <strong>Deny</strong>. The card expires after 10 minutes. When you approve, the bots involved finish what they are doing, restart with the folder attached, and the bot that asked is told.</p>
 <h2 id="what-can-t-be-shared">What can't be shared</h2>
 <ul>
 <li>The root of the file system.</li>
-<li>Household's own folders and any folder that holds one: its state (the bots' homes, keys and certificates), its config, its install (<code>~/.household</code>), and microsandbox's VMs (<code>~/.microsandbox</code>). This rules out sharing your whole home folder too.</li>
-<li>A path with <code>:</code> or <code>,</code>, which microsandbox cannot mount.</li>
-<li>A folder inside a read-write volume, or a read-write folder that holds another volume. A bot could otherwise swap the inner folder for a link to anywhere on your computer before it is mounted. Share the outer folder instead.</li>
+<li>Household's own data (its config, its install, the bots' homes and keys) and the VM runtime's data, or any folder that contains them. With a standard install, this rules out your whole home folder.</li>
+<li>A path with <code>:</code> or <code>,</code> in it.</li>
+<li>A folder inside a read-write shared folder, or a read-write folder that contains another shared folder. Share the outer folder instead.</li>
 </ul>
-<p>Each time a VM starts, Household checks every folder again. One that is now a link, or leads into Household's own data, is not mounted.</p>
+<p>Each time a VM starts, Household checks every folder again. One that has since become a link, or leads into Household's own data, is not attached.</p>
+<h2 id="unplugged-disks">Unplugged disks</h2>
+<p>If a folder is missing when a VM starts, such as one on an unplugged disk, it is skipped and the bot still starts. <strong>Workspace → Volumes</strong> marks it as <strong>Folder missing</strong>. Plugging the disk back in does not restart anything: press <strong>Restart</strong> on the bot's page to attach it again. Household creates a folder only when you first share it or move it to a new path, never for an unplugged disk.</p>
 <h2 id="bot-homes">Bot homes</h2>
-<p><strong>Workspace → Volumes</strong> also lists each bot's home: where it is on this computer and where the bot sees it. The list is read-only and shows what is where. Homes are Household's own and stay when a VM is recreated. A sideworker sees its parent's home as well as its own.</p>
-<h2 id="in-the-config">In the config</h2>
-<p>Volumes live under their workspace in <code>household.yaml</code>:</p>
-<pre><code class="language-yaml">houses:
-  home:
-    volumes:
-      photos:
-        path: /Users/me/Pictures
-        access: read          # or write
-        bots: [sibling]
-        note: family photos   # only you see it
-</code></pre>
-<p>A folder that is missing when a VM starts (an unplugged disk, say) is skipped, so the bot still starts. Plugging it back in restarts nothing: <strong>Restart</strong> on the bot's page mounts it again (so does any change to its folders). Household creates a folder only when it is first shared or moved to a new path, never for an unplugged disk.</p>
+<p><strong>Workspace → Volumes</strong> also lists each bot's home: where it is on your computer and where the bot sees it. This list is for information only. Homes belong to Household and survive restarts and new VMs.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#sharing-a-folder">Sharing a folder</a></li><li><a href="#when-a-bot-asks">When a bot asks</a></li><li><a href="#what-can-t-be-shared">What can't be shared</a></li><li><a href="#bot-homes">Bot homes</a></li><li><a href="#in-the-config">In the config</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-sharing-works">How sharing works</a></li><li><a href="#share-a-folder">Share a folder</a></li><li><a href="#when-a-bot-asks-for-a-folder">When a bot asks for a folder</a></li><li><a href="#what-can-t-be-shared">What can't be shared</a></li><li><a href="#unplugged-disks">Unplugged disks</a></li><li><a href="#bot-homes">Bot homes</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

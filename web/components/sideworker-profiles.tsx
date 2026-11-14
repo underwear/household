@@ -4,7 +4,7 @@ import type { SideworkerProfile } from "../../src/core/household";
 import { api, type HarnessView, type WorkspaceView, type KeyView } from "../api";
 import { Dialog, useDialog } from "./dialog";
 import { TextField } from "./fields";
-import { keysFor, modeLabel, useHarnessForm } from "./bots";
+import { harnessLabel, keysFor, modeLabel, useHarnessForm } from "./bots";
 import { ListSection, written } from "./section";
 
 /** What a bot may start a sideworker on: its own settings (always), or one of the workspace's profiles the owner added. */
@@ -30,7 +30,7 @@ export function SideworkerProfiles({ house, agents, keys, refresh, notify }: {
         ...profiles.map((profile) => ({
           key: profile.name,
           label: profile.name,
-          sub: `${profile.agent} · ${profile.model ?? "default model"} · key ${profile.key}`,
+          sub: `${harnessLabel(profile.agent)} · ${profile.model ?? "default model"} · key ${profile.key}`,
           note: `${profile.reasoningEffort ? `Reasoning ${profile.reasoningEffort}` : "Default reasoning"} · ${profile.mode ? modeLabel(agents, profile.agent, profile.mode) : "default permissions"}`,
         })),
       ]}

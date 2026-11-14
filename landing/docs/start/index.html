@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quick start — Household docs</title>
-  <meta name="description" content="Install Household, run house onboard and house start, then write to your first bot.">
+  <meta name="description" content="Install Household, set it up in the web admin or with house onboard, and write to your first bot.">
   <meta property="og:title" content="Quick start">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/start/">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,86 +172,100 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="./" aria-current="page">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Getting started</p><h1>Quick start</h1>
-<p>From a bare machine to a bot answering you in your messenger.</p>
+<p class="lead">This page takes you from a bare machine to a bot that answers you in your messenger. You install Household, connect a model account and a chat, start it, and say hi.</p>
 <h2 id="what-you-need">What you need</h2>
 <ul>
-<li><strong>A Mac on Apple silicon</strong>, or <strong>Linux with <code>/dev/kvm</code></strong>: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac only through such a Linux VM.</li>
-<li><code>python3</code> and <code>openssl</code> on it.</li>
-<li><strong>A key for the harness:</strong> a Claude subscription or Anthropic API key for Claude Code, or a ChatGPT subscription or OpenAI API key for Codex.</li>
+<li><strong>A machine to run it on.</strong> A Mac with Apple silicon, or Linux with KVM (<code>/dev/kvm</code>): your own computer, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac works only through such a Linux VM.</li>
+<li><strong><code>python3</code> and <code>openssl</code></strong> on that machine. The installer tells you if one is missing.</li>
+<li><strong>A model account</strong> for your bots. For Claude Code: a Claude Pro, Max or Team subscription, or an Anthropic API key. For Codex: a ChatGPT Plus or Pro subscription, or an OpenAI API key.</li>
+<li><strong>A messenger.</strong> A Telegram account, or a Slack workspace where you can install an app.</li>
 </ul>
-<p>Don't like typing? Give this to your coding harness:</p>
+<p>Prefer to let your coding assistant do it? Give Claude Code or Codex this prompt:</p>
 <pre><code class="language-text">Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
 </code></pre>
-<h2 id="1-install">1. Install</h2>
+<h2 id="install">Install</h2>
+<p>Run this in a terminal:</p>
 <pre><code class="language-sh">curl -fsSL https://agents-household.dev/install.sh | sh
 </code></pre>
-<p>It installs the newest release into <code>~/.household</code>, with everything it needs inside: no Docker, no Bun, no sudo. It tells you if something is missing, such as <code>~/.household/bin</code> on your <code>PATH</code>. Then check that microVMs can run here:</p>
+<p>It installs the newest release into <code>~/.household</code> with everything it needs. It does not need Docker or sudo, and it touches nothing outside that folder. When it finishes, it tells you what else to do, for example how to add <code>~/.household/bin</code> to your <code>PATH</code>.</p>
+<p>Then check that this machine can run bots:</p>
 <pre><code class="language-sh">house doctor
 </code></pre>
-<h2 id="2-onboard">2. Onboard</h2>
+<p>Each line starts with ✓ when all is well, or ✗ with what to fix. Fix what it says about the machine itself (microsandbox, virtualization, <code>python3</code>, <code>openssl</code>). The lines about the config and the daemon settle once you have set Household up and started it.</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> On Linux, if the installer says <code>/dev/kvm</code> is missing or not usable, bots cannot start. Add yourself to the group that owns <code>/dev/kvm</code> and log in again, or pick a VM or VPS with KVM.</p>
+<h2 id="set-it-up">Set it up</h2>
+<p>Setup asks for three things, one step at a time, and shows how to get each of them:</p>
+<ol>
+<li><strong>Model</strong>: the account your bots use. <strong>Sign in to Claude</strong> and <strong>Sign in to ChatGPT</strong> are recommended: you open a link on any device, your phone too, and sign in. You can also paste a <strong>Claude subscription token</strong>, an <strong>Anthropic API key</strong> or an <strong>OpenAI API key</strong>. See <a href="../keys/">Keys</a> for the differences.</li>
+<li><strong>Workspace</strong>: a name for your bots' home (lowercase letters, digits and dashes), and how much of this machine's CPU and memory it may use.</li>
+<li><strong>Channel</strong>: where you talk to your bots. <strong>Telegram group with topics</strong> is recommended. You can also choose <strong>Telegram, a thread per bot</strong> (beta), <strong>Telegram, one plain chat</strong> or <strong>Slack DM</strong>, or skip this step and add a channel later.</li>
+</ol>
+<p>At the end, Household makes your first bot, <strong>Assistant</strong>, with scouts turned on. You can change its model, size and instructions later.</p>
+<p>You can do all of this in the web admin or in a terminal. Pick one.</p>
+<h3 id="in-the-web-admin">In the web admin</h3>
+<ol>
+<li>Start Household: <code>house start</code>. Leave it running in that terminal.</li>
+<li>In a second terminal, run <code>house dashboard</code>. It opens the admin in your browser with a one-time sign-in link.</li>
+<li>With no workspace yet, the admin opens <strong>Set up Household</strong> by itself. Go through <strong>Model</strong>, <strong>Workspace</strong> and <strong>Channel</strong>.</li>
+<li>On <strong>Review</strong>, check what you chose and press <strong>Set it all up</strong>. Nothing is made before this step, and if anything fails, nothing is left half made.</li>
+</ol>
+<p>Later, you can run the same setup again from <strong>Workspaces → Guided setup</strong>, for example for a second workspace.</p>
+<h3 id="in-a-terminal">In a terminal</h3>
 <pre><code class="language-sh">house onboard
 </code></pre>
-<p>It asks, one step at a time, and shows for each choice how to get what it needs:</p>
+<p>It asks the same questions, in the same order. You can stop it with Ctrl-C at any point; what is done stays. When it is done, it offers to start Household right there. You can run <code>house onboard</code> again any time: it offers what you already have, or adds something new next to it.</p>
+<h3 id="connecting-telegram">Connecting Telegram</h3>
+<p>For the recommended <strong>Telegram group with topics</strong>, each bot gets its own topic in a group of yours. Before you paste anything:</p>
 <ol>
-<li>
-<p><strong>Model</strong> — a key you saved before, or a new one: Claude or ChatGPT / OpenAI, then how to sign in:</p>
-<ul>
-<li><strong>Sign in to Claude</strong> (recommended): Household shows Claude's sign-in link, you sign in on any device and paste the code it shows. Your bots can then also use that account's claude.ai connectors (Drive, Jira…), as that account, once you switch <strong>Claude.ai connectors</strong> on for a bot. Household keeps the sign-in fresh by itself; Claude ends it about once a month, and Household reminds your bots' chats a few days before (<code>house key claude &lt;name&gt;</code> or <strong>Keys → Sign in again</strong>). It is Household's own sign-in, made by Claude Code itself in a short-lived VM: the Claude on your computer stays as it is, and a backup does not carry it (sign in again after a restore).</li>
-<li><strong>Claude subscription token</strong>: <code>claude setup-token</code> makes one for a year. No claude.ai connectors on it.</li>
-<li>an Anthropic or OpenAI API key, or a ChatGPT sign-in by code (its apps for a bot: <strong>ChatGPT apps</strong>).</li>
-</ul>
-</li>
-<li>
-<p><strong>Workspace</strong> — a name for your bots' home, and how much of the machine's CPU and memory it may use.</p>
-</li>
-<li>
-<p><strong>Channel</strong> — where you talk to your bots:</p>
-<ul>
-<li><strong>Telegram group with topics</strong> (recommended): a topic per bot in a group of yours;</li>
-<li><strong>Telegram, a thread per bot</strong> (beta: Telegram's bot Threaded Mode);</li>
-<li><strong>Telegram, one plain chat</strong>;</li>
-<li><strong>Slack DM</strong>.</li>
-</ul>
-<p>You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. For a group, Household finds it by itself once the bot is in it, and checks it has Topics on and the bot is an admin that may manage topics and delete messages. You can skip this step and add a channel later.</p>
-</li>
+<li>In Telegram, open <a href="https://t.me/BotFather">@BotFather</a>, send <code>/newbot</code>, and choose a name and a username. It gives you a token.</li>
+<li>Create a group, or open one of yours, and turn on <strong>Topics</strong> in its settings.</li>
+<li>Add your new bot to the group and make it an admin with <strong>Manage topics</strong> and <strong>Delete messages</strong>.</li>
 </ol>
-<p>Then it makes the workspace's bot, an assistant with scouts on. Change its model, size and instructions later in the admin.</p>
-<p>You can run <code>house onboard</code> again any time. The web admin has the same setup at <strong>/setup</strong>: it opens by itself while there is no workspace yet, and makes everything at once at its last step.</p>
-<h2 id="3-start">3. Start</h2>
+<p>Then paste the token into setup. Household asks you to send the bot any message in a private chat (pressing <strong>Start</strong> works): that is how it knows you, and you become the workspace's owner. It finds the group by itself and tells you if anything is still missing there.</p>
+<p>For the other channel kinds and for Slack, setup shows its own steps. See <a href="../channels/">Channels</a> for more.</p>
+<h2 id="start-it">Start it</h2>
+<p>If setup did not start Household already, start it now:</p>
 <pre><code class="language-sh">house start
 </code></pre>
-<p>The first start downloads the bot's VM image, so give it a minute. <code>house status</code> shows your bot as <code>running</code> when it is ready.</p>
-<p>To keep Household running after you close the terminal, run <code>house start</code> as a service (launchd on a Mac, a systemd user service on Linux) that starts it again whenever it exits, a clean exit too: launchd <code>KeepAlive</code> set to <code>true</code>, systemd <code>Restart=always</code>. Only &quot;on failure&quot; leaves it down after an update's restart. Stop it through the service. Only one daemon at a time.</p>
-<h2 id="4-say-hi">4. Say hi</h2>
-<p>For a shared group with a topic per bot, see <a href="../telegram-groups/">Telegram groups with topics</a>.</p>
-<p>Write to your bot where you connected it: in a Telegram group, in its own topic; in a private chat with threads, in its own thread; in a plain chat or a Slack DM, right there. 🤖</p>
-<p>For an ordinary private conversation without threads, add a channel in the admin with kind <strong>Telegram Bot DM</strong> (<code>telegram-dm</code>), your Telegram user id as the chat id, and a BotFather token. Threaded Mode is not required. Press <strong>Start</strong> in the bot's Telegram chat, and assign your assistant to the channel.</p>
-<p>All replies and files stay in that chat. If you assign several assistants, choose a default; address another by name (for example, <code>Chef, plan dinner</code>) or reply to one of its messages. Replies include the assistant's name. The Stop button and <code>/stop</code> always stop the channel's default assistant, even when replying to another assistant. The existing <strong>Telegram Bot DM (threaded)</strong> kind remains <code>telegram-private</code>. Connect a particular bot and chat in only one of these modes.</p>
-<p>Example channel entry:</p>
-<pre><code class="language-yaml">kind: telegram-dm
-token: YOUR_BOT_TOKEN
-chat: &quot;100200300&quot;
-pets: [sibling]
+<p>The first start downloads the bot's VM image, so give it a minute or two. Check on it with:</p>
+<pre><code class="language-sh">house status
 </code></pre>
-<p>The adapter omits <code>message_thread_id</code> when sending to this channel; see the <a href="https://core.telegram.org/bots/api#sendmessage">Telegram Bot API</a>.</p>
-<p>Then open the admin:</p>
+<p>Your bot shows as <code>running</code> when it is ready. In the admin, its state shows as <strong>Running</strong> on <strong>Workspace → Bots</strong>.</p>
+<p><code>house start</code> runs in the foreground and stops when you close the terminal or press Ctrl-C. To keep Household running after you log out and after a reboot, run it as a background service: see <a href="../operating/#run-it-in-the-background">Run it in the background</a>.</p>
+<h2 id="say-hi">Say hi</h2>
+<p>Write to your bot where you connected it:</p>
+<ul>
+<li><strong>Telegram group with topics</strong>: in the bot's own topic in your group.</li>
+<li><strong>Telegram, a thread per bot</strong>: in your private chat with the Telegram bot, in its thread.</li>
+<li><strong>Telegram, one plain chat</strong>: right in your private chat with the Telegram bot.</li>
+<li><strong>Slack DM</strong>: in your direct messages with the Slack app.</li>
+</ul>
+<p>Ask it something small first, like &quot;What can you do?&quot; It answers in the same place. Replies, files and approval cards from this bot all show up there.</p>
+<h2 id="open-the-admin">Open the admin</h2>
+<p>The web admin is where you manage everything after setup. Run:</p>
 <pre><code class="language-sh">house dashboard
 </code></pre>
-<p>It prints a one-time link (valid 60 seconds) and opens it. The admin lives at <code>http://127.0.0.1:8780</code>, on this machine only. On a remote server, forward the port first: <code>ssh -L 8780:127.0.0.1:8780 &lt;server&gt;</code>, then run <code>house dashboard --no-open</code> there and open the link on your computer.</p>
-<h2 id="next">Next</h2>
+<p>It prints a one-time sign-in link, valid for 60 seconds, and opens it in your browser. The admin lives at <code>http://127.0.0.1:8780</code> and is reachable only from this machine.</p>
+<p>On a remote server, forward the port first, from your own computer:</p>
+<pre><code class="language-sh">ssh -L 8780:127.0.0.1:8780 &lt;server&gt;
+</code></pre>
+<p>Then run <code>house dashboard --no-open</code> on the server, and open the link it prints in the browser on your computer.</p>
+<h2 id="what-to-do-next">What to do next</h2>
 <ul>
-<li><a href="../bots/">Bots</a> — everything on a bot's page.</li>
-<li><a href="../scouts/">Scouts</a> — let bots use the internet and your keys safely.</li>
-<li><a href="../inboxes/">Inboxes</a> — mail, alerts and feeds for your bots.</li>
-<li><a href="../backup/">Back up and move</a> — keep a copy of everything.</li>
-<li><code>house update</code> moves to the newest release; <code>house --help</code> lists everything else.</li>
+<li>Tell your bot who it is and how to work: <a href="../instructions/">Instructions, skills and memory</a>.</li>
+<li>Let it use your mail, documents or calendar: <a href="../connectors/">Connectors</a>.</li>
+<li>Add more bots, each with its own job: <a href="../bots/">Bots</a>.</li>
+<li>Have it do things on a schedule: <a href="../schedules/">Scheduled tasks</a>.</li>
+<li>Wake it up on new mail, feeds or alerts: <a href="../inboxes/">Inboxes</a>.</li>
+<li>Keep a copy of everything: <a href="../backup/">Back up and move</a>.</li>
 </ul>
+<p><code>house --help</code> lists every command.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-need">What you need</a></li><li><a href="#1-install">1. Install</a></li><li><a href="#2-onboard">2. Onboard</a></li><li><a href="#3-start">3. Start</a></li><li><a href="#4-say-hi">4. Say hi</a></li><li><a href="#next">Next</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-need">What you need</a></li><li><a href="#install">Install</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#start-it">Start it</a></li><li><a href="#say-hi">Say hi</a></li><li><a href="#open-the-admin">Open the admin</a></li><li><a href="#what-to-do-next">What to do next</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

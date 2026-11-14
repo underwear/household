@@ -24,7 +24,7 @@ import { workspacePath, navigate, botPath, type BotTab } from "../router";
 import { useDialog } from "./dialog";
 import { Cell, Cluster, List, ListRow, Page, Panel, Section, Stack, Tabs } from "./layout";
 import { petState, workersOf } from "./bot-state";
-import { DisableDialog, RestartDialog, modeLabel, BotDialog, type Capacity } from "./bots";
+import { DisableDialog, RestartDialog, harnessLabel, modeLabel, BotDialog, type Capacity } from "./bots";
 import { gib, petResources } from "../../src/core/resources";
 import { TerminalDialog } from "./terminal";
 import { written } from "./section";
@@ -115,7 +115,7 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
     ["Name", pet.name, true],
     ["Configured CPU", `${petResources(pet).cpus} vCPU${petResources(pet).cpus === 1 ? "" : "s"}`, false],
     ["Configured RAM", gib(petResources(pet).memoryMiB), false],
-    ["Harness", pet.agent, true],
+    ["Harness", harnessLabel(pet.agent), false],
     ["Model", pet.model, true],
     ["Reasoning effort", pet.reasoningEffort ?? "Default", !!pet.reasoningEffort],
     ...(pet.mode ? [["Permission mode", modeLabel(agents, pet.agent, pet.mode), false] as [string, string, boolean]] : []),

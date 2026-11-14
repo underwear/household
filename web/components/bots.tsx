@@ -1,6 +1,6 @@
 import { BotResourceSummary, useWorkspaceMetrics } from "./bot-resource-summary";
 import { allocatedTotal, crowds, gib, hostRamMiB, CROWDED_SHARE, RAM_STEP_MIB, petResources, petCpuSchema, petMemorySchema, type HostCapacity, type PetResources as BotResources } from "../../src/core/resources";
-import { PET_NAME_PATTERN as BOT_NAME_PATTERN, PET_NAME_HINT as BOT_NAME_HINT } from "../../src/core/names";
+import { PET_NAME_PATTERN as BOT_NAME_PATTERN } from "../../src/core/names";
 import type { AgentModel as HarnessModel } from "../../src/core/agent";
 import { useEffect, useState } from "react";
 import { Brain, MessagesSquare, Pickaxe } from "lucide-react";
@@ -8,7 +8,7 @@ import { api, type HarnessModelsView, type HarnessView, type WorkspaceView, type
 import { botPath } from "../router";
 import { Dialog } from "./dialog";
 import { EmojiField } from "./emoji-field";
-import { CheckList, ChoiceList, SelectField, StepperField, SwitchList, TextField } from "./fields";
+import { ChoiceList, Fold, SelectField, StepperField, SwitchList, TextField } from "./fields";
 import { FormGrid, Page } from "./layout";
 import { channelLabel } from "./workspaces";
 import { Link } from "./link";
@@ -54,9 +54,9 @@ export function BotsPage({ house, save, agents, keys = [], capacity }: SectionPr
                     <span className="strong ellipsis">{pet.title}</span>
                     {pet.title !== pet.name && <span className="id ellipsis">{pet.name}</span>}
                   </span>
-                  <span className="bot-card-runs mono">
-                    <span className="ellipsis">{pet.agent}</span>
-                    <span className="bot-card-model">
+                  <span className="bot-card-runs">
+                    <span className="ellipsis">{harnessLabel(pet.agent)}</span>
+                    <span className="bot-card-model mono">
                       <span className="ellipsis" title={pet.model}>{pet.model}</span>
                       <span className="tag" title="Reasoning effort">
                         <Brain size={11} strokeWidth={1.75} aria-hidden />
@@ -93,6 +93,13 @@ export function BotsPage({ house, save, agents, keys = [], capacity }: SectionPr
     </Page>
   );
 }
+
+/** The harnesses as people know them («Claude Code», «Codex»), with a line on what each runs on; another by its id. */
+const HARNESSES: Record<string, { label: string; description: string }> = {
+  "claude-code-tmux": { label: "Claude Code", description: "Anthropic's agent. Runs on a Claude subscription or an Anthropic API key." },
+  "codex-app-server": { label: "Codex", description: "OpenAI's agent. Runs on a ChatGPT subscription or an OpenAI API key." },
+};
+export const harnessLabel = (name: string) => HARNESSES[name]?.label ?? name;
 
 /** The keys a workspace's bots may run on: those for every workspace, and those for this one. */
 export const keysFor = (keys: KeyView[], house: string) => keys.filter((key) => !key.houses || key.houses.includes(house));
@@ -168,8 +175,9 @@ export function useHarnessForm(agents: HarnessView[], keys: KeyView[], pet?: Pic
   const error = !key ? "Choose a key it runs on." : !model ? "Choose a model." : invalidEffort ? "Choose a supported reasoning effort or Default for this model." : undefined;
   const fields = (
     <>
-      <SelectField
+      <ChoiceList
         label="Harness"
+        grid
         value={agentName}
         onChange={(chosen) => {
           setHarnessName(chosen);
@@ -181,7 +189,7 @@ export function useHarnessForm(agents: HarnessView[], keys: KeyView[], pet?: Pic
           setSettings({});
           if (!keys.some((each) => each.name === key && next?.providers.includes(each.provider))) setKey(only(next?.providers));
         }}
-        options={agents.map((candidate) => ({ value: candidate.name, label: candidate.name }))}
+        options={agents.map((candidate) => ({ value: candidate.name, label: harnessLabel(candidate.name), description: HARNESSES[candidate.name]?.description }))}
       />
       <SelectField
         label="Key"
@@ -231,22 +239,22 @@ export function useHarnessForm(agents: HarnessView[], keys: KeyView[], pet?: Pic
             ]}
           />
         )}
-        {availableSettings.filter((setting) => !setting.checkbox).map((setting) => {
-          const chosen = settings[setting.key] ?? "";
-          const option = setting.options.find(({ id }) => id === chosen);
-          return (
-            <SelectField key={setting.key} label={setting.label} value={chosen}
-              hint={option?.description || (chosen ? undefined : `${setting.description ? `${setting.description} ` : ""}Default: ${setting.defaultLabel}.`)}
-              onChange={(picked) => setSettings((current) => ({ ...current, [setting.key]: picked || null }))}
-              options={[
-                { value: "", label: `Default (${setting.defaultLabel})` },
-                ...setting.options.map(({ id, label }) => ({ value: id, label })),
-                // One the config names that the harness does not offer: shown, so the form says what is there.
-                ...(chosen && !option ? [{ value: chosen, label: `${chosen} (unknown)`, disabled: true }] : []),
-              ]} />
-          );
-        })}
       </FormGrid>
+      {availableSettings.filter((setting) => !setting.checkbox).map((setting) => {
+        const chosen = settings[setting.key] ?? "";
+        const option = setting.options.find(({ id }) => id === chosen);
+        return (
+          <SelectField key={setting.key} label={setting.label} value={chosen}
+            hint={option?.description || (chosen ? undefined : `${setting.description ? `${setting.description} ` : ""}Default: ${setting.defaultLabel}.`)}
+            onChange={(picked) => setSettings((current) => ({ ...current, [setting.key]: picked || null }))}
+            options={[
+              { value: "", label: `Default (${setting.defaultLabel})` },
+              ...setting.options.map(({ id, label }) => ({ value: id, label })),
+              // One the config names that the harness does not offer: shown, so the form says what is there.
+              ...(chosen && !option ? [{ value: chosen, label: `${chosen} (unknown)`, disabled: true }] : []),
+            ]} />
+        );
+      })}
       {/* On/off settings under the selects, full width: a switch and the line on what it allows. */}
       {availableSettings.some((setting) => setting.checkbox) && (
         <SwitchList label="Harness options"
@@ -320,7 +328,9 @@ export function useResourceForm({ host, houses }: Capacity, house: string, pet?:
     </>
   );
   const error = cpuError ? `CPU: ${cpuError}` : ramError ? `RAM: ${ramError}` : budgetError;
-  return { fields, value, error, changed };
+  /** Something under the fields worth a look though it saves: a crowded host, or under 1 GiB. */
+  const warning = !error && (crowded || crowds(value.cpus, host.cpus) || crowds(value.memoryMiB, host.memoryMiB) || value.memoryMiB < 1024);
+  return { fields, value, error, warning, changed };
 }
 
 /**
@@ -390,21 +400,32 @@ function EditBotDialog({ pet, onClose, save }: { pet: BotView; onClose: () => vo
   );
 }
 
-const STEPS = ["Bot", "Harness", "Resources"] as const;
+const STEPS = ["Bot", "Harness"] as const;
+
+/** A name for the config from a display name («Sous Chef» → sous_chef); empty when it has no Latin letters to make one. */
+export const botNameFrom = (title: string) => {
+  const name = title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^[^a-z]+|_+$/g, "").slice(0, 31);
+  return BOT_NAME_PATTERN.test(name) ? name : "";
+};
 
 /**
- * Adding a bot, in three steps: Bot (name, display name, emoji, aliases, and the channels it joins), Harness (what runs
- * it) and Resources (its CPU and RAM); Back keeps what was entered. Its channels are on the first step, not a step of
- * their own: a tick or two, the workspace's only channel ticked already. A bot in none hears no one, and its «started»
- * notice reaches no one.
+ * Adding a bot, in two steps: Bot (how people call it, its emoji and the channels it joins; its config name follows the
+ * display name until typed) and Harness (what runs it, with its size folded under: most keep the default). Back keeps
+ * what was entered. A bot in no channel hears no one, and its «started» notice reaches no one.
  */
 function AddBotDialog({ agents, keys = [], house, capacity, onClose, save }: { agents: HarnessView[]; keys?: KeyView[]; house: WorkspaceView; capacity: Capacity; onClose: () => void; save: (name: string, fields: BotFields, channels: string[]) => Promise<void> }) {
-  const [name, setName] = useState("");
+  const [typedName, setTypedName] = useState<string>();
   const names = useNames();
+  const name = typedName ?? botNameFrom(names.title);
   const [channels, setChannels] = useState(() => (house.channels.length === 1 ? [house.channels[0]!.chat] : []));
   const [step, setStep] = useState(0);
+  const [tried, setTried] = useState(false);
   const agent = useHarnessForm(agents, keys);
   const resources = useResourceForm(capacity, house.name);
+  const taken = house.pets.some((pet) => pet.name === name.trim());
+  const nameError = !name.trim() ? (tried ? "Give it a name: a–z, 0–9, _ or -, starting with a letter." : undefined)
+    : !BOT_NAME_PATTERN.test(name.trim()) ? "Use a lowercase Latin letter first, then a–z, 0–9, _ or -."
+    : taken ? `${house.name} has a bot named ${name.trim()} already.` : undefined;
   const last = step === STEPS.length - 1;
   return (
     <Dialog
@@ -416,12 +437,13 @@ function AddBotDialog({ agents, keys = [], house, capacity, onClose, save }: { a
         back: step > 0 ? () => setStep(step - 1) : undefined,
         confirmLabel: last ? "Add bot" : "Next",
         onConfirm: async () => {
-          if (step === 0 && !BOT_NAME_PATTERN.test(name.trim())) throw new Error(BOT_NAME_HINT);
-          if (step === 1 && agent.error) throw new Error(agent.error);
-          if (!last) {
-            setStep(step + 1);
+          if (step === 0) {
+            setTried(true);
+            if (!name.trim() || nameError) return "stay";
+            setStep(1);
             return "stay";
           }
+          if (agent.error) throw new Error(agent.error);
           if (resources.error) throw new Error(resources.error);
           await save(name.trim(), { ...names.value, ...agent.value, ...resources.value }, channels);
         },
@@ -435,27 +457,30 @@ function AddBotDialog({ agents, keys = [], house, capacity, onClose, save }: { a
             {step === 0 && (
               <>
                 <FormGrid>
-                  <TextField label="Name" mono value={name} onChange={setName} placeholder="my_bot" maxLength={31} hint={BOT_NAME_HINT} error={name && !BOT_NAME_PATTERN.test(name) ? "Use a lowercase Latin letter first, then a–z, 0–9, _ or -." : undefined} />
+                  <TextField label="Display name" maxLength={64} value={names.title} onChange={names.setTitle} placeholder="Sibling" hint="How it signs its messages." />
                   <EmojiField value={names.emoji} onChange={names.setEmoji} />
                 </FormGrid>
-                <FormGrid>
-                  <TextField label="Display name" maxLength={64} value={names.title} onChange={names.setTitle} placeholder={name || "Sibling"} />
-                  {names.aliasesField}
-                </FormGrid>
-                <CheckList
-                  label="Channels"
-                  options={house.channels.map((channel) => ({ value: channel.chat, label: channelLabel(channel) }))}
-                  checked={channels}
-                  onToggle={(chat) => setChannels((chosen) => (chosen.includes(chat) ? chosen.filter((each) => each !== chat) : [...chosen, chat]))}
-                  empty={`No channels in ${house.name} yet. Add one on the workspace's Channels page, then switch the bot on in it from the bot's Channels tab.`}
-                />
+                <TextField label="Name" mono value={name} onChange={(value) => setTypedName(value)} placeholder="sibling" maxLength={31} error={nameError}
+                  hint="For the config and commands; it can't be changed later." />
+                {names.aliasesField}
+                <div className="field">
+                  <span className="field-label">Channels</span>
+                  {house.channels.length ? (
+                    <SwitchList label="Channels" options={house.channels.map((channel) => ({ value: channel.chat, label: channel.name, description: channel.label }))} on={channels}
+                      onToggle={(chat) => setChannels((chosen) => (chosen.includes(chat) ? chosen.filter((each) => each !== chat) : [...chosen, chat]))} />
+                  ) : (
+                    <p className="list-empty">No channels in {house.name} yet. Add one on the Channels page, then switch the bot on in it from its Channels tab.</p>
+                  )}
+                  {house.channels.length > 0 && !channels.length && <p className="hint">In no channel, it hears no one. You can add it to one later.</p>}
+                </div>
               </>
             )}
-            {step === 1 && agent.fields}
-            {step === 2 && (
+            {step === 1 && (
               <>
-                {resources.fields}
-                <p className="hint">You can change it later on the Resources tab.</p>
+                {agent.fields}
+                <Fold summary={<>Size <span className="faint">· {resources.value.cpus} vCPU · {gib(resources.value.memoryMiB)}</span></>} open={!!resources.error || resources.warning}>
+                  {resources.fields}
+                </Fold>
               </>
             )}
           </>

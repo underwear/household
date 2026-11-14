@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sideworkers — Household docs</title>
-  <meta name="description" content="Extra assistants a bot starts for one job, in VMs of their own: coding in another project with its own CLAUDE.md or AGENTS.md, a thread you can talk in, parallel work.">
+  <meta name="description" content="Extra assistants a bot starts for one job, in VMs of their own: coding in another project, a thread you can talk in, parallel work.">
   <meta property="og:title" content="Sideworkers">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/sideworkers/">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,36 +172,56 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Sideworkers</h1>
-<p>A sideworker is another assistant a bot starts for one job: extra hands in its own VM, working on the bot's projects while the bot goes on talking to you. When the job is done, the bot closes it. How it compares with a bot and a scout: see the table on <a href="../bots/#bots-sideworkers-scouts">Bots</a>.</p>
+<p class="lead">A sideworker is a helper a bot starts for one job. It runs in a VM of its own, works on the bot's files and has its own chat thread, so the bot stays free to talk to you while the job gets done. When the job is finished, the bot closes it. For how a sideworker differs from a bot and a scout, see <a href="../bots/">Bots</a>.</p>
 <h2 id="when-it-helps">When it helps</h2>
 <ul>
-<li><strong>Code in another project.</strong> Point it at a folder with its own <code>CLAUDE.md</code> or <code>AGENTS.md</code>, and it works as that project's developer: its conventions, commands and rules, without the bot's conversation in the way.</li>
-<li><strong>Talk to it yourself.</strong> Unlike a subagent hidden inside a session, a sideworker has its own chat thread. Open it, watch it work, and tell it what you want directly.</li>
-<li><strong>A long or parallel job.</strong> A refactor, a test run, an investigation, while the bot stays free for you.</li>
-<li><strong>A clean start.</strong> Work that should not carry the bot's long conversation.</li>
-<li><strong>Another model.</strong> Run the job on a profile you allowed, say Codex next to a Claude Code bot.</li>
+<li><strong>Work in another project.</strong> Point it at a folder with its own <code>CLAUDE.md</code> or <code>AGENTS.md</code>, and it works as that project's developer: its conventions, commands and rules, without the bot's long conversation in the way.</li>
+<li><strong>A long or parallel job.</strong> A refactor, a test run, an investigation, while the bot keeps answering you.</li>
+<li><strong>A clean start.</strong> Work that should not carry everything the bot has talked about.</li>
+<li><strong>Another model.</strong> Run the job on a different harness or model, say Codex next to a Claude Code bot. See the profiles below.</li>
+<li><strong>Someone you can talk to.</strong> Unlike a subagent hidden inside a session, a sideworker has its own thread. Open it, watch it work and tell it what you want directly.</li>
 </ul>
-<h2 id="how-it-works">How it works</h2>
+<h2 id="turn-them-on-or-off">Turn them on or off</h2>
+<p>Sideworkers are on in a new workspace. To change that, open <strong>Workspace → Settings</strong> and use the <strong>Sideworkers</strong> switch under <strong>Features</strong>, then <strong>Save</strong>. Turning them off pauses the ones that run and stops bots from starting new ones.</p>
+<p>From the command line:</p>
+<pre><code class="language-sh">house features home sideworkers=off
+</code></pre>
+<p>You don't start sideworkers yourself. You ask your bot (&quot;get a sideworker to fix the tests in the site project&quot;), or it decides to start one on its own.</p>
+<h2 id="what-happens-when-a-bot-starts-one">What happens when a bot starts one</h2>
 <ol>
-<li><strong>The bot starts it</strong> with a folder in its home and a brief. In a git repository the worker gets its own worktree and branch, so the two don't edit the same files.</li>
-<li><strong>It works in its own VM</strong> with its own session and Docker. It sees the bot's home and the bot's memory, and like the bot it reaches only the hosts the workspace allows, with the workspace's secrets.</li>
-<li><strong>You can join in.</strong> Its thread shows in the bot's channel. Whatever you write there goes to the worker; the bot is told.</li>
-<li><strong>The bot closes it.</strong> Its VM goes; its branch and files stay. Its chat thread is deleted with the messages (on Telegram). The bot is reminded every 30 minutes about a worker that sits idle.</li>
+<li><strong>The bot gives it a folder and a brief.</strong> The folder is one in the bot's home. The bot also picks the CPU and memory for the worker's VM, from what the workspace has free.</li>
+<li><strong>In a git repository, it gets its own branch.</strong> The worker works in a separate copy of the repository on a branch of its own, starting from the bot's last commit. The two never edit the same files. Changes the bot has not committed are not in the worker's copy. When the job is done, the bot merges the branch.</li>
+<li><strong>A thread opens in the bot's channel.</strong> The worker posts there. Whatever you write in that thread goes to the worker, and the bot is told.</li>
+<li><strong>The bot closes it</strong> when the job is done. You can close it too (below).</li>
 </ol>
-<p>A sideworker cannot start sideworkers or have scheduled tasks. You can close one yourself with <strong>Close</strong> on its page.</p>
-<h2 id="set-up">Set up</h2>
+<p>A sideworker sees the bot's home and the bot's memory. Like the bot, it reaches only the hosts the workspace allows and uses the workspace's secrets without seeing their values. It has its own session and its own Docker.</p>
+<p>A sideworker cannot start sideworkers, call scouts, have scheduled tasks or ask for shared folders. It sees the folders its bot has.</p>
+<h2 id="watch-and-close-them">Watch and close them</h2>
+<p><strong>Workspace → Sideworkers</strong> lists what runs now under <strong>Running</strong>: each worker with its state, the bot it was <strong>Started by</strong>, and its <strong>Working directory</strong> and branch. The bot's <strong>Overview</strong> also shows how many sideworkers it has.</p>
+<p>Click a worker to open its page: its working directory, branch and <strong>Logs</strong>, and <strong>Close…</strong> under <strong>Close sideworker</strong>. The list has a <strong>Close…</strong> for each worker too.</p>
+<p>When a sideworker is closed:</p>
 <ul>
-<li><strong>Workspace → Settings → Sideworkers</strong> turns them on. Off pauses the running ones.</li>
-<li><strong>Workspace → Sideworkers</strong> lists what runs now, by bot. The bot that starts a worker chooses its VM's CPU and memory for the job, from what the workspace has free.</li>
-<li><strong>Profiles</strong> are the harness setups a bot may start a worker on, besides its own: a harness, key, model and effort. Add one when you want work done by another model.</li>
+<li>its VM is removed;</li>
+<li>its branch and the files it wrote stay;</li>
+<li>on Telegram, its thread is deleted with all its messages. The bot is asked to tell you first, so you can keep what you need.</li>
 </ul>
-<p>Each worker reserves its VM maximum from the shared workspace CPU/RAM budget. Configure the total in <strong>Workspace → Settings → Workspace capacity</strong>; pets reserve their own share and scouts and sideworkers share the rest. There is no worker count limit. See <a href="../resources/">Workspace resources</a>.</p>
+<p>A sideworker has no time limit. When one sits idle for 30 minutes, its bot is reminded, and again every 30 minutes after that, so it can close the worker or give it more to do.</p>
+<h2 id="run-a-sideworker-on-another-model">Run a sideworker on another model</h2>
+<p>By default a sideworker runs on its bot's own harness, key and model. To let bots use something else, add a profile in <strong>Workspace → Sideworkers → Profiles → + Add profile</strong>:</p>
+<ul>
+<li><strong>Profile name</strong> — what a bot asks for, like <code>code-review</code>.</li>
+<li><strong>Harness</strong>, <strong>Key</strong>, <strong>Model</strong>, <strong>Reasoning effort</strong> and <strong>Permission mode</strong> — the same choices as for a bot.</li>
+</ul>
+<p>Bots see the profiles you added and may pick one when they start a worker. You can also ask for one by name: &quot;start a sideworker on the code-review profile&quot;. A worker keeps the settings it started with: editing or removing a profile does not change the ones already running.</p>
+<h2 id="resources">Resources</h2>
+<p>Each running sideworker holds its VM's CPU and memory from the workspace's budget until it is closed. There is no limit on how many run at once, only on the total. When there is not enough free, the bot is told and can choose a smaller VM, wait, or close a worker it no longer needs. See <a href="../resources/">Resources</a>.</p>
+<p>Close all sideworkers before you make a backup with <code>house export</code>: it refuses to run while any are open. See <a href="../backup/">Back up and move</a>.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#set-up">Set up</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#turn-them-on-or-off">Turn them on or off</a></li><li><a href="#what-happens-when-a-bot-starts-one">What happens when a bot starts one</a></li><li><a href="#watch-and-close-them">Watch and close them</a></li><li><a href="#run-a-sideworker-on-another-model">Run a sideworker on another model</a></li><li><a href="#resources">Resources</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

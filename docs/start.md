@@ -1,100 +1,135 @@
 # Quick start
 
-From a bare machine to a bot answering you in your messenger.
+This page takes you from a bare machine to a bot that answers you in your messenger. You install Household, connect a model account and a chat, start it, and say hi.
 
 ## What you need
 
-- **A Mac on Apple silicon**, or **Linux with `/dev/kvm`**: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac only through such a Linux VM.
-- `python3` and `openssl` on it.
-- **A key for the harness:** a Claude subscription or Anthropic API key for Claude Code, or a ChatGPT subscription or OpenAI API key for Codex.
+- **A machine to run it on.** A Mac with Apple silicon, or Linux with KVM (`/dev/kvm`): your own computer, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac works only through such a Linux VM.
+- **`python3` and `openssl`** on that machine. The installer tells you if one is missing.
+- **A model account** for your bots. For Claude Code: a Claude Pro, Max or Team subscription, or an Anthropic API key. For Codex: a ChatGPT Plus or Pro subscription, or an OpenAI API key.
+- **A messenger.** A Telegram account, or a Slack workspace where you can install an app.
 
-Don't like typing? Give this to your coding harness:
+Prefer to let your coding assistant do it? Give Claude Code or Codex this prompt:
 
 ```text
 Read https://agents-household.dev/llms.txt and help me set up Household on my machine.
 ```
 
-## 1. Install
+## Install
+
+Run this in a terminal:
 
 ```sh
 curl -fsSL https://agents-household.dev/install.sh | sh
 ```
 
-It installs the newest release into `~/.household`, with everything it needs inside: no Docker, no Bun, no sudo. It tells you if something is missing, such as `~/.household/bin` on your `PATH`. Then check that microVMs can run here:
+It installs the newest release into `~/.household` with everything it needs. It does not need Docker or sudo, and it touches nothing outside that folder. When it finishes, it tells you what else to do, for example how to add `~/.household/bin` to your `PATH`.
+
+Then check that this machine can run bots:
 
 ```sh
 house doctor
 ```
 
-## 2. Onboard
+Each line starts with ✓ when all is well, or ✗ with what to fix. Fix what it says about the machine itself (microsandbox, virtualization, `python3`, `openssl`). The lines about the config and the daemon settle once you have set Household up and started it.
+
+⚠️ On Linux, if the installer says `/dev/kvm` is missing or not usable, bots cannot start. Add yourself to the group that owns `/dev/kvm` and log in again, or pick a VM or VPS with KVM.
+
+## Set it up
+
+Setup asks for three things, one step at a time, and shows how to get each of them:
+
+1. **Model**: the account your bots use. **Sign in to Claude** and **Sign in to ChatGPT** are recommended: you open a link on any device, your phone too, and sign in. You can also paste a **Claude subscription token**, an **Anthropic API key** or an **OpenAI API key**. See [Keys](../keys/) for the differences.
+2. **Workspace**: a name for your bots' home (lowercase letters, digits and dashes), and how much of this machine's CPU and memory it may use.
+3. **Channel**: where you talk to your bots. **Telegram group with topics** is recommended. You can also choose **Telegram, a thread per bot** (beta), **Telegram, one plain chat** or **Slack DM**, or skip this step and add a channel later.
+
+At the end, Household makes your first bot, **Assistant**, with scouts turned on. You can change its model, size and instructions later.
+
+You can do all of this in the web admin or in a terminal. Pick one.
+
+### In the web admin
+
+1. Start Household: `house start`. Leave it running in that terminal.
+2. In a second terminal, run `house dashboard`. It opens the admin in your browser with a one-time sign-in link.
+3. With no workspace yet, the admin opens **Set up Household** by itself. Go through **Model**, **Workspace** and **Channel**.
+4. On **Review**, check what you chose and press **Set it all up**. Nothing is made before this step, and if anything fails, nothing is left half made.
+
+Later, you can run the same setup again from **Workspaces → Guided setup**, for example for a second workspace.
+
+### In a terminal
 
 ```sh
 house onboard
 ```
 
-It asks, one step at a time, and shows for each choice how to get what it needs:
+It asks the same questions, in the same order. You can stop it with Ctrl-C at any point; what is done stays. When it is done, it offers to start Household right there. You can run `house onboard` again any time: it offers what you already have, or adds something new next to it.
 
-1. **Model** — a key you saved before, or a new one: Claude or ChatGPT / OpenAI, then how to sign in:
-   - **Sign in to Claude** (recommended): Household shows Claude's sign-in link, you sign in on any device and paste the code it shows. Your bots can then also use that account's claude.ai connectors (Drive, Jira…), as that account, once you switch **Claude.ai connectors** on for a bot. Household keeps the sign-in fresh by itself; Claude ends it about once a month, and Household reminds your bots' chats a few days before (`house key claude <name>` or **Keys → Sign in again**). It is Household's own sign-in, made by Claude Code itself in a short-lived VM: the Claude on your computer stays as it is, and a backup does not carry it (sign in again after a restore).
-   - **Claude subscription token**: `claude setup-token` makes one for a year. No claude.ai connectors on it.
-   - an Anthropic or OpenAI API key, or a ChatGPT sign-in by code (its apps for a bot: **ChatGPT apps**).
-2. **Workspace** — a name for your bots' home, and how much of the machine's CPU and memory it may use.
-3. **Channel** — where you talk to your bots:
-   - **Telegram group with topics** (recommended): a topic per bot in a group of yours;
-   - **Telegram, a thread per bot** (beta: Telegram's bot Threaded Mode);
-   - **Telegram, one plain chat**;
-   - **Slack DM**.
+### Connecting Telegram
 
-   You become the workspace's owner: send your Telegram bot a private message (Start works), or give your Slack member ID. For a group, Household finds it by itself once the bot is in it, and checks it has Topics on and the bot is an admin that may manage topics and delete messages. You can skip this step and add a channel later.
+For the recommended **Telegram group with topics**, each bot gets its own topic in a group of yours. Before you paste anything:
 
-Then it makes the workspace's bot, an assistant with scouts on. Change its model, size and instructions later in the admin.
+1. In Telegram, open [@BotFather](https://t.me/BotFather), send `/newbot`, and choose a name and a username. It gives you a token.
+2. Create a group, or open one of yours, and turn on **Topics** in its settings.
+3. Add your new bot to the group and make it an admin with **Manage topics** and **Delete messages**.
 
-You can run `house onboard` again any time. The web admin has the same setup at **/setup**: it opens by itself while there is no workspace yet, and makes everything at once at its last step.
+Then paste the token into setup. Household asks you to send the bot any message in a private chat (pressing **Start** works): that is how it knows you, and you become the workspace's owner. It finds the group by itself and tells you if anything is still missing there.
 
-## 3. Start
+For the other channel kinds and for Slack, setup shows its own steps. See [Channels](../channels/) for more.
+
+## Start it
+
+If setup did not start Household already, start it now:
 
 ```sh
 house start
 ```
 
-The first start downloads the bot's VM image, so give it a minute. `house status` shows your bot as `running` when it is ready.
+The first start downloads the bot's VM image, so give it a minute or two. Check on it with:
 
-To keep Household running after you close the terminal, run `house start` as a service (launchd on a Mac, a systemd user service on Linux) that starts it again whenever it exits, a clean exit too: launchd `KeepAlive` set to `true`, systemd `Restart=always`. Only "on failure" leaves it down after an update's restart. Stop it through the service. Only one daemon at a time.
-
-## 4. Say hi
-
-For a shared group with a topic per bot, see [Telegram groups with topics](../telegram-groups/).
-
-Write to your bot where you connected it: in a Telegram group, in its own topic; in a private chat with threads, in its own thread; in a plain chat or a Slack DM, right there. 🤖
-
-For an ordinary private conversation without threads, add a channel in the admin with kind **Telegram Bot DM** (`telegram-dm`), your Telegram user id as the chat id, and a BotFather token. Threaded Mode is not required. Press **Start** in the bot's Telegram chat, and assign your assistant to the channel.
-
-All replies and files stay in that chat. If you assign several assistants, choose a default; address another by name (for example, `Chef, plan dinner`) or reply to one of its messages. Replies include the assistant's name. The Stop button and `/stop` always stop the channel's default assistant, even when replying to another assistant. The existing **Telegram Bot DM (threaded)** kind remains `telegram-private`. Connect a particular bot and chat in only one of these modes.
-
-Example channel entry:
-
-```yaml
-kind: telegram-dm
-token: YOUR_BOT_TOKEN
-chat: "100200300"
-pets: [sibling]
+```sh
+house status
 ```
 
-The adapter omits `message_thread_id` when sending to this channel; see the [Telegram Bot API](https://core.telegram.org/bots/api#sendmessage).
+Your bot shows as `running` when it is ready. In the admin, its state shows as **Running** on **Workspace → Bots**.
 
+`house start` runs in the foreground and stops when you close the terminal or press Ctrl-C. To keep Household running after you log out and after a reboot, run it as a background service: see [Run it in the background](../operating/#run-it-in-the-background).
 
-Then open the admin:
+## Say hi
+
+Write to your bot where you connected it:
+
+- **Telegram group with topics**: in the bot's own topic in your group.
+- **Telegram, a thread per bot**: in your private chat with the Telegram bot, in its thread.
+- **Telegram, one plain chat**: right in your private chat with the Telegram bot.
+- **Slack DM**: in your direct messages with the Slack app.
+
+Ask it something small first, like "What can you do?" It answers in the same place. Replies, files and approval cards from this bot all show up there.
+
+## Open the admin
+
+The web admin is where you manage everything after setup. Run:
 
 ```sh
 house dashboard
 ```
 
-It prints a one-time link (valid 60 seconds) and opens it. The admin lives at `http://127.0.0.1:8780`, on this machine only. On a remote server, forward the port first: `ssh -L 8780:127.0.0.1:8780 <server>`, then run `house dashboard --no-open` there and open the link on your computer.
+It prints a one-time sign-in link, valid for 60 seconds, and opens it in your browser. The admin lives at `http://127.0.0.1:8780` and is reachable only from this machine.
 
-## Next
+On a remote server, forward the port first, from your own computer:
 
-- [Bots](../bots/) — everything on a bot's page.
-- [Scouts](../scouts/) — let bots use the internet and your keys safely.
-- [Inboxes](../inboxes/) — mail, alerts and feeds for your bots.
-- [Back up and move](../backup/) — keep a copy of everything.
-- `house update` moves to the newest release; `house --help` lists everything else.
+```sh
+ssh -L 8780:127.0.0.1:8780 <server>
+```
+
+Then run `house dashboard --no-open` on the server, and open the link it prints in the browser on your computer.
+
+## What to do next
+
+- Tell your bot who it is and how to work: [Instructions, skills and memory](../instructions/).
+- Let it use your mail, documents or calendar: [Connectors](../connectors/).
+- Add more bots, each with its own job: [Bots](../bots/).
+- Have it do things on a schedule: [Scheduled tasks](../schedules/).
+- Wake it up on new mail, feeds or alerts: [Inboxes](../inboxes/).
+- Keep a copy of everything: [Back up and move](../backup/).
+
+`house --help` lists every command.

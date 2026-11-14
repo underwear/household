@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mailConnectionSchema, mailSendSchema, type MailConnectionInput, type MailConnectionView, type MailConnectorsView, type MailSendInput, type MailSendView } from "../core/mail-connectors";
+import { MAIL_NO_CHAT, mailConnectionSchema, mailSendSchema, type MailConnectionInput, type MailConnectionView, type MailConnectorsView, type MailSendInput, type MailSendView } from "../core/mail-connectors";
 import type { House } from "../core/household";
 import { HouseholdError } from "../core/errors";
 import type { PetIdentity } from "../infra/agent-api";
@@ -267,8 +267,11 @@ export class MailConnectors {
         const decision = new Promise<"approved" | "denied" | "cancelled">(resolve => { settle = resolve; });
         this.waiting.set(id, { decide: settle, controller });
         const timer = setTimeout(() => this.cancel(id, "Approval expired before submission."), Math.max(0, Date.parse(s.expiresAt) - this.now()));
+        // The owner decides in the bot's chat. No card there (a bot in no channel, a chat that went away): nothing
+        // could approve this, so it ends now with why, instead of waiting out its ten minutes unseen.
         if (this.approval) void this.approval.ask(caller, this.sendView(s), controller.signal).then(answer => {
           if (answer && this.waiting.has(id)) this.decide(s.house, id, answer);
+          else if (!answer && !controller.signal.aborted && this.waiting.has(id)) this.cancel(id, MAIL_NO_CHAT);
         }).catch(() => {});
         const answer = await decision;
         clearTimeout(timer); this.waiting.delete(id); controller.abort();

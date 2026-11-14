@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { MailConnectors } from "../../src/app/mail-connectors";
+import { MailConnectors, type MailApproval } from "../../src/app/mail-connectors";
 import { mailConnectorTools } from "../../src/app/mail-connector-tools";
 import { mailConnectorRoutes } from "../../src/app/mail-connector-routes";
 import { mailApprovalCard } from "../../src/app/mail-approval";
@@ -13,7 +13,7 @@ const caller = { house: "home", pet: "alice" };
 const endpoint = { host: "127.0.0.1", port: 1143, security: "starttls", username: "user@example.test", password: "private-password" };
 const config = (sendPolicy = "approval") => mailConnectionSchema.parse({ title: "Mail", email: "sender@example.test", imap: endpoint, smtp: { ...endpoint, port: 1025 }, sendPolicy, pets: ["alice"] });
 const message = (clientRequestId = "one") => ({ clientRequestId, to: ["recipient@example.test"], subject: "A subject", text: "Message body" });
-function setup(store = new SqliteStore(":memory:"), now?: () => number) {
+function setup(store = new SqliteStore(":memory:"), now?: () => number, approval?: MailApproval) {
   const calls: { op: string; params: Record<string, any> }[] = [];
   let attachment = "original bytes";
   let behavior: MailDriver = async (_config, op, params) => {
@@ -27,7 +27,7 @@ function setup(store = new SqliteStore(":memory:"), now?: () => number) {
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const saved: { name: string; bytes: string }[] = [];
   const files = { read: async () => Buffer.from(attachment), save: async (_c: unknown, name: string, bytes: Uint8Array) => { saved.push({ name, bytes: Buffer.from(bytes).toString() }); return ".household/inbox/test.txt"; } };
-  const service = new MailConnectors(store, files, undefined, driver, now);
+  const service = new MailConnectors(store, files, approval, driver, now);
   service.setHouses([house, { ...house, name: "other" }]);
   const connect = async (policy = "approval", changes: object = {}) => (await service.save("home", { ...config(policy), ...changes })).id;
   const pending = async () => { await waitFor(() => service.list("home").sends.some(s => s.state === "pending")); return service.list("home").sends.find(s => s.state === "pending")!; };
@@ -99,6 +99,21 @@ test("send tool blocks before SMTP until approval, preserving exact attachment s
   expect(Buffer.from(wire.attachments[0].data, "base64").toString()).toBe("original bytes");
   expect(s.calls.find(c => c.op === "send")!.params.recipients).toEqual(["recipient@example.test", "hidden@example.test"]);
   expect(s.service.list("home").sends[0]).not.toHaveProperty("raw");
+});
+
+test("an approval no chat can show ends at once with why, and sends nothing", async () => {
+  const s = setup(undefined, undefined, { ask: async () => undefined });
+  const id = await s.connect();
+  const result = await s.service.sendMessage(caller, id, message());
+  expect(result.state).toBe("cancelled");
+  expect(result.detail).toContain("No chat could show the owner this approval");
+  expect(s.calls.some(c => c.op === "send")).toBe(false);
+});
+
+test("an answer from the chat card decides the approval", async () => {
+  const s = setup(undefined, undefined, { ask: async () => "approved" });
+  const id = await s.connect();
+  expect((await s.service.sendMessage(caller, id, message())).state).toBe("sent");
 });
 
 test("denial resolves the original send with no SMTP; duplicate clientRequestId never resends", async () => {

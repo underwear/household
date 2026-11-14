@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HTTP previews — Household docs</title>
-  <meta name="description" content="A bot shows you a web app from its VM by a link: you approve each one, it lives 15 minutes, and you choose who can open it.">
-  <meta property="og:title" content="HTTP previews">
+  <title>Previews — Household docs</title>
+  <meta name="description" content="A bot shows you a web app it runs by a link: you approve each one, and choose who can open it.">
+  <meta property="og:title" content="Previews">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/previews/">
   <meta property="og:type" content="article">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,35 +172,41 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="./" aria-current="page">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="./" aria-current="page">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
-    <article><p class="crumb">Bots</p><h1>HTTP previews</h1>
-<p>A bot can show you a web app running in its VM — a site it is building, a dev server with live reload, a dashboard — by a link you open in your browser. Each link needs your approval and lives 15 minutes.</p>
-<h2 id="how-it-goes">How it goes</h2>
+    <article><p class="crumb">What bots can reach</p><h1>Previews</h1>
+<p class="lead">A bot can show you a web app running in its VM, such as a site it is building, a dev server with live reload, or a dashboard, through a link you open in your browser. You approve each link, and it lives for 15 minutes.</p>
+<h2 id="turn-them-on">Turn them on</h2>
+<p>Previews are off in a new workspace. Open <strong>Workspace → Settings</strong>, switch on <strong>HTTP previews</strong> under <strong>Features</strong>, and <strong>Save</strong>. Or from the command line:</p>
+<pre><code class="language-sh">house features home preview=on
+</code></pre>
+<p>Turning them off closes any open links.</p>
+<h2 id="how-a-preview-goes">How a preview goes</h2>
 <ol>
-<li><strong>The bot starts the app</strong> in its VM and asks to show it: the port, a title and why.</li>
-<li><strong>You approve.</strong> A card in the chat says who wants to show what, the port, where the link will be and that it has no login. Choose <strong>Open for 15 minutes</strong> or <strong>Cancel</strong>.</li>
-<li><strong>The bot sends you the link.</strong> Open it in your browser. Pages, assets and WebSockets (live reload) work.</li>
+<li><strong>The bot starts the app</strong> in its VM and asks to show it to you: which port, a title, and why.</li>
+<li><strong>You approve.</strong> A card in the chat says which bot wants to show what, the port, where the link will be, and that it has no login. Choose <strong>Open for 15 minutes</strong> or <strong>Cancel</strong>.</li>
+<li><strong>You get the link.</strong> The card changes to show it, and the bot is told. Open it in your browser. Pages, images, scripts and live reload all work.</li>
 <li><strong>It closes</strong> when the bot is done, when you press <strong>Close</strong>, or after 15 minutes. The app keeps running in the VM; only the link stops. Showing it again needs a new approval.</li>
 </ol>
-<p>Open previews show on the bot's <strong>Overview</strong> and on <strong>Workspace → Previews</strong>, with <strong>Close</strong> for each.</p>
+<p>Open previews are listed on the bot's <strong>Overview</strong> and on <strong>Workspace → Previews</strong>, each with <strong>Close</strong>.</p>
+<p>Sideworkers can show previews from their own VM the same way.</p>
 <h2 id="who-can-open-the-link">Who can open the link</h2>
-<p>Set in <strong>Workspace → Settings → HTTP previews</strong>:</p>
+<p>Set this on <strong>Workspace → Previews</strong> under <strong>Who can open the links</strong>:</p>
 <ul>
-<li><strong>This computer only</strong> (default) — links on <code>127.0.0.1</code>: they open only on the machine Household runs on.</li>
-<li><strong>Another address</strong> — listen on an address of this machine and give the host people will open, like <code>mac-mini.local</code>. Who can reach it depends on your network and firewall: Household opens no ports or tunnels.</li>
+<li><strong>This computer only</strong> (the default) — links on <code>127.0.0.1</code>. They open only on the machine Household runs on.</li>
+<li><strong>Another address</strong> — Household listens on an address of this machine (<strong>Listen on</strong>, for example <code>0.0.0.0</code>) and puts the host people will open in the links (<strong>Links use</strong>, for example <code>mac-mini.local</code>). Who can actually reach it depends on your network and firewall: Household opens no ports or tunnels for you.</li>
 </ul>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>There is no login.</strong> Anyone who can reach the link sees the app for those 15 minutes. Approve only what you would show on a shared screen.</p>
+<p>Changing this closes the links that are open now.</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>Links have no login.</strong> Anyone who can reach a link sees the app for those 15 minutes. Approve only what you would show on a shared screen, and keep <strong>This computer only</strong> unless you need more.</p>
 <h2 id="limits">Limits</h2>
 <ul>
-<li>One port of the bot's own VM per preview; HTTP and WebSocket only, not other TCP.</li>
-<li>15 minutes at most. Asking again for the same port returns the same link, without extending it.</li>
-<li>Restarting the bot or Household, or turning previews off, closes its links. Changing who can open them closes the open ones too.</li>
-<li>Sideworkers can show previews of their own VM the same way.</li>
+<li>One port of the bot's own VM per preview. Web pages and WebSockets work; other kinds of connections do not.</li>
+<li>15 minutes at most. If the bot asks again for a port that is already open, it gets the same link with the same time left.</li>
+<li>Restarting the bot or Household closes its links.</li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-goes">How it goes</a></li><li><a href="#who-can-open-the-link">Who can open the link</a></li><li><a href="#limits">Limits</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#turn-them-on">Turn them on</a></li><li><a href="#how-a-preview-goes">How a preview goes</a></li><li><a href="#who-can-open-the-link">Who can open the link</a></li><li><a href="#limits">Limits</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

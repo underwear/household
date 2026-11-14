@@ -17,7 +17,7 @@ import { WorkspacesTable } from "./components/workspaces";
 import { KeyDialog, KeysSection } from "./components/keys";
 import { AllowlistSection, TemporaryNetworkSection, allowDialog, presetDialog, revokeTemporaryDialog } from "./components/workspace";
 import { OwnerDialog, OwnersSection } from "./components/owners";
-import { BotDialog, BotsPage, keyLabel, effortForModel, useHarnessForm } from "./components/bots";
+import { BotDialog, BotsPage, botNameFrom, harnessLabel, keyLabel, effortForModel, useHarnessForm } from "./components/bots";
 import { BotResources } from "./components/bot-resources";
 import { WorkspaceOverviewPage } from "./components/workspace-overview";
 import { BotEnvironment, TEMPLATES } from "./components/bot-environment";
@@ -152,7 +152,7 @@ test("key screens render", () => {
   expect(pets).toContain('<span class="avatar large" aria-hidden="true">🦉</span>'); // the emoji, not the first letter
   expect(pets).toContain('<span class="avatar large" aria-hidden="true">🤖</span>');
   expect(pets).toContain("Not started");
-  expect(pets).toContain('<span class="ellipsis">claude-code-tmux</span><span class="bot-card-model"><span class="ellipsis" title="opus">opus</span>');
+  expect(pets).toContain('<span class="ellipsis">Claude Code</span><span class="bot-card-model mono"><span class="ellipsis" title="opus">opus</span>'); // the harness as people call it
   expect(pets).toContain("unknown model &#x27;gpt-9&#x27;"); // what is wrong, on its card
   expect(pets).toContain('<span class="tag bot-card-mode" title="Permission mode">Manual</span>'); // its mode as people call it
   expect(pets).toMatch(/<span class="tag" title="Reasoning effort"><svg[^>]*>.*?<\/svg>default<\/span>/);
@@ -213,16 +213,16 @@ test("the forms render with what they edit: a channel's bots to tick and its def
   expect(groupForm).toMatch(/Forward General to the default bot<\/span><button type="button" role="switch" aria-checked="true"/);
   expect(groupForm).toContain("forwarded to the default bot&#x27;s own topic");
   const wizard = form(<BotDialog agents={agents} keys={keys} house={work} capacity={capacity} onClose={() => {}} save={async () => {}} />);
-  expect(wizard).toContain('<li class="current" aria-current="step">Bot</li><li>Harness</li><li>Resources</li>'); // three steps, the first one now
+  expect(wizard).toContain('<li class="current" aria-current="step">Bot</li><li>Harness</li></ol>'); // two steps, the first one now: the size is folded under the harness
   expect(wizard).toContain(">Display name<");
   expect(wizard).toContain(">Next<");
   // The channels it joins, on the first step: the workspace's, none ticked when there are several to choose from.
-  expect(wizard).toContain('<legend class="field-label">Channels</legend>');
-  expect(wizard).toContain("<span>DM · Telegram Bot DM (threaded)</span>");
-  expect(wizard).not.toMatch(/type="checkbox" checked=""/);
+  expect(wizard).toContain('<span class="field-label">Channels</span>');
+  expect(wizard).toMatch(/<span class="strong">DM<\/span><span class="hint">Telegram Bot DM \(threaded\)<\/span>/);
+  expect(wizard).not.toMatch(/role="switch" class="switch" checked=""/);
   const only = form(<BotDialog agents={agents} keys={keys} house={{ ...work, channels: [work.channels[0]!] }} capacity={capacity} onClose={() => {}} save={async () => {}} />);
-  expect(only).toMatch(/<input type="checkbox" checked=""\/><span>DM · Telegram Bot DM \(threaded\)<\/span>/); // the only one: ticked already
-  expect(form(<BotDialog agents={agents} keys={keys} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />)).toContain("No channels in lab yet. Add one on the workspace&#x27;s Channels page");
+  expect(only).toMatch(/role="switch" class="switch" checked=""/); // the only one: on already
+  expect(form(<BotDialog agents={agents} keys={keys} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />)).toContain("No channels in lab yet. Add one on the Channels page");
   const newBot = form(<HarnessFields agents={agents} keys={keys} />);
   expect(newBot).toContain('<option value="opus" selected="">opus</option>'); // the harness's default
   // Its permission mode, the harness's default selected, named as people call it; a harness without modes has no field.
@@ -276,7 +276,7 @@ test("a dialog's first focus: its first field you can change, else its submit bu
   expect(firstFocus([cancel, submit], form, true, true)).toBe(cancel);
   // The fields come in that order in the forms, and nothing else claims the focus.
   const pet = renderToStaticMarkup(<BotDialog agents={agents} house={lab} capacity={capacity} onClose={() => {}} save={async () => {}} />);
-  expect(pet).toContain('placeholder="my_bot"'); // the wizard starts with its name
+  expect(pet).toMatch(/^(?:(?!<input).)*<input[^>]*placeholder="Sibling"/); // the wizard starts with its display name
   expect(pet).not.toContain("<select");
   expect(pet).not.toContain("autofocus");
 });
@@ -633,4 +633,14 @@ test("a Google account's access in words: whole, none, or the services Google le
   expect(accessWords({ services: ["gmail", "drive"], writable: ["gmail", "drive"] })).toBe("read and write");
   expect(accessWords({ services: ["gmail", "drive"], writable: [] })).toBe("read only");
   expect(accessWords({ services: ["gmail", "drive", "calendar"], writable: ["calendar"] })).toBe("Calendar writable");
+});
+
+test("a new bot's config name follows its display name; harnesses go by the names people know", () => {
+  expect(botNameFrom("Sous Chef")).toBe("sous_chef");
+  expect(botNameFrom("Café 2")).toBe("cafe_2");
+  expect(botNameFrom("Пупс")).toBe("");
+  expect(botNameFrom("42 bots")).toBe("bots");
+  expect(harnessLabel("claude-code-tmux")).toBe("Claude Code");
+  expect(harnessLabel("codex-app-server")).toBe("Codex");
+  expect(harnessLabel("other-harness")).toBe("other-harness");
 });

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Updates and troubleshooting — Household docs</title>
+  <meta name="description" content="Update Household, check that it runs, read its logs, and fix the problems people meet most.">
+  <meta property="og:title" content="Updates and troubleshooting">
+  <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
+  <meta property="og:url" content="https://agents-household.dev/docs/operating/">
+  <meta property="og:type" content="article">
+  <meta property="og:image" content="https://agents-household.dev/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Household: a home for your harnesses. A bot answering in a Telegram thread.">
+  <meta property="og:site_name" content="Household">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#1f1d1a">
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f7f5f0;
+      --fg: #1f1d1a;
+      --muted: #6e6a62;
+      --line: #e3dfd6;
+      --green: #4f9e6e;
+      --card: #fffdf8;
+      --tile: #efebe3;
+      --font-sans: Onest, system-ui, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1f1d1a;
+        --fg: #f2f0eb;
+        --muted: #a39e94;
+        --line: #36332e;
+        --green: #72c191;
+        --card: #272521;
+        --tile: #33302b;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 400 16px/1.65 var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    .i { width: 18px; height: 18px; flex: none; }
+
+    /* top bar */
+    .top {
+      position: sticky; top: 0; z-index: 10; height: 60px;
+      display: flex; align-items: center; gap: 16px; padding: 0 24px;
+      background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; text-decoration: none; }
+    .brand svg { width: 28px; height: 28px; }
+    .brand .sep { color: var(--muted); font-weight: 400; }
+    .top .spacer { flex: 1; }
+    .top-link {
+      display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px;
+      border: 1px solid var(--line); border-radius: 9px; background: var(--card);
+      font-size: 14px; font-weight: 500; text-decoration: none; transition: background-color .15s, border-color .15s;
+    }
+    .top-link:hover { background: var(--tile); border-color: var(--muted); }
+
+    /* three columns */
+    .layout {
+      display: grid; grid-template-columns: 240px minmax(0, 720px) 200px; gap: 48px;
+      max-width: 1280px; margin: 0 auto; padding: 0 24px;
+    }
+    .side, .toc { position: sticky; top: 60px; align-self: start; max-height: calc(100vh - 60px); overflow-y: auto; padding: 32px 0; }
+    .side h3, .toc h3 {
+      font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px;
+    }
+    .side ul, .toc ul { list-style: none; margin: 0 0 24px; padding: 0; }
+    .side a {
+      display: block; padding: 6px 10px; border-radius: 8px; font-size: 15px; text-decoration: none; color: var(--muted);
+    }
+    .side a:hover { color: var(--fg); background: var(--tile); }
+    .side a[aria-current="page"] { color: var(--fg); background: var(--tile); font-weight: 500; }
+    .side .soon { display: block; padding: 6px 10px; font-size: 15px; color: var(--muted); opacity: .6; }
+    .toc a { display: block; padding: 4px 0 4px 12px; border-left: 1px solid var(--line); font-size: 14px; color: var(--muted); text-decoration: none; }
+    .toc a:hover { color: var(--fg); }
+    .toc a.on { color: var(--fg); border-left-color: var(--fg); }
+
+    /* article */
+    article { padding: 40px 0 96px; }
+    .crumb { font-size: 14px; color: var(--muted); margin: 0 0 8px; }
+    h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 16px; }
+    .lead { font-size: 19px; color: var(--muted); margin: 0 0 32px; }
+    h2 { font-size: 24px; line-height: 1.25; letter-spacing: -0.02em; font-weight: 600; margin: 56px 0 12px; scroll-margin-top: 80px; }
+    p { margin: 0 0 16px; }
+    code { font: 400 14px/1.5 var(--mono); background: var(--tile); border-radius: 5px; padding: 1px 5px; }
+    ul.list { margin: 0 0 16px; padding-left: 20px; }
+    ul.list li { margin: 4px 0; }
+    strong { font-weight: 600; }
+
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 8px 0 16px; font-size: 15px;
+      border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
+    th, td { text-align: left; vertical-align: top; padding: 12px 16px; }
+    th { font-weight: 500; color: var(--muted); background: var(--tile); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+    tr + tr td, thead + tbody tr td { border-top: 1px solid var(--line); }
+    td:first-child { font-weight: 600; white-space: nowrap; }
+    .term { display: inline-flex; align-items: center; gap: 10px; }
+    .tile { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--tile); flex: none; }
+    .tile .i { width: 16px; height: 16px; }
+
+    .note {
+      display: flex; gap: 12px; padding: 14px 16px; margin: 16px 0; border-radius: 12px;
+      background: var(--card); border: 1px solid var(--line); font-size: 15px;
+    }
+    .note .i { color: var(--green); margin-top: 3px; }
+    .note p { margin: 0; }
+
+    ol.steps { list-style: none; margin: 16px 0; padding: 0; counter-reset: s; }
+    ol.steps li { position: relative; padding: 0 0 22px 48px; counter-increment: s; }
+    ol.steps li::before {
+      content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%;
+      display: grid; place-items: center; background: var(--tile); font-weight: 600; font-size: 14px;
+    }
+    ol.steps li::after { content: ""; position: absolute; left: 15px; top: 34px; bottom: 4px; width: 1px; background: var(--line); }
+    ol.steps li:last-child::after { display: none; }
+    ol.steps h4 { margin: 2px 0 4px; font-size: 16px; font-weight: 600; }
+    ol.steps p { margin: 0; color: var(--muted); }
+
+    .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+    .next a {
+      display: block; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+      text-decoration: none; transition: background-color .15s, border-color .15s, transform .15s;
+    }
+    .next a:hover { background: var(--tile); border-color: var(--muted); transform: translateY(-1px); }
+    .next b { display: block; font-weight: 600; margin-bottom: 4px; }
+    .next span { color: var(--muted); font-size: 14px; }
+    @media (prefers-reduced-motion: reduce) { .next a { transition: none; } .next a:hover { transform: none; } }
+
+    @media (width < 1100px) {
+      .layout { grid-template-columns: 220px minmax(0, 1fr); }
+      .toc { display: none; }
+    }
+    @media (width < 760px) {
+      .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+      .side { position: static; max-height: none; padding: 20px 0 0; border-bottom: 1px solid var(--line); }
+      .side ul { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
+      .side h3 { display: none; }
+      .next { grid-template-columns: 1fr; }
+      h1 { font-size: 32px; }
+      td:first-child { white-space: normal; }
+      .term { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .top-link .label { display: none; }
+    }
+  pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1f1d1a"/><path d="M16 6.5 26 15v9.5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V15Z" fill="#f2f0eb"/><rect x="13.25" y="18.5" width="5.5" height="8" rx="1.25" fill="#1f1d1a"/><circle cx="24.5" cy="8" r="4.25" fill="#72c191" stroke="#1f1d1a" stroke-width="2"/></svg>Household <span class="sep">/</span> Docs</a>
+    <span class="spacer"></span>
+    <a class="top-link" href="https://github.com/underwear/household"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span class="label">GitHub</span></a>
+  </header>
+
+  <div class="layout">
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="./" aria-current="page">Updates and troubleshooting</a></li></ul></nav>
+
+    <article><p class="crumb">Running Household</p><h1>Updates and troubleshooting</h1>
+<p class="lead">Household runs on your own machine, so keeping it up to date and fixing it when something goes wrong is up to you. This page shows how to update it, keep it running in the background, check that it works, read its logs, and fix the problems people run into most.</p>
+<h2 id="update-household">Update Household</h2>
+<pre><code class="language-sh">house update
+</code></pre>
+<p>This downloads the newest release, checks it, and installs it next to the one you have. The release before stays on disk, so you can go back to it. To install a particular release instead, give its tag: <code>house update v0.10.2</code>. Release notes are on <a href="https://github.com/underwear/household/releases">GitHub</a>.</p>
+<p>The running Household keeps using the old release until you restart it:</p>
+<ul>
+<li>In a terminal: press Ctrl-C, then run <code>house start</code> again.</li>
+<li>As a background service: restart the service (see below).</li>
+</ul>
+<p>When it starts, the new release first copies your config and database aside, then moves them to the new format if it needs to. <code>house migrate</code> shows what it will change. Afterwards, <code>house doctor</code> and <code>house status</code> should both look clean.</p>
+<p><strong>To go back</strong> to the release before, stop Household, then:</p>
+<pre><code class="language-sh">house update &lt;previous tag&gt;
+house migrate backups               # the copies taken before migrating, newest first
+house migrate restore &lt;backup&gt;
+</code></pre>
+<p>An older release refuses a config or database that a newer one has already changed, which is why you restore the copy as well.</p>
+<h2 id="run-it-in-the-background">Run it in the background</h2>
+<p><code>house start</code> runs in the foreground and stops with the terminal. To keep Household running after you log out and after a reboot, run <code>house start</code> as a service: launchd on a Mac, a systemd user service on Linux.</p>
+<p>Set the service to start it again <strong>whenever it exits</strong>, a clean exit too: <code>KeepAlive</code> set to <code>true</code> for launchd, <code>Restart=always</code> for systemd. A service that restarts only &quot;on failure&quot; can leave Household down. Make sure the service's <code>PATH</code> finds <code>python3</code> and <code>openssl</code>.</p>
+<p>Run only one Household at a time. While the service runs it, stop and restart it through the service, not with Ctrl-C or <code>house start</code>.</p>
+<details>
+<summary>An example for a Mac (launchd)</summary>
+<p>Save this as <code>~/Library/LaunchAgents/dev.agents-household.house.plist</code>, with your user name in place of <code>YOU</code>:</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;
+&lt;plist version=&quot;1.0&quot;&gt;
+&lt;dict&gt;
+  &lt;key&gt;Label&lt;/key&gt;&lt;string&gt;dev.agents-household.house&lt;/string&gt;
+  &lt;key&gt;ProgramArguments&lt;/key&gt;
+  &lt;array&gt;
+    &lt;string&gt;/Users/YOU/.household/bin/house&lt;/string&gt;
+    &lt;string&gt;start&lt;/string&gt;
+  &lt;/array&gt;
+  &lt;key&gt;EnvironmentVariables&lt;/key&gt;
+  &lt;dict&gt;
+    &lt;key&gt;PATH&lt;/key&gt;&lt;string&gt;/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin&lt;/string&gt;
+  &lt;/dict&gt;
+  &lt;key&gt;RunAtLoad&lt;/key&gt;&lt;true/&gt;
+  &lt;key&gt;KeepAlive&lt;/key&gt;&lt;true/&gt;
+  &lt;key&gt;StandardOutPath&lt;/key&gt;&lt;string&gt;/Users/YOU/Library/Logs/household.log&lt;/string&gt;
+  &lt;key&gt;StandardErrorPath&lt;/key&gt;&lt;string&gt;/Users/YOU/Library/Logs/household.log&lt;/string&gt;
+&lt;/dict&gt;
+&lt;/plist&gt;
+</code></pre>
+<ul>
+<li>Start it: <code>launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.agents-household.house.plist</code></li>
+<li>Restart it, for example after an update: <code>launchctl kickstart -k gui/$(id -u)/dev.agents-household.house</code></li>
+<li>Stop it: <code>launchctl bootout gui/$(id -u)/dev.agents-household.house</code></li>
+</ul>
+</details>
+<details>
+<summary>An example for Linux (systemd)</summary>
+<p>Save this as <code>~/.config/systemd/user/household.service</code>:</p>
+<pre><code class="language-ini">[Unit]
+Description=Household
+
+[Service]
+ExecStart=%h/.household/bin/house start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+</code></pre>
+<ul>
+<li>Start it, and at every boot: <code>systemctl --user daemon-reload &amp;&amp; systemctl --user enable --now household</code></li>
+<li>Keep it running while you are logged out: <code>loginctl enable-linger $USER</code></li>
+<li>Restart it, for example after an update: <code>systemctl --user restart household</code></li>
+<li>Stop it: <code>systemctl --user stop household</code></li>
+<li>Its output: <code>journalctl --user -u household</code></li>
+</ul>
+</details>
+<h2 id="check-that-it-runs">Check that it runs</h2>
+<table>
+<thead>
+<tr><th>Command</th><th>What it tells you</th></tr>
+</thead>
+<tbody>
+<tr><td><code>house status</code></td><td>Whether Household is running, the admin's address, and each bot's state</td></tr>
+<tr><td><code>house doctor</code></td><td>What this machine, the config, your keys and your Telegram bots still need: ✓ is fine, ✗ needs fixing</td></tr>
+<tr><td><code>house ls</code></td><td>Your keys, workspaces, bots and channels, without any secret values</td></tr>
+<tr><td><code>house workspace show &lt;workspace&gt;</code></td><td>A workspace's bots and their state, channels, owners and allowed hosts</td></tr>
+<tr><td><code>house bot show &lt;workspace&gt; &lt;bot&gt;</code></td><td>What runs a bot, what it is given and what it uses now</td></tr>
+</tbody>
+</table>
+<p>In the admin, <strong>Workspaces</strong> shows every workspace at a glance, and <strong>Workspace → Bots</strong> shows each bot as <strong>Running</strong>, <strong>Not started</strong>, <strong>Stopped</strong> or <strong>Disabled</strong>.</p>
+<h2 id="read-the-logs">Read the logs</h2>
+<p><strong>In the admin</strong>, open a bot and press <strong>Logs</strong> at the top of its page:</p>
+<ul>
+<li><strong>Activity</strong> is what Household did with the bot: messages in and out, its turns, and problems. Press <strong>Network</strong> to see its network requests too, allowed or denied. Use <strong>Search…</strong> to filter, and <strong>Live</strong> or <strong>Paused</strong> to follow new lines or not.</li>
+<li><strong>Setup</strong>, <strong>On start</strong>, <strong>Docker</strong> and <strong>Kernel</strong> are logs from inside the bot's VM. <strong>Setup</strong> is the first place to look when a bot does not start.</li>
+</ul>
+<p><strong>Console</strong>, next to <strong>Logs</strong>, shows the bot's terminal as it is right now, read-only. It helps when the bot seems stuck on a question.</p>
+<p><strong>In a terminal:</strong></p>
+<pre><code class="language-sh">house logs --problems                       # only what went wrong
+house logs --bot &lt;bot&gt; -f                   # one bot, following new lines
+house logs --bot &lt;bot&gt; --kind network       # its network requests, and why one was denied
+house bot logs &lt;workspace&gt; &lt;bot&gt; --source setup
+house bot screen &lt;workspace&gt; &lt;bot&gt;          # its terminal right now
+</code></pre>
+<p><code>house logs</code> also takes <code>--workspace</code>, <code>--grep &lt;words&gt;</code> and <code>-n &lt;lines&gt;</code>, and it works while Household is stopped.</p>
+<h2 id="get-into-the-admin">Get into the admin</h2>
+<pre><code class="language-sh">house dashboard
+</code></pre>
+<p>It prints a one-time sign-in link and opens it in your browser. The link works once, for 60 seconds. If the admin says <strong>That link expired or was used</strong>, run the command again. <strong>Sign out</strong> ends your session; <code>house dashboard</code> signs you in again.</p>
+<p>The admin is at <code>http://127.0.0.1:8780</code> and listens only on this machine. On a remote server, forward the same port from your computer with <code>ssh -L 8780:127.0.0.1:8780 &lt;server&gt;</code>, run <code>house dashboard --no-open</code> on the server, and open the link on your computer.</p>
+<h2 id="common-problems">Common problems</h2>
+<p><strong><code>house: command not found</code> after installing.</strong> Add <code>~/.household/bin</code> to your <code>PATH</code>. The installer prints the exact line for your shell.</p>
+<p><strong><code>house doctor</code> says virtualization is unavailable.</strong> Bots need hardware virtualization. On Linux, <code>/dev/kvm</code> must exist and be usable by you: add yourself to its group and log in again. On a VPS, pick one that offers KVM or nested virtualization. Intel Macs are not supported.</p>
+<p><strong><code>python3</code> or <code>openssl</code> is missing.</strong> Install it (on a Mac, <code>brew install python3 openssl</code>; on Linux, your package manager). If Household runs as a service, make sure the service's <code>PATH</code> finds it.</p>
+<p><strong>&quot;daemon not running; start it with <code>house start</code>&quot;.</strong> Household is not running. Start it, or start its service.</p>
+<p><strong>&quot;a daemon is already running&quot;.</strong> Only one Household runs at a time. Your background service probably runs it already: check with <code>house status</code>.</p>
+<p><strong>Household stops right after it starts.</strong> Read the last lines it printed, or the service's log. <code>house doctor</code> points at config errors. If it says other users can read your config, run the <code>chmod 600</code> command it shows: the config holds your keys and bot tokens.</p>
+<p><strong>A bot stays starting, or shows Not started.</strong> Its first start downloads the VM image, which takes a minute or two. If it takes longer, open <strong>Logs → Setup</strong> on the bot's page, or run <code>house bot logs &lt;workspace&gt; &lt;bot&gt; --source setup</code>. A failing setup script is fixed on the bot's <strong>Environment</strong> tab.</p>
+<p><strong>A bot does not answer in the chat.</strong></p>
+<ul>
+<li>Check that Household runs and the bot is <strong>Running</strong>.</li>
+<li>Check that the bot is in that channel: the switch on its <strong>Channels</strong> tab.</li>
+<li>Check that you are an owner: <strong>Workspace → Channels → Owners</strong>. Only owners can give bots orders.</li>
+<li>Look at <strong>Console</strong>: the harness may be waiting for an answer on screen.</li>
+<li>For <strong>Telegram, a thread per bot</strong>, <code>house doctor</code> tells you if Threaded Mode is off. Turn it on in BotFather: <strong>Bot Settings → Threads Settings</strong>.</li>
+<li>For a Telegram group, Topics must be on, and the bot must be an admin with <strong>Manage topics</strong> and <strong>Delete messages</strong>.</li>
+<li>Use each Telegram bot token in one place only. If another program or another Household uses the same token, Telegram hands each message to only one of them.</li>
+</ul>
+<p><strong>Bots stop getting answers from the model.</strong></p>
+<ul>
+<li>A Claude sign-in ends about once a month. Your bots' chats get a reminder for five days before. Sign in again in <strong>Settings → Keys → Sign in again</strong>, or with <code>house key claude &lt;name&gt;</code>.</li>
+<li>After restoring a backup, a signed-in key shows &quot;Not signed in on this Household&quot;. Sign in again the same way.</li>
+<li>A Claude subscription token lasts a year. Make a new one with <code>claude setup-token</code>, and replace the old one in <strong>Settings → Keys</strong> or with <code>house key set &lt;name&gt;</code>.</li>
+<li>A subscription has a usage allowance. When it is used up, <strong>Settings → Keys</strong> says so, and bots on that key get no answers until it resets.</li>
+</ul>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> You can let bots go on past the allowance: edit the key and turn on <strong>Go on in overage (billed apart from the subscription)</strong>, or run <code>house key set &lt;name&gt; --allow-overage on</code>. Your provider bills that usage separately, so it costs extra money.</p>
+<p><strong>A bot cannot reach a website or service.</strong> It reaches only the hosts the workspace allows. A bot should ask you in the chat. You can also add it yourself: <strong>Workspace → Network → Domains allowlist → Add host</strong>. <code>house logs --bot &lt;bot&gt; --kind network</code> tells you why a request was denied. Private and local addresses are never allowed. See <a href="../network/">Network and secrets</a>.</p>
+<p><strong>Something broke after an update.</strong> Go back to the release before, as shown in <a href="#update-household">Update Household</a>, and report the problem on <a href="https://github.com/underwear/household/issues">GitHub</a>.</p>
+</article>
+
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#update-household">Update Household</a></li><li><a href="#run-it-in-the-background">Run it in the background</a></li><li><a href="#check-that-it-runs">Check that it runs</a></li><li><a href="#read-the-logs">Read the logs</a></li><li><a href="#get-into-the-admin">Get into the admin</a></li><li><a href="#common-problems">Common problems</a></li></ul></nav>
+  </div>
+  <script>
+    // highlight the section being read in "On this page": the last heading above the top fifth of the screen
+    const links = [...document.querySelectorAll(".toc a")];
+    const heads = [...document.querySelectorAll("article h2[id]")];
+    const mark = () => {
+      const line = innerHeight * 0.2;
+      const near = innerHeight + scrollY >= document.body.scrollHeight - 2; // at the bottom: the last section
+      const cur = near ? heads.at(-1) : heads.filter(h => h.getBoundingClientRect().top <= line).at(-1);
+      links.forEach(a => a.classList.toggle("on", !!cur && a.hash === "#" + cur.id));
+    };
+    addEventListener("scroll", mark, { passive: true });
+    mark();
+  </script>
+</body>
+</html>

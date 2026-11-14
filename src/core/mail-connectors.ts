@@ -44,6 +44,8 @@ export const mailSendSchema = z.strictObject({
   replyTo: mailMessageRef.optional(),
 }).refine(v => v.to.length + v.cc.length + v.bcc.length > 0 && v.to.length + v.cc.length + v.bcc.length <= 50, "Specify 1–50 recipients");
 export type MailSendInput = z.infer<typeof mailSendSchema>;
+/** Why an approval ended at once: no chat could show it to the owner (the admin says so on the account's row). */
+export const MAIL_NO_CHAT = "No chat could show the owner this approval: the bot may be in no channel. Nothing was sent; ask the owner to add the bot to a channel, then request again.";
 export type MailSendState = "preparing" | "pending" | "sending" | "sent" | "sent-copy-failed" | "denied" | "cancelled" | "failed" | "unknown";
 export interface MailSendView {
   id: string; connection: string; pet: string; from: string; to: string[]; cc: string[]; bcc: string[]; subject: string; text: string;

@@ -29,8 +29,9 @@ test("workspace profiles: the bot's own settings by default (said once), then ow
 
 test("profile editor reuses adapter controls with matching keys and native effort defaults", () => {
   const html = renderToStaticMarkup(<SideworkerProfileDialog agents={agents} keys={keys} taken={[]} profile={{ name: "quick", agent: "alpha", key: "alpha-key" }} onClose={() => {}} save={async () => {}} />);
-  expect(html).toContain('value="alpha" selected=""');
-  expect(html).toContain('<option value="beta">beta</option>');
+  expect(html).toContain('checked="" value="alpha"');
+  expect(html).toContain('<input type="radio" name="'); // the harnesses as choices
+  expect(html).toContain('value="beta"/>');
   expect(html).toContain('value="alpha-key" selected=""');
   expect(html).not.toContain('value="beta-key"');
   expect(html).toContain('value="alpha-fast" selected=""');

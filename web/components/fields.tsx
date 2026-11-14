@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Minus, Plus } from "lucide-react";
 import type { FieldHelp } from "../../src/core/channels";
 
@@ -164,22 +164,23 @@ export interface ChoiceOption {
   icon?: ReactNode;
 }
 
-/** One of a few options, each with a line on it (radio buttons drawn as cards). */
-export function ChoiceList({ label, options, value, onChange }: { label: string; options: ChoiceOption[]; value: string; onChange: (value: string) => void }) {
+/** One of a few options, each with a line on it (radio buttons drawn as cards); `grid`: short names in tiles, a few to a row. */
+export function ChoiceList({ label, options, value, onChange, grid }: { label: string; options: ChoiceOption[]; value: string; onChange: (value: string) => void; grid?: boolean }) {
   const name = useId();
+  const choices = options.map((option) => (
+    <label key={option.value} className="choice">
+      <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+      {option.icon}
+      <span className="stack gap-1">
+        <span className="strong">{option.label}</span>
+        {option.description && <span className="hint">{option.description}</span>}
+      </span>
+    </label>
+  ));
   return (
     <fieldset className="field">
       <legend className="field-label">{label}</legend>
-      {options.map((option) => (
-        <label key={option.value} className="choice">
-          <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
-          {option.icon}
-          <span className="stack gap-1">
-            <span className="strong">{option.label}</span>
-            {option.description && <span className="hint">{option.description}</span>}
-          </span>
-        </label>
-      ))}
+      {grid ? <div className="choice-grid">{choices}</div> : choices}
     </fieldset>
   );
 }
@@ -212,6 +213,26 @@ export function FormGroup({ title, children }: { title: string; children: ReactN
       <legend className="form-group-title">{title}</legend>
       {children}
     </fieldset>
+  );
+}
+
+/**
+ * A part of a form most owners never open (a server's address and port): its summary line, the fields under it.
+ * `open` opens it (when something inside needs a look) but never closes it: the owner closes it.
+ */
+export function Fold({ summary, open, children }: { summary: ReactNode; open?: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (open && ref.current) ref.current.open = true;
+  }, [open]);
+  return (
+    <details className="fold" ref={ref}>
+      <summary>
+        <ChevronRight size={14} aria-hidden className="field-help-chevron" />
+        <span className="ellipsis">{summary}</span>
+      </summary>
+      <div className="fold-body">{children}</div>
+    </details>
   );
 }
 

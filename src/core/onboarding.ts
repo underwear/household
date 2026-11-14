@@ -140,7 +140,7 @@ export const CHANNELS: ChannelOption[] = [
     label: "Slack DM",
     description: "A direct message with a Slack app of yours, in your Slack workspace. Bots answer in threads.",
     steps: [
-      "Create a Slack app from the Household manifest and install it in your workspace ([guide](https://github.com/underwear/household/blob/main/docs/slack.md#install)).",
+      "Create a Slack app from the Household manifest and install it in your workspace ([guide](https://agents-household.dev/docs/channels/#slack)).",
       "In the app's settings, copy the **Bot User OAuth Token** (OAuth & Permissions, `xoxb-…`).",
       "Under **Basic Information → App-Level Tokens**, make one with `connections:write` (`xapp-…`).",
       "Paste both here.",

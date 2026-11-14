@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inboxes — Household docs</title>
-  <meta name="description" content="Watch mail, feeds, health checks, alerts, a Telegram bot or your own endpoint and hand new events to your bots. Setup, sources, per-bot switches and the custom HTTP format.">
-  <meta property="og:title" content="Workspace inboxes">
+  <meta name="description" content="Watch mail, feeds, health checks, alerts and your own endpoints, and hand new events to your bots.">
+  <meta property="og:title" content="Inboxes">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/inboxes/">
   <meta property="og:type" content="article">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,80 +172,72 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
-    <article><p class="crumb">Sources and delivery</p><h1>Workspace inboxes</h1>
-<p>An inbox watches a source — mail, a feed, a health check, alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. Sources are checked from the host: passwords and tokens stay in the private Household config and never reach a bot's VM. Event contents are treated as untrusted data, never as your instructions.</p>
-<p>For live mailbox search, attachments, replies and SMTP sending, add a separate <a href="../mail-connector/">Mail connector</a>. An inbox only delivers new events and exposes their delivered history; it does not grant general mailbox access.</p>
+    <article><p class="crumb">Automation</p><h1>Inboxes</h1>
+<p class="lead">An inbox watches a source — a mailbox, a feed, a website, your alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. A new email arrives, a site goes down, a monitor fires: the bot gets it and can act on it without you asking.</p>
+<p>An inbox is not a <a href="../connectors/">connector</a>. A connector lets bots look things up in an account when they need to; it never wakes them. An inbox does the opposite: it brings new events to bots, but gives them no access to the account itself. Watching a mailbox in an inbox doesn't let bots search older mail or send replies. For that, also connect the mailbox as a connector.</p>
+<p>Sources are checked from Household's computer. Passwords, tokens and keys stay there and never reach a bot's VM. Bots treat event contents as outside data, never as your instructions.</p>
 <h2 id="add-an-inbox">Add an inbox</h2>
-<p>In <strong>Workspace → Inboxes</strong>, choose <strong>+ Add inbox</strong>:</p>
+<p>Open <strong>Workspace → Inboxes → + Add inbox</strong>. The form has three steps.</p>
 <ol>
-<li><strong>Source.</strong> Pick what to watch (see <a href="#sources">Sources</a>).</li>
-<li><strong>Connection.</strong> Enter the address and credentials, then <strong>Test and continue</strong>. A test posts nothing, tells no bot and does not move the inbox forward.</li>
-<li><strong>Delivery.</strong> Name it and choose how often to check: every minute, 5 or 15 minutes, or any interval from 1 minute to 24 hours. Choose a channel and:
+<li><strong>Source.</strong> Pick what to watch (see the sections below).</li>
+<li><strong>Connection.</strong> Enter the address and credentials, then press <strong>Test and continue</strong>. The test only checks the connection: it posts nothing and tells no bot. Web sources take credentials as request headers (<strong>+ Add header</strong>). Redirects are not followed, so enter the final address.</li>
+<li><strong>Delivery.</strong>
 <ul>
-<li><strong>Post events in the channel</strong> — on: one Workspace message per event in that channel. Off: only the bots get them.</li>
-<li><strong>Bots</strong> — for each bot in that channel, <strong>Receives</strong> and <strong>Silent</strong> (see <a href="#bots">Bots</a>). With posting on, you may leave every bot off for a plain channel feed; with posting off, at least one bot must receive.</li>
-<li><strong>On the first check</strong> — <em>Start from now</em> (default) skips what is already there; <em>Deliver what is there now</em> sends up to 50 current items, or the current state of a JSON or health check.</li>
+<li><strong>Name</strong> the inbox and choose how often to <strong>Check</strong>: every minute, every 5 or 15 minutes, or a custom interval from 1 minute to 24 hours.</li>
+<li>Pick the <strong>Channel</strong>. Bots reply about its events there.</li>
+<li><strong>Post events in the channel</strong>: on, everyone in the channel sees one message per event. Off, only the chosen bots get them.</li>
+<li>Under <strong>Bots</strong>, choose who receives the events (see <a href="#choose-which-bots-get-events">Choose which bots get events</a>).</li>
+<li><strong>On the first check</strong>: <strong>Start from now, skip what is there</strong> (the default), or <strong>Deliver what is there now (up to 50)</strong>.</li>
 </ul>
 </li>
 </ol>
-<p>Bots reply about an event in the inbox's channel.</p>
+<p>Press <strong>Add inbox</strong>. A workspace can have up to 30 inboxes.</p>
+<h2 id="choose-which-bots-get-events">Choose which bots get events</h2>
+<p>Each bot has two switches for an inbox:</p>
+<ul>
+<li><strong>Receives</strong>: the bot gets the inbox's events. Only bots in the inbox's channel can receive; add a bot to the channel first.</li>
+<li><strong>Silent</strong>: events go to the bot's inbox history only. It isn't woken for them, but it can look them up and search them when it needs to.</li>
+</ul>
+<p>With posting on, you can leave every bot off and use the inbox as a plain feed in the channel. With posting off, at least one bot must receive.</p>
+<p>You can set the same switches from the bot's side: a bot's <strong>Inboxes</strong> tab lists every inbox of the workspace with <strong>Receives</strong> and <strong>Silent</strong>.</p>
+<p>A busy bot gets new events when it is free. A bot that was paused or stopped gets a short catch-up summary instead of a pile of messages, and reads the details from its history. A bot only sees events sent to it: switching <strong>Receives</strong> on later doesn't open older ones. Inbox history stays on Household's computer, survives pausing or removing an inbox, and is part of <a href="../backup/">backups</a>.</p>
 <h2 id="manage-inboxes">Manage inboxes</h2>
-<p>Each inbox shows its state (Watching, Retrying, Needs attention, Paused), when it was last checked, when it checks next, and how many events wait for delivery. <strong>Recent events</strong> under the list shows what arrived lately.</p>
+<p>Each inbox on the Inboxes page shows its state, when it was last checked, when it checks next, and how many events wait for delivery. States: <strong>Watching</strong>, <strong>First check soon</strong>, <strong>Checking…</strong>, <strong>Retrying</strong>, <strong>Needs attention</strong>, <strong>Paused</strong>. <strong>Recent events</strong> below the list shows what arrived lately.</p>
 <ul>
 <li><strong>Check now</strong> checks right away.</li>
-<li><strong>Edit</strong> changes anything. Changing the source or the channel is refused while events still wait for delivery: let them go out, or remove the inbox.</li>
-<li><strong>Pause</strong> stops checking and keeps its place; <strong>Resume</strong> goes on from there.</li>
-<li><strong>Remove</strong> stops it and drops waiting events. Posts already in the channel and the bots' event history stay.</li>
+<li><strong>Edit</strong> opens the delivery settings; <strong>Back</strong> reaches the connection. You can't change the source or channel while events still wait for delivery.</li>
+<li><strong>Pause</strong> stops checking and keeps the inbox's place. <strong>Resume</strong> carries on from there.</li>
+<li><strong>Remove</strong> stops it and drops events still waiting. What it already posted stays in the channel, and bots keep their history.</li>
 </ul>
-<h2 id="bots">Bots</h2>
-<p>A bot's <strong>Inboxes</strong> tab lists every inbox of its workspace with two switches:</p>
-<ul>
-<li><strong>Receives</strong> — the bot gets the inbox's events. It must be in the inbox's channel first.</li>
-<li><strong>Silent</strong> — events go to the bot's inbox history only: it is not woken for them and can look them up when it needs to.</li>
-</ul>
-<p>The same switches are in the inbox's own form. The only bot of an inbox that does not post in its channel cannot switch off there: turn posting on or add another bot first.</p>
-<p>A busy bot takes events when it is idle. A paused bot, or one whose VM was down, gets a short <strong>catch-up digest</strong> instead of a pile of messages: counts per inbox, the time range and a few titles. It reads the full events from its history.</p>
-<p>Bots read and search their history with three tools:</p>
-<ul>
-<li><code>inbox_list</code> — the inboxes it receives, and which of them are silent.</li>
-<li><code>inbox_history</code> — events by inbox and date, newest first.</li>
-<li><code>inbox_search</code> — events by words in their title, text and metadata.</li>
-</ul>
-<p>A bot sees only events that were addressed to it; subscribing later does not open older events. History is kept on the host, is not cleared by pausing or removing an inbox, and is part of backups.</p>
-<h2 id="sources">Sources</h2>
-<table>
-<thead>
-<tr><th>Source</th><th>You enter</th><th>What arrives</th></tr>
-</thead>
-<tbody>
-<tr><td>IMAP</td><td>Server, port (TLS: 993; STARTTLS: 143), connection security, username, password or app password, folder</td><td>New mail. Messages stay unread.</td></tr>
-<tr><td>POP3</td><td>Server, port (TLS: 995; STARTTLS: 110), connection security, username, password or app password</td><td>New mail. Nothing is deleted.</td></tr>
-<tr><td>RSS / Atom</td><td>Feed URL</td><td>New entries</td></tr>
-<tr><td>Health check</td><td>URL, expected status, timeout, failures before an alert</td><td>Down and recovered</td></tr>
-<tr><td>JSON watcher</td><td>URL, the whole response or selected fields</td><td>Changed values</td></tr>
-<tr><td>Grafana</td><td>Base URL, <code>Authorization: Bearer &lt;service account token&gt;</code></td><td>Alerts and their state changes</td></tr>
-<tr><td>Datadog</td><td>API URL of your region, monitor ID, <code>DD-API-KEY</code> and <code>DD-APPLICATION-KEY</code></td><td>State changes of that monitor</td></tr>
-<tr><td>Telegram Bot Updates</td><td>Token of a dedicated bot</td><td>Updates the bot receives</td></tr>
-<tr><td>Custom HTTP</td><td>URL and headers</td><td>Events your endpoint returns (<a href="#custom-http">format</a>)</td></tr>
-</tbody>
-</table>
-<p>Every URL source accepts request headers for credentials. Redirects are not followed: enter the final URL.</p>
-<p><strong>Mail.</strong> Needs Python 3.9+ on the host and a provider that accepts a password or app password; OAuth-only mailboxes are not supported. Choose <strong>TLS</strong> for encryption from the start, or <strong>STARTTLS</strong> to upgrade the connection before login (POP3 uses STLS). Encryption and certificate verification are required in both modes; there is no fallback to plaintext. Existing inboxes keep using TLS. Attachments are not forwarded; mail arrives as plain text, up to 16,000 characters per event.</p>
-<p><strong>Proton Mail Bridge.</strong> Run Bridge on the same computer as Household. In Bridge, open the account's mailbox settings and use its IMAP host (usually <code>127.0.0.1</code>), port (usually <code>1143</code>), username and generated password, not your Proton account password. Choose the connection mode configured in Bridge, usually <strong>STARTTLS</strong>. In Bridge's <strong>Settings → Advanced settings → Export TLS certificates</strong>, export the certificate, then paste its PEM contents into <strong>Trusted certificate</strong> in Household. Do not paste the private key. This trusts the supplied certificate for this inbox while still checking the server name and expiry. If Bridge regenerates its certificate, export and replace it here. Test the connection, then select delivery. See <a href="https://proton.me/support/comprehensive-guide-to-bridge-settings">Bridge settings</a>.</p>
-<p><strong>RSS / Atom.</strong> RSS 2.0, RSS 1.0 and Atom. An edited entry with the same ID is not sent again.</p>
-<p><strong>Health check.</strong> A check passes when the URL answers the expected status (200 by default) within the timeout (10 s by default). After 3 failures in a row (1–10) the bots get one <em>down</em> event; the first passing check after it sends <em>recovered</em>. A site already down when you add it still alerts. The response body is ignored.</p>
-<p><strong>JSON watcher.</strong> Any JSON endpoint. Watch the whole response, or list fields as <a href="https://www.rfc-editor.org/rfc/rfc6901">JSON Pointer</a> paths, one per line:</p>
+<p>Changing a password or header keeps the inbox's place. Changing the address, server, account, folder or monitor starts it over, as on a first check.</p>
+<h2 id="mail">Mail</h2>
+<p>Two sources watch a mailbox for new mail: <strong>IMAP</strong> (a chosen folder, usually <code>INBOX</code>) and <strong>POP3</strong>. Neither changes your mailbox: IMAP leaves messages unread, POP3 never deletes. Mail arrives as plain text, up to 16,000 characters per event, without attachments.</p>
+<p>Enter the <strong>Mail server</strong>, <strong>Port</strong> and <strong>Connection security</strong> from your provider's help pages, then your <strong>Username</strong> and <strong>Password or app password</strong>. <strong>TLS</strong> encrypts from the start; <strong>STARTTLS</strong> requires encryption before signing in. Both check the server's certificate, and neither ever falls back to an unencrypted connection. Many providers want an app password rather than your normal one. Mailboxes that allow only signing in through Google or Microsoft are not supported. Mail needs Python 3.9 or later on Household's computer.</p>
+<p><strong>Proton Mail</strong> works through Proton Mail Bridge, running on the same computer as Household. Use the IMAP server, port and password Bridge shows for your account (usually <code>127.0.0.1</code>, port <code>1143</code>, <strong>STARTTLS</strong>) — not your Proton password. In Bridge, open <strong>Settings → Advanced settings → Export TLS certificates</strong> and paste the certificate into <strong>Trusted certificate (optional)</strong>; never paste the private key. If Bridge makes a new certificate, paste the new one.</p>
+<h2 id="feeds">Feeds</h2>
+<p><strong>RSS / Atom</strong> delivers new entries from a feed: articles, releases, changelogs. Enter the <strong>Feed URL</strong>. An entry that is edited later is not sent again.</p>
+<h2 id="health-checks">Health checks</h2>
+<p><strong>Health check</strong> watches that an address answers. Enter its <strong>Endpoint URL</strong> and set the <strong>Expected status</strong> (200 by default), the <strong>Timeout, s</strong> (10 by default) and <strong>Failures to alert</strong> (3 in a row by default, 1–10). After that many failures, bots get one &quot;down&quot; event; the first passing check after it sends &quot;recovered&quot;. A site that is already down when you add it still alerts.</p>
+<h2 id="changes-in-json">Changes in JSON</h2>
+<p><strong>JSON watcher</strong> watches an <strong>Endpoint URL</strong> that returns JSON and sends an event when the answer changes. Watch the <strong>Whole response</strong>, or <strong>Selected fields</strong>, one path per line:</p>
 <pre><code class="language-text">/price
 /status
 /items/0/available
 </code></pre>
-<p>Key order and whitespace don't count as changes; array order does. A field appearing or disappearing is a change.</p>
-<p><strong>Grafana and Datadog.</strong> Give the token read access to the alerts or the monitor. One Datadog inbox watches one monitor. A Grafana alert that disappears arrives as &quot;No longer active&quot;: it may be resolved or deleted.</p>
-<p><strong>Telegram Bot Updates.</strong> Use a bot made for this inbox, not one of your channels' bots: checking takes the updates off Telegram's queue, so nothing else may read that bot, and a bot with a webhook is refused. Household never sends messages as this bot. Telegram keeps waiting updates for 24 hours only.</p>
+<p>Key order and spacing don't count as changes; the order of list items does.</p>
+<h2 id="alerts">Alerts</h2>
+<ul>
+<li><strong>Grafana</strong> delivers alerts and their state changes. Enter your <strong>Grafana base URL</strong> and put a service account token in the <code>Authorization</code> header (<code>Bearer &lt;token&gt;</code>).</li>
+<li><strong>Datadog</strong> delivers state changes of one monitor. Enter your region's <strong>Datadog API base URL</strong> and the <strong>Monitor ID</strong>, and fill in the <code>DD-API-KEY</code> and <code>DD-APPLICATION-KEY</code> headers.</li>
+</ul>
+<p>Give the token or keys read access only. An alert that fires and clears between two checks can be missed.</p>
+<h2 id="telegram-bot">Telegram bot</h2>
+<p><strong>Telegram Bot Updates</strong> delivers what people send to a Telegram bot — handy for a public intake bot whose messages your own bots should handle. Create a new bot with BotFather just for this inbox and paste its <strong>Bot token</strong>. Don't reuse a bot from your channels: the inbox takes the bot's updates, so nothing else can read them, and a bot with a webhook is refused. Household never sends messages as this bot. Telegram keeps waiting updates for 24 hours only.</p>
 <h2 id="custom-http">Custom HTTP</h2>
-<p>Household sends <code>GET &lt;your URL&gt;?limit=50</code>, adding <code>cursor=&lt;value&gt;</code> once you have returned one. Put credentials in headers. Answer <code>200</code> with:</p>
+<p><strong>Custom HTTP</strong> reads events from an <strong>Endpoint URL</strong> you run.</p>
+<p>Household calls <code>GET &lt;your URL&gt;?limit=50</code>, adding <code>cursor=&lt;value&gt;</code> once you have returned one. Answer <code>200</code> with:</p>
 <pre><code class="language-json">{
   &quot;version&quot;: 1,
   &quot;items&quot;: [
@@ -259,43 +253,13 @@
   &quot;nextCursor&quot;: &quot;184&quot;
 }
 </code></pre>
-<table>
-<thead>
-<tr><th>Field</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>version</code></td><td>Always <code>1</code></td></tr>
-<tr><td><code>items</code></td><td>Up to 50 events, oldest first; empty when there is nothing new</td></tr>
-<tr><td><code>id</code></td><td>Required, stable, up to 512 characters. A changed event needs a new ID.</td></tr>
-<tr><td><code>title</code></td><td>Required, up to 300 characters</td></tr>
-<tr><td><code>text</code></td><td>Required plain text, up to 16,000 characters</td></tr>
-<tr><td><code>url</code></td><td>Optional HTTP(S) link</td></tr>
-<tr><td><code>occurredAt</code></td><td>Optional time with a timezone</td></tr>
-<tr><td><code>metadata</code></td><td>Optional JSON object, up to 16 KiB; bots can search it</td></tr>
-<tr><td><code>nextCursor</code></td><td>Optional, up to 4,096 characters; where to continue next time</td></tr>
-</tbody>
-</table>
-<p>Without a cursor, return the latest 50 events; with one, the next events after it. Endpoints without cursors can return a recent window: Household remembers the last 5,000 IDs of each inbox.</p>
-<h2 id="when-something-fails">When something fails</h2>
-<p>A failing source is retried with growing pauses: up to an hour, or the inbox's own interval when that is longer. After 3 failed checks in a row, the inbox shows <strong>Needs attention</strong> with the reason, and its bots get one notice; they get one more when it recovers. An inbox without bots shows the problem on the page only.</p>
-<p>Good to know:</p>
-<ul>
-<li>An event is saved before it is delivered, so a restart does not lose it. Around a crash, a channel post can rarely appear twice, and a bot may get an event it had already started on: the digest tells it so.</li>
-<li>Checks see snapshots: an alert that fires and clears between two checks can be missed.</li>
-<li>Changing a password or header keeps the inbox's place. Changing the URL, server, account, folder or monitor starts it over, as on its first check.</li>
-<li>Changing mail connection security or its trusted certificate also keeps the inbox's place; changing the port starts it over.</li>
-<li>Switching posting on or off applies to new events; switching a bot to Silent applies at once.</li>
-<li>The host can reach internal addresses your bots cannot: only you configure sources.</li>
-</ul>
-<h2 id="references">References</h2>
-<ul>
-<li><a href="https://core.telegram.org/bots/api#getting-updates">Telegram Bot API: getting updates</a></li>
-<li><a href="https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/api/generated_base_api_alertmanager.go">Grafana Alertmanager API</a></li>
-<li><a href="https://docs.datadoghq.com/api/latest/monitors/get-a-monitors-details/">Datadog monitor details API</a></li>
-</ul>
+<p><code>items</code> holds up to 50 events, oldest first. Each needs a stable <code>id</code> (a changed event needs a new one), a <code>title</code> and plain <code>text</code> (up to 16,000 characters); <code>url</code>, <code>occurredAt</code> and a small <code>metadata</code> object are optional. Without a cursor, return the latest events; with one, the events after it. If your endpoint has no cursors, return a recent window: Household remembers the last 5,000 IDs.</p>
+<h2 id="when-an-inbox-fails">When an inbox fails</h2>
+<p>A failing source is retried with growing pauses, up to an hour (or the inbox's own interval, if longer). After 3 failed checks in a row, the inbox shows <strong>Needs attention</strong> with the reason, and its bots are told once; they hear again when it recovers. An inbox without bots shows the problem on the page only.</p>
+<p>Events are saved before they are delivered, so a restart doesn't lose them. Rarely, around a crash, a channel post can appear twice.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#add-an-inbox">Add an inbox</a></li><li><a href="#manage-inboxes">Manage inboxes</a></li><li><a href="#bots">Bots</a></li><li><a href="#sources">Sources</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#when-something-fails">When something fails</a></li><li><a href="#references">References</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#add-an-inbox">Add an inbox</a></li><li><a href="#choose-which-bots-get-events">Choose which bots get events</a></li><li><a href="#manage-inboxes">Manage inboxes</a></li><li><a href="#mail">Mail</a></li><li><a href="#feeds">Feeds</a></li><li><a href="#health-checks">Health checks</a></li><li><a href="#changes-in-json">Changes in JSON</a></li><li><a href="#alerts">Alerts</a></li><li><a href="#telegram-bot">Telegram bot</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#when-an-inbox-fails">When an inbox fails</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Scouts — Household docs</title>
-  <meta name="description" content="Specialists your bots call for one task, each in its own VM with only the access you give it: the untrusted internet, production keys, closed networks. Every run waits for your Run.">
+  <meta name="description" content="Specialists your bots call for one task, each in its own VM with only the access you give it. Every run waits for your approval.">
   <meta property="og:title" content="Scouts">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/scouts/">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,50 +172,68 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="./" aria-current="page">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../mcp/">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="./" aria-current="page">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Scouts</h1>
-<p>A scout is a specialist your bots can call for one task: &quot;buy two bus tickets&quot;, &quot;find this movie on a torrent site&quot;, &quot;download this video&quot;. It works in its own fresh VM, with only the access you gave it, and is deleted when the task is done.</p>
-<p>Scouts are how bots touch what is risky or valuable without holding it themselves: the open, untrusted internet, a production key, a closed network. A bot never sees a scout's keys, and a scout sees none of the bot's files or memory.</p>
-<h2 id="turn-them-on">Turn them on</h2>
-<p>In <strong>Workspace → Settings</strong>, switch on <strong>Scouts</strong>. The first time, the workspace gets ready-made capabilities (a browser, media tools, dev tools) and the <strong>General</strong> scout made of them: the open tools on the open internet.</p>
-<h2 id="set-up-a-scout">Set up a scout</h2>
-<p><strong>Workspace → Scouts → + New scout</strong>. A scout is set up like a skill:</p>
-<ul>
-<li><strong>Name, title and description</strong> — the description says when to call it; bots choose by it.</li>
-<li><strong>Instructions</strong> — how it should work.</li>
-<li><strong>Access</strong> — the <strong>capabilities</strong> it is made of, a setup of its own if it needs one, and optionally a repository to start in.</li>
-<li><strong>Harness and resources</strong> — its own, or the workspace's defaults.</li>
-</ul>
-<p>A <strong>capability</strong> is one thing a scout can do: an install script, the network it needs and the keys it uses. They live on the <strong>Capabilities</strong> tab, each with <strong>Test install</strong> and a history of changes. Keep them small (a browser; a CLI and its key): a scout combines several. Network works like this:</p>
-<ul>
-<li>A capability that needs only software (a browser, a downloader) leaves the network <strong>open</strong>.</li>
-<li>A capability that brings access to something valuable lists its <strong>hosts</strong>: a scout that has it reaches only the hosts of its capabilities. So a scout with a production key cannot wander off to the open internet.</li>
-</ul>
-<p>You add the keys' values yourself. Bots can <strong>draft</strong> a capability they need; nothing changes until you apply it.</p>
-<p><strong>Settings</strong> on the Scouts page: the default harness, CPU and memory. Bots can choose CPU/RAM per launch within the shared <a href="../resources/">workspace resource budget</a>. Scouts, install tests and sideworkers draw from the same pool; there is no scout count limit.</p>
-<h2 id="a-run">A run</h2>
+<p class="lead">A scout is a specialist your bots can call for one task: &quot;buy two bus tickets&quot;, &quot;read the reviews on this unfamiliar site&quot;, &quot;check last night's errors in production&quot;. It works in a fresh VM with only the access you gave it, and is deleted when the task is done.</p>
+<p>Scouts let your bots reach what is risky or valuable without holding it themselves: the open, untrusted internet, a production key, a closed network. A bot never sees a scout's keys, and a scout sees none of the bot's files or memory. Nothing a scout says reaches the bot unless you pass it on.</p>
+<h2 id="turn-on-scouts">Turn on scouts</h2>
+<p>Scouts are off in a new workspace. Open <strong>Workspace → Settings</strong>, switch on <strong>Scouts</strong> under <strong>Features</strong>, and <strong>Save</strong>. Or from the command line:</p>
+<pre><code class="language-sh">house features home scouts=on
+</code></pre>
+<p>The first time, the workspace gets three ready-made capabilities (a browser, media tools and developer tools) and the <strong>General</strong> scout made of them: a helper on the open internet with no keys of its own. Your bots can call it right away.</p>
+<h2 id="how-a-run-goes">How a run goes</h2>
 <ol>
-<li><strong>A bot calls a scout</strong> by name with a short task and what counts as success.</li>
-<li><strong>You approve.</strong> A <strong>Run</strong> card shows in the chat: who calls whom, the task, the capabilities, the network, the keys inside its VM and the names of any secrets the bot passes. Nothing starts until you press <strong>Run</strong>; unanswered, it is cancelled after 10 minutes.</li>
-<li><strong>It works in its own thread</strong> (<strong>Open thread</strong> on the card). Talk to it there; the result — text and files — comes to you in that thread.</li>
-<li><strong>Its bot gets facts, not text:</strong> status, steps, how many domains, file handles. A scout's words or files reach the bot only when you pass them, one at a time. Whatever comes from a scout is treated as untrusted.</li>
-<li><strong>It says it is done</strong> with an outcome (success, failed, blocked). On its card, <strong>Close</strong> deletes its VM; <strong>Keep</strong> leaves it running for more. A scout has no time limit: its bot is reminded when it idles for 30 minutes and should cancel it when it is finished or stuck.</li>
+<li><strong>A bot calls a scout</strong> by name, with a short task and what counts as success.</li>
+<li><strong>You approve it.</strong> A card shows in the chat: which bot calls which scout, the task, the capabilities, the network it will reach, any keys inside its VM, and the names of any secrets the bot hands over. Nothing starts until you press <strong>Run</strong>. Press <strong>Cancel</strong>, or leave it for 10 minutes, and it does not run.</li>
+<li><strong>It works in its own thread.</strong> Use <strong>Open thread</strong> on the card to follow it. You can talk to it there, and its results (text and files) come to you in that thread.</li>
+<li><strong>You decide what the bot gets.</strong> The calling bot learns only how the run is going and how it ended. When the scout wants to send the bot its findings, you get a card: <strong>Pass text</strong> or <strong>Drop</strong>. Each file asks separately: <strong>Send to</strong> the bot, or <strong>Skip</strong>. Whatever you pass is treated as untrusted.</li>
+<li><strong>It says it is done</strong>, with an outcome: success, failed or blocked. On that card, <strong>Close</strong> deletes its VM; <strong>Keep</strong> leaves it running for more work.</li>
 </ol>
-<h2 id="secrets">Secrets</h2>
-<p>You decide every one:</p>
+<p>A scout has no time limit. If it sits idle for 30 minutes, the bot that called it is reminded and should stop it once it is finished or stuck.</p>
+<p><strong>Workspace → Scouts</strong> lists what is <strong>Running</strong> and the <strong>Recent runs</strong>.</p>
+<h2 id="make-your-own-scout">Make your own scout</h2>
+<p>Open <strong>Workspace → Scouts → + New scout</strong>:</p>
 <ul>
-<li>Keys of capabilities are yours: you set them in the admin, and the bot never sees them.</li>
-<li>A bot that passes a secret it knows (a card number, an email for a new account) names it on the Run card; you approve it with the run.</li>
-<li>A scout that asks for a secret mid-task needs your approval too, or it asks you directly in its thread.</li>
+<li><strong>Name</strong> — what bots call it by, like <code>prod-ops</code>. <strong>Title</strong> and an emoji are for display.</li>
+<li><strong>Description</strong> — when to call it. Bots choose a scout by this text, so say plainly what it is for.</li>
+<li><strong>Capabilities</strong> — tick the <strong>Shared ones it has</strong>, and <strong>A setup of its own</strong> for access only this scout should get, such as a production key or an account.</li>
 </ul>
-<h2 id="threads">Threads</h2>
-<p>A scout's thread stays after the run, as history. A bot can ask to delete it: a <strong>Delete thread / Keep</strong> card asks you, and deleting stops the scout if it is still running and removes the thread with its messages and files. Channels that cannot delete threads keep the history.</p>
+<p>Then press <strong>Create scout</strong>. Its page has four tabs:</p>
+<ul>
+<li><strong>Overview</strong> — a summary, and what it <strong>Runs on</strong>. <strong>Change…</strong> gives it its own harness, model, CPU and memory.</li>
+<li><strong>Instructions</strong> — how it should work.</li>
+<li><strong>Access</strong> — its shared capabilities, its own setup, and an optional repository cloned fresh for every run.</li>
+<li><strong>Runs</strong> — its past runs.</li>
+</ul>
+<p><strong>Settings</strong> on the Scouts page sets the defaults for every scout: the <strong>Harness</strong> they run on and the CPU and memory of <strong>Each run</strong>. A bot can choose another size for a run, within what the workspace has free. See <a href="../resources/">Resources</a>.</p>
+<h2 id="capabilities">Capabilities</h2>
+<p>A capability is one thing a scout can do. It has an install script (bash, run as root at the start of every run), a network rule, keys, and optional skills. Keep them small, like &quot;a browser&quot; or &quot;the Heroku CLI and its key&quot;: a scout combines several.</p>
+<p>They live on the <strong>Capabilities</strong> tab of the Scouts page. <strong>+ New capability</strong> can <strong>Start from</strong> a ready-made one: Browser (Playwright), Media (yt-dlp, ffmpeg), Developer tools, Heroku CLI, or PostgreSQL client. On a capability's page:</p>
+<ul>
+<li><strong>Install</strong> — the script. <strong>Test install</strong> runs the saved script in a fresh VM and shows how it went.</li>
+<li><strong>Network</strong> — <strong>Any host</strong>, for a tool that only needs software (a browser, a downloader). Or <strong>Only these hosts</strong>, for access to something valuable: a scout with such a capability reaches only the hosts of its capabilities, so a scout holding a production key cannot wander off to the open internet. List the hosts the install script downloads from too.</li>
+<li><strong>Keys</strong> — <strong>+ Add key</strong>. You type the value; bots never see it. Choose how the scout gets it: <strong>Through the gateway</strong> (the scout sees a placeholder, and Household adds the real value to requests to the hosts you list) or <strong>Inside its VM</strong> (the real value, for database clients and some command-line tools; a tricked scout could reveal it).</li>
+<li><strong>History</strong> — every save is a revision you can restore.</li>
+</ul>
+<p>Bots can propose a capability they need. It shows under <strong>New from bots</strong>; <strong>Review</strong> it, then apply it or <strong>Discard draft</strong>. Nothing changes until you apply it.</p>
+<h2 id="secrets">Secrets</h2>
+<p>You decide every secret a scout gets:</p>
+<ul>
+<li>Keys of capabilities are set by you in the admin. Bots never see them.</li>
+<li>A bot that hands a scout a secret it knows (a card number, an email for a new account) names it on the Run card. You approve it with the run.</li>
+<li>A scout that needs a secret mid-task asks you in its thread. Reply <code>/secret &lt;value&gt;</code> there within 10 minutes. Household deletes your message, asks you to confirm, and gives the value to that run only.</li>
+</ul>
+<h2 id="after-a-run">After a run</h2>
+<p>A scout's thread stays as history. A bot can ask to delete it: a card with <strong>Delete thread</strong> and <strong>Keep</strong> asks you. Deleting stops the scout if it still runs and removes the thread with its messages and files for good. Channels that cannot delete threads keep the history.</p>
 <h2 id="run-one-yourself">Run one yourself</h2>
-<p><code>house scout run &lt;workspace&gt; &lt;scout&gt; --task &quot;…&quot;</code> starts a scout without a Run card; its thread opens in a bot's channel, and the bot hears nothing of it. <code>house --help</code> lists the rest: runs, status, logs, cancel.</p>
+<p>You can start a scout from the command line, without a Run card:</p>
+<pre><code class="language-sh">house scout run home general --task &quot;Find the opening hours of the town library&quot;
+</code></pre>
+<p>Its thread opens in a bot's channel, and that bot hears nothing of it. <code>house scout --help</code> lists the commands to follow, message and cancel runs.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#turn-them-on">Turn them on</a></li><li><a href="#set-up-a-scout">Set up a scout</a></li><li><a href="#a-run">A run</a></li><li><a href="#secrets">Secrets</a></li><li><a href="#threads">Threads</a></li><li><a href="#run-one-yourself">Run one yourself</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#turn-on-scouts">Turn on scouts</a></li><li><a href="#how-a-run-goes">How a run goes</a></li><li><a href="#make-your-own-scout">Make your own scout</a></li><li><a href="#capabilities">Capabilities</a></li><li><a href="#secrets">Secrets</a></li><li><a href="#after-a-run">After a run</a></li><li><a href="#run-one-yourself">Run one yourself</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

@@ -40,7 +40,7 @@ doing them (it needs a real terminal, it asks questions).
 
    Other kinds, the same way: `telegram-private` (the bot's own threads: Telegram's Threaded Mode, still beta,
    turned on in BotFather's Mini App → Bot Settings → Threads Settings; the chat is the user's id),
-   `telegram-dm` (one plain chat; the chat is the user's id) or a Slack DM (see docs/slack.md).
+   `telegram-dm` (one plain chat; the chat is the user's id) or a Slack DM (see https://agents-household.dev/docs/channels/#slack).
 9. **Running for good**: `house start` as a launchd / systemd user service that restarts it whenever it exits,
    a clean exit too (an update's restart, a stop that is not the service's own): launchd `KeepAlive` `true`
    (not `SuccessfulExit` false), systemd `Restart=always` with `RestartSec=5`. Its `PATH` finds `openssl` and

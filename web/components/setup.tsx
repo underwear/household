@@ -5,6 +5,7 @@ import { api, type BotListenStatus, type BotListenView, type DeviceLoginView, ty
 import { botPath, navigate, workspacePath } from "../router";
 import { ChoiceList, StepperField, Switch, TextField } from "./fields";
 import { Cell, Cluster, FormGrid, List, ListRow, Page, Panel, Stack } from "./layout";
+import { harnessLabel } from "./bots";
 import { Link } from "./link";
 import { Guide, useKeyConnect } from "./key-connect";
 import { petState } from "./bot-state";
@@ -495,7 +496,7 @@ export function ReviewStep({ draft, agents, open, refresh, onMade }: { draft: Se
         {row("model", "Model", key ? `${providerLabel(key.provider)} · key ${key.name}` : "—", key?.pasted ? "pasted here; saved with the rest" : undefined)}
         {row("workspace", "Workspace", workspace ? workspace.name : "—", workspace && `${workspace.cpus} vCPU · ${gib(workspace.memoryMiB)}`)}
         {row("channel", "Channel", channel === null ? "None yet" : channel ? [channel.label, channel.bot].filter(Boolean).join(" · ") : "—", owner)}
-        {row(undefined, "Bot", `🤖 ${DEFAULT_BOT.title}`, size && `${harness === "codex-app-server" ? "Codex" : "Claude Code"} · ${size.cpus} vCPU · ${gib(size.memoryMiB)}`)}
+        {row(undefined, "Bot", `🤖 ${DEFAULT_BOT.title}`, size && `${harnessLabel(harness ?? "claude-code-tmux")} · ${size.cpus} vCPU · ${gib(size.memoryMiB)}`)}
       </List>
       {action.busy && <p className="setup-state"><span className="dot busy" aria-hidden />Got everything. Setting it up, please wait…</p>}
       {slow && <p className="hint">Still setting up: Household applies changes one at a time, and a bot that is starting holds them for a moment.</p>}

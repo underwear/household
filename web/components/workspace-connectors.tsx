@@ -1,4 +1,4 @@
-import { MailSetup, MailSends, mailAccessWords, useMailConnections } from "./mail-connectors";
+import { MailSetup, mailAccessWords, mailInput, mailNotices, useMailConnections, type MailNotice } from "./mail-connectors";
 import type { MailConnectionView } from "../api";
 import { MicrosoftSetup, microsoftAccessWords, useMicrosoftConnections } from "./microsoft-connectors";
 import type { MicrosoftConnectionView } from "../api";
@@ -13,7 +13,7 @@ import { Cell, List, ListRow, Page, Section } from "./layout";
 import { relative } from "./bot-crons";
 
 /** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
-export const CONNECTOR_TYPES = [{ id: "mail", label: "Mail (IMAP / SMTP)", description: "Search and read mail, manage folders and send with optional approval.", mark: "@" }, { id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }] as const;
+export const CONNECTOR_TYPES = [{ id: "mail", label: "Email", description: "Any mailbox over IMAP and SMTP: read, organize and send with your OK.", mark: "@" }, { id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }] as const;
 type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
 /** A Google account's services: what the owner picks to share (and what bots may do with each), and their names. */
 const SERVICES = [
@@ -57,7 +57,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
   const microsoft = useMicrosoftConnections(house.name);
   const mail = useMailConnections(house.name);
   const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView; microsoft?: MicrosoftConnectionView; mail?: MailConnectionView }>();
-  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView } | { microsoft: MicrosoftConnectionView }>();
+  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView } | { microsoft: MicrosoftConnectionView } | { mail: MailConnectionView }>();
   const dialog = useDialog();
   const refresh = async () => {
     try {
@@ -117,9 +117,13 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     onConfirm: async () => { await api.disconnectMicrosoft(house.name, c.id); await microsoft.refresh(); notify(`${c.account} disconnected`); },
   });
   const disconnectMail = (c: MailConnectionView) => dialog.open({
-    title: `Disconnect ${c.title}?`, body: "Credentials are removed from this host. Pending approvals are cancelled. A message already being submitted cannot be recalled. Previously read mail and send history remain in Household.", confirmLabel: "Disconnect", danger: true,
-    onConfirm: async () => { await api.disconnectMail(house.name, c.id); await mail.refresh(); notify(`${c.title} disconnected`); },
+    title: `Disconnect ${c.email}?`,
+    body: "Its bots lose access right away and the password is removed from this computer. Emails waiting for your approval are cancelled; one already on its way can't be recalled. What bots already read stays in their history and backups.",
+    confirmLabel: "Disconnect", danger: true,
+    onConfirm: async () => { await api.disconnectMail(house.name, c.id); await mail.refresh(); notify(`${c.email} disconnected`); },
   });
+  const botTitle = (name: string) => house.pets.find((p) => p.name === name)?.title ?? name;
+  const waiting = (c: MailConnectionView) => (mail.sends ?? []).filter((s) => s.connection === c.id && s.state === "pending").length;
   const failed = [mail.error && { what: "Mail", message: mail.error, retry: mail.refresh },microsoft.error && { what: "Microsoft", message: microsoft.error, retry: microsoft.refresh }, error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
   return (
     <Page
@@ -145,11 +149,12 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
             </button>
           </p>
         ))}
-        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add a mail, Google, Slack or Microsoft To Do account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
-          {(mail.connections ?? []).map(c => <ListRow key={c.id} actions={<><button className="text-btn plain" onClick={() => setSetup({ type: "mail", mail: c })}>Edit settings and access</button><button className="text-btn" onClick={() => disconnectMail(c)}>Disconnect</button></>}>
-            <Cell><ConnectorMark type="mail" /><span className="cell-lines"><span className="strong">{c.title} · {c.email}</span><span className="hint">{mailAccessWords(c)}</span><span className="hint">{c.pets.length ? c.pets.join(", ") : "Private: no bots selected"}</span></span></Cell>
-            <Cell><span className="bot-state"><span className="dot idle" />Connected</span></Cell>
-          </ListRow>)}
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add an email, Google, Slack or Microsoft To Do account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
+          {(mail.connections ?? []).map((c) => (
+            <ConnectionRow key={c.id} house={house} type="mail" title={<span className="strong connector-email">{c.email}</span>}
+              sub={`${c.title} · ${mailAccessWords(c)}`} connection={{ ...c, needsReconnect: false }} notices={mailNotices(mail.sends ?? [], c.id, botTitle)}
+              onAccess={() => setAccess({ mail: c })} edit="Settings" onEdit={() => setSetup({ type: "mail", mail: c })} onDisconnect={() => disconnectMail(c)} />
+          ))}
           {connections.map((c) => (
             <ConnectionRow
               key={c.id}
@@ -159,14 +164,14 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
               sub={`Google · ${servicesWords(c.services)} · ${accessWords(c)}`}
               connection={c}
               onAccess={() => setAccess({ google: c })}
-              onReconnect={() => setSetup({ type: "google", existing: c })}
+              onEdit={() => setSetup({ type: "google", existing: c })}
               onDisconnect={() => disconnect(c)}
             />
           ))}
           {(microsoft.connections ?? []).map(c => (
             <ConnectionRow key={c.id} house={house} type="microsoft" title={<span className="strong connector-email">{c.account}</span>}
               sub={`Microsoft To Do · ${microsoftAccessWords(c)}`} connection={c}
-              onAccess={() => setAccess({ microsoft: c })} onReconnect={() => setSetup({ type: "microsoft", microsoft: c })} onDisconnect={() => disconnectMicrosoft(c)} />
+              onAccess={() => setAccess({ microsoft: c })} onEdit={() => setSetup({ type: "microsoft", microsoft: c })} onDisconnect={() => disconnectMicrosoft(c)} />
           ))}
           {(slack.connections ?? []).map((c) => (
             <ConnectionRow
@@ -177,14 +182,15 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
               sub={`Slack · ${slackAccessWords(c)}`}
               connection={c}
               onAccess={() => setAccess({ slack: c })}
-              onReconnect={() => setSetup({ type: "slack", slack: c })}
+              onEdit={() => setSetup({ type: "slack", slack: c })}
               onDisconnect={() => disconnectSlack(c)}
             />
           ))}
         </List>
       </Section>
-      <MailSends house={house.name} sends={mail.sends ?? []} refresh={mail.refresh} notify={notify} />
-      {setup?.type === "mail" && <MailSetup key={setup.mail?.id ?? "new"} house={house.name} existing={setup.mail} options={sharable(house)} back={setup.mail ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)} saved={async () => { await mail.refresh(); notify("Mail connection saved"); }} />}
+      {setup?.type === "mail" && <MailSetup key={setup.mail?.id ?? "new"} house={house.name} existing={setup.mail} options={sharable(house)} waiting={setup.mail ? waiting(setup.mail) : 0}
+        back={setup.mail ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
+        saved={async () => { await mail.refresh(); notify(setup.mail ? "Mail settings saved" : "Mail connected"); }} />}
       {setup && setup.type !== "mail" && setup.type !== "slack" && setup.type !== "microsoft" && <ConnectorSetup onMail={() => setSetup({ type: "mail" })} onMicrosoft={() => setSetup({ type: "microsoft" })} onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
       {setup?.type === "microsoft" && <MicrosoftSetup key={setup.microsoft?.id ?? "new"} house={house.name} ready={!!microsoft.ready} existing={setup.microsoft}
         options={sharable(house)} back={setup.microsoft ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
@@ -203,6 +209,9 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
           }}
         />
       )}
+      {access && "mail" in access && <BotAccess key={access.mail.id} house={house} title={access.mail.email} pets={access.mail.pets}
+        body={`Mail, ${mailAccessWords(access.mail)}. Saving checks the connection again${waiting(access.mail) ? " and cancels emails waiting for your approval" : ""}.`} onClose={() => setAccess(undefined)}
+        save={async (pets) => { await api.saveMail(house.name, mailInput(access.mail, pets), access.mail.id); await mail.refresh(); notify("Bot access saved"); }} />}
       {access && "microsoft" in access && <BotAccess house={house} title={access.microsoft.account} pets={access.microsoft.pets}
         body={`Microsoft To Do, ${microsoftAccessWords(access.microsoft)}. Changes apply right away.`} onClose={() => setAccess(undefined)}
         save={async pets => { await api.shareMicrosoft(house.name, access.microsoft.id, pets); await microsoft.refresh(); notify("Bot access saved"); }} />}
@@ -241,11 +250,14 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
   );
 }
 
-/** One connected account: its mark, name, what it gives and which bots have it; its state; Bot access, Reconnect, Disconnect. */
-function ConnectionRow({ house, type, title, sub, connection: c, onAccess, onReconnect, onDisconnect }: {
+/**
+ * One connected account: its mark, name, what it gives and which bots have it, anything that needs the owner (an email
+ * waiting in a chat); its state; Bot access, Reconnect (or Settings), Disconnect.
+ */
+function ConnectionRow({ house, type, title, sub, connection: c, notices = [], onAccess, edit = "Reconnect", onEdit, onDisconnect }: {
   house: WorkspaceView; type: ConnectorType; title: ReactNode; sub: string;
-  connection: { pets: string[]; needsReconnect: boolean; connectedAt: string };
-  onAccess: () => void; onReconnect: () => void; onDisconnect: () => void;
+  connection: { pets: string[]; needsReconnect: boolean; connectedAt: string }; notices?: MailNotice[];
+  onAccess: () => void; edit?: string; onEdit: () => void; onDisconnect: () => void;
 }) {
   const pets = new Map(house.pets.map((pet) => [pet.name, pet]));
   return (
@@ -253,7 +265,7 @@ function ConnectionRow({ house, type, title, sub, connection: c, onAccess, onRec
       actions={
         <>
           <button className="text-btn plain" onClick={onAccess}>Bot access</button>
-          <button className={c.needsReconnect ? "btn small" : "text-btn plain"} onClick={onReconnect}>Reconnect</button>
+          <button className={c.needsReconnect ? "btn small" : "text-btn plain"} onClick={onEdit}>{edit}</button>
           <button className="text-btn" onClick={onDisconnect}>Disconnect</button>
         </>
       }
@@ -275,6 +287,15 @@ function ConnectionRow({ house, type, title, sub, connection: c, onAccess, onRec
               ))
             )}
           </span>
+          {notices.map((n) => (
+            <span key={n.key} className="connector-notice">
+              <span className={`dot ${n.tone}`} />
+              <span>
+                {n.text}
+                {n.detail && <span className="faint"> {n.detail}</span>}
+              </span>
+            </span>
+          ))}
         </span>
       </Cell>
       <Cell lines>

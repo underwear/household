@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { WorkspaceView } from "../api";
 import { workspacePath, botPath } from "../router";
 import { Cell, List, ListRow, Page, Section } from "./layout";
+import { harnessLabel } from "./bots";
 import { Link } from "./link";
 import { ownBots, petState, withWorkers } from "./bot-state";
 
@@ -53,9 +54,9 @@ export function WorkspaceOverviewPage({ house }: { house: WorkspaceView }) {
                   </Link>
                   {pet.title !== pet.name && <span className="id">{pet.name}</span>}
                 </Cell>
-                <Cell mono>
+                <Cell>
                   <span className="muted ellipsis">
-                    {pet.agent} · {pet.model}
+                    {harnessLabel(pet.agent)} · <span className="mono">{pet.model}</span>
                   </span>
                 </Cell>
                 <Cell>

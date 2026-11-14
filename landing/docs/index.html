@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Overview — Household docs</title>
-  <meta name="description" content="What Household is: workspaces, bots and harnesses, each bot in its own microVM, with network access and secrets under your control.">
+  <meta name="description" content="Your own AI assistants, Claude Code or Codex bots in their own microVMs on your machine, that you talk to in your messenger: the idea, how it works and how it keeps your accounts safe.">
   <meta property="og:title" content="Household overview">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/">
@@ -159,7 +159,10 @@
       .term { flex-direction: column; align-items: flex-start; gap: 6px; }
       .top-link .label { display: none; }
     }
-  </style>
+  pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+</style>
 </head>
 <body>
   <header class="top">
@@ -169,91 +172,80 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs">
-      <h3>Getting started</h3>
-      <ul>
-        <li><a href="./" aria-current="page">Overview</a></li>
-        <li><a href="start/">Quick start</a></li>
-        <li><a href="bots/">Bots</a></li>
-        <li><a href="sideworkers/">Sideworkers</a></li>
-        <li><a href="inboxes/">Inboxes</a></li>
-        <li><a href="mail-connector/">Mail connector</a></li>
-        <li><a href="scouts/">Scouts</a></li>
-        <li><a href="previews/">HTTP previews</a></li>
-        <li><a href="volumes/">Shared folders</a></li>
-        <li><a href="mcp/">MCP servers</a></li>
-        <li><a href="backup/">Back up and move</a></li>
-      </ul>
-    </nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="./" aria-current="page">Overview</a></li><li><a href="start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="bots/">Bots</a></li><li><a href="keys/">Keys</a></li><li><a href="instructions/">Instructions, skills and memory</a></li><li><a href="sideworkers/">Sideworkers</a></li><li><a href="scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="connectors/">Connectors</a></li><li><a href="network/">Network and secrets</a></li><li><a href="volumes/">Shared folders</a></li><li><a href="previews/">Previews</a></li><li><a href="mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="inboxes/">Inboxes</a></li><li><a href="schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="resources/">Resources</a></li><li><a href="backup/">Back up and move</a></li><li><a href="operating/">Updates and troubleshooting</a></li></ul></nav>
 
-    <article>
-      <p class="crumb">Getting started</p>
-      <h1>Household overview</h1>
-      <p class="lead">Household runs assistant bots with coding harnesses such as Claude Code or Codex. Talk to each bot in a messenger, with its own VM, network access and credentials under your control.</p>
+    <article><p class="crumb">Getting started</p><h1>Household overview</h1>
+<p class="lead">Household gives you your own AI assistants. Each one is a bot running Claude Code or Codex, in its own microVM on your Mac or Linux machine, and you talk to it in your messenger: Telegram or Slack. A bot keeps its files and memory between conversations, works on its own schedule, and reaches only what you allow. Your keys stay on your machine, and the bots never see them.</p>
+<h2 id="what-you-can-do-with-it">What you can do with it</h2>
+<ul>
+<li><strong>Talk to your assistants from anywhere.</strong> Each bot has its own thread or topic in your chat. Write to it from your phone or your laptop, like to anyone else.</li>
+<li><strong>Give each one a job.</strong> A household helper, a coding partner for your projects, an ops bot that watches your alerts at night. Each has its own instructions, skills and memory.</li>
+<li><strong>Let them act on their own.</strong> Bots can wake up on new mail, feeds or alerts, and run tasks on a schedule: a digest every weekday at 9:00, or a reminder at 18:00 today.</li>
+<li><strong>Connect your accounts with care.</strong> Give chosen bots access to mail, documents, calendars, chats or tasks, read-only or read-write.</li>
+<li><strong>Hand risky work to a throwaway VM.</strong> &quot;Read the reviews on this unfamiliar site&quot; or &quot;buy two bus tickets&quot; goes to a scout that you approve, not to the bot that holds your files.</li>
+</ul>
+<h2 id="core-ideas">Core ideas</h2>
+<table>
+<thead>
+<tr><th>Idea</th><th>What it is</th></tr>
+</thead>
+<tbody>
+<tr><td>Workspace</td><td>A home for a group of bots, and a trust zone. It has its own allowlist of hosts, secrets, channels, owners and CPU and memory budget.</td></tr>
+<tr><td>Bot</td><td>A long-lived assistant in a workspace. It has its own microVM with a home folder that survives restarts, its own memory, and its own thread in the chat.</td></tr>
+<tr><td>Harness</td><td>What a bot runs on: Claude Code or Codex. Anything the harness can do, the bot can do.</td></tr>
+<tr><td>Key</td><td>The model account a bot uses: a Claude or ChatGPT subscription you sign in to, or an API key.</td></tr>
+<tr><td>Channel</td><td>Where you talk to the bots: a Telegram group with a topic per bot, a private Telegram chat, or a Slack DM.</td></tr>
+<tr><td>Connectors</td><td>Your accounts (mail, Google, Slack, Microsoft To Do and more), connected to the workspace and given to the bots you choose.</td></tr>
+<tr><td>Sideworker</td><td>Extra hands a bot starts for one long or parallel job. It shares the bot's home and access, and is closed when the job is done.</td></tr>
+<tr><td>Scout</td><td>A specialist a bot calls for one risky or privileged task. It runs in a fresh VM with only the access you gave it, and only after you approve.</td></tr>
+</tbody>
+</table>
+<p>The people who set up a workspace are its <strong>owners</strong>. Only owners can give the bots orders and approve what they ask for. Anyone else in a shared chat is a guest.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>A small program, <code>house</code>, runs on your machine. It starts each bot's VM, talks to your messenger, and stands between every bot and the internet.</p>
+<ol>
+<li><strong>Install Household</strong> on your Mac or Linux machine.</li>
+<li><strong>Set it up</strong>, in the web admin or with <code>house onboard</code> in a terminal: a key, a workspace, a channel, and a first bot.</li>
+<li><strong>Start it.</strong> The first start downloads the bot's VM image.</li>
+<li><strong>Write to your bot</strong> in its thread. It answers there, and it can start sideworkers or ask for a scout when the job needs one.</li>
+<li><strong>Shape it over time</strong> in the web admin: its instructions, skills, schedule, connectors, the hosts it may reach and the folders it may see.</li>
+</ol>
+<p>Household is open source and self-hosted. Nobody but you receives your conversations, files or keys, and Household sends no telemetry. The models themselves run at your provider, Anthropic or OpenAI. The web admin listens only on your machine, at <code>http://127.0.0.1:8780</code>.</p>
+<h2 id="how-it-keeps-you-safe">How it keeps you safe</h2>
+<p>A bot is a capable agent with a shell. Household assumes it can make mistakes, or be talked into them by something it reads, and limits what a mistake can reach.</p>
+<ul>
+<li><strong>One VM per bot.</strong> Every bot, sideworker and scout runs in its own microVM, with its own Linux kernel. It sees none of your files and none of the other bots' files, except folders you share on purpose. A sideworker sees its parent bot's home.</li>
+<li><strong>An allowlist for the network.</strong> Each workspace lists the hosts its bots may reach. Everything else is blocked. When a bot needs a new host, it asks in the chat, and you choose <strong>Allow 15 min</strong>, <strong>Allow forever</strong> or <strong>Deny</strong>.</li>
+<li><strong>Secrets as placeholders.</strong> A bot never holds your real API keys or secrets. It gets a placeholder instead. When the bot sends a request to that secret's own hosts, Household puts the real value into the request on its way out. Sent anywhere else, the placeholder is useless.</li>
+<li><strong>Scouts need your approval.</strong> A scout starts only when you press <strong>Run</strong> on its card, after you see the task, its access and any secret the bot wants to pass. It works in a fresh VM with none of the bot's files, and its VM is deleted when you close it. What it finds reaches you first. The bot gets its words and files only when you pass them on.</li>
+<li><strong>You approve the rest too.</strong> When a bot asks for a folder of your computer or for a link to a web app it runs, it waits for your answer in the chat. Sending mail through a connector waits for you too, unless you allowed it in advance.</li>
+</ul>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> The placeholder trick works only for HTTP(S) requests that carry the secret as-is in a header. An SSH key, a database password, a request signature (such as AWS) or a key read from a file needs the real value inside the VM. A bot will tell you when that is the case. Put such secrets only into a bot or a scout you trust with them.</p>
+<h2 id="where-it-runs">Where it runs</h2>
+<table>
+<thead>
+<tr><th></th><th></th></tr>
+</thead>
+<tbody>
+<tr><td>Machine</td><td>A Mac with Apple silicon, or Linux (x86_64 or arm64) with KVM: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac works only through such a Linux VM.</td></tr>
+<tr><td>Software</td><td><code>python3</code> and <code>openssl</code>. The installer brings everything else. No Docker, no sudo.</td></tr>
+<tr><td>Harnesses</td><td>Claude Code, Codex</td></tr>
+<tr><td>Messengers</td><td>Telegram, Slack</td></tr>
+<tr><td>A model account</td><td>A Claude subscription or Anthropic API key for Claude Code; a ChatGPT subscription or OpenAI API key for Codex.</td></tr>
+</tbody>
+</table>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="start/">Quick start</a>: install Household and say hi to your first bot.</li>
+<li><a href="bots/">Bots</a>: everything on a bot's page.</li>
+<li><a href="keys/">Keys</a>: which account your bots run on, and how to sign in.</li>
+<li><a href="channels/">Channels</a>: where you talk to your bots, and who else can.</li>
+<li><a href="network/">Network and secrets</a>: the allowlist, temporary access and placeholders.</li>
+<li><a href="scouts/">Scouts</a>: give bots risky jobs without risking their files.</li>
+</ul>
+</article>
 
-      <p>A daemon, <code>house</code>, runs on your Mac or Linux machine. It starts each bot in its own microVM, connects it to a messenger (e.g. Telegram) and stands between the bot and the internet. Each bot answers in its own thread and keeps its files and memory between conversations.</p>
-
-      <h2 id="concepts">Core concepts</h2>
-      <table>
-        <thead><tr><th>Concept</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr><td><span class="term"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg></span>Workspace</span></td><td>A group of bots sharing an allowlist, secrets, channels and owners.</td></tr>
-          <tr><td><span class="term"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1" /></svg></span>Channel</span></td><td>A workspace's connection to a messenger, e.g. a Telegram bot.</td></tr>
-          <tr><td><span class="term"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="3" /><path d="M2 12v4M22 12v4M9 13v2M15 13v2" /></svg></span>Bot</span></td><td>An assistant running in a workspace: its own VM with a persistent home and memory, and its own chat thread.</td></tr>
-          <tr><td><span class="term"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 11 2-2-2-2" /><path d="M11 13h4" /><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /></svg></span>Harness</span></td><td>What a bot runs on: a coding runtime, e.g. the Claude Code CLI or the Codex CLI.</td></tr>
-          <tr><td><span class="term"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999" /><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024" /><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069" /><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z" /></svg></span>Sideworker</span></td><td>A temporary clone of a bot for a separate task in another directory. Same workspace, same permissions.</td></tr>
-          <tr><td><span class="term"><span class="tile"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z" /></svg></span>Scout</span></td><td>A one-task VM for access a bot doesn't have or for untrusted sites. Runs only with your approval and reports to you, never to the bot.</td></tr>
-        </tbody>
-      </table>
-
-      <h2 id="how-it-works">How it works</h2>
-      <ol class="steps">
-        <li><h4>Install the daemon</h4><p><code>house</code>, on your Mac or Linux machine.</p></li>
-        <li><h4>Create a workspace</h4><p>Choose which hosts its bots may reach and which secrets they may use.</p></li>
-        <li><h4>Connect a messenger</h4><p>E.g. a Telegram bot.</p></li>
-        <li><h4>Add a bot</h4><p>Pick its harness, e.g. the Claude Code CLI, and set up its VM: a setup script installs the tools and packages it needs.</p></li>
-        <li><h4>Talk to it</h4><p>Write in its thread. It replies there, calling scouts or starting sideworkers when needed.</p></li>
-      </ol>
-      <p><code>house onboard</code> walks you through steps 2 to 4 in the terminal.</p>
-
-      <h2 id="security">Network and secrets</h2>
-      <p>All of a bot's traffic goes through the daemon:</p>
-      <ul class="list">
-        <li><strong>Allowlist.</strong> Each workspace lists the hosts its bots may reach; everything else is blocked.</li>
-        <li><strong>Placeholders.</strong> Bots see only placeholders for API keys and secrets. The daemon substitutes the real value at egress, in the HTTP header of a request to the secret's own hosts, so a leaked placeholder is useless.</li>
-        <li><strong>Isolation.</strong> Every bot and scout runs in a separate VM. A sideworker sees its parent's home.</li>
-        <li><strong>Scouts.</strong> No scout runs without your approval: you see the task and its capabilities, and you decide which secrets it gets. It starts in a fresh VM with none of the bot's files, which is deleted when you close it. It sends its result to you in its own thread; the bot gets its text and files only when you pass them on, so hostile content from untrusted sites stays out of the bot's context.</li>
-      </ul>
-      <div class="note"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><p>Substitution happens at egress, not inside the VM, so it works only for HTTP(S) clients that send the secret verbatim in a header. Database passwords, SSH keys, request signatures (e.g. AWS SigV4) and anything read from a file need the real value in the VM.</p></div>
-
-      <h2 id="requirements">Where it runs</h2>
-      <table>
-        <thead><tr><th>Part</th><th>Supported</th></tr></thead>
-        <tbody>
-          <tr><td>Machine</td><td>macOS on Apple silicon, or Linux with KVM (your own machine, a VM with nested virtualization, or a KVM-enabled VPS)</td></tr>
-          <tr><td>Harnesses</td><td>Claude Code CLI, Codex CLI</td></tr>
-          <tr><td>Messengers</td><td>Telegram (bot, threaded mode)</td></tr>
-        </tbody>
-      </table>
-
-      <h2 id="next">Next steps</h2>
-      <div class="next">
-        <a href="https://github.com/underwear/household/blob/main/plugins/household/skills/household/install.md"><b>Setup</b><span>From a bare machine to a bot answering in your messenger</span></a>
-        <a href="https://github.com/underwear/household/blob/main/plugins/household/skills/household/operate.md"><b>Operating</b><span>Bots, network, secrets, scouts, updates, backups</span></a>
-        <a href="https://github.com/underwear/household/blob/main/plugins/household/skills/household/debug.md"><b>Debugging</b><span>Where to look when something does not work</span></a>
-      </div>
-    </article>
-
-    <nav class="toc" aria-label="On this page">
-      <h3>On this page</h3>
-      <ul>
-        <li><a href="#concepts">Core concepts</a></li>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#security">Network and secrets</a></li>
-        <li><a href="#requirements">Where it runs</a></li>
-        <li><a href="#next">Next steps</a></li>
-      </ul>
-    </nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-can-do-with-it">What you can do with it</a></li><li><a href="#core-ideas">Core ideas</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#how-it-keeps-you-safe">How it keeps you safe</a></li><li><a href="#where-it-runs">Where it runs</a></li><li><a href="#next-steps">Next steps</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

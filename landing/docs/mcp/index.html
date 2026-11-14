@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MCP servers — Household docs</title>
-  <meta name="description" content="Give a bot any MCP server: ask it, and it adds the server to its own Claude Code or Codex, with the hosts and keys you approve.">
-  <meta property="og:title" content="Adding MCP servers">
+  <meta name="description" content="Give a bot any MCP server: ask it, and it adds the server to its own setup.">
+  <meta property="og:title" content="MCP servers">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/mcp/">
   <meta property="og:type" content="article">
@@ -160,6 +160,8 @@
       .top-link .label { display: none; }
     }
   pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
+pre { overflow-x: auto; padding: 18px; background: var(--tile); border-radius: 10px; font: 13px/1.6 var(--mono); } article { min-width: 0; } article a { overflow-wrap: anywhere; } td { overflow-wrap: break-word; } td:first-child { white-space: nowrap; } table { display: block; overflow-x: auto; } blockquote { margin: 0 0 12px; padding: 2px 16px; border-left: 3px solid var(--tile); } blockquote p { margin: 0; } svg.warn { width: 1.05em; height: 1.05em; vertical-align: -0.17em; margin-right: 0.25em; color: #b45309; } details { display: block; margin: -8px 0 18px 19px; } details > summary { display: block; width: fit-content; cursor: pointer; list-style: none; font: 400 13px/1.5 var(--font-sans); color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; } details > summary::-webkit-details-marker { display: none; } details > summary:hover, details[open] > summary { color: var(--fg); text-decoration-style: solid; } details[open] { padding-left: 14px; border-left: 2px solid var(--line); } details[open] > summary + * { margin-top: 10px; } details > :last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -170,50 +172,50 @@
   </header>
 
   <div class="layout">
-    <nav class="side" aria-label="Docs"><h3>Household</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li><li><a href="../bots/">Bots</a></li><li><a href="../resources/">Workspace resources</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../mail-connector/">Mail connector</a></li><li><a href="../inboxes/">Inboxes</a></li><li><a href="../scouts/">Scouts</a></li><li><a href="../previews/">HTTP previews</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="./" aria-current="page">MCP servers</a></li><li><a href="../backup/">Back up and move</a></li></ul></nav>
+    <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="./" aria-current="page">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
-    <article><p class="crumb">Bots</p><h1>Adding MCP servers</h1>
-<p>Household does not connect MCP servers for a whole workspace yet. But every bot runs a real Claude Code or Codex in its own VM, so you can simply ask it: it will add any MCP server to its own harness, from the inside. 🤖</p>
+    <article><p class="crumb">What bots can reach</p><h1>MCP servers</h1>
+<p class="lead">MCP servers give an assistant new tools: your issue tracker, a wiki, a design tool, a database. Household has no page for adding MCP servers to a whole workspace. You don't need one: every bot runs a real Claude Code or Codex in its own VM, so you can ask the bot to add a server to itself, the same way you would set it up on your own machine.</p>
+<h2 id="first-check-what-is-already-there">First, check what is already there</h2>
+<p>Some services don't need an MCP server at all:</p>
+<ul>
+<li><strong>Connectors.</strong> Email, Google (Gmail, Drive, Calendar), Microsoft To Do and Slack can be connected once for the workspace and given to the bots you choose. See <a href="../connectors/">Connectors</a>.</li>
+<li><strong>Your Claude or ChatGPT account's connectors.</strong> A bot that runs on a Claude or ChatGPT sign-in can use the connectors or apps already set up in that account (Drive, Jira, GitHub…). Turn on <strong>Claude.ai connectors</strong> or <strong>ChatGPT apps</strong> on the bot's <strong>Harness</strong> tab. See <a href="../keys/">Keys</a>.</li>
+</ul>
 <h2 id="ask-your-bot">Ask your bot</h2>
-<p>Write to it as you would to a colleague:</p>
+<p>For anything else, write to the bot as you would to a colleague:</p>
 <blockquote>
 <p>Add the Linear MCP server for yourself: https://mcp.linear.app/mcp</p>
 </blockquote>
 <blockquote>
-<p>Connect the Atlassian Rovo MCP server, so you can read our Jira and Confluence.</p>
+<p>Connect the Atlassian MCP server, so you can read our Jira and Confluence.</p>
 </blockquote>
-<blockquote>
-<p>Install the Playwright MCP server and use it for the tickets site.</p>
-</blockquote>
-<details>
-<summary><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> We believe giving your bot a browser is a bad idea. Why?</summary>
-<p>It works. We still wouldn't. The internet is not a friendly place, and a browser takes your bot right into it.</p>
+<p>The bot adds the server the way its harness does and tells you when it needs something from you. Usually that is one of two things:</p>
 <ul>
-<li><strong>Pages talk back.</strong> Any page can carry text written for an AI rather than for you: &quot;ignore your instructions and…&quot;. This is prompt injection, and no model is fully immune to it.</li>
-<li><strong>Your bot has a lot to lose.</strong> Your projects, its memory, the hosts your workspace allows, the keys it can use. A page that talks it into something talks it into it with all of that at hand.</li>
-<li><strong>A browser is a huge program.</strong> Millions of lines of code that read whatever a page sends. Browser makers ship security fixes all the time, which is good news, and also a hint at how often holes are found.</li>
+<li><strong>A host.</strong> A bot's VM reaches only the hosts the workspace allows. For a remote server, the bot asks for the server's domain, and you answer on the card in the chat: <strong>Allow 15 min</strong>, <strong>Allow forever</strong> or <strong>Deny</strong>. You can also add the host yourself on <strong>Workspace → Network</strong>. See <a href="../network/">Network</a>.</li>
+<li><strong>A key.</strong> For a server that needs a token, the bot asks you for a secret on a card in the chat. Answer its request with <code>/secret &lt;value&gt;</code>, or add the secret yourself on <strong>Workspace → Secrets</strong>. The bot only ever sees a placeholder; Household puts the real token into requests to that server's host on their way out.</li>
 </ul>
-<p>A scout is made for exactly this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your bot only if you pass them. So when your bot needs a website, let it <a href="../scouts/">call a scout</a>.</p>
-</details>
-<p>The bot adds the server the way its harness does (<code>claude mcp add …</code> in Claude Code, <code>codex mcp add …</code> in Codex) and tells you if it needs something from you. Usually that is one of two things:</p>
-<ul>
-<li><strong>A host.</strong> A bot's VM reaches only what the workspace allows. For a remote server it asks for the server's domain, and you answer in the chat: for 15 minutes, for good, or no. You can also add the host yourself on the workspace's <strong>Network</strong> page.</li>
-<li><strong>A key.</strong> For a server that needs a token, the bot asks you for a Workspace secret. You paste the value; the bot only ever sees a placeholder, and Household puts the real token into requests to that server's host on their way out.</li>
-</ul>
+<p>A new server usually shows up in the bot's next session. If the bot does not see it, press <strong>Restart</strong> on the bot's page.</p>
 <h2 id="it-stays">It stays</h2>
-<p>A bot's MCP settings live in its home folder, which survives restarts and new VMs. If a server needs a system package (Node, Python, a browser), the bot adds it to its environment setup, so a new VM gets it back.</p>
-<p>A new server usually shows up in the bot's next session. If the bot does not see it, press <strong>Restart</strong> on its page.</p>
+<p>A bot's MCP settings live in its home folder, which survives restarts and new VMs. If a server needs software in the VM (Node, Python, a browser), the bot adds it to its <strong>Setup</strong> script on the <strong>Environment</strong> tab, so a new VM gets it back.</p>
 <h2 id="good-to-know">Good to know</h2>
 <ul>
-<li><strong>Each bot for itself.</strong> A server one bot added is not shared with the others: ask each bot that needs it.</li>
-<li><strong>No more access than the bot.</strong> A server runs inside the bot's VM, or is reached through the workspace's network rules, so it can do only what the bot can.</li>
-<li><strong>Tokens in headers.</strong> A secret works when the server sends its token in an HTTP header, as most do. A server that needs the raw value itself, to sign requests for example, cannot use the placeholder.</li>
-<li><strong>Browser logins.</strong> Servers that sign in through a browser (OAuth) may not manage it from a VM: when there is a choice, give the bot a token instead.</li>
+<li><strong>Each bot for itself.</strong> A server one bot added is not shared with the others. Ask each bot that needs it.</li>
+<li><strong>No more access than the bot.</strong> A server runs inside the bot's VM or is reached through the workspace's network rules, so it can do only what the bot can.</li>
+<li><strong>Tokens in headers.</strong> A secret works when the server takes its token in an HTTP header, as most do. A server that needs the raw value itself, to sign requests for example, cannot use the placeholder.</li>
+<li><strong>Browser sign-ins.</strong> Servers that sign you in through a browser may not manage it from a VM. When there is a choice, give the bot a token instead.</li>
 </ul>
-<p>Household-wide MCP servers, set up once for every bot in a workspace, may come later. Until then, your bots are happy to help. 🙂</p>
+<h2 id="think-twice-about-a-browser">Think twice about a browser</h2>
+<p>You can ask a bot to install a browser server such as Playwright, and it works. We still wouldn't.</p>
+<ul>
+<li><strong>Pages talk back.</strong> Any page can carry text written for an AI rather than for you: &quot;ignore your instructions and…&quot;. This is called prompt injection, and no model is fully immune to it.</li>
+<li><strong>Your bot has a lot to lose.</strong> Your projects, its memory, the hosts your workspace allows, the keys it can use. A page that talks it into something does so with all of that at hand.</li>
+<li><strong>A browser is a huge program</strong> that reads whatever a page sends. Browser makers ship security fixes all the time, a hint at how often holes are found.</li>
+</ul>
+<p>A scout is made for this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your bot only if you pass them on. When your bot needs a website, let it <a href="../scouts/">call a scout</a>.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#ask-your-bot">Ask your bot</a></li><li><a href="#it-stays">It stays</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#ask-your-bot">Ask your bot</a></li><li><a href="#it-stays">It stays</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#think-twice-about-a-browser">Think twice about a browser</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen
