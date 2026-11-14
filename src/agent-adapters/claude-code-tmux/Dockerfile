@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=builder /claude /usr/local/bin/claude
 COPY seed/ /opt/household/seed/
 COPY --chmod=755 entrypoint.sh /usr/local/bin/household-entrypoint
+COPY --chmod=755 launch.py /usr/local/bin/household-claude-launch
 # Hooks and the MCP server come from root-owned files passed with --settings and --mcp-config: managed settings
 # would be replaced by the organisation's remote settings, and the agent user cannot edit these files.
 # (mkdir first: COPY --chmod would give a directory it creates the file's mode, 644.)

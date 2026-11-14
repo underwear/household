@@ -36,7 +36,16 @@ if [ "${ENABLE_CLAUDEAI_MCP_SERVERS:-false}" = "true" ]; then set --; fi
 directories=$(python3 -I -c 'import json, os; print(json.dumps([p for p in json.loads(os.environ.get("HOUSEHOLD_ADDITIONAL_DIRECTORIES", "[]")) if os.path.isdir(p)]))')
 settings=$(jq --argjson dirs "$directories" \
   '.permissions.additionalDirectories = $dirs' /etc/household/claude-settings.json)
-tmux new-session -d -s main -x 160 -y 48 -c "$workspace" claude --settings "$settings" \
+set -- claude --settings "$settings" \
   --mcp-config /etc/household/mcp.json "$@" --model "$HOUSEHOLD_MODEL" \
   --permission-mode "$HOUSEHOLD_PERMISSION_MODE" --append-system-prompt "$HOUSEHOLD_INSTRUCTIONS"
+# tmux's command message is bounded: carry large prompts/settings through a private
+# transient file instead. Snapshot this launch's environment, not an older tmux server's.
+launch=$(mktemp /tmp/household-claude-launch.XXXXXX)
+trap 'rm -f "$launch"' EXIT
+python3 -I -c 'import json, os, sys
+with open(sys.argv[1], "w") as out:
+    json.dump({"argv": sys.argv[2:], "env": dict(os.environ)}, out)
+' "$launch" "$@"
+tmux new-session -d -s main -x 160 -y 48 -c "$workspace" /usr/local/bin/household-claude-launch "$launch"
 while tmux has-session -t main 2>/dev/null; do sleep 2; done

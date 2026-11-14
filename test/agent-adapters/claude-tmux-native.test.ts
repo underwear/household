@@ -7,6 +7,7 @@ import type { Exec } from "../../src/core/agent";
 // Build the current adapter as household-qa-claude:0.9.3 first. No real accounts or network.
 test.skipIf(process.env.E2E_CLAUDE_TMUX !== "1")("native Claude 2.1.323 + tmux: startup, paste, queue, permissions, copy mode and interrupt", async () => {
   const name = `household-qa-tmux-${process.pid}`;
+  const instructions = "Synthetic QA\n" + 'literal $HOME $(touch /tmp/prompt-must-stay-data) `echo nope` "quotes" Привет 🐾\n'.repeat(500);
   async function docker(args: string[], stdin?: string) {
     const child = Bun.spawn(["docker", ...args], { stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
     const [output, error, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
@@ -37,15 +38,22 @@ test.skipIf(process.env.E2E_CLAUDE_TMUX !== "1")("native Claude 2.1.323 + tmux: 
     await idle();
   }
   try {
-    await docker(["run", "-d", "--name", name, "--network", "none", "--entrypoint", "sleep", "-e", "ANTHROPIC_API_KEY=sk-ant-api03-qa-fixture", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:18080", "-e", "HOUSEHOLD_MODEL=sonnet", "-e", "HOUSEHOLD_PERMISSION_MODE=manual", "-e", "HOUSEHOLD_INSTRUCTIONS=Synthetic QA", "-e", "HOUSEHOLD_EVENTS_URL=http://127.0.0.1:18080/events", "-e", "HOUSEHOLD_MCP_URL=http://127.0.0.1:18080/mcp", "-e", "DISABLE_TELEMETRY=1", "-e", 'HOUSEHOLD_ADDITIONAL_DIRECTORIES=["/volumes/server"]', process.env.CLAUDE_QA_IMAGE ?? "household-qa-claude:0.9.3", "infinity"]);
+    await docker(["run", "-d", "--name", name, "--network", "none", "--entrypoint", "sleep", "-e", "ANTHROPIC_API_KEY=sk-ant-api03-qa-fixture", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:18080", "-e", "HOUSEHOLD_MODEL=sonnet", "-e", "HOUSEHOLD_PERMISSION_MODE=manual", "-e", `HOUSEHOLD_INSTRUCTIONS=${instructions}`, "-e", "HOUSEHOLD_EVENTS_URL=http://127.0.0.1:18080/events", "-e", "HOUSEHOLD_MCP_URL=http://127.0.0.1:18080/mcp", "-e", "DISABLE_TELEMETRY=1", "-e", 'HOUSEHOLD_ADDITIONAL_DIRECTORIES=["/volumes/server"]', process.env.CLAUDE_QA_IMAGE ?? "household-qa-claude:0.9.3", "infinity"]);
     expect(await run(["claude", "--version"])).toStartWith("2.1.323 ");
     // An existing home can contain Python modules and user settings. Neither may change startup plumbing.
     await run(["sh", "-c", 'printf \'raise RuntimeError("must not import from bot home")\n\' > "$HOME/json.py"; mkdir -p "$HOME/.claude"; printf \'{"promptSuggestionEnabled":true}\' > "$HOME/.claude/settings.json"']);
     await docker(["cp", join(import.meta.dir, "native-fixtures/claude-provider.py"), `${name}:/tmp/provider.py`]);
     await docker(["exec", "-d", name, "python3", "/tmp/provider.py"]);
     await docker(["exec", "-u", "root", name, "sh", "-c", "mkdir -p /volumes/server /volumes/other; printf 'public memory' > /volumes/server/memory.txt; printf 'private fixture' > /volumes/other/memory.txt"]);
+    // An older tmux server must not supply stale configuration to the pane launcher.
+    await run(["env", "HOUSEHOLD_INSTRUCTIONS=stale", "HOUSEHOLD_MODEL=stale", "tmux", "new-session", "-d", "-s", "preexisting", "sleep", "infinity"]);
     await docker(["exec", "-d", name, "household-entrypoint"]);
     await until(async () => (await claudeCodeTmux.isReady(exec)).ready, "startup");
+    const launched = JSON.parse(await run(["python3", "-I", "-c", 'import glob,json; matches=[]\nfor path in glob.glob("/proc/[0-9]*/cmdline"):\n try: args=open(path,"rb").read().split(b"\\0")\n except OSError: continue\n if b"--append-system-prompt" in args: matches.append([a.decode() for a in args])\nprint(json.dumps(matches))']));
+    expect(launched).toHaveLength(1);
+    expect(launched[0][launched[0].indexOf("--append-system-prompt") + 1]).toBe(instructions);
+    expect(launched[0][launched[0].indexOf("--model") + 1]).toBe("sonnet");
+    expect(await run(["sh", "-c", "test ! -e /tmp/prompt-must-stay-data && find /tmp -maxdepth 1 -name 'household-claude-launch.*'"])).toBe("");
     const multiline = 'Привет 🐾 $HOME `literal`\nsecond line';
     expect(await claudeCodeTmux.send(exec, multiline, () => true)).toEqual({ status: "sent" });
     await until(() => accepted(multiline), "literal multiline prompt");
@@ -188,6 +196,18 @@ test.skipIf(process.env.E2E_CLAUDE_TMUX !== "1")("native Claude 2.1.323 + tmux: 
     await done("auto shared memory");
     expect((await hooks()).some(h => h.hook_event_name === "PostToolUse" && h.tool_use_id === "toolu_auto_read")).toBe(true);
     expect((await hooks()).some(h => h.hook_event_name === "PermissionRequest" && h.permission_mode === "auto")).toBe(false);
+
+    // Check the actual model requests, not just Claude's process arguments, across
+    // ordinary turns and both restarts above. The whole append must remain system text.
+    const requests = (await run(["cat", "/tmp/qa/requests.jsonl"])).trim().split(/\n/)
+      .map(line => JSON.parse(line)).filter(request => request.stream && request.tools?.length);
+    expect(requests.length).toBeGreaterThan(10);
+    for (const request of requests) {
+      const system = typeof request.system === "string" ? request.system
+        : request.system.map((block: { text?: string }) => block.text ?? "").join("\n");
+      expect(system).toContain(instructions);
+      expect(system.split(instructions)).toHaveLength(2);
+    }
 
   } finally {
     const fs = await import("node:fs/promises");

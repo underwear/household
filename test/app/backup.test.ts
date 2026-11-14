@@ -202,7 +202,7 @@ test("round trip: import into an empty Household restores the config (600), the 
   expect(statSync(paths.configFile).mode & 0o777).toBe(0o600);
   // The same CA: pets keep trusting it.
   expect(readFileSync(join(paths.tlsDir, "ca.key"), "utf8")).toBe("CA-KEY");
-  expect(readdirSync(paths.tlsDir)).toEqual(["ca.crt", "ca.key"]); // the leaf: made on the next start
+  expect(readdirSync(paths.tlsDir).sort()).toEqual(["ca.crt", "ca.key"]); // the leaf: made on the next start
   expect(statSync(paths.tlsDir).mode & 0o777).toBe(0o700);
   expect(["ca.crt", "ca.key"].map((name) => statSync(join(paths.tlsDir, name)).mode & 0o777)).toEqual([0o600, 0o600]);
   expect(lines).toEqual([

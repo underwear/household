@@ -69,7 +69,7 @@ test("provisioning: CA trust in env; the key's placeholder by its kind, the real
   // claude's question about an API key counts as a dialog on screen (should it come anyway).
   expect(inputBox("Detected a custom API key in your environment\n❯ 1. Yes")).toBeUndefined();
   expect(claudeCodeTmux.home).toBe("/home/agent");
-  for (const file of ["Dockerfile", "entrypoint.sh", "household-hook", "mcp.json", "seed/.claude.json", "seed/.claude/settings.json"]) {
+  for (const file of ["Dockerfile", "entrypoint.sh", "launch.py", "household-hook", "mcp.json", "seed/.claude.json", "seed/.claude/settings.json"]) {
     expect(existsSync(join(claudeCodeTmux.imageContext, file))).toBe(true);
   }
 });
@@ -574,12 +574,12 @@ test("scheduled readiness distinguishes busy Claude from its editable input box"
 test("account connectors are opt-in for pets and always off for scouts, including the launch arguments", () => {
   const context = { caCertPath: "/ca", eventsUrl: "http://gw/events", mcpUrl: "http://gw/mcp", instructions: "", model: "opus" };
   const entrypoint = readFileSync(join(claudeCodeTmux.imageContext, "entrypoint.sh"), "utf8");
-  const launch = entrypoint.slice(entrypoint.indexOf("set -- --strict-mcp-config"));
+  const launch = entrypoint.slice(entrypoint.indexOf("set -- --strict-mcp-config"), entrypoint.indexOf("launch=$(mktemp"));
   for (const scout of [false, true]) for (const enabled of [undefined, "false", "true"]) {
     const env = claudeCodeTmux.env({ ...context, scout, settings: enabled ? { claudeAiConnectors: enabled } : {} });
     const expected = !scout && enabled === "true";
     expect(env.ENABLE_CLAUDEAI_MCP_SERVERS).toBe(String(expected));
-    const result = Bun.spawnSync(["sh", "-c", `tmux() { if [ "$1" = has-session ]; then return 1; fi; printf '%s\n' "$@"; }; ${launch}`], { env });
+    const result = Bun.spawnSync(["sh", "-c", `python3() { printf '[]'; }; jq() { printf '{}'; }; ${launch}\nprintf '%s\n' "$@"`], { env });
     expect(result.exitCode).toBe(0);
     const args = result.stdout.toString().trim().split("\n");
     expect(args.includes("--strict-mcp-config")).toBe(!expected);
