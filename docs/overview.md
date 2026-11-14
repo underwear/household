@@ -37,7 +37,7 @@ A bot is a capable agent with a shell and root in its VM. Household assumes it w
 - **A VM per bot, not a container.** Every bot, sideworker and scout runs in its own hardware-virtualised microVM with its own Linux kernel, and sees none of your files or other bots' except folders you share.
 - **One way out, through an allowlist.** A VM's only route out is Household's proxy, which passes only the hosts on the workspace's allowlist. For a new host the bot asks in the chat, and you choose **Allow 15 min**, **Allow forever** or **Deny**.
 - **Secrets substituted at egress.** Inside the VM a secret is a placeholder; the proxy swaps in the real value only in requests to that secret's own hosts. Anywhere else, a placeholder is a useless string.
-- **Scouts for what a bot should not hold.** The open web, a production key or a closed network go to a scout, which starts only when you press **Run**. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.
+- **Scouts for what a bot should not hold.** Errands on sites you don't trust, or a purchase with your card, go to a scout, which starts only when you press **Run**. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.
 - **You approve the rest.** New hosts, folders of your computer, preview links and, with **Ask me first**, every change a connector would make wait for an owner.
 
 ⚠️ Placeholders don't work for SSH keys, database passwords or signed requests: those need the real value inside the VM. See [What a placeholder cannot do](network/#what-a-placeholder-cannot-do).
@@ -67,7 +67,7 @@ A bot can rewrite its own instructions, skills and setup scripts. That changes h
 
 Bots in one workspace share the allowlist, secrets, shared skills, connected accounts, channels and owners. Make a second workspace when:
 
-- one bot reads untrusted input (mail from strangers, guests, the open web) and another holds something valuable (a production key, your private mailbox);
+- one bot reads untrusted input (mail from strangers, guests, the open web) and another holds something valuable (your private mailbox, a server's keys);
 - different people should own the bots, such as your family and your team;
 - the bots need a budget of their own.
 

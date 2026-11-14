@@ -209,7 +209,7 @@
 <li><strong>A VM per bot, not a container.</strong> Every bot, sideworker and scout runs in its own hardware-virtualised microVM with its own Linux kernel, and sees none of your files or other bots' except folders you share.</li>
 <li><strong>One way out, through an allowlist.</strong> A VM's only route out is Household's proxy, which passes only the hosts on the workspace's allowlist. For a new host the bot asks in the chat, and you choose <strong>Allow 15 min</strong>, <strong>Allow forever</strong> or <strong>Deny</strong>.</li>
 <li><strong>Secrets substituted at egress.</strong> Inside the VM a secret is a placeholder; the proxy swaps in the real value only in requests to that secret's own hosts. Anywhere else, a placeholder is a useless string.</li>
-<li><strong>Scouts for what a bot should not hold.</strong> The open web, a production key or a closed network go to a scout, which starts only when you press <strong>Run</strong>. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.</li>
+<li><strong>Scouts for what a bot should not hold.</strong> Errands on sites you don't trust, or a purchase with your card, go to a scout, which starts only when you press <strong>Run</strong>. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.</li>
 <li><strong>You approve the rest.</strong> New hosts, folders of your computer, preview links and, with <strong>Ask me first</strong>, every change a connector would make wait for an owner.</li>
 </ul>
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Placeholders don't work for SSH keys, database passwords or signed requests: those need the real value inside the VM. See <a href="network/#what-a-placeholder-cannot-do">What a placeholder cannot do</a>.</p>
@@ -234,7 +234,7 @@
 <h3 id="workspaces-are-trust-boundaries">Workspaces are trust boundaries</h3>
 <p>Bots in one workspace share the allowlist, secrets, shared skills, connected accounts, channels and owners. Make a second workspace when:</p>
 <ul>
-<li>one bot reads untrusted input (mail from strangers, guests, the open web) and another holds something valuable (a production key, your private mailbox);</li>
+<li>one bot reads untrusted input (mail from strangers, guests, the open web) and another holds something valuable (your private mailbox, a server's keys);</li>
 <li>different people should own the bots, such as your family and your team;</li>
 <li>the bots need a budget of their own.</li>
 </ul>

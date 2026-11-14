@@ -174,36 +174,30 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Provider keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="./" aria-current="page">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Scouts</h1>
-<p class="lead">A scout is a specialist your bots call for one task they should not do themselves: &quot;buy two bus tickets&quot;, &quot;read the reviews on this unfamiliar site&quot;, &quot;check last night's errors in production&quot;. It runs in a fresh VM with only the access you gave it, nothing of the bot's, starts only when you press <strong>Run</strong>, and is deleted when done. Turn scouts on in workspace settings.</p>
-<h2 id="how-it-works">How it works</h2>
+<p class="lead">A scout is a helper your bot calls for one errand it shouldn't do itself: &quot;buy me a bus ticket for Friday&quot;, &quot;read the reviews on this unfamiliar site&quot;. It starts in a fresh VM with only what that errand needs, waits for your OK, and is deleted when it's done. Turn scouts on in workspace settings.</p>
+<h2 id="why-not-let-the-bot-do-it">Why not let the bot do it</h2>
+<p>Your bot holds a lot: your files, its memory, your connected accounts. A web page can carry text written to trick an AI. A scout goes there instead, carrying nothing of yours but what the errand needs, so a tricked scout has little to give away, and what it read reaches your bot only if you pass it on.</p>
+<h2 id="how-an-errand-goes">How an errand goes</h2>
+<p>Say you ask your bot to buy a bus ticket.</p>
 <ol>
-<li><strong>A bot calls a scout</strong> with a task and what counts as success, picking by the scout's description: say there when to call it.</li>
-<li><strong>You approve it.</strong> A card shows the task, capabilities, network, keys and names of secrets the bot hands over. Nothing starts until you press <strong>Run</strong>.</li>
-<li><strong>It works in its own thread</strong>, where you follow and talk to it.</li>
-<li><strong>Its bot gets facts, not text:</strong> status, steps, tools, domains and secrets used, file handles. Its words and files reach the bot only when you pass them, one decision each, as untrusted input, keeping hostile content away from all the bot can reach.</li>
-<li><strong>It reports success, failure or blocked.</strong> <strong>Close</strong> deletes its VM; nothing carries over.</li>
+<li><strong>The bot calls a scout</strong> with a browser and hands it only what the purchase needs, such as your card details and the booking site's login.</li>
+<li><strong>You approve it.</strong> A card in the chat shows the task, where the scout may go and which secrets it gets. Nothing starts until you press <strong>Run</strong>.</li>
+<li><strong>It does the errand</strong> in its own thread, where you can follow it and answer if it asks for something more.</li>
+<li><strong>It reports</strong> done, failed or blocked. Your bot learns how it went, but the scout's words and files reach the bot only when you pass them on. <strong>Close</strong> deletes its VM; nothing carries over.</li>
 </ol>
-<h2 id="example-scouts">Example scouts</h2>
+<h2 id="scouts-to-start-with">Scouts to start with</h2>
 <ul>
-<li><strong>General</strong> (built in): a browser, media and developer tools, open internet, no keys. Tricked, it has nothing of yours to give away.</li>
-<li><strong>prod-ops</strong>: the Heroku CLI and a read-only database connection, reaching only those two hosts.</li>
-<li><strong>shopper</strong>: buys tickets on sites without an API, with card details for one run only.</li>
+<li><strong>General</strong> (built in): a browser and everyday tools, the open internet, no keys. For reading sites you don't trust: tricked, it has nothing of yours to give away.</li>
+<li><strong>A shopper</strong>: a browser with your card details for one run, allowed to reach only the shop.</li>
 </ul>
 <h2 id="what-you-decide">What you decide</h2>
-<p><strong>Capabilities.</strong> Each is one small thing a scout can do, like &quot;the Heroku CLI and its key&quot;: an install script (run as root at every start), a network rule, keys, skills. Scouts combine several. Bots can draft one; nothing changes until you apply it.</p>
-<p><strong>Any host or only these hosts.</strong> <strong>Any host</strong> suits a tool that needs only software. <strong>Only these hosts</strong> is for access: a scout with one reaches only its capabilities' hosts, even if it also has the browser. Give every capability with a key a host list, including its install script's download hosts. Mid-task it can ask for one more host, for that run only. Private hosts must always be listed.</p>
-<p><strong>Through the gateway or inside its VM</strong>, for each key:</p>
-<ul>
-<li><strong>Through the gateway.</strong> The scout sees a placeholder; Household adds the real value to HTTPS headers to the key's hosts, so the key must go in a header. A tricked scout cannot reveal what it never held: use it whenever you can.</li>
-<li><strong>Inside its VM.</strong> The real value, for database clients, SSH and tools that need it. Household masks it in what the scout posts, but a tricked scout could still disclose it. Pair it with <strong>Only these hosts</strong> and a read-only or limited key.</li>
-</ul>
-<p>Secrets the bot hands over are named on the Run card; the scout asks you in its thread for any it needs mid-task. They stay in that run's VM.</p>
+<p><strong>Capabilities.</strong> A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you; nothing changes until you apply it.</p>
+<p><strong>Any host or only these hosts.</strong> <strong>Any host</strong> suits a scout that only reads the web. A scout that carries a card or a password should reach <strong>only these hosts</strong>, the ones its errand needs; mid-task it can ask you for one more, for that run only.</p>
+<p><strong>Secrets.</strong> Most keys stay hidden even from the scout: it holds a placeholder, and Household fills in the real value on the way out (see <a href="../network/">Network and secrets</a>). Card details typed into a page need the real value inside the scout's VM; Household hides it in what the scout posts, and the VM is deleted after the run. Give a scout like that <strong>only these hosts</strong>.</p>
 <p>A run holds CPU and memory from the moment it waits for <strong>Run</strong>; see <a href="../resources/">Resources</a>.</p>
-<h2 id="put-it-to-use">Put it to use</h2>
-<p><strong>A night ops bot.</strong> A <a href="../inboxes/#alerts">Grafana inbox</a> wakes your ops bot when an alert fires. It calls <strong>prod-ops</strong>; you press <strong>Run</strong> from your phone and pass on the findings only if the bot should act.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#example-scouts">Example scouts</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#put-it-to-use">Put it to use</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#why-not-let-the-bot-do-it">Why not let the bot do it</a></li><li><a href="#how-an-errand-goes">How an errand goes</a></li><li><a href="#scouts-to-start-with">Scouts to start with</a></li><li><a href="#what-you-decide">What you decide</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

@@ -81,7 +81,7 @@ Install the `household` skill too, for running Household afterwards:
 - **Owners decide.** Only workspace owners can give a bot orders; everyone else in a chat is a guest. Network grants,
   secrets, shared folders, scout runs and HTTP previews of a bot's web app (a 15-minute link) each need the owner's
   approval in the chat.
-- **Scouts for what a bot should not hold.** The untrusted internet, a production key or a closed network go to a
+- **Scouts for what a bot should not hold.** Errands on untrusted sites, purchases with your card, a key a bot shouldn't hold go to a
   scout. A scout with an access capability reaches only that capability's hosts; its keys never reach the bot, and
   its words and files reach the bot only when the owner passes them, as untrusted input.
 - **Budgets.** Each workspace has one CPU/RAM budget (8 vCPU / 8 GiB by default); bots reserve their share and

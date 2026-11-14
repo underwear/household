@@ -1,36 +1,31 @@
 # Scouts
 
-A scout is a specialist your bots call for one task they should not do themselves: "buy two bus tickets", "read the reviews on this unfamiliar site", "check last night's errors in production". It runs in a fresh VM with only the access you gave it, nothing of the bot's, starts only when you press **Run**, and is deleted when done. Turn scouts on in workspace settings.
+A scout is a helper your bot calls for one errand it shouldn't do itself: "buy me a bus ticket for Friday", "read the reviews on this unfamiliar site". It starts in a fresh VM with only what that errand needs, waits for your OK, and is deleted when it's done. Turn scouts on in workspace settings.
 
-## How it works
+## Why not let the bot do it
 
-1. **A bot calls a scout** with a task and what counts as success, picking by the scout's description: say there when to call it.
-2. **You approve it.** A card shows the task, capabilities, network, keys and names of secrets the bot hands over. Nothing starts until you press **Run**.
-3. **It works in its own thread**, where you follow and talk to it.
-4. **Its bot gets facts, not text:** status, steps, tools, domains and secrets used, file handles. Its words and files reach the bot only when you pass them, one decision each, as untrusted input, keeping hostile content away from all the bot can reach.
-5. **It reports success, failure or blocked.** **Close** deletes its VM; nothing carries over.
+Your bot holds a lot: your files, its memory, your connected accounts. A web page can carry text written to trick an AI. A scout goes there instead, carrying nothing of yours but what the errand needs, so a tricked scout has little to give away, and what it read reaches your bot only if you pass it on.
 
-## Example scouts
+## How an errand goes
 
-- **General** (built in): a browser, media and developer tools, open internet, no keys. Tricked, it has nothing of yours to give away.
-- **prod-ops**: the Heroku CLI and a read-only database connection, reaching only those two hosts.
-- **shopper**: buys tickets on sites without an API, with card details for one run only.
+Say you ask your bot to buy a bus ticket.
+
+1. **The bot calls a scout** with a browser and hands it only what the purchase needs, such as your card details and the booking site's login.
+2. **You approve it.** A card in the chat shows the task, where the scout may go and which secrets it gets. Nothing starts until you press **Run**.
+3. **It does the errand** in its own thread, where you can follow it and answer if it asks for something more.
+4. **It reports** done, failed or blocked. Your bot learns how it went, but the scout's words and files reach the bot only when you pass them on. **Close** deletes its VM; nothing carries over.
+
+## Scouts to start with
+
+- **General** (built in): a browser and everyday tools, the open internet, no keys. For reading sites you don't trust: tricked, it has nothing of yours to give away.
+- **A shopper**: a browser with your card details for one run, allowed to reach only the shop.
 
 ## What you decide
 
-**Capabilities.** Each is one small thing a scout can do, like "the Heroku CLI and its key": an install script (run as root at every start), a network rule, keys, skills. Scouts combine several. Bots can draft one; nothing changes until you apply it.
+**Capabilities.** A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you; nothing changes until you apply it.
 
-**Any host or only these hosts.** **Any host** suits a tool that needs only software. **Only these hosts** is for access: a scout with one reaches only its capabilities' hosts, even if it also has the browser. Give every capability with a key a host list, including its install script's download hosts. Mid-task it can ask for one more host, for that run only. Private hosts must always be listed.
+**Any host or only these hosts.** **Any host** suits a scout that only reads the web. A scout that carries a card or a password should reach **only these hosts**, the ones its errand needs; mid-task it can ask you for one more, for that run only.
 
-**Through the gateway or inside its VM**, for each key:
-
-- **Through the gateway.** The scout sees a placeholder; Household adds the real value to HTTPS headers to the key's hosts, so the key must go in a header. A tricked scout cannot reveal what it never held: use it whenever you can.
-- **Inside its VM.** The real value, for database clients, SSH and tools that need it. Household masks it in what the scout posts, but a tricked scout could still disclose it. Pair it with **Only these hosts** and a read-only or limited key.
-
-Secrets the bot hands over are named on the Run card; the scout asks you in its thread for any it needs mid-task. They stay in that run's VM.
+**Secrets.** Most keys stay hidden even from the scout: it holds a placeholder, and Household fills in the real value on the way out (see [Network and secrets](../network/)). Card details typed into a page need the real value inside the scout's VM; Household hides it in what the scout posts, and the VM is deleted after the run. Give a scout like that **only these hosts**.
 
 A run holds CPU and memory from the moment it waits for **Run**; see [Resources](../resources/).
-
-## Put it to use
-
-**A night ops bot.** A [Grafana inbox](../inboxes/#alerts) wakes your ops bot when an alert fires. It calls **prod-ops**; you press **Run** from your phone and pass on the findings only if the bot should act.

@@ -12,7 +12,7 @@ A bot is a long-lived assistant: a coding-agent harness such as Claude Code or C
 | Access | The workspace's | Its bot's | Only what you set |
 | Starts | When you add it | When its bot decides | When you press **Run** |
 
-Projects and long-lived context belong to a bot, a parallel job to a [sideworker](../sideworkers/), the untrusted internet or a production key to a [scout](../scouts/). Switch the last two under **Workspace → Settings → Features**.
+Projects and long-lived context belong to a bot, a parallel job to a [sideworker](../sideworkers/), an errand on a site you don't trust, or a purchase with your card, to a [scout](../scouts/). Switch the last two under **Workspace → Settings → Features**.
 
 ## How it works
 
