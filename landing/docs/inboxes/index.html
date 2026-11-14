@@ -173,115 +173,73 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="./" aria-current="page">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Automation</p><h1>Inboxes</h1>
-<p class="lead">An inbox watches a source — a mailbox, a feed, a website, your alerts, a Telegram bot or your own endpoint — and hands each new event to the bots you choose. A site goes down, and your ops bot hears about it within minutes, without you asking.</p>
-<p>An inbox is not a <a href="../connectors/">connector</a>. A connector lets bots look things up in an account when they need to; it never wakes them. An inbox does the opposite: it brings new events to bots, but gives them no access to the account itself. Watching a mailbox in an inbox doesn't let bots search older mail or send replies. For that, also connect the mailbox as a connector.</p>
-<h2 id="when-it-helps">When it helps</h2>
-<ul>
-<li><strong>Mail that needs handling:</strong> invoices, support requests, a shared family address.</li>
-<li><strong>Your services:</strong> a failed health check or an alert wakes a bot to look into it.</li>
-<li><strong>Things you follow:</strong> releases, a price, a status.</li>
-<li><strong>People outside your chats:</strong> a public Telegram bot or your own app sends work to your bots.</li>
-</ul>
+<p class="lead">An inbox watches a source, for example a mailbox, a feed, a website, your alerts, a Telegram bot or your own endpoint, and hands each new event to the bots you choose. A site goes down, and your ops bot hears within minutes, without you asking.</p>
 <h2 id="how-it-works">How it works</h2>
 <ul>
-<li><strong>Household checks the source</strong> from its own computer, every 5 minutes by default. Passwords, tokens and keys stay there and never reach a bot's VM.</li>
+<li><strong>Household checks the source</strong> from its own computer, every 5 minutes by default. Passwords and tokens never reach a bot's VM.</li>
 <li><strong>Sources stay as they are.</strong> IMAP leaves messages unread, POP3 never deletes, a watched Telegram bot never sends.</li>
-<li><strong>Each new event is saved, then delivered</strong> to the bots that receive it, in the inbox's channel. A busy bot gets it when free; a paused or stopped bot gets a short catch-up summary instead of a pile of messages.</li>
-<li><strong>Every bot keeps an inbox history</strong> on Household's computer and can search it. It holds only events sent to that bot, survives removing the inbox, and is part of <a href="../backup/">backups</a>.</li>
-<li><strong>Events are outside data, never your instructions.</strong> Anyone can send you an email or put text in a feed, so a bot reads an event the way it reads a stranger's message. Give a bot that receives your mail only the access it needs.</li>
+<li><strong>Each new event is saved, then delivered</strong> to the bots that receive it, in the inbox's channel. A stopped bot gets a short catch-up summary later.</li>
+<li><strong>Each bot keeps a searchable history</strong> of its events, included in <a href="../backup/">backups</a>.</li>
+<li><strong>Events are outside data, never your instructions.</strong> Anyone can email you or write in a feed, so a bot reads an event like a stranger's message. Give a bot that receives your mail only the access it needs.</li>
 </ul>
 <h2 id="what-you-decide">What you decide</h2>
 <h3 id="inbox-connector-or-schedule">Inbox, connector or schedule?</h3>
 <ul>
 <li><strong>An inbox</strong> wakes a bot when something new arrives. It gives no access to the account.</li>
-<li><strong>A <a href="../connectors/">connector</a></strong> lets a bot search and act in an account when asked. It never wakes the bot.</li>
-<li><strong>A <a href="../schedules/">scheduled task</a></strong> wakes a bot at a set time, whatever has arrived.</li>
+<li><strong>A <a href="../connectors/">connector</a></strong> lets a bot search and act in an account. It never wakes the bot.</li>
+<li><strong>A <a href="../schedules/">scheduled task</a></strong> wakes a bot at a set time.</li>
 </ul>
-<p>They combine: an inbox brings mail in, a connector lets the bot reply, a schedule sets when you hear.</p>
+<p>They combine: an inbox brings mail, a connector lets the bot reply, a schedule sets when you hear.</p>
 <h3 id="who-gets-the-events">Who gets the events</h3>
-<p>Each bot in the inbox's channel has <strong>Receives</strong> and <strong>Silent</strong>, and the inbox has <strong>Post events in the channel</strong>. Together they give three ways to use it:</p>
+<p>Each bot in the inbox's channel has <strong>Receives</strong> and <strong>Silent</strong>, and the inbox has <strong>Post events in the channel</strong>:</p>
 <table>
 <thead>
 <tr><th>Mode</th><th>What happens</th><th>Use it for</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>Receives</strong></td><td>The bot is woken for each event.</td><td>What needs action soon: a site down, an alert, a support request.</td></tr>
-<tr><td><strong>Silent</strong></td><td>The event goes to the bot's history only. It isn't woken, but finds it when you ask or on a schedule.</td><td>Volume you want summarised, not interruptions: newsletters, release feeds, all mail for a morning digest.</td></tr>
-<tr><td><strong>Post only</strong></td><td>Posting on, no bot receiving: one message per event in the channel.</td><td>A plain feed for the people in a group: releases, a status page.</td></tr>
+<tr><td><strong>Receives</strong></td><td>The bot is woken for each event.</td><td>What needs action soon: a site down, an alert.</td></tr>
+<tr><td><strong>Silent</strong></td><td>The event goes to the bot's history only; the bot finds it when you ask or on a schedule.</td><td>Volume you want summarised: newsletters, a morning mail digest.</td></tr>
+<tr><td><strong>Post only</strong></td><td>No bot receives; each event is posted in the channel.</td><td>A plain feed for a group: releases, a status page.</td></tr>
 </tbody>
 </table>
-<p>Posting is separate from the bots. On, everyone in the channel sees each event, guests included: keep it off for mail and anything private. Off, only the chosen bots get events, and at least one must receive. Only bots in the inbox's channel can receive.</p>
-<h3 id="first-check-and-frequency">First check and frequency</h3>
-<p>On the first check an inbox skips what is there (the default) or delivers up to 50 existing events. It checks every 5 minutes by default, from every minute to once a day. Check alerts often: one that fires and clears between two checks can be missed.</p>
-<h2 id="set-it-up">Set it up</h2>
-<p>Add one under <strong>Workspace → Inboxes → + Add inbox</strong>; a bot's own <strong>Inboxes</strong> tab sets its switches too. The connection test posts nothing and tells no bot. Web sources take credentials as request headers. Redirects are not followed, so enter the final address.</p>
+<p>With posting on, everyone in the channel sees each event, guests included: keep it off for mail and anything private.</p>
+<p>On its first check an inbox skips what is there, unless you ask for up to 50 existing events. Check alerts often: one that fires and clears between two checks is missed.</p>
 <h2 id="mail">Mail</h2>
-<p><strong>IMAP</strong> watches one folder, usually <code>INBOX</code>; <strong>POP3</strong> watches the mailbox. Mail arrives as plain text, up to 16,000 characters per event, without attachments. Take the server, port and connection security from your provider's help pages. <strong>TLS</strong> and <strong>STARTTLS</strong> both check the server's certificate, and neither ever falls back to an unencrypted connection. Many providers want an app password rather than your normal one. Mailboxes that allow only signing in through Google or Microsoft are not supported.</p>
-<p><em>Recipe:</em> point an inbox at <code>invoices@</code> with a bookkeeping bot on <strong>Receives</strong>: it notes each invoice and its due date as it comes.</p>
-<p><strong>Proton Mail</strong> works through Proton Mail Bridge on the same computer as Household. Use the IMAP server, port and password Bridge shows (usually <code>127.0.0.1</code>, port <code>1143</code>, <strong>STARTTLS</strong>), not your Proton password. In Bridge, open <strong>Settings → Advanced settings → Export TLS certificates</strong> and paste the certificate into <strong>Trusted certificate</strong>; never paste the private key. If Bridge makes a new certificate, paste the new one.</p>
-<h2 id="feeds">Feeds</h2>
-<p><strong>RSS / Atom</strong> delivers new entries from a feed. An entry that is edited later is not sent again.</p>
-<p><em>Recipe:</em> the release feeds of the tools you use, <strong>Silent</strong> to your coding bot, and a Friday task: &quot;tell me which releases matter for our projects&quot;.</p>
-<h2 id="health-checks">Health checks</h2>
-<p><strong>Health check</strong> watches that an address answers with the expected status (200 by default) within a timeout (10 seconds by default). After a number of failures in a row (3 by default, 1–10), bots get one &quot;down&quot; event; the first passing check after it sends &quot;recovered&quot;. A site that is already down when you add it still alerts.</p>
-<p><em>Recipe:</em> your site, with an ops bot on <strong>Receives</strong> that looks into it and tells you more than &quot;it's down&quot;.</p>
-<h2 id="changes-in-json">Changes in JSON</h2>
-<p><strong>JSON watcher</strong> sends an event when a JSON answer changes: the whole response, or selected fields, one path per line:</p>
-<pre><code class="language-text">/price
-/status
-/items/0/available
-</code></pre>
-<p>Key order and spacing don't count as changes; the order of list items does.</p>
-<p><em>Recipe:</em> a shop's product API, watching <code>/price</code> and <code>/available</code>, with a bot that tells you only when the price drops below what you named.</p>
+<p><strong>IMAP</strong> watches one folder, <strong>POP3</strong> the mailbox. Mail arrives as plain text, no attachments. Many providers want an app password; Google- or Microsoft-only sign-ins don't work. For <strong>Proton Mail</strong>, run Proton Mail Bridge on Household's computer, use the server and password it shows, and paste its exported certificate into <strong>Trusted certificate</strong>, never the private key.</p>
+<h2 id="feeds-and-websites">Feeds and websites</h2>
+<ul>
+<li><strong>RSS / Atom</strong> delivers new entries; edited ones aren't sent again.</li>
+<li><strong>Health check</strong> sends one &quot;down&quot; event after failures in a row (3 by default), then &quot;recovered&quot;.</li>
+<li><strong>JSON watcher</strong> sends an event when a JSON answer changes, or only chosen fields, such as <code>/price</code>.</li>
+</ul>
 <h2 id="alerts">Alerts</h2>
 <ul>
 <li><strong>Grafana</strong> delivers alerts and their state changes. Put a service account token in the <code>Authorization</code> header (<code>Bearer &lt;token&gt;</code>).</li>
 <li><strong>Datadog</strong> delivers state changes of one monitor. Fill in the <code>DD-API-KEY</code> and <code>DD-APPLICATION-KEY</code> headers.</li>
 </ul>
 <p>Give the token or keys read access only.</p>
-<p><em>Recipe:</em> see the night ops bot below.</p>
 <h2 id="telegram-bot">Telegram bot</h2>
-<p><strong>Telegram Bot Updates</strong> delivers what people send to a Telegram bot. Create a bot with BotFather just for this inbox. Don't reuse a bot from your channels: the inbox takes the bot's updates, so nothing else can read them, and a bot with a webhook is refused. Telegram keeps waiting updates for 24 hours only.</p>
-<p><em>Recipe:</em> a public feedback bot for your project. People write to it; your bot sorts what they send and gives you a summary each evening.</p>
-<h2 id="put-it-to-use">Put it to use</h2>
-<p><strong>A night ops bot.</strong> A Grafana inbox, posting off, with your ops bot on <strong>Receives</strong>. When an alert fires, the bot reads it and calls a <a href="../scouts/">scout</a> that holds the production key. You press <strong>Run</strong> from your phone and read the findings in the scout's thread.</p>
-<p><strong>A mail triage bot.</strong> An IMAP inbox with the bot on <strong>Silent</strong>, the <a href="../connectors/">Email connector</a> with <strong>Ask me first</strong>, and a <a href="../schedules/">scheduled task</a> at 9:00: &quot;summarise yesterday's mail and draft replies to what needs one&quot;. Nothing goes out until you approve it.</p>
-<h2 id="limits-and-good-to-know">Limits and good to know</h2>
-<ul>
-<li>Up to 30 inboxes per workspace.</li>
-<li>A failing source is retried with growing pauses, up to an hour (or the inbox's own interval, if longer). After 3 failed checks in a row, the inbox shows the reason on its page and its bots are told once; they hear again when it recovers.</li>
-<li>Events are saved before they are delivered, so a restart doesn't lose them. Rarely, around a crash, a channel post can appear twice.</li>
-<li>Changing a password or header keeps the inbox's place. Changing the address, server, account, folder or monitor starts it over, as on a first check. The source and channel can't change while events still wait for delivery.</li>
-<li>Removing an inbox drops events still waiting; what it posted stays.</li>
-</ul>
+<p><strong>Telegram Bot Updates</strong> delivers what people send to a Telegram bot, such as a public feedback bot. Create one with BotFather just for this inbox. Don't reuse a bot from your channels: the inbox takes its updates, so nothing else can read them.</p>
 <h2 id="custom-http">Custom HTTP</h2>
-<p><strong>Custom HTTP</strong> reads events from an endpoint you run. Use it to bring your own app's events (new orders, tickets, sign-ups) to your bots.</p>
-<p>Household calls <code>GET &lt;your URL&gt;?limit=50</code>, adding <code>cursor=&lt;value&gt;</code> once you have returned one. Answer <code>200</code> with:</p>
+<p><strong>Custom HTTP</strong> reads your own app's events from an endpoint you run. Household calls <code>GET &lt;your URL&gt;?limit=50</code>, adding <code>cursor=&lt;value&gt;</code> once you return one. Answer <code>200</code> with events oldest first:</p>
 <pre><code class="language-json">{
   &quot;version&quot;: 1,
-  &quot;items&quot;: [
-    {
-      &quot;id&quot;: &quot;ticket-184:revision-3&quot;,
-      &quot;title&quot;: &quot;Payment service latency&quot;,
-      &quot;text&quot;: &quot;p95 latency exceeded 2 seconds for five minutes.&quot;,
-      &quot;url&quot;: &quot;https://status.example.com/incidents/184&quot;,
-      &quot;occurredAt&quot;: &quot;2026-11-09T08:30:00Z&quot;,
-      &quot;metadata&quot;: { &quot;service&quot;: &quot;payments&quot;, &quot;severity&quot;: &quot;warning&quot; }
-    }
-  ],
+  &quot;items&quot;: [{ &quot;id&quot;: &quot;ticket-184:rev-3&quot;, &quot;title&quot;: &quot;Payment latency&quot;, &quot;text&quot;: &quot;p95 over 2 s.&quot; }],
   &quot;nextCursor&quot;: &quot;184&quot;
 }
 </code></pre>
-<p><code>items</code> holds up to 50 events, oldest first. Each needs a stable <code>id</code> (a changed event needs a new one), a <code>title</code> (up to 300 characters) and plain <code>text</code> (up to 16,000 characters); <code>url</code>, <code>occurredAt</code> and a small <code>metadata</code> object (up to 16 KB) are optional. Without a cursor, return the latest events; with one, the events after it. If your endpoint has no cursors, return a recent window: Household remembers the last 5,000 IDs.</p>
-<h2 id="related">Related</h2>
+<p>Each event needs a stable <code>id</code> (a new one when it changes), a <code>title</code> and plain <code>text</code>; <code>url</code>, <code>occurredAt</code> and <code>metadata</code> are optional. Without cursors, return recent events: Household skips IDs it has seen.</p>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p><strong>A mail triage bot.</strong> An IMAP inbox with the bot on <strong>Silent</strong>, the <a href="../connectors/">Email connector</a> with <strong>Ask me first</strong>, and a <a href="../schedules/">scheduled task</a> at 9:00: &quot;summarise yesterday's mail and draft replies to what needs one&quot;. Nothing goes out until you approve it.</p>
+<h2 id="good-to-know">Good to know</h2>
 <ul>
-<li><a href="../connectors/">Connectors</a>: access to the accounts behind your inboxes.</li>
-<li><a href="../schedules/">Scheduled tasks</a>: when a time, not an event, should wake a bot.</li>
-<li><a href="../scouts/">Scouts</a>: for alerts that need production access.</li>
+<li>After 3 failed checks in a row the inbox's bots are told, and again when it recovers.</li>
+<li>Changing the address, server, account or folder starts the inbox over, as on a first check.</li>
+<li>Removing an inbox drops events still waiting; what it posted stays.</li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#mail">Mail</a></li><li><a href="#feeds">Feeds</a></li><li><a href="#health-checks">Health checks</a></li><li><a href="#changes-in-json">Changes in JSON</a></li><li><a href="#alerts">Alerts</a></li><li><a href="#telegram-bot">Telegram bot</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#limits-and-good-to-know">Limits and good to know</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#related">Related</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#mail">Mail</a></li><li><a href="#feeds-and-websites">Feeds and websites</a></li><li><a href="#alerts">Alerts</a></li><li><a href="#telegram-bot">Telegram bot</a></li><li><a href="#custom-http">Custom HTTP</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

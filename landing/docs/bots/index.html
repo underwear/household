@@ -173,33 +173,25 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="./" aria-current="page">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Bots</h1>
-<p class="lead">A bot is a long-lived assistant: a coding-agent harness such as Claude Code or Codex, running in its own microVM on your machine and answering you in your messenger. Unlike a chat window, it stays. A &quot;Sous Chef&quot; bot in the family group plans this week's meals, remembers that Anna is allergic to nuts, and still has last week's shopping list in its home folder.</p>
-<h2 id="what-you-d-use-it-for">What you'd use it for</h2>
-<ul>
-<li><strong>A household helper</strong> in a family chat: meals, reminders, a shared to-do list.</li>
-<li><strong>A coding partner</strong> for your projects in a <a href="../volumes/">shared folder</a>.</li>
-<li><strong>A mail or ops bot</strong> that wakes on new mail or an alert from an <a href="../inboxes/">inbox</a> and tells you only what matters.</li>
-<li><strong>A researcher</strong> that keeps notes on a topic for weeks and sends a digest on a <a href="../schedules/">schedule</a>.</li>
-</ul>
+<p class="lead">A bot is a long-lived assistant: a coding-agent harness such as Claude Code or Codex, running in its own microVM on your machine and answering you in your messenger. Unlike a chat window, it stays, and remembers that Anna is allergic to nuts.</p>
 <h2 id="bots-sideworkers-scouts">Bots, sideworkers, scouts</h2>
 <table>
 <thead>
 <tr><th></th><th>Bot</th><th>Sideworker</th><th>Scout</th></tr>
 </thead>
 <tbody>
-<tr><td>What</td><td>Your long-lived assistant</td><td>Extra hands a bot starts for one job</td><td>A specialist a bot calls for one risky or privileged task</td></tr>
-<tr><td>Lives</td><td>Until you remove it</td><td>Until the job is done and it is closed</td><td>One run, then its VM is deleted</td></tr>
-<tr><td>Sees</td><td>Its own home, memory and shared folders</td><td>Its bot's home, memory and folders</td><td>Nothing of the bot: only what its capabilities bring</td></tr>
-<tr><td>Access</td><td>The workspace's allowed hosts and secrets</td><td>Its bot's</td><td>Only its capabilities' hosts and keys, which you set</td></tr>
+<tr><td>What</td><td>Your long-lived assistant</td><td>Extra hands for one job</td><td>A specialist for one risky task</td></tr>
+<tr><td>Lives</td><td>Until you remove it</td><td>Until its job is closed</td><td>One run</td></tr>
+<tr><td>Sees</td><td>Its home, memory, folders</td><td>Its bot's</td><td>Nothing of the bot</td></tr>
+<tr><td>Access</td><td>The workspace's</td><td>Its bot's</td><td>Only what you set</td></tr>
 <tr><td>Starts</td><td>When you add it</td><td>When its bot decides</td><td>When you press <strong>Run</strong></td></tr>
 </tbody>
 </table>
-<p>Your projects and long-lived context belong to a bot. A long or parallel job in those projects goes to a <a href="../sideworkers/">sideworker</a>. The untrusted internet, a production key or a closed network goes to a <a href="../scouts/">scout</a>, so none of it sits next to your files. Sideworkers are on in a new workspace, scouts off: <strong>Workspace → Settings → Features</strong>.</p>
+<p>Projects and long-lived context belong to a bot, a parallel job to a <a href="../sideworkers/">sideworker</a>, the untrusted internet or a production key to a <a href="../scouts/">scout</a>. Switch the last two under <strong>Workspace → Settings → Features</strong>.</p>
 <h2 id="how-it-works">How it works</h2>
 <ul>
-<li><strong>Its own computer.</strong> A microVM with its own Linux kernel. It sees none of your files or other bots', except folders you share. Its only way out is Household, which lets through the allowed hosts and puts your keys into requests on the way out; the bot holds only placeholders.</li>
-<li><strong>Owners give orders.</strong> It answers in the workspace's <a href="../channels/">channels</a> and takes orders only from the workspace's owners. Anyone else in the chat is a guest: the bot may talk to them but is told not to act for them, and its approval cards (a host, a secret, a folder, a scout run) answer only to an owner.</li>
-<li><strong>It asks for more.</strong> A new host, secret or folder: it asks in the chat and waits.</li>
+<li><strong>Its own computer.</strong> It sees only folders you share and reaches out only through Household, holding placeholders, not your keys (<a href="../#how-it-keeps-you-safe">how it keeps you safe</a>). For a new host, secret or folder it asks and waits.</li>
+<li><strong>Owners give orders.</strong> It answers in the workspace's <a href="../channels/">channels</a> and acts only for <a href="../channels/#owners-and-guests">owners</a>.</li>
 </ul>
 <h3 id="what-survives-what">What survives what</h3>
 <table>
@@ -207,66 +199,36 @@
 <tr><th></th><th>Restart</th><th>New VM</th><th>Harness switch</th></tr>
 </thead>
 <tbody>
-<tr><td>Home folder: projects, harness settings, tools installed there</td><td>Stays</td><td>Stays</td><td>Stays</td></tr>
-<tr><td>Memory, instructions, personal skills, scheduled tasks</td><td>Stay</td><td>Stay</td><td>Stay</td></tr>
-<tr><td>Docker images, containers and volumes</td><td>Stay</td><td>Stay</td><td>Stay</td></tr>
-<tr><td>Packages installed outside home (<code>apt</code>, <code>/etc</code>)</td><td>Stay</td><td>Gone; <strong>Setup</strong> rebuilds them</td><td>Gone; <strong>Setup</strong> rebuilds them</td></tr>
-<tr><td>Running processes and services</td><td>Gone; <strong>On start</strong> restarts them</td><td>Gone; <strong>On start</strong> restarts them</td><td>Gone; <strong>On start</strong> restarts them</td></tr>
-<tr><td>The conversation</td><td>Fresh</td><td>Depends on the harness</td><td>Fresh</td></tr>
+<tr><td>Home folder, Docker, memory, skills, tasks</td><td>Stay</td><td>Stay</td><td>Stay</td></tr>
+<tr><td>Packages outside home (<strong>Setup</strong> rebuilds them)</td><td>Stay</td><td>Gone</td><td>Gone</td></tr>
+<tr><td>Running processes (<strong>On start</strong> restarts them)</td><td>Gone</td><td>Gone</td><td>Gone</td></tr>
+<tr><td>The conversation</td><td>Fresh</td><td>Depends on harness</td><td>Fresh</td></tr>
 </tbody>
 </table>
-<p>A bot gets a new VM when Household updates, when you switch its harness, and when its shared folders change. What it must not forget belongs in <a href="../instructions/#memory">memory</a>. Settings in a harness's own config, such as <a href="../mcp/">MCP servers</a> it added, stay with that harness: after a switch, ask the bot to add them again.</p>
+<p>A new VM comes with each Household update and each change of harness or shared folders. <a href="../mcp/">MCP servers</a> the bot added don't follow a harness switch: ask it to add them again.</p>
 <h2 id="what-you-decide">What you decide</h2>
 <ul>
-<li><strong>One bot or several.</strong> One bot has one memory and one place to ask. Make separate bots when jobs differ in what they touch: each has its own VM, files, memory, folders, connectors and inboxes, so a mail bot tricked by a hostile email cannot reach the coding bot's projects. Each reserves CPU and RAM (2 vCPU and 1 GiB by default, of the workspace's 8 and 8; see <a href="../resources/">Resources</a>). Bots of a workspace share its allowed hosts and secrets; when those must differ, make a second workspace.</li>
-<li><strong>Harness and key.</strong> Anything the harness can do, the bot can do. The <a href="../keys/">key</a> decides whose account it runs on and how it is billed.</li>
-<li><strong>Permission mode.</strong> How much the harness does before asking. Household's network rules, secrets and approvals apply in every mode; the mode only governs the harness's own questions, which come to the chat as cards. Keep the default Household picks for each harness. Choose a stricter mode for a bot with read-write folders you could not bear to lose.</li>
-<li><strong>Nightly restart.</strong> A new bot restarts every night at 04:00: 5 minutes before, it is asked to write a handoff note, and it picks up from it in a fresh session. A clean context keeps a long-lived bot sharp. Change it on the <strong>Lifecycle</strong> tab, or turn it off for a bot that works through the night.</li>
+<li><strong>One bot or several.</strong> Separate bots when jobs touch different things: each has its own VM, files, memory, connectors and inboxes, so a mail bot tricked by a hostile email cannot reach the coding bot's projects. Each reserves <a href="../resources/">resources</a>. Bots share their workspace's hosts and secrets; for different ones, make another workspace.</li>
+<li><strong>Harness and key.</strong> Anything the harness can do, the bot can do; the <a href="../keys/">key</a> decides whose account pays.</li>
+<li><strong>Permission mode.</strong> How often the harness asks before acting; Household's approvals apply in every mode. Keep the default, or go stricter for a bot with read-write folders you can't afford to lose.</li>
+<li><strong>Nightly restart.</strong> Each night it writes a handoff note and resumes in a fresh session, staying sharp. Set it on the <strong>Lifecycle</strong> tab.</li>
 </ul>
 <details>
 <summary>Why let a harness run without asking?</summary>
 <p>A harness that stops for every command is no use from a phone, and its prompts guard your own computer, which a bot does not run on. The VM is the boundary instead: a bot can break only its VM and what you shared with it, and reach only what the workspace allows. What crosses that boundary (a host, a secret, a folder, a scout run) still waits for you.</p>
 </details>
 <h2 id="set-it-up">Set it up</h2>
-<p>You need a <a href="../keys/">key</a> and usually a <a href="../channels/">channel</a>. <code>house onboard</code> creates your first bot; for more, <strong>Workspace → Bots → + Add bot</strong>. Three fields carry a trap:</p>
+<p>Add a bot under <strong>Workspace → Bots</strong> with a <a href="../keys/">key</a> and usually a <a href="../channels/">channel</a>. Mind three fields:</p>
 <ul>
-<li><strong>Name</strong> is for the config and <code>house</code> commands, and can't be changed later. The display name and emoji can.</li>
+<li><strong>Name</strong> is permanent; the display name isn't.</li>
 <li><strong>Channels</strong>: a bot in no channel hears no one.</li>
-<li><strong>Size</strong>: the default suits most bots. Under 1 GiB a harness may run out of memory.</li>
+<li><strong>Size</strong>: under 1 GiB a harness may run out of memory.</li>
 </ul>
-<table>
-<thead>
-<tr><th>Tab</th><th>What it is for</th></tr>
-</thead>
-<tbody>
-<tr><td>Overview</td><td>The bot at a glance; <strong>Disable</strong> and <strong>Remove</strong></td></tr>
-<tr><td>Harness</td><td>Harness, key, model, effort, permission mode, account connectors; a change that needs a new session restarts it</td></tr>
-<tr><td>AGENTS.md</td><td>Its standing <a href="../instructions/">instructions</a></td></tr>
-<tr><td>Lifecycle</td><td>Its scheduled restart and the handoff messages around it</td></tr>
-<tr><td>Channels</td><td>Where it answers; default bot of a shared chat</td></tr>
-<tr><td>Inboxes</td><td>Which <a href="../inboxes/">inboxes</a> wake it, and which only keep events for it</td></tr>
-<tr><td>Scheduled tasks</td><td><a href="../schedules/">What it does later</a>, once or on repeat</td></tr>
-<tr><td>Skills</td><td>Its own <a href="../instructions/#skills">skills</a></td></tr>
-<tr><td>Environment</td><td><strong>Setup</strong> (once per new VM) and <strong>On start</strong> (every boot) scripts</td></tr>
-<tr><td>Volumes</td><td>The <a href="../volumes/">shared folders</a> it sees at <code>/volumes/&lt;name&gt;</code></td></tr>
-<tr><td>Memory</td><td>Its <a href="../instructions/#memory">notes</a></td></tr>
-<tr><td>Resources</td><td>What its VM uses against its allocation; a new allocation applies on the next restart</td></tr>
-</tbody>
-</table>
-<h2 id="limits-and-good-to-know">Limits and good to know</h2>
-<ul>
-<li><strong>Restart</strong> gives a fresh session and keeps files, packages and memory; <strong>Let it save its work first</strong> waits up to 3 minutes. <strong>Disable</strong> stops its VM and keeps everything. <strong>Remove</strong> deletes its VM and Docker disk; its home stays on your disk.</li>
-<li><strong>Logs</strong> show its messages, turns, every network request and its VM's own logs, where a failing <strong>Setup</strong> script shows up. <strong>Console</strong> shows a terminal harness's screen, read-only; <code>house bot attach &lt;workspace&gt; &lt;bot&gt;</code> lets you type into it (Ctrl-b, then d, to leave).</li>
-<li>Environment scripts are stored in plain text in Household's config. Keep secrets out.</li>
-<li>From the terminal: <code>house bot add|set|restart|disable|enable|rm &lt;workspace&gt; &lt;bot&gt;</code>; <code>--now</code> skips the wait.</li>
-</ul>
-<h2 id="put-it-to-use">Put it to use</h2>
-<p>A coding partner: share your projects folder read-write, write its role in AGENTS.md (&quot;you maintain the site and the API; run the tests before you say done&quot;), and put <code>sudo apt-get install -y postgresql-client</code> in its <strong>Setup</strong> script. Ask it to fix a bug in the API while a sideworker updates the site's dependencies on a branch of its own.</p>
-<h2 id="related">Related</h2>
-<p><a href="../instructions/">Instructions, skills and memory</a> · <a href="../keys/">Keys</a> · <a href="../sideworkers/">Sideworkers</a> · <a href="../scouts/">Scouts</a></p>
+<p>Its <strong>Setup</strong> script runs once per new VM, <strong>On start</strong> on every boot; failures show in <strong>Logs</strong>. Keep secrets out of both.</p>
+<p><strong>Restart</strong> gives a fresh session; <strong>Disable</strong> stops the VM; <strong>Remove</strong> deletes the VM and Docker disk but keeps its home.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-d-use-it-for">What you'd use it for</a></li><li><a href="#bots-sideworkers-scouts">Bots, sideworkers, scouts</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#limits-and-good-to-know">Limits and good to know</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#related">Related</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#bots-sideworkers-scouts">Bots, sideworkers, scouts</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#set-it-up">Set it up</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

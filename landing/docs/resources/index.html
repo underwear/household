@@ -173,46 +173,29 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="./" aria-current="page">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Running Household</p><h1>Resources</h1>
-<p class="lead">Every bot, sideworker and scout runs in its own VM, which takes some of your computer's CPU and memory. Each workspace has one budget for all of them, 8 vCPU and 8 GiB of RAM in a new workspace, so a busy afternoon of scouts and sideworkers cannot starve your bots or the machine.</p>
+<p class="lead">Every bot, sideworker and scout runs in its own VM, which takes some of your computer's CPU and memory. Each workspace has one budget for all of them, so a busy afternoon of helpers cannot starve your bots or the machine.</p>
 <h2 id="how-the-budget-works">How the budget works</h2>
 <ul>
-<li><strong>Each bot reserves its size</strong>, whether it runs or not, so its room is always there. Only making it smaller or removing it frees that share; disabling it does not. Bots together cannot reserve more than the total.</li>
-<li><strong>Scouts and sideworkers share the rest.</strong> Each holds its VM's full size from the moment it is requested, a scout waiting for your <strong>Run</strong> included, until its VM is gone. There is no limit on how many run at once, only on the total.</li>
-<li><strong>A start that doesn't fit is refused.</strong> The bot is told what is free and can choose a smaller VM, wait, or close a helper. Nothing running is stopped or shrunk to make room.</li>
+<li><strong>Each bot reserves its size</strong>, running or not. Only making it smaller or removing it frees that share; disabling it does not.</li>
+<li><strong>Scouts and sideworkers share the rest.</strong> Each holds its VM's full size from the moment it is requested until its VM is gone.</li>
+<li><strong>A start that doesn't fit is refused.</strong> The bot is told what is free and can pick a smaller VM, wait, or close a helper. Nothing running is stopped to make room.</li>
 </ul>
-<p>The numbers are the most each VM may use, not what it uses right now.</p>
 <h2 id="how-big-to-make-things">How big to make things</h2>
 <table>
 <thead>
 <tr><th>What</th><th>Default</th><th>Starting point</th></tr>
 </thead>
 <tbody>
-<tr><td>A bot</td><td>2 vCPU, 1 GiB</td><td>Fine for a bot that chats, reads mail and runs small scripts. A coding bot that builds, tests or runs containers: 2–4 GiB. Under 1 GiB a harness may run out of memory.</td></tr>
-<tr><td>A scout run</td><td>2 vCPU, 2 GiB</td><td>Enough for a browser. A bot may pick another size for a run.</td></tr>
+<tr><td>A bot</td><td>2 vCPU, 1 GiB</td><td>Enough to chat, read mail and run small scripts. A coding bot: 2–4 GiB.</td></tr>
+<tr><td>A scout run</td><td>2 vCPU, 2 GiB</td><td>Enough for a browser.</td></tr>
 <tr><td>A sideworker</td><td>none</td><td>The bot sizes each one for its job.</td></tr>
 </tbody>
 </table>
-<p><strong>Leave room for helpers.</strong> Keep enough free for the scouts and sideworkers you expect at the same time. With default sizes CPU runs out first: four default bots reserve all 8 vCPU of a new workspace, and no scout or sideworker can start. Three leave 2 vCPU and 5 GiB, room for one default scout run. If your bots start sideworkers often, raise the total or make the bots smaller.</p>
-<p>Budgets are per workspace, and the totals of several workspaces can add up to more than your computer has.</p>
-<h2 id="set-it-up">Set it up</h2>
-<ul>
-<li><strong>The workspace's total:</strong> <strong>Workspace → Resources → Change capacity…</strong>. You cannot set more than this computer has, or less than what is held right now.</li>
-<li><strong>A bot's size:</strong> its <strong>Resources</strong> tab, or when you create it. The new size applies on its next restart; until then the budget counts whichever is larger, the old size or the new one.</li>
-<li><strong>Scouts:</strong> the default size is in <strong>Settings</strong> on <strong>Workspace → Scouts</strong>; a scout can have its own.</li>
-</ul>
-<p>From the terminal, <code>house bot set &lt;workspace&gt; &lt;bot&gt; --cpus 4 --memory 4</code> sizes a bot (memory in GiB), and <code>house scout settings &lt;workspace&gt; --cpus 2 --memory 2</code> sets the scouts' default.</p>
-<h2 id="good-to-know">Good to know</h2>
-<ul>
-<li>If the total ends up below what is held, for example after you edit the config by hand, <strong>Workspace → Resources</strong> says <strong>Over capacity</strong>. Nothing running is stopped; new scouts and sideworkers wait until some close or you raise the total.</li>
-</ul>
-<h2 id="related">Related</h2>
-<ul>
-<li><a href="../sideworkers/">Sideworkers</a> and <a href="../scouts/">Scouts</a>: the helpers that draw from the shared part.</li>
-<li><a href="../bots/">Bots</a>: sizing when you add a bot.</li>
-</ul>
+<p>Leave room for the helpers you expect at once: four default bots fill a new workspace's 8 vCPU, and then no scout or sideworker can start.</p>
+<p>Change the workspace's total on <strong>Workspace → Resources</strong>, and a bot's size on its <strong>Resources</strong> tab; a new bot size applies on its next restart.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-the-budget-works">How the budget works</a></li><li><a href="#how-big-to-make-things">How big to make things</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#related">Related</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-the-budget-works">How the budget works</a></li><li><a href="#how-big-to-make-things">How big to make things</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

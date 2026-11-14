@@ -173,56 +173,36 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="./" aria-current="page">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Scouts</h1>
-<p class="lead">A scout is a specialist your bots call for one task they should not do themselves: &quot;buy two bus tickets&quot;, &quot;read the reviews on this unfamiliar site&quot;, &quot;check last night's errors in production&quot;. It works in a fresh VM with only the access you gave it and nothing of the bot's, starts only when you press <strong>Run</strong>, and is deleted when the task is done.</p>
-<h2 id="when-it-helps">When it helps</h2>
-<ul>
-<li><strong>The untrusted internet,</strong> where pages can carry text written to steer an AI.</li>
-<li><strong>A key the bot should not hold:</strong> production, payments, admin.</li>
-<li><strong>A closed network:</strong> a database or an internal host.</li>
-<li><strong>Software you'd rather keep out of the bot's VM:</strong> a browser, a downloader, a vendor's CLI.</li>
-</ul>
+<p class="lead">A scout is a specialist your bots call for one task they should not do themselves: &quot;buy two bus tickets&quot;, &quot;read the reviews on this unfamiliar site&quot;, &quot;check last night's errors in production&quot;. It runs in a fresh VM with only the access you gave it, nothing of the bot's, starts only when you press <strong>Run</strong>, and is deleted when done. Turn scouts on in workspace settings.</p>
 <h2 id="how-it-works">How it works</h2>
 <ol>
-<li><strong>A bot calls a scout</strong> by name, with a task and what counts as success. It chooses by the scout's description, so say there when to call it: &quot;production incidents on Heroku&quot;.</li>
-<li><strong>You approve it.</strong> A card in the chat shows the task, capabilities, network, keys inside the VM and the names of secrets the bot hands over. Nothing starts until you press <strong>Run</strong>; unanswered for 10 minutes, the run is cancelled.</li>
-<li><strong>It works in its own thread</strong>, where you follow it, talk to it and get its results.</li>
-<li><strong>Its bot gets facts, not text:</strong> status, steps, how many tools and domains it used, which secrets it asked for, handles of its files. A scout's words and files reach the bot only when you pass them, one decision each, as untrusted input. So hostile content from untrusted sites stays out of the bot's context, away from everything the bot can reach.</li>
-<li><strong>It says it is done</strong>: success, failed or blocked. <strong>Close</strong> deletes its VM; nothing carries over to the next run. There is no time limit; an idle scout reminds its bot every 30 minutes.</li>
+<li><strong>A bot calls a scout</strong> with a task and what counts as success, picking by the scout's description: say there when to call it.</li>
+<li><strong>You approve it.</strong> A card shows the task, capabilities, network, keys and names of secrets the bot hands over. Nothing starts until you press <strong>Run</strong>.</li>
+<li><strong>It works in its own thread</strong>, where you follow and talk to it.</li>
+<li><strong>Its bot gets facts, not text:</strong> status, steps, tools, domains and secrets used, file handles. Its words and files reach the bot only when you pass them, one decision each, as untrusted input, keeping hostile content away from all the bot can reach.</li>
+<li><strong>It reports success, failure or blocked.</strong> <strong>Close</strong> deletes its VM; nothing carries over.</li>
 </ol>
-<h2 id="three-example-scouts">Three example scouts</h2>
-<p><strong>General</strong> comes with scouts: a browser, media and developer tools on the open internet, no keys. For research, downloads and sites without an API. Tricked, it has nothing of yours to give away.</p>
-<p><strong>prod-ops</strong> serves a night ops bot: the Heroku CLI with an API key through the gateway, and a PostgreSQL client with a read-only connection string inside its VM. Both list their hosts, so the scout reaches only Heroku's API and the database and cannot carry your key anywhere else.</p>
-<p><strong>shopper</strong> buys tickets on sites without an API: the browser, the open internet, and instructions like &quot;show the basket and total before paying&quot;. It stores no card: the bot hands the details over for one run, named on the Run card, or the scout asks you in its thread.</p>
+<h2 id="example-scouts">Example scouts</h2>
+<ul>
+<li><strong>General</strong> (built in): a browser, media and developer tools, open internet, no keys. Tricked, it has nothing of yours to give away.</li>
+<li><strong>prod-ops</strong>: the Heroku CLI and a read-only database connection, reaching only those two hosts.</li>
+<li><strong>shopper</strong>: buys tickets on sites without an API, with card details for one run only.</li>
+</ul>
 <h2 id="what-you-decide">What you decide</h2>
-<p><strong>Turn scouts on.</strong> They are off in a new workspace: <strong>Workspace → Settings → Features</strong>.</p>
-<p><strong>Its capabilities.</strong> A capability is one thing a scout can do: an install script (bash, run as root at the start of every run), a network rule, keys and optional skills. Keep them small, like &quot;the Heroku CLI and its key&quot;; a scout combines several. Access meant for one scout only goes into <strong>A setup of its own</strong>.</p>
-<p><strong>Any host or only these hosts.</strong> <strong>Any host</strong> suits a tool that needs only software. <strong>Only these hosts</strong> is for access: a scout with such a capability reaches only the hosts of its capabilities, even if it also has the browser. Give every capability that carries a key a host list, including where its install script downloads from. Mid-task, a scout can ask you for one more host, for that run only.</p>
+<p><strong>Capabilities.</strong> Each is one small thing a scout can do, like &quot;the Heroku CLI and its key&quot;: an install script (run as root at every start), a network rule, keys, skills. Scouts combine several. Bots can draft one; nothing changes until you apply it.</p>
+<p><strong>Any host or only these hosts.</strong> <strong>Any host</strong> suits a tool that needs only software. <strong>Only these hosts</strong> is for access: a scout with one reaches only its capabilities' hosts, even if it also has the browser. Give every capability with a key a host list, including its install script's download hosts. Mid-task it can ask for one more host, for that run only. Private hosts must always be listed.</p>
 <p><strong>Through the gateway or inside its VM</strong>, for each key:</p>
 <ul>
-<li><strong>Through the gateway.</strong> The scout sees a placeholder; Household puts the real value into HTTPS headers on requests to the key's hosts. Substitution happens at egress, not inside the VM, so it works only for HTTP APIs that take the key in a header. A tricked scout cannot reveal what it never held. Use it whenever the tool allows.</li>
-<li><strong>Inside its VM.</strong> The real value, for database clients, SSH and tools that need the key itself. Household masks the exact value in what the scout posts, but a tricked scout could still disclose it. Pair it with <strong>Only these hosts</strong> and a read-only or limited key.</li>
+<li><strong>Through the gateway.</strong> The scout sees a placeholder; Household adds the real value to HTTPS headers to the key's hosts, so the key must go in a header. A tricked scout cannot reveal what it never held: use it whenever you can.</li>
+<li><strong>Inside its VM.</strong> The real value, for database clients, SSH and tools that need it. Household masks it in what the scout posts, but a tricked scout could still disclose it. Pair it with <strong>Only these hosts</strong> and a read-only or limited key.</li>
 </ul>
-<h2 id="set-it-up">Set it up</h2>
-<p>Scouts live under <strong>Workspace → Scouts</strong>, capabilities on its <strong>Capabilities</strong> tab, starting from ready-made ones (browser, media, developer tools, Heroku CLI, PostgreSQL client). Test a capability's install before a bot depends on it. Bots can draft a capability they need; nothing changes until you apply it.</p>
-<h2 id="secrets">Secrets</h2>
-<p>You decide every secret a scout gets. Capability keys you set yourself. A secret the bot hands over is named on the Run card. A scout that needs one mid-task asks in its thread; reply <code>/secret &lt;value&gt;</code> within 10 minutes and confirm. Either way the value stays in that run's VM only.</p>
+<p>Secrets the bot hands over are named on the Run card; the scout asks you in its thread for any it needs mid-task. They stay in that run's VM.</p>
+<p>A run holds CPU and memory from the moment it waits for <strong>Run</strong>; see <a href="../resources/">Resources</a>.</p>
 <h2 id="put-it-to-use">Put it to use</h2>
-<p><strong>A night ops bot.</strong> A <a href="../inboxes/#alerts">Grafana inbox</a> wakes your ops bot when an alert fires. It calls <strong>prod-ops</strong>; you press <strong>Run</strong> from your phone and pass the findings to the bot only if you want it to act.</p>
-<h2 id="good-to-know">Good to know</h2>
-<ul>
-<li>On the open internet a scout reaches public addresses only; a private host has to be on a capability's host list.</li>
-<li>A run holds its CPU and memory from the moment it waits for <strong>Run</strong> until its VM is gone. See <a href="../resources/">Resources</a>.</li>
-<li><code>house scout run &lt;workspace&gt; &lt;scout&gt; --task &quot;…&quot;</code> starts a run from the terminal, with no Run card and no bot told. <code>house scout --help</code> and <code>house capability --help</code> list the rest.</li>
-</ul>
-<h2 id="related">Related</h2>
-<ul>
-<li><a href="../bots/">Bots</a>: bots, sideworkers and scouts compared.</li>
-<li><a href="../network/">Network and secrets</a>: the gateway and placeholders.</li>
-<li><a href="../mcp/">MCP servers</a>: why the browser belongs with a scout.</li>
-</ul>
+<p><strong>A night ops bot.</strong> A <a href="../inboxes/#alerts">Grafana inbox</a> wakes your ops bot when an alert fires. It calls <strong>prod-ops</strong>; you press <strong>Run</strong> from your phone and pass on the findings only if the bot should act.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#three-example-scouts">Three example scouts</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#secrets">Secrets</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#related">Related</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#example-scouts">Example scouts</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#put-it-to-use">Put it to use</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

@@ -173,7 +173,7 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="./" aria-current="page">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">What bots can reach</p><h1>MCP servers</h1>
-<p class="lead">MCP servers give an assistant new tools: your issue tracker, a wiki, a design tool, a database. Household has no page for adding MCP servers to a whole workspace. You don't need one: every bot runs a real coding-agent harness (Claude Code, Codex…) in its own VM, so you can ask the bot to add a server to itself, the same way you would set it up on your own machine.</p>
+<p class="lead">MCP servers give a bot new tools: an issue tracker, a wiki, a database. Each bot runs a real coding-agent harness (Claude Code, Codex…) in its own VM, so you ask the bot to add a server to itself, as on your own machine.</p>
 <h2 id="first-check-what-is-already-there">First, check what is already there</h2>
 <p>Some services don't need an MCP server at all:</p>
 <ul>
@@ -181,12 +181,9 @@
 <li><strong>Your Claude or ChatGPT account's connectors.</strong> A bot that runs on a Claude or ChatGPT sign-in can use the connectors or apps already set up in that account (Drive, Jira, GitHub…). Turn on <strong>Claude.ai connectors</strong> or <strong>ChatGPT apps</strong> on the bot's <strong>Harness</strong> tab. See <a href="../keys/">Keys</a>.</li>
 </ul>
 <h2 id="ask-your-bot">Ask your bot</h2>
-<p>For anything else, write to the bot as you would to a colleague:</p>
+<p>For anything else, ask the bot:</p>
 <blockquote>
 <p>Add the Linear MCP server for yourself: https://mcp.linear.app/mcp</p>
-</blockquote>
-<blockquote>
-<p>Connect the Atlassian MCP server, so you can read our Jira and Confluence.</p>
 </blockquote>
 <blockquote>
 <p>Install the Playwright MCP server and use it for the tickets site.</p>
@@ -201,24 +198,23 @@
 </ul>
 <p>A scout is made for exactly this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your bot only if you pass them. So when your bot needs a website, let it <a href="../scouts/">call a scout</a>.</p>
 </details>
-<p>The bot adds the server the way its harness does and tells you when it needs something from you. Usually that is one of two things:</p>
+<p>The bot tells you when it needs something:</p>
 <ul>
-<li><strong>A host.</strong> A bot's VM reaches only the hosts the workspace allows. For a remote server, the bot asks for the server's domain, and you answer on the card in the chat: <strong>Allow 15 min</strong>, <strong>Allow forever</strong> or <strong>Deny</strong>. You can also add the host yourself on <strong>Workspace → Network</strong>. See <a href="../network/">Network</a>.</li>
-<li><strong>A key.</strong> For a server that needs a token, the bot asks you for a secret on a card in the chat. Answer its request with <code>/secret &lt;value&gt;</code>, or add the secret yourself on <strong>Workspace → Secrets</strong>. The bot only ever sees a placeholder; Household puts the real token into requests to that server's host on their way out.</li>
+<li><strong>A host.</strong> It asks to reach the server's domain; you answer on the card. See <a href="../network/">Network</a>.</li>
+<li><strong>A key.</strong> It asks for a secret and only ever sees a placeholder. See <a href="../network/#secrets">Secrets</a>.</li>
 </ul>
-<p>A new server usually shows up in the bot's next session. If the bot does not see it, press <strong>Restart</strong> on the bot's page.</p>
-<h2 id="it-stays">It stays</h2>
-<p>A bot's MCP settings live in its home folder, which survives restarts and new VMs. If a server needs software in the VM (Node, Python, a browser), the bot adds it to its <strong>Setup</strong> script on the <strong>Environment</strong> tab, so a new VM gets it back.</p>
+<p>A new server shows up in the bot's next session, or after a restart.</p>
 <h2 id="good-to-know">Good to know</h2>
 <ul>
-<li><strong>Each bot for itself.</strong> A server one bot added is not shared with the others. Ask each bot that needs it.</li>
-<li><strong>No more access than the bot.</strong> A server runs inside the bot's VM or is reached through the workspace's network rules, so it can do only what the bot can.</li>
-<li><strong>Tokens in headers.</strong> A secret works when the server takes its token in an HTTP header, as most do. A server that needs the raw value itself, to sign requests for example, cannot use the placeholder.</li>
-<li><strong>Browser sign-ins.</strong> Servers that sign you in through a browser may not manage it from a VM. When there is a choice, give the bot a token instead.</li>
+<li><strong>Each bot for itself.</strong> Servers aren't shared between bots.</li>
+<li><strong>It stays</strong> across restarts and new VMs; software it needs goes into the bot's <strong>Setup</strong> script. See <a href="../bots/#what-survives-what">What survives what</a>.</li>
+<li><strong>No more access than the bot</strong> has.</li>
+<li><strong>Tokens in headers.</strong> A placeholder can't serve a server that needs the raw value, for example to sign requests.</li>
+<li><strong>Browser sign-ins</strong> may fail from a VM; use a token.</li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#ask-your-bot">Ask your bot</a></li><li><a href="#it-stays">It stays</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#ask-your-bot">Ask your bot</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

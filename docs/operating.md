@@ -1,6 +1,6 @@
 # Updates and troubleshooting
 
-`house update` keeps Household current, a background service keeps it running, and most problems show up in `house doctor` or in a bot's logs. Troubleshooting below is ordered by what you see.
+Keep Household current, keep it running, and find what went wrong.
 
 ## Update Household
 
@@ -8,7 +8,7 @@
 house update            # the newest release; `house update v0.10.2` for a given one
 ```
 
-It installs the release next to the one you have and keeps the one before on disk. The running Household keeps the old release until you restart it: Ctrl-C and `house start` again, or restart the service. On its first start, the new release copies your config and database aside, then moves them to the new format if it needs to (`house migrate` shows what it will change). Afterwards `house doctor` and `house status` should be clean. Release notes are on [GitHub](https://github.com/underwear/household/releases).
+The new release takes over when you restart Household. On its first start it copies your config and database aside, then converts them if needed.
 
 **To go back**, stop Household, then:
 
@@ -18,16 +18,16 @@ house migrate backups               # the copies taken before migrating, newest 
 house migrate restore <backup>
 ```
 
-An older release refuses a config or database a newer one has changed, which is why you restore the copy too.
+An older release refuses a config or database a newer one has changed, so restore the copy too.
 
 ## Run it in the background
 
-`house start` runs in the foreground and stops with the terminal. To keep Household running after you log out and after a reboot, run `house start` as a launchd service on a Mac or a systemd user service on Linux. The service must:
+To keep Household running after you log out and after a reboot, run `house start` as a launchd service on a Mac or a systemd user service on Linux. The service must:
 
 - **start it again whenever it exits, a clean exit too**: `KeepAlive` set to `true` for launchd, `Restart=always` for systemd. A service that restarts only on failure can leave Household down;
 - **have a `PATH` that finds `python3` and `openssl`.**
 
-Run only one Household at a time. While a service runs it, stop and restart it through the service, not with Ctrl-C or `house start`, or the service starts it again.
+Run only one Household at a time. While a service runs it, stop and restart it through the service, not with Ctrl-C or `house start`.
 
 <details>
 <summary>An example for a Mac (launchd)</summary>
@@ -89,76 +89,49 @@ WantedBy=default.target
 
 </details>
 
-## Check that it runs
+## Check that it runs and read the logs
 
-| Command | What it tells you |
-| --- | --- |
-| `house status` | Whether Household runs, the admin's address, each bot's state |
-| `house doctor` | What the machine, the config, your keys and your Telegram bots still need: ✗ needs fixing |
-| `house ls` | Your keys, workspaces, bots and channels, without secret values |
-| `house workspace show <workspace>` | A workspace's bots, channels, owners and allowed hosts |
-| `house bot show <workspace> <bot>` | What runs a bot and what it uses now |
-
-## Read the logs
-
-In the admin, a bot's logs are under **Logs** on its page. **Activity** is what Household did with the bot, with its network requests if you turn them on; **Setup** is the first place to look when a bot does not start. **Console** shows the bot's terminal read-only, for a harness that has one, such as Claude Code.
-
-From the terminal (`house logs` works while Household is stopped, too):
+`house status` shows whether Household and each bot run; `house doctor` lists what the machine, config, keys and Telegram bots still need.
 
 ```sh
 house logs --problems                       # only what went wrong
 house logs --bot <bot> -f                   # one bot, following new lines
 house logs --bot <bot> --kind network       # its network requests, and why one was denied
 house bot logs <workspace> <bot> --source setup
-house bot screen <workspace> <bot>          # its terminal right now
 ```
 
-## Back up and restore
-
-`house export` writes your config with its keys, the database and the bots' homes into one archive; `house import <file>` restores it with Household stopped. The archive holds your keys in plain form. See [Back up and move](../backup/).
+The admin shows them under **Logs** on a bot's page. Backups: [Back up and move](../backup/).
 
 ## Troubleshooting
 
 ### Household won't install or start
 
-- **`house: command not found`.** Add `~/.household/bin` to your `PATH`; the installer printed the exact line for your shell.
-- **`house doctor` says virtualization is unavailable.** On Linux, `/dev/kvm` must exist and be usable by you: add yourself to its group and log in again. On a VPS, pick one with KVM or nested virtualization. Intel Macs are not supported.
-- **`python3` or `openssl` is missing.** Install it (`brew install python3 openssl` on a Mac, your package manager on Linux). If Household runs as a service, check that the service's `PATH` finds it.
-- **"daemon not running".** Start it with `house start`, or start its service.
-- **"a daemon is already running".** Your service probably runs it already: `house status`.
-- **It stops right after it starts.** Read the last lines it printed, or the service's log. `house doctor` points at config errors. If it says others can read your config, run the `chmod 600` command it shows: the config holds your keys and bot tokens.
+- **`house: command not found`.** Add `~/.household/bin` to your `PATH`.
+- **No virtualization.** On Linux, join the group of `/dev/kvm` and log in again; on a VPS, pick one with KVM.
+- **`python3` or `openssl` missing.** Install it; for a service, check that its `PATH` finds it.
+- **"a daemon is already running".** Your service probably runs it: `house status`.
+- **It stops right after starting.** Read its last lines or the service's log, and run `house doctor`.
 
-### A bot doesn't start
+### A bot doesn't start or answer
 
-Its first start downloads the VM image, which takes a minute or two. If it takes longer, read its setup log (**Logs → Setup**, or `house bot logs <workspace> <bot> --source setup`). A failing setup script is fixed on the bot's **Environment** tab, or by asking the bot once it runs.
-
-### A bot doesn't answer
-
-- Check that Household runs and the bot is running: `house status`.
-- Check that the bot is in that channel, and that you are an owner of the workspace. A bot does not take orders from guests.
+- The first start takes a minute or two; if longer, read its setup log and fix a failing setup script on its **Environment** tab.
+- Check that you are an owner and the bot is in that channel; see [Channels](../channels/).
 - Look at **Console**: the harness may be waiting for an answer on screen.
-- For a Telegram group, Topics must be on, and the Telegram bot must be an admin with **Manage topics** and **Delete messages**. For a private chat with a thread per bot, Threaded Mode must be on in BotFather; `house doctor` tells you if it is off.
-- Use each Telegram bot token in one place only. If another program or another Household uses it, Telegram hands each message to only one of them.
+- Use each Telegram bot token in one place only; `house doctor` flags Telegram settings that are off.
 
-### Sign-in expired, or the model stops answering
+### The model stops answering
 
-- **A Claude sign-in** ends about once a month. From five days before, the chats of its bots get a daily reminder. Sign in again next to the key in **Settings → Keys**, or with `house key claude <name>`.
-- **After restoring a backup**, a signed-in key says it is not signed in on this Household. Sign in again the same way.
-- **A Claude subscription token** from `claude setup-token` lasts a year. Make a new one and replace the old one in **Settings → Keys** or with `house key set <name>`.
-- **A used-up allowance.** A subscription's bots get no answers until its allowance resets; **Settings → Keys** says so.
-
-⚠️ You can let a key's bots go on past the allowance with `house key set <name> --allow-overage on`, or the same switch on the key. Your provider bills that usage apart from the subscription.
+A Claude sign-in ends about once a month and after a restore: sign in again in **Settings → Keys**. A used-up allowance stops answers until it resets. See [Keys](../keys/).
 
 ### A bot can't reach a site
 
-A bot reaches only the hosts its workspace allows, and should ask you in the chat for a new one. `house logs --bot <bot> --kind network` says why a request was denied. You can add a host yourself on **Workspace → Network**. A bot's own request for a name that points into a private network is refused without asking you; if you do want it to reach such a host, add it to the allowlist yourself. See [Network and secrets](../network/).
+`house logs --bot <bot> --kind network` says why a request was denied. See [Network and secrets](../network/).
 
-### The admin won't open
+### The admin does not open
 
-- **"That link expired or was used".** A sign-in link works once, for 60 seconds. Run `house dashboard` again.
-- **"daemon not running".** The admin runs inside Household: start it first.
-- **"port 8780 is taken".** Another program uses the port. Set `daemon.webPort` in `~/.config/household/household.yaml` and restart Household.
-- **On a remote server**, forward the same port on both ends from your computer (`ssh -L 8780:127.0.0.1:8780 <server>`), run `house dashboard --no-open` on the server, and open the link on your computer.
+- **"That link expired or was used".** Run `house dashboard` again.
+- **"port 8780 is taken".** Set `daemon.webPort` in `~/.config/household/household.yaml` and restart.
+- **On a remote server**, forward the port from your computer (`ssh -L 8780:127.0.0.1:8780 <server>`), run `house dashboard --no-open` on the server, and open the link on your computer.
 
 ### Something broke after an update
 

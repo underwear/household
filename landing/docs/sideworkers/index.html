@@ -173,64 +173,30 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="./" aria-current="page">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Sideworkers</h1>
-<p class="lead">A sideworker is extra hands a bot starts for one job. It runs in a VM of its own, works on the bot's files and has its own chat thread, so the bot stays free to talk to you. Ask your coding bot to &quot;get a sideworker to fix the failing tests in the site project&quot;: a worker fixes them on its own branch, and the bot merges the branch and closes the worker.</p>
-<h2 id="when-it-helps">When it helps</h2>
-<ul>
-<li><strong>Work in another project.</strong> Started in a folder with its own <code>CLAUDE.md</code> or <code>AGENTS.md</code>, it works as that project's developer, without the bot's long conversation in the way.</li>
-<li><strong>A long or parallel job.</strong> A refactor, a test run, an investigation, while the bot keeps answering you.</li>
-<li><strong>A clean start.</strong> Work that should not carry everything the bot has talked about.</li>
-<li><strong>Another model.</strong> A second opinion, or a job another model does better.</li>
-<li><strong>Someone you can talk to.</strong> Unlike a subagent hidden inside a session, a sideworker has a thread where you watch it and tell it what you want.</li>
-</ul>
+<p class="lead">A sideworker is extra hands a bot starts for one job: a refactor, a test run, work in another project, or a second opinion from another model. It runs in a VM of its own, works on the bot's files and has its own chat thread, so the bot stays free to talk to you. For a standing job or access the bot should not hold, see <a href="../bots/">bots, sideworkers and scouts</a> compared.</p>
 <h2 id="how-it-works">How it works</h2>
-<ul>
-<li><strong>The bot starts it.</strong> You ask the bot, or it decides on its own. It gives the worker a folder in its home, a written brief (the worker does not know the conversation) and a CPU and memory size from what the workspace has free.</li>
-<li><strong>In a git repository, it gets its own branch.</strong> By default the worker has a separate checkout on a branch of its own, from the bot's last commit, so the two never edit the same files and their builds never meet. What the bot has not committed is not in it. The bot can instead share its live folder; then both edit the same files.</li>
-<li><strong>It works with the bot's things:</strong> its home, memory and shared folders, and the workspace's allowed hosts and secrets (as placeholders). It has its own session and its own Docker.</li>
-<li><strong>It has a thread</strong> in the bot's channel. What you write there goes to the worker, and the bot is told. The worker reports to the bot.</li>
-<li><strong>It answers to its bot.</strong> It cannot start sideworkers, call scouts, have scheduled tasks or ask for new shared folders: those stay with the bot that answers to you.</li>
-<li><strong>The bot closes it.</strong> Its VM is removed; its branch and files stay. On Telegram its thread is deleted with its messages, so the bot tells you first if anything there is worth keeping. There is no time limit; an idle worker reminds its bot every 30 minutes.</li>
-</ul>
-<h2 id="what-you-decide">What you decide</h2>
-<p><strong>Sideworker, scout, or another bot?</strong></p>
-<ul>
-<li><strong>A sideworker</strong> does the bot's own work in parallel, with the bot's files and access, for one job.</li>
-<li><strong>A <a href="../scouts/">scout</a></strong> does what the bot should not: untrusted sites, a production key, a closed network. It sees nothing of the bot.</li>
-<li><strong>Another <a href="../bots/">bot</a></strong> fits a standing job with its own instructions, memory and schedule.</li>
-</ul>
-<p><strong>On or off.</strong> Sideworkers are on in a new workspace; switch them under <strong>Workspace → Settings → Features</strong>. Off pauses the running ones and stops new ones.</p>
-<p><strong>Which models they may use.</strong> A worker runs on its bot's harness, key and model unless the bot picks a profile you added under <strong>Workspace → Sideworkers → Profiles</strong>: a harness, key, model, effort and permission mode under a name like <code>code-review</code>. Add one for a second opinion from another model, or for a project whose instruction file only another harness reads (Claude Code reads <code>CLAUDE.md</code>, Codex reads <code>AGENTS.md</code>). Its key decides whose allowance or bill the job spends. A running worker keeps the settings it started with.</p>
-<h2 id="a-worked-example">A worked example</h2>
-<p>Your bot <em>Dev</em> keeps your site's repository at <code>~/projects/site</code>. You write:</p>
-<blockquote>
-<p>The site's tests fail since the framework upgrade. Get a sideworker on it, and don't touch the snapshot files.</p>
-</blockquote>
+<p>Say you ask your coding bot: &quot;The site's tests fail since the framework upgrade. Get a sideworker on it, and don't touch the snapshot files.&quot;</p>
 <ol>
-<li>Dev commits its work, then starts <code>sw-fix-tests</code> in <code>~/projects/site</code> with 2 vCPU and 2 GiB and a brief: the failing suite, what it ruled out, your rule, what done looks like.</li>
-<li>The worker gets a checkout at <code>.worktrees/sw-fix-tests</code> on the branch <code>sideworker/sw-fix-tests</code> and reads the project's own instructions.</li>
-<li>Its thread opens in Dev's channel. You add: &quot;the date tests fail only in CI, use UTC&quot;. The worker gets it, and Dev is told.</li>
-<li>Meanwhile Dev answers your other questions.</li>
-<li>The worker reports a green branch. Dev reviews and merges it, and closes the worker.</li>
+<li><strong>Brief.</strong> The bot commits its work and starts a worker in the project folder with a written brief (the failing suite, what it ruled out, your rule, what done looks like), since the worker does not know the conversation.</li>
+<li><strong>Branch.</strong> In a git repository the worker gets its own checkout on its own branch, from the bot's last commit, so the two never edit the same files. What the bot has not committed is not in it. The bot can instead share its live folder; then both edit the same files.</li>
+<li><strong>Review.</strong> The worker's thread opens in the bot's channel. What you write there goes to the worker, and the bot is told; meanwhile the bot answers you. The worker reports a green branch; the bot reviews and merges it.</li>
+<li><strong>Close.</strong> The bot closes the worker: its VM is removed, its branch and files stay. On Telegram its thread is deleted with its messages, so the bot tells you first if anything there is worth keeping.</li>
 </ol>
-<h2 id="put-it-to-use">Put it to use</h2>
-<p><strong>Weekly dependency updates.</strong> Give Dev a <a href="../schedules/">scheduled task</a>: &quot;Every Monday at 8:00, start a sideworker on the <code>code-review</code> profile to update the site's dependencies and run the tests.&quot; The result waits in its thread, the branch for Dev to merge.</p>
+<p>The worker has its bot's home, memory, shared folders, and the workspace's hosts and secrets, with its own session and Docker. It cannot start sideworkers, call scouts, have scheduled tasks or ask for new folders: those stay with the bot that answers to you.</p>
+<h2 id="what-you-decide">What you decide</h2>
+<ul>
+<li><strong>On or off.</strong> On by default; switch them under <strong>Workspace → Settings → Features</strong>. Off pauses the running ones and stops new ones.</li>
+<li><strong>Which models they may use.</strong> A worker runs on its bot's harness, key and model unless the bot picks a profile you added under <strong>Workspace → Sideworkers → Profiles</strong>, such as <code>code-review</code> on another model. Its key decides whose allowance or bill the job spends.</li>
+</ul>
 <h2 id="good-to-know">Good to know</h2>
 <ul>
-<li><strong>Workspace → Sideworkers</strong> lists the running ones; you can close one there.</li>
-<li>Each worker holds its full VM size from the workspace's budget until closed. There is no count limit, only the total. See <a href="../resources/">Resources</a>.</li>
+<li>Each worker holds its full VM size from the workspace's <a href="../resources/">resources</a> until closed.</li>
 <li>When a worker shares the bot's live folder, never let both bind-mount one directory into containers: two databases on one data directory corrupt it.</li>
 <li><code>house export</code> refuses to run while a sideworker is open. See <a href="../backup/">Back up and move</a>.</li>
-<li>From the terminal: <code>house features &lt;workspace&gt; sideworkers=on|off</code>.</li>
-</ul>
-<h2 id="related">Related</h2>
-<ul>
-<li><a href="../bots/">Bots</a>: bots, sideworkers and scouts compared.</li>
-<li><a href="../scouts/">Scouts</a>: for access the bot should not hold.</li>
-<li><a href="../resources/">Resources</a>: the budget workers draw from.</li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#a-worked-example">A worked example</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#related">Related</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#good-to-know">Good to know</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

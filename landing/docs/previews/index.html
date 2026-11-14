@@ -173,46 +173,26 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="./" aria-current="page">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">What bots can reach</p><h1>Previews</h1>
-<p class="lead">A bot can show you a web app running in its VM, such as a site it is building, a dev server with live reload, or a dashboard, through a link you open in your browser. You approve each link, and it lives for 15 minutes.</p>
-<h2 id="when-it-helps">When it helps</h2>
-<ul>
-<li>Look at a site or a UI change before you accept the bot's work, without cloning or building anything yourself.</li>
-<li>See a chart or report a bot rendered as a small web page.</li>
-</ul>
+<p class="lead">A bot can show you a web app running in its VM, such as a site it is building, through a link you open in your browser. You approve each link.</p>
 <h2 id="how-it-works">How it works</h2>
 <ul>
-<li><strong>Off until you turn it on,</strong> under <strong>Workspace → Settings → Features → HTTP previews</strong>. Turning it off closes open links.</li>
-<li><strong>The bot asks.</strong> It starts the app in its VM and asks to show one port, with a title and a reason. You get a card in the chat: <strong>Open for 15 minutes</strong> or <strong>Cancel</strong>. Unanswered, it lapses after five minutes.</li>
-<li><strong>You get a link.</strong> Pages, scripts and live reload work.</li>
-<li><strong>It closes</strong> when the bot is done, when you close it, or after 15 minutes. The app keeps running in the VM; only the link stops, and showing it again needs a new approval.</li>
-<li><strong>Sideworkers</strong> can show previews from their own VMs the same way.</li>
+<li><strong>Off until you turn it on,</strong> under <strong>Workspace → Settings → Features → HTTP previews</strong>.</li>
+<li><strong>The bot asks</strong> to show one port of its VM, with a reason. You answer on a card in the chat: <strong>Open for 15 minutes</strong> or <strong>Cancel</strong>.</li>
+<li><strong>You get a link.</strong> Pages, live reload and WebSockets work; other connections do not.</li>
+<li><strong>It closes</strong> when the bot is done, when you close it, when the bot or Household restarts, or after 15 minutes at most. The app keeps running; showing it again needs a new approval.</li>
+<li><strong><a href="../sideworkers/">Sideworkers</a></strong> can show previews the same way.</li>
 </ul>
-<p>Open links are listed on the bot's <strong>Overview</strong> and on <strong>Workspace → Previews</strong>.</p>
 <h2 id="who-can-open-the-link">Who can open the link</h2>
 <p>Set it on <strong>Workspace → Previews</strong>:</p>
 <ul>
-<li><strong>This computer only</strong> (the default): links on <code>127.0.0.1</code>, which open only on the machine Household runs on.</li>
+<li><strong>This computer only</strong> (the default): links on <code>127.0.0.1</code> that open only on this machine.</li>
 <li><strong>Another address:</strong> Household listens on an address of this machine (say <code>0.0.0.0</code>) and writes links with the host people will open (say <code>mac-mini.local</code>). Who can reach it is up to your network and firewall: Household opens no ports or tunnels.</li>
 </ul>
-<p>Keep the default unless you need to look from another device, such as your phone on your home network. Changing it closes the links open now.</p>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>Links have no login.</strong> Anyone who can reach a link sees the app for those 15 minutes. Approve only what you would show on a shared screen.</p>
-<h2 id="limits">Limits</h2>
-<ul>
-<li>One port of the bot's own VM per preview. Web pages and WebSockets work; other connections do not.</li>
-<li>15 minutes at most. Asking again for an open port returns the same link with the same time left.</li>
-<li>Restarting the bot or Household closes its links.</li>
-</ul>
-<h2 id="put-it-to-use">Put it to use</h2>
-<p>A coding partner: share <code>~/Projects/site</code> read-write as a <a href="../volumes/">shared folder</a>, let the bot hand a redesign to a <a href="../sideworkers/">sideworker</a>, and have it show the result as a preview before you merge.</p>
-<p>From the terminal: <code>house features &lt;workspace&gt; preview=on</code>.</p>
-<h2 id="related">Related</h2>
-<ul>
-<li><a href="../volumes/">Shared folders</a>: the project the bot works on</li>
-<li><a href="../sideworkers/">Sideworkers</a>: helpers that can show previews too</li>
-</ul>
+<p>Keep the default unless you need another device, such as your phone at home.</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>Links have no login.</strong> Anyone who can reach a link sees the app while it is open. Approve only what you would show on a shared screen.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#who-can-open-the-link">Who can open the link</a></li><li><a href="#limits">Limits</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#related">Related</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-it-works">How it works</a></li><li><a href="#who-can-open-the-link">Who can open the link</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen
