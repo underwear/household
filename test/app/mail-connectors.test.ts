@@ -13,7 +13,7 @@ const caller = { house: "home", pet: "alice" };
 const endpoint = { host: "127.0.0.1", port: 1143, security: "starttls", username: "user@example.test", password: "private-password" };
 const config = (sendPolicy = "approval") => mailConnectionSchema.parse({ title: "Mail", email: "sender@example.test", imap: endpoint, smtp: { ...endpoint, port: 1025 }, sendPolicy, pets: ["alice"] });
 const message = (clientRequestId = "one") => ({ clientRequestId, to: ["recipient@example.test"], subject: "A subject", text: "Message body" });
-function setup(store = new SqliteStore(":memory:")) {
+function setup(store = new SqliteStore(":memory:"), now?: () => number) {
   const calls: { op: string; params: Record<string, any> }[] = [];
   let attachment = "original bytes";
   let behavior: MailDriver = async (_config, op, params) => {
@@ -27,7 +27,7 @@ function setup(store = new SqliteStore(":memory:")) {
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const saved: { name: string; bytes: string }[] = [];
   const files = { read: async () => Buffer.from(attachment), save: async (_c: unknown, name: string, bytes: Uint8Array) => { saved.push({ name, bytes: Buffer.from(bytes).toString() }); return ".household/inbox/test.txt"; } };
-  const service = new MailConnectors(store, files, undefined, driver);
+  const service = new MailConnectors(store, files, undefined, driver, now);
   service.setHouses([house, { ...house, name: "other" }]);
   const connect = async (policy = "approval", changes: object = {}) => (await service.save("home", { ...config(policy), ...changes })).id;
   const pending = async () => { await waitFor(() => service.list("home").sends.some(s => s.state === "pending")); return service.list("home").sends.find(s => s.state === "pending")!; };
@@ -219,7 +219,7 @@ test("send tools use full connector prefix and approval escapes untrusted conten
 });
 
 test("send IDs survive bounded history and expiry; pending approvals stay ahead of history", async () => {
-  const s = setup(), id = await s.connect("auto");
+  const s = setup(undefined, () => Date.UTC(2026, 10, 14)), id = await s.connect("auto");
   for (let i = 0; i < 105; i++) {
     // Rate limiting is covered independently; model time between these mock submissions.
     (s.service as any).budgets.clear();

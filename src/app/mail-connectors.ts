@@ -57,7 +57,9 @@ export class MailConnectors {
     const cutoff = this.now() - 30 * 86400_000;
     const keep = items.filter(s => !terminal(s) || Date.parse(s.createdAt) >= cutoff);
     const old = keep.filter(terminal).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-100);
-    this.store.set(SENDS, JSON.stringify([...keep.filter(s => !terminal(s)), ...old]));
+    const retained = new Set(old.map(s => s.id));
+    // Preserve insertion order, including requests created in the same millisecond.
+    this.store.set(SENDS, JSON.stringify(keep.filter(s => !terminal(s) || retained.has(s.id))));
   }
   private sendView(s: Send): MailSendView { const { house, revision, key, inputHash, raw, ...view } = s; return structuredClone(view); }
   private view(c: Connection): MailConnectionView {
@@ -114,7 +116,7 @@ export class MailConnectors {
     this.store.set(KEY, JSON.stringify(kept));
     for (const s of this.sends()) if (["preparing", "pending"].includes(s.state) && !this.parent({ house: s.house, pet: s.pet })) this.cancel(s.id, "The requesting bot is no longer available.");
   }
-  list(house: string): MailConnectorsView { this.house(house); return { connections: this.connections().filter(c => c.house === house).map(c => this.view(c)), sends: this.sends().filter(s => s.house === house).sort((a, b) => Number(terminal(a)) - Number(terminal(b)) || b.createdAt.localeCompare(a.createdAt)).map(s => this.sendView(s)) }; }
+  list(house: string): MailConnectorsView { this.house(house); return { connections: this.connections().filter(c => c.house === house).map(c => this.view(c)), sends: this.sends().filter(s => s.house === house).reverse().sort((a, b) => Number(terminal(a)) - Number(terminal(b)) || b.createdAt.localeCompare(a.createdAt)).map(s => this.sendView(s)) }; }
   private input(house: string, input: unknown, old?: Connection): MailConnectionInput {
     const parsed = mailConnectionSchema.safeParse(input);
     if (!parsed.success) throw new HouseholdError("Check mail server, security, sender, permissions and bot settings");
