@@ -35,7 +35,7 @@ The people who set up a workspace are its **owners**: only they give the bots or
 A bot is a capable agent with a shell and root in its VM. Household assumes it will make mistakes, or be talked into them by something it reads, and limits what a mistake can reach.
 
 - **A VM per bot, not a container.** Every bot, sideworker and scout runs in its own hardware-virtualised microVM with its own Linux kernel, and sees none of your files or other bots' except folders you share.
-- **One way out, through an allowlist.** A VM's only route out is Household's proxy, which passes only the hosts on the workspace's allowlist. For a new host the bot asks in the chat, and you choose **Allow 15 min** (that bot only), **Allow forever** (the whole workspace) or **Deny**.
+- **One way out, through an allowlist.** A VM's only route out is Household's proxy, which passes only the hosts on the workspace's allowlist. For a new host the bot asks in the chat, and you choose **Allow 15 min**, **Allow forever** or **Deny**.
 - **Secrets substituted at egress.** Inside the VM a secret is a placeholder; the proxy swaps in the real value only in requests to that secret's own hosts. Anywhere else, a placeholder is a useless string.
 - **Scouts for what a bot should not hold.** The open web, a production key or a closed network go to a scout, which starts only when you press **Run**. The bot gets facts about the run, not the scout's text, so hostile content stays out of its context.
 - **You approve the rest.** New hosts, folders of your computer, preview links and, with **Ask me first**, every change a connector would make wait for an owner.
