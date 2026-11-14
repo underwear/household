@@ -197,6 +197,7 @@
 <li><strong>One time zone</strong> for the whole Household, under <strong>Household → Settings → Time zone</strong>. Bots get it with every message, so &quot;tomorrow at 9&quot; means 9:00 there.</li>
 <li><strong>Missed runs happen once, late.</strong> If Household was down at the time, the task runs once when it is back.</li>
 <li><strong>Failed runs are not retried.</strong> A repeating task waits for its next time.</li>
+<li><strong>Lost completion signals do not block the inbox forever.</strong> After a minute without agent events, Household checks whether the agent is idle. If it is, an unfinished run is marked failed with an accounting error and queued work continues. The task may already have run; it is not replayed.</li>
 <li><strong>No pile-ups.</strong> A repeating run is skipped while the previous one is unfinished.</li>
 <li><strong>Every run is a model turn</strong> on the bot's <a href="../keys/">key</a>.</li>
 </ul>

@@ -44,11 +44,19 @@ const VITAL: AgentEvent["kind"][] = ["prompt-accepted", "turn-finished", "turn-f
 /** A message with files not fetched yet: the pet gets it once they are (or once they failed). */
 const unfetched = (message: Message) => message.attachments?.some((attachment) => !fetched(attachment)) ?? false;
 
-/** A prompt as the agent reports it, compared with what was typed: control characters gone, spaces collapsed. */
+/** Compare the prompt body, allowing Claude's whole-paste transport envelope, never stripping content tags. */
 const sameText = (typed: string, accepted: string) => {
   const plain = (text: string) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim();
-  return plain(typed) === plain(accepted);
+  const expected = plain(typed);
+  const actual = plain(accepted);
+  if (expected === actual) return true;
+  // Claude can repeat the id on the closing tag. Only unwrap a complete, matching pair.
+  const paste = actual.match(/^<pasted_content id=(["'])([^"']+)\1>([\s\S]*)<\/pasted_content(?: id=\1\2\1)?>$/);
+  return paste !== null && expected === plain(paste[3]!);
 };
+
+/** Give delayed hooks time to arrive; elapsed time alone never proves a scheduled turn ended. */
+const CRON_QUIET_MS = 60_000;
 
 /**
  * Puts a pet's dialog to its person; resolves to their answer, or undefined when it stays in the pet's session.
@@ -166,6 +174,7 @@ export class Delivery {
     const closesDialog = events.some(event => event.kind === "dialog-closed" && box.dialogState.matching(event).length > 0);
     // Over the rate, progress goes; turns' ends and starts and dialogs never.
     if (!box.admit(closesDialog || dialog !== undefined || events.some((event) => VITAL.includes(event.kind) || event.kind === "tool-review" || (event.kind === "notification" && event.audience === "chat")))) {
+      if (events.length > 0) this.watchCron(house, pet, box);
       for (const event of events) if (event.kind === "tool-finished") box.dialogState.finished(event);
       return {};
     }
@@ -301,6 +310,7 @@ export class Delivery {
     for (const message of box.awaiting) this.mark(message, "failed");
     box.awaiting = [];
     box.cronTurns.clear();
+    this.watchCron(house, pet, box);
     box.memoryRevision = undefined;
     box.memoryEpoch++;
     box.typed = [];
@@ -428,6 +438,7 @@ export class Delivery {
   }
 
   private record(house: string, pet: string, box: Mailbox, event: AgentEvent): OpenDialog | undefined {
+    this.watchCron(house, pet, box);
     if (event.kind === "tool-finished") box.dialogState.finished(event);
     const opened = event.kind === "dialog-opened" ? box.dialogState.opened(event) : undefined;
     if (opened) {
@@ -503,6 +514,45 @@ export class Delivery {
     const at = box.typed.findIndex((typed) => sameText(typed.text, prompt));
     if (at < 0) return [];
     return box.typed.splice(0, at + 1).at(-1)!.messages;
+  }
+
+  /** Missing acceptance/end hooks must not hold the entire inbox forever, even with nothing queued yet. */
+  private watchCron(house: string, pet: string, box: Mailbox): void {
+    box.cancelCronWatch?.();
+    box.cancelCronWatch = undefined;
+    const epoch = ++box.cronEpoch;
+    if (!box.awaiting.some(message => message.origin === "cron")) return;
+    box.cancelCronWatch = this.clock.after(CRON_QUIET_MS, () => void this.recoverCron(house, pet, box, epoch));
+  }
+
+  private async recoverCron(house: string, pet: string, box: Mailbox, epoch: number): Promise<void> {
+    const current = () => this.boxes.get(key(house, pet)) === box && box.cronEpoch === epoch;
+    if (!current()) return;
+    box.cancelCronWatch = undefined;
+    if (!box.awaiting.some(message => message.origin === "cron")) return;
+    const blocked = () => box.flushing || this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet)) || box.inbox.activity === "dialog" || box.asking.length > 0;
+    if (blocked()) return this.watchCron(house, pet, box);
+    const agent = box.agent;
+    let idle = false;
+    try { idle = await agent.isIdle?.(this.execIn(house, pet)) ?? false; } catch { /* unknown: keep waiting */ }
+    // Any event while the terminal was being inspected invalidates that observation.
+    if (!current()) return;
+    if (!idle || blocked() || box.agent !== agent) return this.watchCron(house, pet, box);
+    const stale = box.awaiting.filter(message => message.origin === "cron");
+    const error = "Scheduled turn accounting lost: agent is idle without a correlated completion; task will not be replayed";
+    for (const message of stale) {
+      const turn = box.cronTurns.get(message.id);
+      this.store.cronEvent?.([message.id], { kind: "turn-failed", error, ...(turn !== undefined ? { turn } : {}) });
+      this.mark(message, "failed");
+      box.cronTurns.delete(message.id);
+      this.report({ kind: "turn-lost", house, pet, why: "failed", ...(turn !== undefined ? { turn } : {}) });
+    }
+    box.awaiting = box.awaiting.filter(message => !stale.includes(message));
+    box.typed = box.typed.filter(typed => !typed.messages.some(message => stale.includes(message)));
+    box.inbox.stopped();
+    this.events.error(`bot ${house}/${pet}: ${error}`);
+    this.watchCron(house, pet, box);
+    void this.flush(house, pet);
   }
 
   /** Closes a dialog that is no longer on screen, or looks again later. */
@@ -624,6 +674,7 @@ export class Delivery {
         box.awaiting.push(...messages.filter(message => message.origin !== "cron"));
         this.events.info(`${name}: ${what} delivered (${box.inbox.size} left)`);
         this.report({ kind: "delivered", house, pet, messages });
+        this.watchCron(house, pet, box);
       }
     } finally {
       box.flushing = false;

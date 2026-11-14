@@ -33,6 +33,9 @@ export class Mailbox {
   awaiting: Message[] = [];
   /** Scheduled prompts actually accepted by the agent, correlated to their native turn. */
   readonly cronTurns = new Map<number, string | undefined>();
+  /** A quiet scheduled submission is checked against native idle; events invalidate an in-flight probe. */
+  cronEpoch = 0;
+  cancelCronWatch?: () => void;
   /** Being typed into the agent right now: an edit can no longer change them. */
   sending: Message[] = [];
   /** Batches typed (or being typed), oldest first, as their text, until the agent says it took them. */
@@ -111,6 +114,8 @@ export class Mailbox {
   }
 
   close(): void {
+    this.cancelCronWatch?.();
+    this.cronEpoch++;
     for (const asking of this.asking) asking.controller.abort();
     this.dialogState.clear();
     this.retry.cancel();

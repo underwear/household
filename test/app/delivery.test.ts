@@ -956,6 +956,158 @@ test("two cron tasks never enter the session together before prompt-accepted arr
   } finally {delivery.stop();store.close();}
 });
 
+test("Claude's wrapped cron prompt and Stop complete the run and release the next cron and chat", async () => {
+  for (const close of ['</pasted_content>', '</pasted_content id="paste-1">']) {
+    const { delivery, sent, store, say, clock, updates } = setup({ nativeClaude: true, memory: () => ({ revision: 1, text: "CORE\n" }) });
+    const now = Date.now();
+    const runs = () => store.crons.view("work", "sibling").runs;
+    const hook = (hook_event_name: string, fields: Record<string, string>) => delivery.onPayload("work", "sibling", { hook_event_name, ...fields });
+    try {
+      for (let n = 0; n < 2; n++) {
+        const job = store.crons.create("work", "sibling", { name: `task ${n}`, body: `check ${n}`, at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+        delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+      }
+      say(1);
+      clock.tick(1_200);
+      await waitFor(() => runs()[1]?.status === "delivered");
+      expect(sent).toHaveLength(1);
+      await hook("UserPromptSubmit", { prompt: `\u0007 <pasted_content id="paste-1">\n${sent[0]!.text.replace(/\n/g, "\r\n")}\n${close} `, prompt_id: "cron-1" });
+      expect(runs()[1]!.started).not.toBeNull();
+      expect(updates.at(-1)).toMatchObject({ kind: "turn-started", turn: "cron-1", messages: [{ origin: "cron" }] });
+      await hook("Stop", { last_assistant_message: "Checked once", prompt_id: "cron-1" });
+      await waitFor(() => sent.length === 3);
+      expect(runs()[1]).toMatchObject({ status: "answered", result: "Checked once", error: null });
+      expect(runs()[1]!.finished).not.toBeNull();
+      expect(runs()[0]!.status).toBe("delivered");
+      expect(idsIn(sent[2]!.text)).toEqual(["m1"]);
+      expect(sent.filter(({ text }) => text.includes("check 0"))).toHaveLength(1);
+    } finally { delivery.stop(); store.close(); }
+  }
+});
+
+test("prompt matching keeps literal markup and rejects unrelated or mismatched paste wrappers", async () => {
+  const { delivery, send, sent, post, updates } = setup();
+  try {
+    send("check <literal>content</literal>");
+    await waitFor(() => updates.some(update => update.kind === "delivered"));
+    for (const text of [
+      '<pasted_content id="a">check content</pasted_content id="a">',
+      '<pasted_content id="a">check <literal>content</literal></pasted_content id="b">',
+      'prefix <pasted_content id="a">check <literal>content</literal></pasted_content>',
+    ]) {
+      await post({ kind: "prompt-accepted", text });
+      expect(updates.at(-1)).toMatchObject({ kind: "turn-started", messages: [] });
+    }
+    await post({ kind: "prompt-accepted", text: `<pasted_content id="a">${sent[0]!.text}</pasted_content id="a">` });
+    expect(updates.at(-1)).toMatchObject({ kind: "turn-started", messages: [{ text: "check <literal>content</literal>" }] });
+  } finally { delivery.stop(); }
+});
+
+test("a cron with lost acceptance or Stop releases the queue only after quiet and confirmed native idle", async () => {
+  for (const accepted of [false, true]) {
+    let idle = false;
+    let probes = 0;
+    const { delivery, sent, store, post, clock, send, updates } = setup({ idle: async () => { probes++; return idle; } });
+    const now = Date.now();
+    const runs = () => store.crons.view("work", "sibling").runs;
+    try {
+      idle = true;
+      for (let n = 0; n < 2; n++) {
+        const job = store.crons.create("work", "sibling", { name: `task ${n}`, body: `check ${n}`, at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+        delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+      }
+      send("after cron");
+      await waitFor(() => runs()[1]?.status === "delivered");
+      idle = false;
+      if (accepted) await post({ kind: "prompt-accepted", text: sent[0]!.text, turn: "lost-stop" });
+      // A long-running turn is safe even after the watchdog deadline.
+      clock.tick(60_000);
+      await waitFor(() => probes >= 2);
+      expect(runs()[1]!.status).toBe("delivered");
+      expect(sent).toHaveLength(1);
+      idle = true;
+      // Fresh progress starts another quiet period.
+      await post({ kind: "tool-started", tool: "Bash", summary: "still working" });
+      clock.tick(59_999);
+      await Bun.sleep(0);
+      expect(sent).toHaveLength(1);
+      clock.tick(1);
+      await waitFor(() => sent.length === 3);
+      expect(runs()[1]!.status).toBe("failed");
+      expect(runs()[1]!.error).toContain("idle");
+      expect(runs()[1]!.finished).not.toBeNull();
+      expect(runs()[1]!.result).toBeNull();
+      expect(runs()[1]!.started === null).toBe(!accepted);
+      expect(runs()[0]!.status).toBe("delivered");
+      expect(sent[2]!.text).toBe("after cron");
+      expect(updates.some(update => update.kind === "turn-lost" && update.why === "failed")).toBe(true);
+      // A late hook cannot claim the failed run or overwrite it with another turn's result.
+      await post({ kind: "prompt-accepted", text: sent[0]!.text, turn: "late" });
+      expect(updates.at(-1)).toMatchObject({ kind: "turn-started", messages: [] });
+      await post({ kind: "turn-finished", text: "late result", turn: "late" });
+      expect(runs()[1]).toMatchObject({ status: "failed", result: null });
+      expect(sent).toHaveLength(3);
+    } finally { delivery.stop(); store.close(); }
+  }
+});
+
+test("cron recovery retries unknown idle without a queued successor and discards a probe invalidated by progress", async () => {
+  let probe: ((idle: boolean) => void) | undefined;
+  let calls = 0;
+  const { delivery, sent, store, post, clock } = setup({ idle: async () => {
+    calls++;
+    if (calls === 1) return true; // Initial submission.
+    if (calls === 2) throw new Error("VM temporarily unavailable");
+    return new Promise<boolean>(resolve => { probe = resolve; });
+  } });
+  const now = Date.now();
+  const job = store.crons.create("work", "sibling", { name: "missing hook", body: "check", at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+  const run = () => store.crons.view("work", "sibling").runs[0]!;
+  try {
+    delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+    await waitFor(() => run().status === "delivered");
+    clock.tick(60_000);
+    await waitFor(() => calls === 2);
+    expect(run().status).toBe("delivered");
+    clock.tick(60_000);
+    await waitFor(() => probe !== undefined);
+    await post({ kind: "prompt-accepted", text: sent[0]!.text, turn: "still-alive" });
+    probe!(true); // Its idle snapshot predates this newly accepted turn.
+    await Bun.sleep(0);
+    expect(run().status).toBe("delivered");
+    expect(run().error).toBeNull();
+    probe = undefined;
+    clock.tick(60_000);
+    await waitFor(() => probe !== undefined);
+    probe!(true);
+    await waitFor(() => run().status === "failed");
+    expect(run().error).toContain("idle");
+    expect(sent).toHaveLength(1);
+  } finally { delivery.stop(); store.close(); }
+});
+
+test("wrapped cron acceptance and Stop arriving during submission are not overwritten by the send result", async () => {
+  let finishSend!: (result: SendResult) => void;
+  const { delivery, sent, store, post, clock } = setup({ sends: [new Promise(resolve => { finishSend = resolve; })] });
+  const now = Date.now();
+  const job = store.crons.create("work", "sibling", { name: "quick", body: "check", at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+  const run = () => store.crons.view("work", "sibling").runs[0]!;
+  try {
+    delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+    await waitFor(() => sent.length === 1);
+    await post({ kind: "prompt-accepted", text: `<pasted_content id='quick'>${sent[0]!.text}</pasted_content id='quick'>`, turn: "quick" });
+    await post({ kind: "turn-finished", text: "done", turn: "quick" });
+    finishSend({ status: "sent" });
+    await Bun.sleep(0);
+    clock.tick(60_000);
+    await Bun.sleep(0);
+    expect(run()).toMatchObject({ status: "answered", result: "done", error: null });
+    expect(run().started).not.toBeNull();
+    expect(run().finished).not.toBeNull();
+    expect(sent).toHaveLength(1);
+  } finally { delivery.stop(); store.close(); }
+});
+
 test("a crash during scheduled submission is not replayed after restart", async()=>{
   const store=new SqliteStore(":memory:");const now=Date.now();
   const job=store.crons.create("work","sibling",{name:"once",body:"check",at:new Date(now+1).toISOString().slice(0,-1)},now);

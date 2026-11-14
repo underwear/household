@@ -30,5 +30,6 @@ The two combine: an inbox on **Silent** collects events without waking the bot, 
 - **One time zone** for the whole Household, under **Household → Settings → Time zone**. Bots get it with every message, so "tomorrow at 9" means 9:00 there.
 - **Missed runs happen once, late.** If Household was down at the time, the task runs once when it is back.
 - **Failed runs are not retried.** A repeating task waits for its next time.
+- **Lost completion signals do not block the inbox forever.** After a minute without agent events, Household checks whether the agent is idle. If it is, an unfinished run is marked failed with an accounting error and queued work continues. The task may already have run; it is not replayed.
 - **No pile-ups.** A repeating run is skipped while the previous one is unfinished.
 - **Every run is a model turn** on the bot's [key](../keys/).
