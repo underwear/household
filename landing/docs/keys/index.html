@@ -173,71 +173,70 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="./" aria-current="page">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Keys</h1>
-<p class="lead">A key is what your bots run on: your access to Claude or ChatGPT. It can be your subscription, signed in through Household, a subscription token you paste, or a pay-per-use API key. You add keys once, under Household's settings, and then pick one for each bot. Household keeps every key on your machine; the bots themselves never get to see it.</p>
-<h2 id="which-key-to-choose">Which key to choose</h2>
-<p>Claude Code bots run on Claude keys, and Codex bots on ChatGPT / OpenAI keys:</p>
+<p class="lead">A key is the model account your bots run on: a Claude or ChatGPT subscription you sign in to through Household, a subscription token you paste, or a pay-per-use API key. One key signed in to your Claude Max plan can run all the family bots. Keys stay on your machine; bots never see them.</p>
+<h2 id="what-you-d-use-it-for">What you'd use it for</h2>
+<ul>
+<li><strong>Run bots on the subscription you already pay for.</strong></li>
+<li><strong>Keep spending apart</strong>: one key per account or budget, limited to the workspaces that may use it.</li>
+<li><strong>Give a bot your account's connectors</strong>: claude.ai connectors or ChatGPT apps you already set up.</li>
+<li><strong>Avoid surprise bills</strong>: a used-up subscription key stops instead of running into extra usage.</li>
+</ul>
+<h2 id="subscription-or-api-key">Subscription or API key</h2>
+<p>This choice sets your cost.</p>
+<ul>
+<li><strong>A subscription</strong> (a sign-in or a pasted token) costs its monthly price and no more. Its use comes in windows, such as 5 hours and 7 days, and every bot on the key draws from the same windows as your own use of that account. When a window is used up, the bots get no answers until it resets, unless you allow overage. Best for personal bots and everyday use.</li>
+<li><strong>An API key</strong> is billed per token, with no windows. A bot that wakes for every inbox event or runs a task every half hour adds up. Best for a busy, unattended bot, or to keep bots out of the subscription you use yourself.</li>
+</ul>
+<p>Start with a sign-in. Move a bot to an API key, or to a second subscription, when it starts crowding out your own use.</p>
 <table>
 <thead>
-<tr><th></th><th>Claude Code</th><th>Codex</th></tr>
+<tr><th>Kind</th><th>For</th><th>Billed</th><th>Renew</th><th>Account connectors</th></tr>
 </thead>
 <tbody>
-<tr><td>Sign in (recommended)</td><td><strong>Sign in to Claude</strong>: Pro, Max or Team</td><td><strong>Sign in to ChatGPT</strong>: Plus or Pro</td></tr>
-<tr><td>Pasted token</td><td><strong>Claude subscription token</strong> from <code>claude setup-token</code></td><td>—</td></tr>
-<tr><td>Pay per use</td><td><strong>Anthropic API key</strong></td><td><strong>OpenAI API key</strong></td></tr>
+<tr><td><strong>Sign in to Claude</strong></td><td>Claude Pro, Max or Team</td><td>Subscription</td><td>Sign in again about once a month</td><td>claude.ai connectors</td></tr>
+<tr><td><strong>Claude subscription token</strong> (<code>claude setup-token</code>)</td><td>Claude Pro, Max or Team</td><td>Subscription</td><td>After a year</td><td>None</td></tr>
+<tr><td><strong>Sign in to ChatGPT</strong></td><td>ChatGPT Plus or Pro</td><td>Subscription</td><td>Household keeps it fresh</td><td>ChatGPT apps</td></tr>
+<tr><td><strong>Anthropic API key</strong> / <strong>OpenAI API key</strong></td><td>Your Console or Platform account</td><td>Per use</td><td>Never</td><td>None</td></tr>
 </tbody>
 </table>
+<p>A key fits the harness that uses its provider: Claude keys for Claude Code, ChatGPT and OpenAI keys for Codex.</p>
+<h2 id="how-it-works">How it works</h2>
 <ul>
-<li><strong>Sign in</strong> is the easiest, and the only kind that brings the account's connectors (see <a href="#account-connectors">Account connectors</a>). A Claude sign-in needs renewing about once a month.</li>
-<li><strong>Claude subscription token</strong> lasts a year with nothing to renew, but has no claude.ai connectors.</li>
-<li><strong>API keys</strong> are billed per use by Anthropic or OpenAI, with no subscription to run out of.</li>
+<li><strong>The bot never holds it.</strong> The key stays in Household's config on your machine. Inside the VM there is a stand-in; Household puts the real key into the bot's model requests on the way out. A bot tricked into printing everything it has still can't print your key.</li>
+<li><strong>Household's own sign-in.</strong> It is a session of its own: the Claude Code or ChatGPT on your computer is not touched. Household renews its tokens itself.</li>
+<li><strong>One list for the whole Household</strong>, under <strong>Household → Settings → Keys</strong>. Every workspace's bots may use every key unless you limit it.</li>
+<li><strong>Allowance metering</strong> (Claude subscriptions). Household reads each window's use from Claude's answers, shows it next to the key, and by default refuses the bots' requests once a window is used up, until it resets.</li>
 </ul>
-<p>You can have as many keys as you like, several of one provider too. Give each bot the one it should spend.</p>
-<h2 id="add-a-key">Add a key</h2>
-<ol>
-<li>In the admin, open the <strong>Household</strong> card in the sidebar, then <strong>Settings</strong>. Under <strong>Keys</strong>, press <strong>+ Add key</strong>.</li>
-<li>Choose the provider: <strong>Claude</strong> or <strong>ChatGPT / OpenAI</strong>.</li>
-<li>Choose how it signs in. The recommended way is marked.</li>
-<li>Name the key under <strong>Key name</strong> (for example <code>claude</code>, or <code>claude-work</code> for a second account), then follow the steps in the dialog:
+<h2 id="what-else-you-decide">What else you decide</h2>
 <ul>
-<li><strong>Sign in to Claude</strong>: press <strong>Get sign-in link</strong>. Household starts Claude Code's own sign-in and shows a link. Open it on any device, your phone too, and sign in to the account your bots should use. Paste the code Claude shows under <strong>Code</strong> and press <strong>Connect</strong>. The link works once, for 10 minutes. The very first sign-in downloads a VM image of about 1.4 GB, so it can take a few minutes.</li>
-<li><strong>Sign in to ChatGPT</strong>: press <strong>Sign in with ChatGPT</strong>. Open the link shown, sign in and enter the code. The dialog finishes by itself. If ChatGPT refuses device codes, allow them in its security settings.</li>
-<li><strong>Claude subscription token</strong>: on any computer with Claude Code, run <code>claude setup-token</code>, sign in, and paste the token it prints (<code>sk-ant-oat01-…</code>).</li>
-<li><strong>API key</strong>: create one in the <a href="https://platform.claude.com/settings/keys">Claude Console</a> or on the <a href="https://platform.openai.com/api-keys">OpenAI Platform</a> and paste it. They show it only once.</li>
+<li><strong>Overage.</strong> Claude can go on past a used-up window in &quot;extra usage&quot;, billed apart. Off by default; turn on <strong>Go on in overage</strong> under the key's <strong>Edit</strong> if a bot must not stop.</li>
+<li><strong>Which workspaces.</strong> Under the key's <strong>Edit</strong>, tick workspaces to keep it for them only.</li>
+<li><strong>Account connectors.</strong> A bot on a sign-in can use the connectors (claude.ai) or apps (ChatGPT) set up in that account (Drive, Jira, GitHub…): one switch per bot on its <strong>Harness</strong> tab, off by default. Its sideworkers get them too; scouts never do.</li>
 </ul>
-</li>
-</ol>
-<p>The key now appears in the list with its provider and kind, and <strong>Used in</strong> shows which bots run on it. Pick it for a bot under <strong>Key</strong> when you add the bot, or later on its <strong>Harness</strong> tab.</p>
-<p><code>house onboard</code> asks for a key the same way when you set up Household.</p>
-<h2 id="what-quot-the-bot-never-sees-it-quot-means">What &quot;the bot never sees it&quot; means</h2>
-<p>A key stays on your machine, in Household's config. Inside the bot's VM there is only a stand-in value. When the bot talks to Claude or ChatGPT, its request goes through Household on the way out, and Household puts the real key in at that moment. So even if a bot were tricked into printing everything it has, your key would not be in it. The same holds for the secrets you give a workspace.</p>
-<p>You can still see a pasted key yourself: <strong>Reveal</strong> in the list shows it in full. A signed-in key has nothing to reveal; its tokens stay with Household.</p>
-<h2 id="signed-in-keys">Signed-in keys</h2>
-<p>Household keeps a sign-in fresh by itself. The list shows whose account it is and the date to sign in again by.</p>
-<p>Claude ends a sign-in about once a month. From five days before, Household posts a reminder once a day in the chats of the bots that use it. When the day comes, press <strong>Sign in again</strong> next to the key and repeat the sign-in. If you sign in to another account, the key's bots move to it. Once a sign-in has ended, its bots get no answers until you sign in again.</p>
-<p>This sign-in belongs to Household alone. The Claude Code or ChatGPT on your own computer is not touched. A <a href="../backup/">backup</a> does not carry it either: after restoring on a new machine, the key says it is not signed in, and <strong>Sign in again</strong> fixes it.</p>
-<h2 id="allowance-and-overage">Allowance and overage</h2>
-<p>A Claude subscription has usage windows, such as 5 hours and 7 days. For Claude subscription keys, signed in or pasted, the list shows how much of each window is used and when it resets.</p>
-<p>When a window is used up, Claude may go on in &quot;extra usage&quot; and bill it apart from the subscription. Household does not let that happen by surprise: by default it refuses the bots' requests on that key until the window resets. To let them go on and pay for it, press <strong>Edit</strong> on the key and tick <strong>Go on in overage (billed apart from the subscription)</strong> under <strong>Past its allowance</strong>.</p>
-<p>API keys have no allowance: you pay for what you use.</p>
-<h2 id="limit-a-key-to-some-workspaces">Limit a key to some workspaces</h2>
-<p>By default every workspace's bots may run on every key. To keep a key for some workspaces only, press <strong>Edit</strong> on it and tick them under <strong>Workspaces</strong>. With none ticked, it is for every workspace. Bots in other workspaces won't see it in their <strong>Key</strong> list.</p>
-<p><strong>Edit</strong> also has a <strong>Note</strong>, which only you see (for example &quot;Max subscription&quot;), and for a pasted key its value. <strong>Remove</strong> deletes a key, but only once no bot runs on it.</p>
-<h2 id="account-connectors">Account connectors</h2>
-<p>A signed-in key brings the connectors of its account. On claude.ai you may already have connected Google Drive, Jira, GitHub and the like; in ChatGPT these are called apps. A bot on that key can use them too, as that account.</p>
-<p>This is off by default, one switch per bot: on its <strong>Harness</strong> tab, under <strong>Harness options</strong>, turn on <strong>Claude.ai connectors</strong> (Claude Code) or <strong>ChatGPT apps</strong> (Codex). The bot's sideworkers get them too. Scouts never do. A pasted token or an API key has no connectors, so the switch is greyed out on those.</p>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> The bot acts as you in those services, with every connector of that account and whatever access you gave each one there. For finer control, such as read-only access to one mailbox, use the workspace's own <a href="../connectors/">Connectors</a> instead.</p>
-<h2 id="from-the-terminal">From the terminal</h2>
-<p>On a server without a browser at hand, the <code>house</code> command does the same:</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> With account connectors, the bot acts as you, with every connector of that account and whatever access you gave each one there. For narrower access, such as read-only on one mailbox, use the workspace's own <a href="../connectors/">Connectors</a>.</p>
+<h2 id="set-it-up">Set it up</h2>
+<p><strong>Household → Settings → Keys → + Add key</strong> (<code>house onboard</code> asks for the first one). Then pick it for a bot when you add it, or on its <strong>Harness</strong> tab. What to know per kind:</p>
 <ul>
-<li><code>house key claude &lt;name&gt;</code> signs in to Claude. It prints the link and asks for the code. Run it again to sign in anew.</li>
-<li><code>house key codex &lt;name&gt;</code> signs in to ChatGPT with a code.</li>
-<li><code>house key add &lt;name&gt; --provider anthropic|openai</code> adds a pasted token or API key. It asks for the value without showing it.</li>
-<li><code>house key set &lt;name&gt; --allow-overage on|off</code> and <code>--workspaces a,b</code> change the settings above.</li>
-<li><code>house key rm &lt;name&gt;</code> removes a key.</li>
+<li><strong>Sign in to Claude</strong>: open the link on any device and sign in to the account the bots should use. The link works once, for 10 minutes. The first sign-in downloads a VM image of about 1.4 GB.</li>
+<li><strong>Sign in to ChatGPT</strong>: if ChatGPT refuses device codes, allow them in its security settings.</li>
+<li><strong>Claude subscription token</strong>: run <code>claude setup-token</code> on any computer with Claude Code and paste the <code>sk-ant-oat01-…</code> token.</li>
+<li><strong>API key</strong>: from the <a href="https://platform.claude.com/settings/keys">Claude Console</a> or the <a href="https://platform.openai.com/api-keys">OpenAI Platform</a>. They show it only once.</li>
 </ul>
+<h2 id="limits-and-good-to-know">Limits and good to know</h2>
+<ul>
+<li><strong>Claude sign-ins end about monthly.</strong> From 5 days before, Household posts a daily reminder in the chats of the key's bots. Once it has ended, they get no answers until you press <strong>Sign in again</strong>. Signing in to another account there moves the key's bots to it.</li>
+<li><strong>Backups don't carry a Claude sign-in.</strong> After a restore, press <strong>Sign in again</strong>. See <a href="../backup/">Back up and move</a>.</li>
+<li><strong>API keys are never refused</strong>; you pay for what you use.</li>
+<li>A key can be removed only once no bot runs on it.</li>
+</ul>
+<p>From the terminal: <code>house key claude &lt;name&gt;</code> or <code>house key codex &lt;name&gt;</code> signs in; <code>house key add &lt;name&gt; --provider anthropic|openai</code> adds a pasted token or API key; <code>house key set &lt;name&gt; --allow-overage on|off</code>, with <code>--workspaces a,b</code> on <code>add</code> or <code>set</code>; <code>house key rm &lt;name&gt;</code>.</p>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p>Two keys, two budgets: your Claude Max sign-in as <code>claude</code> for the family bots, and an Anthropic API key as <code>ops</code>, limited to the ops workspace. The night ops bot that wakes on every Grafana <a href="../inboxes/">inbox</a> alert then never uses up the windows your family bots and your own Claude Code share.</p>
+<h2 id="related">Related</h2>
+<p><a href="../bots/">Bots</a> · <a href="../connectors/">Connectors</a> · <a href="../network/">Network and secrets</a></p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#which-key-to-choose">Which key to choose</a></li><li><a href="#add-a-key">Add a key</a></li><li><a href="#what-quot-the-bot-never-sees-it-quot-means">What &quot;the bot never sees it&quot; means</a></li><li><a href="#signed-in-keys">Signed-in keys</a></li><li><a href="#allowance-and-overage">Allowance and overage</a></li><li><a href="#limit-a-key-to-some-workspaces">Limit a key to some workspaces</a></li><li><a href="#account-connectors">Account connectors</a></li><li><a href="#from-the-terminal">From the terminal</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-d-use-it-for">What you'd use it for</a></li><li><a href="#subscription-or-api-key">Subscription or API key</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-else-you-decide">What else you decide</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#limits-and-good-to-know">Limits and good to know</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

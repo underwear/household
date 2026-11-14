@@ -173,99 +173,72 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="./" aria-current="page">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">What bots can reach</p><h1>Network and secrets</h1>
-<p class="lead">A bot can only reach the hosts its workspace allows. Everything else is closed. This matters because a bot reads things you did not write: web pages, mail, forwarded messages. If one of them tricks it, the bot still cannot send your files to a stranger's server. When a bot needs a new host, it asks you in the chat.</p>
-<p>Secrets work the same way. You give a bot a token (GitHub, npm and so on) as a placeholder it cannot read. Household puts the real value into the bot's requests on their way out, and only to the hosts you chose.</p>
-<h2 id="how-bots-reach-the-internet">How bots reach the internet</h2>
-<p>Every bot runs in its own VM with no direct way out. All its traffic goes through Household on your machine, which checks each connection against the workspace's allowlist:</p>
+<p class="lead">A bot's VM has no way to the internet of its own. Everything it sends goes through Household on your machine, which lets through only the hosts on the workspace's allowlist. Secrets travel the same road: the bot holds a placeholder, and Household puts the real token into its requests on the way out, only to the hosts you chose. A coding bot with <code>api.github.com</code> allowed and a GitHub token opens pull requests, but never sees the token and cannot post your files to a paste site.</p>
+<h2 id="when-it-helps">When it helps</h2>
 <ul>
-<li>Web requests (HTTP and HTTPS) work for any allowed host.</li>
-<li>Other TCP connections, such as SSH, git over SSH or a database, work too, as long as that host and port are allowed. <code>example.com:22</code> allows SSH to one host.</li>
-<li>UDP and programs that ignore the VM's proxy settings do not get out.</li>
-<li>Your local network stays closed unless you add one of its hosts to the allowlist yourself, by its exact name.</li>
+<li>A bot that reads mail and web pages cannot send what it read to a stranger's server.</li>
+<li>A bot uses your GitHub or npm token without being able to leak it.</li>
+<li>A bot reaches one database on your home network, and nothing else there.</li>
+<li>A one-off need (&quot;I need docs.rs&quot;) opens for 15 minutes, not for good.</li>
 </ul>
-<p>Each workspace has its own allowlist, temporary access and secrets. A bot in one workspace never gets another workspace's.</p>
-<p>To see what a bot tried to reach, open the bot, press <strong>Logs</strong> and turn on <strong>Network</strong>. Every request is there: allowed, denied or failed.</p>
+<h2 id="how-it-works">How it works</h2>
+<ul>
+<li><strong>One way out.</strong> Each bot runs in its own hardware-virtualised VM, whose only exit is Household's proxy. Web requests work for allowed hosts; other TCP (SSH, git over SSH, a database) works when that host and port are allowed. UDP and programs that ignore the proxy do not get out.</li>
+<li><strong>One allowlist per workspace,</strong> shared by its bots and their sideworkers. <a href="../scouts/">Scouts</a> get only the network their capabilities give.</li>
+<li><strong>Your local network stays closed.</strong> Only an exact entry you write yourself, such as <code>nas.local:445</code>, reaches a private address. Wildcards, <code>*</code> and chat approvals reach public addresses only, so a name someone points at your router cannot open your network.</li>
+<li><strong>Your harness's hosts,</strong> such as its model provider, are added for you.</li>
+<li><strong>Most traffic stays sealed.</strong> For an ordinary host, the bot's HTTPS runs end to end: Household sees the host and port, not the content. For the hosts that get a key (the model provider, and each secret's hosts), Household terminates TLS with its own certificate authority, which every VM trusts, fills the key into the request header, and sends the request on.</li>
+<li><strong>Everything is logged</strong> in the bot's <strong>Logs</strong>: allowed, denied or failed, and whether it was intercepted.</li>
+</ul>
+<h2 id="how-to-think-about-the-allowlist">How to think about the allowlist</h2>
+<p>The allowlist limits where data can go, not what goes there.</p>
+<ul>
+<li><strong>An allowed host is also a way out.</strong> <code>github.com</code> means every repository on GitHub, not only yours: a bot tricked by a web page can push what it read to one the attacker owns, with a token the page hands it. The same holds for any host where anyone can upload, such as shared storage (<code>storage.googleapis.com</code>, in the Go preset) or paste sites. Allow the narrowest host that does the job.</li>
+<li><strong>Allow forever is for the whole workspace.</strong> One tap on a bot's request opens the host to every bot and sideworker in it, today and later. For one bot's one-off need, choose <strong>Allow 15 min</strong>. Bots that need different reach belong in different workspaces.</li>
+<li><strong><code>*</code> gives up the allowlist.</strong> Any public host on port 443 (<code>*:*</code>: any port). A tricked bot can send what it read anywhere; bots stop asking, so the chat no longer shows you what they reach; secrets from the chat are refused. Your local network and this machine stay closed. Keep it for a workspace whose bots hold nothing worth taking.</li>
+<li><strong>Connectors are not on it.</strong> A <a href="../connectors/">connector</a> works from Household on your machine, and your Claude or ChatGPT account's connectors work through the provider, so the allowlist never sees the services they reach. A write connector is a way out the allowlist does not cover.</li>
+</ul>
 <h2 id="the-allowlist">The allowlist</h2>
-<p>Go to <strong>Workspace → Network</strong>. <strong>Domains allowlist</strong> lists every host the workspace's bots can reach.</p>
-<ul>
-<li><strong>Add a host.</strong> Type it in the field and press <strong>Add host</strong>, then confirm.</li>
-<li><strong>Add from a preset.</strong> Pick one under <strong>Add from a preset…</strong>. You see the hosts it adds before anything changes, and press <strong>Add hosts</strong>. A preset only adds ordinary entries, which you can remove one by one later. Presets: Python · PyPI, Node · npm, Debian · apt, Rust · Cargo / rustup, Go · modules, Docker Hub · container images and GitHub · source / releases.</li>
-<li><strong>Remove a host.</strong> Remove it from the list, and the workspace's bots are denied it.</li>
-</ul>
-<p>Hosts tagged <strong>by harness</strong> are the ones the bots' harness needs, such as its model provider. Household adds them, and you cannot remove them here. Hosts marked <strong>approved in chat · public addresses only</strong> are ones you allowed forever from a bot's request.</p>
-<p>How to write an entry (<strong>Domain formats</strong> on the page shows the same):</p>
+<p><strong>Workspace → Network.</strong> Presets (Python, Node, Debian, Rust, Go, Docker Hub, GitHub) add ordinary entries you can remove one by one.</p>
 <table>
 <thead>
 <tr><th>Entry</th><th>Allows</th></tr>
 </thead>
 <tbody>
-<tr><td><code>example.com</code></td><td>one host, on port 443 (HTTPS)</td></tr>
-<tr><td><code>example.com:80</code></td><td>that host over plain HTTP; <code>:22</code> for SSH, any other port the same way</td></tr>
+<tr><td><code>example.com</code></td><td>one host, on port 443</td></tr>
+<tr><td><code>example.com:22</code></td><td>that host on another port: <code>:80</code> for plain HTTP, <code>:22</code> for SSH</td></tr>
 <tr><td><code>*.example.com</code></td><td>its subdomains at any depth, not <code>example.com</code> itself</td></tr>
-<tr><td><code>*</code></td><td>any public host on port 443; <code>*:*</code> any port</td></tr>
+<tr><td><code>*</code></td><td>any public host on port 443; <code>*:*</code> on any port</td></tr>
 </tbody>
 </table>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong><code>*</code> opens the whole internet.</strong> A bot tricked by a web page or a forwarded message can then send what it has read anywhere. Household asks you to confirm with <strong>I understand the risk</strong>. Your local network and this machine stay closed even then.</p>
-<p>From the command line: <code>house workspace allow &lt;workspace&gt; &lt;host&gt;</code> and <code>house workspace disallow &lt;workspace&gt; &lt;host&gt;</code>.</p>
 <h2 id="when-a-bot-asks-for-a-host">When a bot asks for a host</h2>
-<p>When a bot needs a host that is not allowed, it asks you in its chat. The card shows which bot, which host and port, why it needs it (in the bot's own words) and the addresses the host points to right now. You have three answers:</p>
-<ul>
-<li><strong>Allow 15 min.</strong> Only this bot, only this host and port, only at the addresses shown, for 15 minutes. Then it closes by itself.</li>
-<li><strong>Allow forever.</strong> Household asks once more (<strong>Yes, forever</strong>). The host joins the workspace's allowlist, so every bot in the workspace can reach it until you remove it.</li>
-<li><strong>Deny.</strong> The bot gets nothing.</li>
-</ul>
-<p>Only owners can answer. If nobody answers within five minutes, the request lapses and nothing is allowed.</p>
-<p>A bot can only ask for one exact host name, never a wildcard or an IP address. A name that points into a private network is refused without asking you, and you are told. If you do want a bot to reach such a host, add it to the allowlist yourself.</p>
-<p>A <a href="../scouts/">scout</a> can ask too, but only for its current run: you see <strong>Allow 15 min</strong> and <strong>Deny</strong>, with no &quot;forever&quot;.</p>
-<h3 id="see-and-revoke-temporary-access">See and revoke temporary access</h3>
-<p><strong>Workspace → Network → Temporary access</strong> lists every 15-minute grant: the host and port, the bot, the minutes left and the bot's reason. Press <strong>Revoke</strong> to end one now. Only that bot loses access to that host and port.</p>
-<p>From the command line: <code>house workspace show &lt;workspace&gt;</code> lists them, and <code>house workspace revoke &lt;workspace&gt; &lt;host[:port]&gt;</code> ends one.</p>
+<p>A bot that needs a host asks in its chat, with its reason and the addresses the host points to now. <strong>Allow 15 min</strong> opens that host and port, at those addresses, to that bot only. <strong>Allow forever</strong> adds the host to the workspace's allowlist, after one more confirmation. Only owners can answer, and an unanswered request lapses after five minutes.</p>
+<p>A bot can ask only for one exact host name, never a wildcard or an IP address; a name pointing into a private network is refused without asking you. A scout gets only <strong>Allow 15 min</strong>, for its run. Revoke a running grant under <strong>Workspace → Network → Temporary access</strong>.</p>
 <h2 id="secrets">Secrets</h2>
-<p>A secret is a token of yours that bots use without seeing it: a GitHub token, an npm token, an API key for a service.</p>
-<p>Here is what happens:</p>
-<ol>
-<li>You save the secret with the hosts it is for, say <code>api.github.com</code>, and a variable name, say <code>GITHUB_TOKEN</code>.</li>
-<li>Inside each bot's VM, <code>GITHUB_TOKEN</code> holds a placeholder, <code>household-secret-github</code>, not the token.</li>
-<li>The bot uses the variable as usual, for example in an <code>Authorization</code> header.</li>
-<li>On the way out, when a request goes to one of the secret's hosts, Household swaps the placeholder in that header for the real token. Login and password pairs, as git sends them, work too.</li>
-</ol>
-<p>Sent anywhere else, the placeholder is just a meaningless string. The real token never enters a VM, so a bot cannot leak it, even by accident.</p>
-<h3 id="add-a-secret">Add a secret</h3>
-<ol>
-<li>Go to <strong>Workspace → Secrets → + Add secret</strong>.</li>
-<li>Under <strong>Start from</strong>, pick <strong>GitHub</strong>, <strong>npm</strong> or <strong>Hugging Face</strong> to fill in the hosts and variable, or <strong>Custom</strong> to start empty.</li>
-<li>Fill in the <strong>Name</strong>, the <strong>Variable</strong> where bots find it, the <strong>Value</strong> and the <strong>Hosts</strong>: exact hosts, comma-separated.</li>
-<li>Under <strong>Advanced</strong>, change the <strong>Header</strong> if the service does not use <code>Authorization</code>.</li>
-<li>Press <strong>Add secret</strong>.</li>
-</ol>
-<p>Saving a secret does not open its hosts. If a host is not on the allowlist, the secret's row says <strong>Not allowed in Network</strong>, with an <strong>Allow</strong> button next to it.</p>
-<p>A new secret works right away. A new variable reaches each bot at its next VM start. Removing a secret takes effect right away; the bots keep running. <strong>Reveal</strong> shows a secret's value, and <strong>Edit</strong> changes it.</p>
-<p><strong>Who gets it</strong> appears when the workspace has scout capabilities. <strong>Every bot in this workspace</strong> is the default; sideworkers share their bot's secrets. <strong>Only scouts with a capability</strong> keeps it from bots and sideworkers altogether, not even as a placeholder. See <a href="../scouts/">Scouts</a>.</p>
-<p>From the command line: <code>house secret add &lt;workspace&gt; &lt;name&gt; --host h1,h2 --env VAR</code>. Leave out <code>--value</code>, and the value is read from standard input, so it stays out of your shell history. <code>house secret set</code> changes one and <code>house secret rm</code> removes one.</p>
-<h3 id="secrets-from-the-chat">Secrets from the chat</h3>
-<p>When a bot needs a token you have not saved, it asks you in the chat. The card says what for, which hosts, which variable, and why. Reply with <code>/secret &lt;value&gt;</code> (in Slack, <code>!secret &lt;value&gt;</code>). Household deletes your message before the bot sees it, then asks you to confirm with <strong>Yes, save</strong>. The request expires after 10 minutes, and <strong>Cancel request</strong> drops it.</p>
-<p>You can also save one without being asked: <code>/secret &lt;name&gt; &lt;value&gt; &lt;domain&gt;</code>, with several domains separated by commas. Bots find it in the variable <code>SECRET_&lt;NAME&gt;</code>: <code>/secret github ghp_… api.github.com</code> gives them <code>SECRET_GITHUB</code>.</p>
-<p>If you paste something that looks like a token into the chat by mistake, Household deletes it before the bot sees it and offers to save it as a secret. You can still send it as is, after a warning.</p>
-<p>Notes:</p>
-<ul>
-<li>In Slack, and in a Telegram group where the bot cannot delete messages, delete your message yourself.</li>
-<li><code>/secret</code> never overwrites an existing secret. Change it on the <strong>Secrets</strong> page.</li>
-<li>A bot can ask to change a secret's hosts, variable or header, or to remove it. You approve each change in the chat.</li>
-<li>Secrets from the chat need an allowlist. While the workspace allows the whole internet (<code>*</code>), they are refused.</li>
-<li>Reaching the secret's hosts is a separate question. If they are not allowed yet, the bot asks for them too.</li>
-</ul>
+<p>A secret is a token saved with its hosts and a variable name, say <code>GITHUB_TOKEN</code> for <code>api.github.com</code>. Inside the VM the variable holds a placeholder, <code>household-secret-github</code>. When the bot sends it in a header to one of those hosts, Household swaps in the real token on the way out; login and password pairs, as git sends them, work too. Anywhere else the placeholder is a meaningless string. The real value never enters a VM, so a bot cannot leak it, even by accident.</p>
+<p><strong>Add one</strong> under <strong>Workspace → Secrets</strong>. Templates fill in GitHub, npm and Hugging Face; change the header under <strong>Advanced</strong> if the service does not use <code>Authorization</code>. A secret chooses where its value is filled in, never where bots may go: its hosts still have to be on the allowlist. A new secret works at once; a new variable reaches a bot at its next VM start.</p>
+<p><strong>Who gets it.</strong> Once the workspace has scout capabilities, a secret goes either to every bot and sideworker or only to scouts with a capability; the latter keeps even the placeholder away from bots.</p>
+<p><strong>From the chat.</strong> A bot that needs a token asks with a card; reply <code>/secret &lt;value&gt;</code> (<code>!secret</code> in Slack). Household deletes your message before the bot sees it, as it does with a token pasted by mistake, then asks you to confirm. In Slack, and in a Telegram group where the bot cannot delete messages, delete it yourself. Unasked, <code>/secret &lt;name&gt; &lt;value&gt; &lt;domain&gt;</code> saves one as <code>SECRET_&lt;NAME&gt;</code>. It never overwrites a secret, and is refused while the workspace allows <code>*</code>.</p>
 <h3 id="what-a-placeholder-cannot-do">What a placeholder cannot do</h3>
-<p>Household can only fill a secret into an HTTP header of a request to one of the secret's hosts. Anything else needs the real value, which is the placeholder's whole point to avoid:</p>
+<p>Substitution happens at egress, not inside the VM, so it works only for a token in an HTTP header to the secret's hosts. An SSH key, a database password, a request the bot signs itself (as with AWS keys), or a token in a URL or body needs the real value, and the bot tells you so first. Send it as is, knowing the bot and its model provider see it and it stays in the chat history, or give the job to a <a href="../scouts/">scout</a>, which holds the value in a throwaway VM the bot never sees.</p>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p>A coding bot reads issues from strangers and ships fixes. Give its workspace the GitHub preset and a GitHub token as a secret. Save your hosting provider's production token for <strong>Only scouts with a capability</strong>, so the bot that reads strangers' text never holds even its placeholder; a deploy <a href="../scouts/">scout</a> uses it when you approve the run.</p>
+<h2 id="from-the-terminal">From the terminal</h2>
+<pre><code class="language-sh">house workspace allow|disallow &lt;workspace&gt; &lt;host&gt;
+house workspace show &lt;workspace&gt;                  # includes temporary grants
+house workspace revoke &lt;workspace&gt; &lt;host[:port]&gt;
+house secret add &lt;workspace&gt; &lt;name&gt; --host h1,h2 --env VAR   # value from standard input
+house secret set|rm …
+</code></pre>
+<h2 id="related">Related</h2>
 <ul>
-<li>An SSH key or a database password is used inside the VM, not sent as a header.</li>
-<li>A request the bot has to sign itself (as with AWS keys) needs the real key to compute the signature.</li>
-<li>A token sent in a URL or a request body is not filled in.</li>
+<li><a href="../scouts/">Scouts</a>: keys and networks a bot should not hold</li>
+<li><a href="../keys/">Keys</a>: model keys, filled in the same way</li>
+<li><a href="../connectors/">Connectors</a>: accounts, outside the allowlist</li>
 </ul>
-<p>For these, the bot tells you before it goes on. You can send it the value in the chat as is, knowing that the bot and its model provider then see it and it stays in the chat history. Or you can give the job to a <a href="../scouts/">scout</a>, which holds the value in a throwaway VM and never shows it to the bot.</p>
-<p>Model keys for the harness itself are not secrets. They live on the <a href="../keys/">Keys</a> page and work the same way: the bot never sees them.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-bots-reach-the-internet">How bots reach the internet</a></li><li><a href="#the-allowlist">The allowlist</a></li><li><a href="#when-a-bot-asks-for-a-host">When a bot asks for a host</a></li><li><a href="#secrets">Secrets</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#how-to-think-about-the-allowlist">How to think about the allowlist</a></li><li><a href="#the-allowlist">The allowlist</a></li><li><a href="#when-a-bot-asks-for-a-host">When a bot asks for a host</a></li><li><a href="#secrets">Secrets</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#from-the-terminal">From the terminal</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

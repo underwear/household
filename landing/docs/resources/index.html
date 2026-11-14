@@ -173,37 +173,46 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="./" aria-current="page">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Running Household</p><h1>Resources</h1>
-<p class="lead">Every bot, sideworker and scout runs in its own VM, and each VM takes some of your computer's CPU and memory. Each workspace has one budget for all of them, so a busy afternoon of scouts and sideworkers cannot starve your bots or the machine. Bots keep a fixed share; scouts and sideworkers use what is left.</p>
+<p class="lead">Every bot, sideworker and scout runs in its own VM, which takes some of your computer's CPU and memory. Each workspace has one budget for all of them, 8 vCPU and 8 GiB of RAM in a new workspace, so a busy afternoon of scouts and sideworkers cannot starve your bots or the machine.</p>
 <h2 id="how-the-budget-works">How the budget works</h2>
 <ul>
-<li><strong>The workspace has a total</strong>, such as 8 vCPU and 8 GiB of RAM (the default for a new workspace).</li>
-<li><strong>Each bot reserves its size</strong>, whether it is running or not, so its room is always there. Bots together cannot reserve more than the total.</li>
-<li><strong>Scouts and sideworkers share the rest.</strong> Each holds its VM's full size while it exists, even when idle, and gives it back once its VM is gone. There is no limit on how many run at once, only on the total.</li>
-<li><strong>A start that doesn't fit is refused.</strong> The bot is told how much is free and can choose a smaller VM, wait, or close a helper it no longer needs. Nothing running is ever stopped or shrunk to make room.</li>
+<li><strong>Each bot reserves its size</strong>, whether it runs or not, so its room is always there. Only making it smaller or removing it frees that share; disabling it does not. Bots together cannot reserve more than the total.</li>
+<li><strong>Scouts and sideworkers share the rest.</strong> Each holds its VM's full size from the moment it is requested, a scout waiting for your <strong>Run</strong> included, until its VM is gone. There is no limit on how many run at once, only on the total.</li>
+<li><strong>A start that doesn't fit is refused.</strong> The bot is told what is free and can choose a smaller VM, wait, or close a helper. Nothing running is stopped or shrunk to make room.</li>
 </ul>
-<p>The numbers are what each VM may use at most, not what it uses right now.</p>
-<h2 id="see-what-is-in-use">See what is in use</h2>
-<p><strong>Workspace → Resources</strong> shows a bar for CPU and one for RAM: what bots reserve, what scouts and sideworkers hold, and what is free. Below, <strong>In use</strong> lists each bot, scout and sideworker with its size and state, updated every few seconds. The workspace's <strong>Overview</strong> shows <strong>Free resources</strong> at a glance.</p>
-<h2 id="set-the-workspace-s-total">Set the workspace's total</h2>
-<p>On <strong>Workspace → Resources</strong>, press <strong>Change capacity…</strong> and set <strong>CPU</strong> (whole vCPUs) and <strong>RAM</strong> (in GiB). You cannot set more than this computer has, or less than what bots and helpers hold right now: make a bot smaller or close a helper first.</p>
-<p>Budgets are per workspace. If you run several workspaces, their totals together can add up to more than your computer has, so choose them with that in mind.</p>
-<h2 id="size-a-bot">Size a bot</h2>
-<p>Open the bot's <strong>Resources</strong> tab. <strong>Usage</strong> shows what its VM uses now; <strong>Allocation</strong> sets its <strong>CPU</strong> and <strong>RAM</strong>. Saving doesn't interrupt the bot: the new size applies on its next <strong>Restart</strong>. Until then, the budget counts whichever is larger, the old size or the new one.</p>
-<p>You can also set a bot's size when you create it, or from the command line:</p>
-<pre><code class="language-sh">house bot set home sibling --cpus 4 --memory 4
-</code></pre>
-<p>Memory there is in GiB. A bot needs at least 0.5 GiB, but under 1 GiB a harness may run out of memory.</p>
-<h2 id="size-scouts-and-sideworkers">Size scouts and sideworkers</h2>
+<p>The numbers are the most each VM may use, not what it uses right now.</p>
+<h2 id="how-big-to-make-things">How big to make things</h2>
+<table>
+<thead>
+<tr><th>What</th><th>Default</th><th>Starting point</th></tr>
+</thead>
+<tbody>
+<tr><td>A bot</td><td>2 vCPU, 1 GiB</td><td>Fine for a bot that chats, reads mail and runs small scripts. A coding bot that builds, tests or runs containers: 2–4 GiB. Under 1 GiB a harness may run out of memory.</td></tr>
+<tr><td>A scout run</td><td>2 vCPU, 2 GiB</td><td>Enough for a browser. A bot may pick another size for a run.</td></tr>
+<tr><td>A sideworker</td><td>none</td><td>The bot sizes each one for its job.</td></tr>
+</tbody>
+</table>
+<p><strong>Leave room for helpers.</strong> Keep enough free for the scouts and sideworkers you expect at the same time. With default sizes CPU runs out first: four default bots reserve all 8 vCPU of a new workspace, and no scout or sideworker can start. Three leave 2 vCPU and 5 GiB, room for one default scout run. If your bots start sideworkers often, raise the total or make the bots smaller.</p>
+<p>Budgets are per workspace, and the totals of several workspaces can add up to more than your computer has.</p>
+<h2 id="set-it-up">Set it up</h2>
 <ul>
-<li><strong>Sideworkers</strong> have no default size: the bot that starts one chooses its CPU and memory for the job.</li>
-<li><strong>Scouts</strong> use the default from <strong>Settings</strong> on <strong>Workspace → Scouts</strong>, or a scout's own size. A bot may choose another size for a run.</li>
+<li><strong>The workspace's total:</strong> <strong>Workspace → Resources → Change capacity…</strong>. You cannot set more than this computer has, or less than what is held right now.</li>
+<li><strong>A bot's size:</strong> its <strong>Resources</strong> tab, or when you create it. The new size applies on its next restart; until then the budget counts whichever is larger, the old size or the new one.</li>
+<li><strong>Scouts:</strong> the default size is in <strong>Settings</strong> on <strong>Workspace → Scouts</strong>; a scout can have its own.</li>
 </ul>
-<p>A scout waiting for your <strong>Run</strong> approval already holds its share, and so does a test of a capability's install script. A scout or sideworker being removed keeps its share until its VM is gone.</p>
-<p>If the total ever ends up below what is held, for example after you edit the config by hand, the <strong>Resources</strong> page says <strong>Over capacity</strong>. Nothing running is stopped; new scouts and sideworkers wait until some close or you raise the total.</p>
-<p>See <a href="../sideworkers/">Sideworkers</a> and <a href="../scouts/">Scouts</a>.</p>
+<p>From the terminal, <code>house bot set &lt;workspace&gt; &lt;bot&gt; --cpus 4 --memory 4</code> sizes a bot (memory in GiB), and <code>house scout settings &lt;workspace&gt; --cpus 2 --memory 2</code> sets the scouts' default.</p>
+<h2 id="good-to-know">Good to know</h2>
+<ul>
+<li>If the total ends up below what is held, for example after you edit the config by hand, <strong>Workspace → Resources</strong> says <strong>Over capacity</strong>. Nothing running is stopped; new scouts and sideworkers wait until some close or you raise the total.</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li><a href="../sideworkers/">Sideworkers</a> and <a href="../scouts/">Scouts</a>: the helpers that draw from the shared part.</li>
+<li><a href="../bots/">Bots</a>: sizing when you add a bot.</li>
+</ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-the-budget-works">How the budget works</a></li><li><a href="#see-what-is-in-use">See what is in use</a></li><li><a href="#set-the-workspace-s-total">Set the workspace's total</a></li><li><a href="#size-a-bot">Size a bot</a></li><li><a href="#size-scouts-and-sideworkers">Size scouts and sideworkers</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-the-budget-works">How the budget works</a></li><li><a href="#how-big-to-make-things">How big to make things</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

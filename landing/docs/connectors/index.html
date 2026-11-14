@@ -173,129 +173,96 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="./" aria-current="page">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">What bots can reach</p><h1>Connectors</h1>
-<p class="lead">A connector lets your bots use one of your outside accounts — a mailbox, Google, Slack, Microsoft To Do — as you. For each account you choose what bots may do there and which bots may use it at all. A bot then reaches into the account when its work needs it: &quot;find last week's invoice&quot;, &quot;what did the team decide in #launch?&quot;, &quot;add milk to my shopping list&quot;.</p>
-<p><a href="../channels/">Channels</a> are for talking with your bots, and <a href="../inboxes/">inboxes</a> wake them when something new arrives. A connector does neither: it only gives chosen bots access to an account.</p>
-<h2 id="add-a-connector">Add a connector</h2>
-<p>Open <strong>Workspace → Connectors → + Add connector</strong>, pick what to connect and press <strong>Next</strong>. Each kind of account has its own short setup, described in its section below. All of them ask two things:</p>
+<p class="lead">A connector gives chosen bots one of your outside accounts, as you: a mailbox, a Google account, your Slack user, Microsoft To Do. A bot reaches into it when its work needs it: &quot;find last week's invoice&quot;, &quot;what did the team decide in #launch?&quot;, &quot;add milk to the shopping list&quot;. You choose per account whether bots may only read or also change things, and which bots get it.</p>
+<h2 id="when-it-helps">When it helps</h2>
 <ul>
-<li><strong>What bots may do</strong>: read only, or also change things. Some connectors offer finer choices, such as whether bots may send email.</li>
-<li><strong>Which bots</strong> may use the account. Picking none is fine: the account stays private until you grant access.</li>
+<li>A bot answers from your mail, Drive or Slack history.</li>
+<li>A bot drafts replies and sends each one only after you approve it.</li>
+<li>A family bot keeps the shared shopping list in Microsoft To Do.</li>
 </ul>
-<p>You can connect several accounts of one kind, say a personal and a work mailbox; each has its own permissions and bots. A connection belongs to one workspace, and bots of other workspaces never see it.</p>
-<h2 id="bot-access">Bot access</h2>
-<p>Each account's row shows the bots that may use it. To change them, press <strong>Bot access</strong>, switch bots on or off, and press <strong>Save access</strong>. A bot that loses access stops at once, even in the middle of a read.</p>
-<p><strong>Sideworkers</strong> get their parent bot's access. <strong>Scouts</strong> never get any. A disabled bot can't use connectors until you enable it again.</p>
-<h2 id="read-only-or-read-and-write">Read only or read and write</h2>
-<p>With read access, bots search and read, and nothing in the account changes. With write access, a bot acts as you: it sends messages, edits files or changes events in your name.</p>
-<p>Bots treat what they read as outside content, not your instructions. Still, a bot that reads mail from strangers and may send mail can be targeted by them. For email, <strong>Ask me first</strong> lets you approve each message. Other connectors have no per-action approval, so give write access only to bots you trust with that account.</p>
-<h2 id="reconnect-and-settings">Reconnect and settings</h2>
-<p>Each row shows <strong>Connected</strong> or <strong>Reconnect required</strong>; the latter means the sign-in was revoked or expired. <strong>Reconnect</strong> signs in again with the account's current choices, and what you pick replaces them. It is also how you change a Google, Slack or Microsoft account's permissions. An email account has <strong>Settings</strong> instead: the same steps as tabs (<strong>Account</strong>, <strong>Sending</strong>, <strong>Permissions</strong>, <strong>Bots</strong>), and <strong>Save</strong> checks the connection again.</p>
-<h2 id="disconnect">Disconnect</h2>
-<p>Press <strong>Disconnect</strong> on the row and confirm. Its bots lose access right away and the saved sign-in is removed from your computer; other accounts stay connected. What bots already read stays in their history, chats and backups. Whether the provider also forgets Household depends on the connector; each section below says what to do.</p>
-<h2 id="privacy-and-security">Privacy and security</h2>
+<h2 id="first-check-what-is-already-there">First, check what is already there</h2>
 <ul>
-<li><strong>Credentials stay on your computer</strong>, in Household's private storage and its backups. They never enter a bot's VM.</li>
-<li><strong>What a bot reads goes to its AI provider</strong> (Anthropic or OpenAI), like anything else it works on, and may be quoted in its chat. Choose bot access with the chat's audience in mind.</li>
-<li><strong>Bots act only through Household</strong>, and only in the ways the connector offers. No connector can permanently delete your mail or files.</li>
+<li><strong>A connector</strong> lets a bot look things up and act in an account when its work needs it. It never wakes the bot.</li>
+<li><strong>An inbox</strong> wakes a bot when something new arrives, but gives it no access to the account. To watch a mailbox and answer from it, use both. See <a href="../inboxes/">Inboxes</a>.</li>
+<li><strong>A channel</strong> is where you talk with your bots. A Slack channel doesn't let a bot read your Slack, and the Slack connector doesn't let anyone talk to a bot. See <a href="../channels/">Channels</a>.</li>
+<li><strong>Your Claude or ChatGPT account's connectors.</strong> A bot on a Claude or ChatGPT sign-in can use the connectors or apps set up in that account (Drive, Jira, GitHub…), as that account. Turn on <strong>Claude.ai connectors</strong> or <strong>ChatGPT apps</strong> on the bot's <strong>Harness</strong> tab. See <a href="../keys/">Keys</a>.</li>
+<li><strong>An MCP server</strong> for any other service: ask the bot to add one. It runs in the bot's VM, behind the network allowlist. See <a href="../mcp/">MCP servers</a>.</li>
 </ul>
-<p>See also the <a href="../../privacy/">Privacy Policy</a>.</p>
+<h2 id="how-it-works">How it works</h2>
+<p><strong>Access per account and per bot.</strong> Each account has its own permissions and bots, within one workspace; with none picked, it stays private. A bot taken off the list loses access from its next request. Sideworkers get their parent's access. Scouts never get any: they see nothing of the bot, its accounts included.</p>
+<p><strong>Read only or read and write.</strong> Read only: bots search and read, and nothing changes. Read and write: a bot sends, edits and deletes in your name.</p>
+<p><strong>Household makes the calls, not the VM.</strong> Sign-ins and passwords stay on your computer (and in your <a href="../backup/">backups</a>) and never enter a VM.</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>A write connector is a way out the network allowlist doesn't cover.</strong> A bot reading text from strangers can be tricked by it, and with write access could send what it knows to someone, as you. Only Email has <strong>Ask me first</strong>, an approval for each outgoing message. Google, Slack and Microsoft To Do act with no per-action approval.</p>
+<p><strong>What your AI provider sees.</strong> What a bot reads goes to its AI provider (Anthropic or OpenAI), and may be quoted in its chat, which the messenger and everyone in it see. See the <a href="../../privacy/">Privacy Policy</a>.</p>
+<p><strong>Disconnect and reconnect.</strong> <strong>Disconnect</strong> cuts the bots off and removes the stored sign-in; what they already read stays in their history and backups. <strong>Reconnect</strong> renews an expired or revoked sign-in and changes a Google, Slack or Microsoft account's permissions; email has <strong>Settings</strong> instead.</p>
+<h2 id="what-you-decide">What you decide</h2>
+<ul>
+<li><strong>Read only, unless changing things is the bot's job</strong>, above all for a bot that reads mail from strangers.</li>
+<li><strong>Which bots.</strong> A bot in a family group shouldn't hold your work mailbox: what it reads can end up in that chat.</li>
+</ul>
+<h3 id="email-connector-or-google-for-the-same-gmail">Email connector or Google for the same Gmail</h3>
+<ul>
+<li><strong>Email</strong> when you want to approve each outgoing email, when bots should save attachments, or for mail outside Google. Gmail needs an app password for it.</li>
+<li><strong>Google</strong> when bots also need Drive or Calendar, or you'd rather sign in with Google. With write access, Gmail sends without asking.</li>
+</ul>
+<p>You can use both: Google with only Drive and Calendar, and the mailbox as Email with <strong>Ask me first</strong>.</p>
 <h2 id="email">Email</h2>
-<p>Connect any mailbox that offers IMAP for reading and, if bots should send, SMTP for sending. That covers most providers and your own mail server. Bots can:</p>
-<ul>
-<li>search mail by sender, recipient, subject, text, date or unread, and read it — reading doesn't mark it as read;</li>
-<li>save attachments into their files;</li>
-<li>reply in a thread or write new mail with attachments, if you allow sending;</li>
-<li>organize the mailbox, if you allow it: mark read or flagged, move, put in Trash, save drafts, manage folders. Nothing is ever deleted for good.</li>
-</ul>
-<p>Email needs Python 3.9 or later on Household's computer. Accounts that only allow signing in through Google or Microsoft, with no password for mail apps, are not supported.</p>
-<h3 id="connect-a-mailbox">Connect a mailbox</h3>
-<p>Your provider's help pages list its IMAP and SMTP servers, ports and security; have them at hand.</p>
-<ol>
-<li><strong>Workspace → Connectors → + Add connector → Email.</strong></li>
-<li><strong>Account.</strong> Enter the email address and the incoming (IMAP) server: its host, port, and <strong>SSL/TLS</strong> or <strong>STARTTLS</strong>. Both encrypt and check the server's certificate; there is never an unencrypted fallback. Leave the username empty if it is your email address, and enter the password. Press <strong>Next</strong>: Household signs in to check the account before you go on.</li>
-<li><strong>Sending.</strong> Enter the outgoing (SMTP) server, which Household guesses from the incoming one, and press <strong>Next</strong> to check it too. Or press <strong>Skip for now</strong>: bots will only read, and you can set up sending later.</li>
-<li><strong>Permissions.</strong> Choose how bots may send (see <a href="#sending">Sending</a>) and whether they may <strong>Organize the mailbox</strong>.</li>
-<li><strong>Bots.</strong> Pick the bots, then press <strong>Connect</strong>.</li>
-</ol>
-<p>Tip: many providers don't accept your normal password from other apps and want an app password, which you create in your account's security settings and can revoke any time. A local mail bridge such as Proton Mail Bridge runs on the same computer as Household, gives you its own password, and uses its own certificate: export it from the bridge and, under <strong>Trusted certificate</strong>, paste it or <strong>Choose file…</strong> (the certificate file, never the private key).</p>
+<p><strong>What bots can do.</strong> Search and read mail (without marking it read) and save attachments into their files. If you allow it, send new mail and replies with attachments, and organize the mailbox: mark, move, put in Trash, save drafts, manage folders. Nothing is ever deleted for good.</p>
+<p><strong>What you decide.</strong> Any mailbox with IMAP works, plus SMTP for sending. Setup runs <strong>Account</strong> (incoming server; <strong>Next</strong> checks the sign-in) → <strong>Sending</strong> (outgoing server, guessed from the incoming one; <strong>Next</strong> checks it, or <strong>Skip for now</strong> to read only and add it later in the mailbox's <strong>Settings → Sending</strong>) → <strong>Permissions</strong> → <strong>Bots</strong>. <strong>Organize the mailbox</strong> is a separate switch and never allows sending.</p>
 <h3 id="sending">Sending</h3>
-<p>Sending signs in like incoming mail; turn off <strong>Same sign-in as incoming mail</strong> to give it its own username and password. You also set the sender name recipients see and, if your provider doesn't keep a copy of sent mail by itself, a folder for Household to save one.</p>
-<p>On <strong>Permissions</strong>, choose how bots may send:</p>
 <ul>
-<li><strong>Ask me first</strong> (default): each email comes to your chat with the bot. Nothing goes out until you approve it.</li>
-<li><strong>Send on their own</strong>: bots send from this address without asking.</li>
-<li><strong>Don't send</strong>: bots only read; the outgoing server stays saved for later.</li>
+<li><strong>Ask me first</strong> (default): each email comes to your chat with the bot, recipients, text and attachments included. <strong>Approve send</strong> sends exactly that message; <strong>Deny</strong> sends nothing. To change it, tell the bot. The bot must be in a <a href="../channels/">channel</a> with you.</li>
+<li><strong>Send on their own</strong>: bots send without asking.</li>
+<li><strong>Don't send</strong>: bots only read; the outgoing server stays saved.</li>
 </ul>
-<p>To add sending to a mailbox connected without it, or to remove it, open its <strong>Settings → Sending</strong>.</p>
-<p><strong>Organize the mailbox</strong> is a separate switch. It does not allow sending.</p>
-<h3 id="approving-an-email">Approving an email</h3>
-<p>With <strong>Ask me first</strong>, the bot posts an <strong>Approve outgoing email</strong> card in its chat, so it must be in a <a href="../channels/">channel</a> with you. The card shows the sender, To, Cc, Bcc, subject, full text, and names and sizes of attachments.</p>
-<ul>
-<li><strong>Approve send</strong> sends exactly that message; the bot can't change it afterwards.</li>
-<li><strong>Deny</strong> sends nothing.</li>
-</ul>
-<p>To change something, tell the bot; it asks again. A request expires after ten minutes, and is cancelled if you change the account's settings or bot access, disconnect it, or restart Household. An email on its way can't be recalled.</p>
-<p>The account's row shows when an email waits for your OK and in which chat. For a week it also notes emails that weren't sent (for example because the bot is in no chat with you) and ones that <strong>may not have gone out</strong> because the server stopped answering. Household never resends by itself: check Sent before asking the bot again.</p>
-<p>Limits: messages over 12 MB can't be opened; attachments are capped at 8 MB per file saved and per email sent; up to 20 mailboxes per workspace.</p>
-<p>To fully revoke access after disconnecting, also delete the app password at your provider.</p>
+<p>The account's row shows emails waiting for your OK and, for a week, ones that weren't sent or may not have gone out. Household never resends by itself: check Sent before asking again.</p>
+<p><strong>Before you start.</strong></p>
+<ol>
+<li>Look up your provider's IMAP and SMTP servers. If it doesn't accept your normal password from other apps, create an app password in its security settings.</li>
+<li>For a local bridge such as Proton Mail Bridge, run it on Household's computer, use the password it gives you, and export its certificate. Under <strong>Trusted certificate</strong>, paste it or choose the file: the certificate, never the private key.</li>
+</ol>
+<p><strong>Limits.</strong> Accounts that only allow signing in through Google or Microsoft, with no password for mail apps, aren't supported. Messages over 12 MB can't be opened; attachments are capped at 8 MB per saved file and per sent email. An approval request expires after ten minutes, and is cancelled if you change the account's settings or bot access, disconnect it or restart Household. Up to 20 mailboxes per workspace.</p>
+<p><strong>Revoke fully.</strong> Disconnect (it cancels emails waiting for approval), then delete the app password at your provider.</p>
 <h2 id="google">Google</h2>
-<p>Connect a Google account with Gmail, Drive and Calendar. You sign in with Google itself; no app password needed.</p>
-<table>
-<thead>
-<tr><th>Service</th><th>Read only</th><th>Read and write adds</th></tr>
-</thead>
-<tbody>
-<tr><td>Gmail</td><td>Search and read email</td><td>Send, draft, label and trash email</td></tr>
-<tr><td>Drive</td><td>Find files and read documents</td><td>Create, edit and trash files</td></tr>
-<tr><td>Calendar</td><td>Read calendars and events</td><td>Create, change and delete events</td></tr>
-</tbody>
-</table>
-<p>Bots read Google Docs, Sheets (the first sheet) and Slides as text. Mail and files a bot removes go to Google's Trash. Bots can't share files with anyone.</p>
-<ol>
-<li><strong>Workspace → Connectors → + Add connector → Google.</strong></li>
-<li>Choose <strong>Access</strong>, switch on the <strong>Services</strong> you want, and pick bots under <strong>Bot access</strong>.</li>
-<li>Press <strong>Continue to Google</strong>, choose the account and allow access. Google sends you back to Connectors.</li>
-</ol>
-<p>If you untick a write permission on Google's screen, that service stays readable, and the row says which services are writable. If the dialog says <strong>Google isn't set up on this host</strong>, you're on a source build: install an official release.</p>
-<p>Google has no owner approvals: with write access, bots send mail and change files and events without asking. To approve each email, connect the mailbox as <a href="#email">Email</a> with <strong>Ask me first</strong> instead.</p>
-<p>Disconnecting removes the account from Household only. To revoke access at Google too, remove Household in <a href="https://myaccount.google.com/connections">Google Account connections</a>.</p>
+<p><strong>What bots can do.</strong> Read only: search and read Gmail; find files and read Docs, Sheets (the first sheet) and Slides as text; read calendars and events. Read and write adds sending, drafting, labelling and trashing mail; creating, editing and trashing files; creating, changing and deleting events.</p>
+<p><strong>What you decide.</strong> Read only or read and write, which of Gmail, Drive and Calendar to share, and the bots. A write permission you untick on Google's screen leaves that service read only.</p>
+<p><strong>Setup.</strong> You sign in with Google itself, no app password. If Household says Google isn't set up on this host, you're on a source build: install an official release.</p>
+<p><strong>Limits.</strong> With write access, bots send mail and change files and events without asking. Bots don't open Gmail attachments, can't share files, and can't delete mail or files for good: they go to Google's Trash.</p>
+<p><strong>Revoke fully.</strong> Disconnecting removes the account from Household only. Also remove Household in <a href="https://myaccount.google.com/connections">Google Account connections</a>.</p>
 <h2 id="slack">Slack</h2>
-<p>Connect your Slack user so bots can search and read Slack as you when they need context. Nobody messages your bots here; to talk with them in Slack, add a <a href="../channels/">channel</a>.</p>
-<ul>
-<li><strong>Read only</strong>: bots search and read what your Slack user can see — channels, direct and group messages, people. Bots can also search and download files, read reactions, resolve user groups and look up users by email.</li>
-<li><strong>Read and write</strong>: bots can also post, edit and delete your messages, upload files, add/remove reactions, open DMs and mark conversations read as you.</li>
-</ul>
+<p><strong>What bots can do.</strong> Act as your Slack user. Read only: search and read the channels and direct messages you can see, look up people, user groups and reactions, and download files. Read and write adds posting, editing and deleting your messages, uploading files, reacting, opening direct messages and marking conversations read.</p>
+<p><strong>What you decide.</strong> Read only or read and write, and the bots. Posts go out under your name with no approval.</p>
+<p><strong>Setup.</strong> It uses Household's own Slack app:</p>
 <ol>
-<li><strong>Workspace → Connectors → + Add connector → Slack.</strong></li>
-<li>Choose access, pick bots under <strong>Bot access</strong>, and press <strong>Continue to Slack</strong>.</li>
-<li>Press <strong>Open Slack</strong>, choose your Slack workspace and approve. You use Household's own Slack app; your workspace's admins may have to allow it.</li>
+<li>Press <strong>Open Slack</strong> in Household, choose your Slack workspace and approve. Its admins may have to allow the app.</li>
 <li>Slack sends you to a page on agents-household.dev. Copy the connection result there.</li>
-<li>Paste it into <strong>Connection result</strong> within ten minutes and press <strong>Connect</strong>.</li>
+<li>Paste it into Household within ten minutes.</li>
 </ol>
-<p>This works when Household runs on a server, too. The result's one-time code is useless without a key that stays on your Household computer. Prefer your own Slack app? Choose <strong>Use a user token instead</strong>; <strong>Get a user token</strong> lists the steps.</p>
-<p><code>files.download</code> takes a Slack file ID and saves the original to the bot's <code>~/.household/inbox</code>, returning a path relative to its home. The bot can open images with its local image tools. <code>files.upload</code> reads a path relative to <code>~/.household/outbox</code>; optional <code>channel_id</code>, <code>thread_ts</code> and <code>initial_comment</code> share it to a conversation or thread. Without a channel the file stays private. Both operations have a 50 MiB limit. Upload uses <a href="https://docs.slack.dev/messaging/working-with-files/">Slack's external upload flow</a>; do not automatically retry an uncertain write.</p>
-<p>Existing connections keep their granted scopes. Reconnect to grant new capabilities: <code>reactions:read</code>, <code>usergroups:read</code>, <code>users:read.email</code>, and, for write access, <code>chat:write</code>, <code>files:write</code>, <code>reactions:write</code>, <code>im:write</code>, <code>mpim:write</code>, <code>channels:write</code>, <code>groups:write</code>. With your own Slack app, add these User Token Scopes before reinstalling. All writes require <code>allowWrite</code> as well as the relevant scope; the operations tool lists capabilities available across your connections. <code>users.conversations</code> accepts combinations such as <code>im,mpim</code>.</p>
-<p>Disconnecting also revokes the token at Slack. If Slack can't be reached then, remove the app from your Slack account yourself.</p>
+<p>It works with Household on a server too. For a Slack app of your own, choose <strong>Use a user token instead</strong>.</p>
+<p><strong>Limits.</strong> Files up to 50 MB each way; one a bot uploads without naming a conversation stays private to you. A message a bot deletes is gone. An account connected before Household 0.10.6 can do less: reconnect it to get the rest (with your own app, add the permissions its steps list first).</p>
+<p><strong>Revoke fully.</strong> Disconnecting also revokes access at Slack. If Slack can't be reached then, remove the app from your Slack account yourself.</p>
 <h2 id="microsoft-to-do">Microsoft To Do</h2>
-<p>Connect a personal, work or school Microsoft account.</p>
-<ul>
-<li><strong>Read only</strong>: bots read your lists, tasks and checklists.</li>
-<li><strong>Read and write</strong>: bots can also create, edit, complete and delete lists, tasks and checklist items, with notes, due dates, reminders and repeats.</li>
-</ul>
+<p><strong>What bots can do.</strong> Read only: your lists, tasks and checklists. Read and write: also create, edit, complete and delete lists, tasks and checklist items, with notes, due dates, reminders and repeats.</p>
+<p><strong>What you decide.</strong> Read only or read and write, and the bots. Personal, work and school accounts work.</p>
+<p><strong>Setup.</strong></p>
 <ol>
-<li><strong>Workspace → Connectors → + Add connector → Microsoft To Do.</strong></li>
-<li>Choose access, pick bots under <strong>Bot access</strong>, and press <strong>Prepare Microsoft sign-in</strong>.</li>
-<li>Press <strong>Open Microsoft</strong>, enter the code Household shows and approve. Any browser on any device works.</li>
-<li>Keep the dialog open: it connects by itself after you approve. If the code expires, press <strong>Start again</strong>.</li>
+<li>Press <strong>Open Microsoft</strong>, enter the code Household shows and approve, in any browser on any device.</li>
+<li>Keep Household's dialog open: it connects by itself.</li>
 </ol>
-<p>Only enter a code you just requested in your own Household. Work and school accounts may need an administrator's approval. Planner, My Day and attachments aren't available.</p>
-<p>Disconnecting doesn't withdraw the permission at Microsoft: remove Household in your Microsoft account's app permissions, or your organization's My Apps page.</p>
-<h2 id="claude-and-chatgpt-account-connectors">Claude and ChatGPT account connectors</h2>
-<p>A bot on a key signed in to Claude or ChatGPT can also use the connectors set up in that claude.ai account, or the apps in that ChatGPT account (Drive, Jira, GitHub…), as that account. They aren't managed on the Connectors page: switch on <strong>Claude.ai connectors</strong> or <strong>ChatGPT apps</strong> on the bot's <strong>Harness</strong> tab. Off by default; sideworkers get them too, scouts never. A pasted token or API key has none. See <a href="../keys/">Keys</a>.</p>
-<p>For anything else, a bot can add an MCP server to its own harness: see <a href="../mcp/">MCP</a>.</p>
+<p>Only enter a code you just requested in your own Household; a code someone sends you is an attempt to take your account. Work and school accounts may need an administrator's approval.</p>
+<p><strong>Limits.</strong> To Do only: no Planner, My Day or attachments. No approval per action.</p>
+<p><strong>Revoke fully.</strong> Disconnecting doesn't withdraw the permission at Microsoft. Remove Household in your Microsoft account's app permissions, or your organization's My Apps page.</p>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p><strong>A week planner for the family.</strong> Give the family group's bot Google with only Calendar, read only, and Microsoft To Do, read and write. A Monday 8:00 <a href="../schedules/">scheduled task</a>: &quot;post this week's events and what's left on the shopping list&quot;. During the week an owner says &quot;add oat milk&quot; in the group, and the list changes.</p>
+<h2 id="related">Related</h2>
+<ul>
+<li><a href="../inboxes/">Inboxes</a>: wake bots when something new arrives.</li>
+<li><a href="../network/">Network and secrets</a>: the allowlist connectors sit outside of.</li>
+<li><a href="../mcp/">MCP servers</a>: any other service.</li>
+</ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#add-a-connector">Add a connector</a></li><li><a href="#bot-access">Bot access</a></li><li><a href="#read-only-or-read-and-write">Read only or read and write</a></li><li><a href="#reconnect-and-settings">Reconnect and settings</a></li><li><a href="#disconnect">Disconnect</a></li><li><a href="#privacy-and-security">Privacy and security</a></li><li><a href="#email">Email</a></li><li><a href="#google">Google</a></li><li><a href="#slack">Slack</a></li><li><a href="#microsoft-to-do">Microsoft To Do</a></li><li><a href="#claude-and-chatgpt-account-connectors">Claude and ChatGPT account connectors</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#email">Email</a></li><li><a href="#google">Google</a></li><li><a href="#slack">Slack</a></li><li><a href="#microsoft-to-do">Microsoft To Do</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

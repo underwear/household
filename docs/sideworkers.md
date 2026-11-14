@@ -1,63 +1,62 @@
 # Sideworkers
 
-A sideworker is a helper a bot starts for one job. It runs in a VM of its own, works on the bot's files and has its own chat thread, so the bot stays free to talk to you while the job gets done. When the job is finished, the bot closes it. For how a sideworker differs from a bot and a scout, see [Bots](../bots/).
+A sideworker is extra hands a bot starts for one job. It runs in a VM of its own, works on the bot's files and has its own chat thread, so the bot stays free to talk to you. Ask your coding bot to "get a sideworker to fix the failing tests in the site project": a worker fixes them on its own branch, and the bot merges the branch and closes the worker.
 
 ## When it helps
 
-- **Work in another project.** Point it at a folder with its own `CLAUDE.md` or `AGENTS.md`, and it works as that project's developer: its conventions, commands and rules, without the bot's long conversation in the way.
+- **Work in another project.** Started in a folder with its own `CLAUDE.md` or `AGENTS.md`, it works as that project's developer, without the bot's long conversation in the way.
 - **A long or parallel job.** A refactor, a test run, an investigation, while the bot keeps answering you.
 - **A clean start.** Work that should not carry everything the bot has talked about.
-- **Another model.** Run the job on a different harness or model, say Codex next to a Claude Code bot. See the profiles below.
-- **Someone you can talk to.** Unlike a subagent hidden inside a session, a sideworker has its own thread. Open it, watch it work and tell it what you want directly.
+- **Another model.** A second opinion, or a job another model does better.
+- **Someone you can talk to.** Unlike a subagent hidden inside a session, a sideworker has a thread where you watch it and tell it what you want.
 
-## Turn them on or off
+## How it works
 
-Sideworkers are on in a new workspace. To change that, open **Workspace → Settings** and use the **Sideworkers** switch under **Features**, then **Save**. Turning them off pauses the ones that run and stops bots from starting new ones.
+- **The bot starts it.** You ask the bot, or it decides on its own. It gives the worker a folder in its home, a written brief (the worker does not know the conversation) and a CPU and memory size from what the workspace has free.
+- **In a git repository, it gets its own branch.** By default the worker has a separate checkout on a branch of its own, from the bot's last commit, so the two never edit the same files and their builds never meet. What the bot has not committed is not in it. The bot can instead share its live folder; then both edit the same files.
+- **It works with the bot's things:** its home, memory and shared folders, and the workspace's allowed hosts and secrets (as placeholders). It has its own session and its own Docker.
+- **It has a thread** in the bot's channel. What you write there goes to the worker, and the bot is told. The worker reports to the bot.
+- **It answers to its bot.** It cannot start sideworkers, call scouts, have scheduled tasks or ask for new shared folders: those stay with the bot that answers to you.
+- **The bot closes it.** Its VM is removed; its branch and files stay. On Telegram its thread is deleted with its messages, so the bot tells you first if anything there is worth keeping. There is no time limit; an idle worker reminds its bot every 30 minutes.
 
-From the command line:
+## What you decide
 
-```sh
-house features home sideworkers=off
-```
+**Sideworker, scout, or another bot?**
 
-You don't start sideworkers yourself. You ask your bot ("get a sideworker to fix the tests in the site project"), or it decides to start one on its own.
+- **A sideworker** does the bot's own work in parallel, with the bot's files and access, for one job.
+- **A [scout](../scouts/)** does what the bot should not: untrusted sites, a production key, a closed network. It sees nothing of the bot.
+- **Another [bot](../bots/)** fits a standing job with its own instructions, memory and schedule.
 
-## What happens when a bot starts one
+**On or off.** Sideworkers are on in a new workspace; switch them under **Workspace → Settings → Features**. Off pauses the running ones and stops new ones.
 
-1. **The bot gives it a folder and a brief.** The folder is one in the bot's home. The bot also picks the CPU and memory for the worker's VM, from what the workspace has free.
-2. **In a git repository, it gets its own branch.** The worker works in a separate copy of the repository on a branch of its own, starting from the bot's last commit. The two never edit the same files. Changes the bot has not committed are not in the worker's copy. When the job is done, the bot merges the branch.
-3. **A thread opens in the bot's channel.** The worker posts there. Whatever you write in that thread goes to the worker, and the bot is told.
-4. **The bot closes it** when the job is done. You can close it too (below).
+**Which models they may use.** A worker runs on its bot's harness, key and model unless the bot picks a profile you added under **Workspace → Sideworkers → Profiles**: a harness, key, model, effort and permission mode under a name like `code-review`. Add one for a second opinion from another model, or for a project whose instruction file only another harness reads (Claude Code reads `CLAUDE.md`, Codex reads `AGENTS.md`). Its key decides whose allowance or bill the job spends. A running worker keeps the settings it started with.
 
-A sideworker sees the bot's home and the bot's memory. Like the bot, it reaches only the hosts the workspace allows and uses the workspace's secrets without seeing their values. It has its own session and its own Docker.
+## A worked example
 
-A sideworker cannot start sideworkers, call scouts, have scheduled tasks or ask for shared folders. It sees the folders its bot has.
+Your bot *Dev* keeps your site's repository at `~/projects/site`. You write:
 
-## Watch and close them
+> The site's tests fail since the framework upgrade. Get a sideworker on it, and don't touch the snapshot files.
 
-**Workspace → Sideworkers** lists what runs now under **Running**: each worker with its state, the bot it was **Started by**, and its **Working directory** and branch. The bot's **Overview** also shows how many sideworkers it has.
+1. Dev commits its work, then starts `sw-fix-tests` in `~/projects/site` with 2 vCPU and 2 GiB and a brief: the failing suite, what it ruled out, your rule, what done looks like.
+2. The worker gets a checkout at `.worktrees/sw-fix-tests` on the branch `sideworker/sw-fix-tests` and reads the project's own instructions.
+3. Its thread opens in Dev's channel. You add: "the date tests fail only in CI, use UTC". The worker gets it, and Dev is told.
+4. Meanwhile Dev answers your other questions.
+5. The worker reports a green branch. Dev reviews and merges it, and closes the worker.
 
-Click a worker to open its page: its working directory, branch and **Logs**, and **Close…** under **Close sideworker**. The list has a **Close…** for each worker too.
+## Put it to use
 
-When a sideworker is closed:
+**Weekly dependency updates.** Give Dev a [scheduled task](../schedules/): "Every Monday at 8:00, start a sideworker on the `code-review` profile to update the site's dependencies and run the tests." The result waits in its thread, the branch for Dev to merge.
 
-- its VM is removed;
-- its branch and the files it wrote stay;
-- on Telegram, its thread is deleted with all its messages. The bot is asked to tell you first, so you can keep what you need.
+## Good to know
 
-A sideworker has no time limit. When one sits idle for 30 minutes, its bot is reminded, and again every 30 minutes after that, so it can close the worker or give it more to do.
+- **Workspace → Sideworkers** lists the running ones; you can close one there.
+- Each worker holds its full VM size from the workspace's budget until closed. There is no count limit, only the total. See [Resources](../resources/).
+- When a worker shares the bot's live folder, never let both bind-mount one directory into containers: two databases on one data directory corrupt it.
+- `house export` refuses to run while a sideworker is open. See [Back up and move](../backup/).
+- From the terminal: `house features <workspace> sideworkers=on|off`.
 
-## Run a sideworker on another model
+## Related
 
-By default a sideworker runs on its bot's own harness, key and model. To let bots use something else, add a profile in **Workspace → Sideworkers → Profiles → + Add profile**:
-
-- **Profile name** — what a bot asks for, like `code-review`.
-- **Harness**, **Key**, **Model**, **Reasoning effort** and **Permission mode** — the same choices as for a bot.
-
-Bots see the profiles you added and may pick one when they start a worker. You can also ask for one by name: "start a sideworker on the code-review profile". A worker keeps the settings it started with: editing or removing a profile does not change the ones already running.
-
-## Resources
-
-Each running sideworker holds its VM's CPU and memory from the workspace's budget until it is closed. There is no limit on how many run at once, only on the total. When there is not enough free, the bot is told and can choose a smaller VM, wait, or close a worker it no longer needs. See [Resources](../resources/).
-
-Close all sideworkers before you make a backup with `house export`: it refuses to run while any are open. See [Back up and move](../backup/).
+- [Bots](../bots/): bots, sideworkers and scouts compared.
+- [Scouts](../scouts/): for access the bot should not hold.
+- [Resources](../resources/): the budget workers draw from.

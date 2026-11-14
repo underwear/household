@@ -1,6 +1,6 @@
 # MCP servers
 
-MCP servers give an assistant new tools: your issue tracker, a wiki, a design tool, a database. Household has no page for adding MCP servers to a whole workspace. You don't need one: every bot runs a real Claude Code or Codex in its own VM, so you can ask the bot to add a server to itself, the same way you would set it up on your own machine.
+MCP servers give an assistant new tools: your issue tracker, a wiki, a design tool, a database. Household has no page for adding MCP servers to a whole workspace. You don't need one: every bot runs a real coding-agent harness (Claude Code, Codex…) in its own VM, so you can ask the bot to add a server to itself, the same way you would set it up on your own machine.
 
 ## First, check what is already there
 
@@ -16,6 +16,21 @@ For anything else, write to the bot as you would to a colleague:
 > Add the Linear MCP server for yourself: https://mcp.linear.app/mcp
 
 > Connect the Atlassian MCP server, so you can read our Jira and Confluence.
+
+> Install the Playwright MCP server and use it for the tickets site.
+
+<details>
+<summary>⚠️ We believe giving your bot a browser is a bad idea. Why?</summary>
+
+It works. We still wouldn't. The internet is not a friendly place, and a browser takes your bot right into it.
+
+- **Pages talk back.** Any page can carry text written for an AI rather than for you: "ignore your instructions and…". This is prompt injection, and no model is fully immune to it.
+- **Your bot has a lot to lose.** Your projects, its memory, the hosts your workspace allows, the keys it can use. A page that talks it into something talks it into it with all of that at hand.
+- **A browser is a huge program.** Millions of lines of code that read whatever a page sends. Browser makers ship security fixes all the time, which is good news, and also a hint at how often holes are found.
+
+A scout is made for exactly this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your bot only if you pass them. So when your bot needs a website, let it [call a scout](../scouts/).
+
+</details>
 
 The bot adds the server the way its harness does and tells you when it needs something from you. Usually that is one of two things:
 
@@ -34,13 +49,3 @@ A bot's MCP settings live in its home folder, which survives restarts and new VM
 - **No more access than the bot.** A server runs inside the bot's VM or is reached through the workspace's network rules, so it can do only what the bot can.
 - **Tokens in headers.** A secret works when the server takes its token in an HTTP header, as most do. A server that needs the raw value itself, to sign requests for example, cannot use the placeholder.
 - **Browser sign-ins.** Servers that sign you in through a browser may not manage it from a VM. When there is a choice, give the bot a token instead.
-
-## Think twice about a browser
-
-You can ask a bot to install a browser server such as Playwright, and it works. We still wouldn't.
-
-- **Pages talk back.** Any page can carry text written for an AI rather than for you: "ignore your instructions and…". This is called prompt injection, and no model is fully immune to it.
-- **Your bot has a lot to lose.** Your projects, its memory, the hosts your workspace allows, the keys it can use. A page that talks it into something does so with all of that at hand.
-- **A browser is a huge program** that reads whatever a page sends. Browser makers ship security fixes all the time, a hint at how often holes are found.
-
-A scout is made for this: a fresh VM with nothing of yours in it, only the access you give it, deleted after the task, and its findings reach your bot only if you pass them on. When your bot needs a website, let it [call a scout](../scouts/).

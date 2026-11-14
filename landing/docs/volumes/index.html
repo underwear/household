@@ -173,61 +173,75 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="./" aria-current="page">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">What bots can reach</p><h1>Shared folders</h1>
-<p class="lead">A bot lives in its own VM and sees only its own home. To give it a folder of your computer, such as a projects folder, your photos, or a drop zone for downloads, share it as a volume. The bot sees it at <code>/volumes/&lt;name&gt;</code>, and what it writes there lands on your computer at once.</p>
-<h2 id="how-sharing-works">How sharing works</h2>
+<p class="lead">A bot lives in its own VM and sees only its own home. Share a folder of your computer and it appears at <code>/volumes/&lt;name&gt;</code> in the VMs of the bots you pick, read-only or read-write. What a bot writes there lands on your disk at once: share <code>~/Projects/site</code> read-write as <code>site</code>, and your coding bot edits the same files your editor has open.</p>
+<h2 id="when-it-helps">When it helps</h2>
 <ul>
-<li><strong>One folder, one access, a list of bots.</strong> Each shared folder is <strong>Read-only</strong> or <strong>Read-write</strong>, and every bot you pick gets the same access.</li>
-<li><strong>Always at <code>/volumes/&lt;name&gt;</code>.</strong> Never inside a bot's home or over system folders, so nothing is hidden or clashes.</li>
-<li><strong>The bot knows.</strong> Each bot is told which folders it has and whether it may write to them.</li>
-<li><strong>Sideworkers see their bot's folders.</strong> Scouts get none.</li>
-<li><strong>A change restarts the bots it touches.</strong> Folders are attached when a VM starts. The bots' homes stay; running programs and anything installed outside the home do not. The bot's Setup script brings software back.</li>
-<li><strong>Stopping sharing never deletes anything.</strong> The folder and every file in it stay on your computer.</li>
-<li><strong>The files are yours, not Household's.</strong> Backups (<code>house export</code>) do not include shared folders, and Household cannot undo a bot's changes.</li>
+<li><strong>A drop zone.</strong> A folder where you drop scans, exports and downloads for a bot, and it leaves its results.</li>
+<li><strong>A reference library.</strong> Your notes, manuals or photo archive, read-only: a bot searches and quotes them but cannot change them.</li>
+<li><strong>A shared project.</strong> A repository you and a bot work on together.</li>
+<li><strong>A hand-off between bots.</strong> One bot writes reports into a folder, another reads them.</li>
+</ul>
+<h2 id="first-check-what-is-already-there">First, check what is already there</h2>
+<ul>
+<li><strong>The bot's home</strong> keeps its own working files across restarts and new VMs; it needs no shared folder for those.</li>
+<li><strong>A <a href="../connectors/">connector</a></strong> reaches documents in your accounts, such as Google Drive, without any folder on your disk.</li>
+<li><strong>A shared folder</strong> is for files on this computer that you use too.</li>
+</ul>
+<h2 id="how-it-works">How it works</h2>
+<ul>
+<li><strong>One folder, one access, a list of bots.</strong> Every bot you pick gets the same access.</li>
+<li><strong>Always at <code>/volumes/&lt;name&gt;</code>,</strong> never inside a bot's home or over system folders, so nothing is hidden or clashes. Each bot is told which folders it has and whether it may write.</li>
+<li><strong>Sideworkers see their bot's folders. Scouts get none,</strong> so a scout's work on untrusted sites never touches your files.</li>
+<li><strong>A change restarts the bots it touches,</strong> and their sideworkers, because folders are attached when a VM starts. Each bot gets a few minutes to finish its turn. Homes stay; running programs and anything installed outside the home do not, and the bot's Setup script brings software back.</li>
+<li><strong>Stopping sharing deletes nothing.</strong> The folder and its files stay on your computer.</li>
+<li><strong>The files are yours, not Household's.</strong> Backups (<code>house export</code>) leave shared folders out, and Household cannot undo a bot's changes.</li>
+<li><strong>Checked at every start.</strong> A folder that has since become a link, or leads into Household's own data, is not attached.</li>
+</ul>
+<h2 id="what-you-decide">What you decide</h2>
+<ul>
+<li><strong>Read-only or read-write.</strong> Read-only unless the bot's job is to make or change files there.</li>
+<li><strong>Which bots.</strong> Only those whose job needs the folder. A bot that reads strangers' mail or web pages can be tricked, so keep your archive away from it, read-write above all.</li>
+<li><strong>What is in it.</strong> Whatever a bot can read, it can send to any host the workspace allows, and it goes to the model provider as the bot reads it. Read-only stops changes, not reading.</li>
 </ul>
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>Read-write means the bot can change and delete what is in the folder.</strong> Share read-write only what you would hand to someone working for you, and keep a copy of anything you cannot lose.</p>
 <h2 id="share-a-folder">Share a folder</h2>
-<p><strong>In the admin:</strong> open <strong>Workspace → Volumes → + Share folder</strong> and fill in:</p>
+<p><strong>Workspace → Volumes → + Share folder</strong>, or a bot's <strong>Volumes</strong> tab. The name becomes <code>/volumes/&lt;name&gt;</code>; a folder that does not exist yet is created. Before you confirm, Household shows how many files the folder holds and which bots will restart, and warns about folders that often hold credentials, like <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.config</code> or <code>~/Library</code>.</p>
+<p>A bot can also ask for a folder, a change or giving one up. You approve or deny it on a card in the chat; it expires after 10 minutes.</p>
+<h2 id="what-can-t-be-shared">What can't be shared</h2>
 <ul>
-<li><strong>Name</strong> — the folder's name in the VM: <code>projects</code> becomes <code>/volumes/projects</code>.</li>
-<li><strong>Folder on this computer</strong> — a full path or <code>~/…</code>. A folder that does not exist yet is created.</li>
-<li><strong>Access</strong> — <strong>Read-only</strong> or <strong>Read-write</strong>.</li>
-<li><strong>Bots</strong> — who gets it.</li>
-<li><strong>Note</strong> — for you only.</li>
+<li>The root of the file system.</li>
+<li>Household's own data (its config, its install, the bots' homes and keys) and the VM runtime's, or any folder that contains them, so no bot can reach keys or another bot's home. With a standard install, this rules out your whole home folder.</li>
+<li>A path with <code>:</code> or <code>,</code>, which the VM runtime cannot attach.</li>
+<li>A folder inside a read-write shared folder, or a read-write folder that contains another shared folder, in any workspace. Share the outer folder instead.</li>
 </ul>
-<p>Press <strong>Next</strong>. Household shows how many files the folder holds and which bots will restart, and warns you about folders that often hold credentials, like <code>~/.ssh</code>, <code>~/.config</code> or <code>~/Library</code>. Confirm with <strong>Share it</strong>.</p>
-<p><strong>On a bot's page:</strong> the <strong>Volumes</strong> tab lists every shared folder of the workspace with a switch to mount or unmount it for this bot, and <strong>+ Share folder</strong> for a new one.</p>
-<p><strong>From the command line:</strong></p>
+<details>
+<summary>Why are nested folders refused?</summary>
+<p>A bot that can write to the outer folder could swap the inner one for a link to anywhere on your computer, say <code>~/.ssh</code>, just as another VM attaches it. Household checks every folder at each start, but the check and the attach are two steps; keeping writable folders apart leaves nothing to swap.</p>
+</details>
+<h2 id="good-to-know">Good to know</h2>
+<ul>
+<li><strong>Unplugged disks.</strong> A folder missing when a VM starts is skipped, and the bot starts without it; after plugging the disk back in, restart the bot. Household creates a folder only when you first share or move it, never for an unplugged disk.</li>
+<li><strong>Bot homes</strong> are listed under <strong>Workspace → Volumes</strong> too, for information: where each is on your computer.</li>
+</ul>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p>A paperwork bot: share <code>~/Scans</code> read-write as <code>scans</code>, and give the bot a <a href="../schedules/">scheduled task</a> at 9:00: &quot;Rename new scans by date and sender, file them under <code>/volumes/scans/sorted</code>, and tell me which bills are due.&quot;</p>
+<h2 id="from-the-terminal">From the terminal</h2>
 <pre><code class="language-sh">house volume add home photos --path ~/Pictures --bots sibling
 house volume add home projects --path ~/Projects/shared --access write --bots sibling,helper
 house volume set home photos --access write
 house volume ls home
 house volume rm home photos          # stops sharing; the files stay
 </code></pre>
-<p><code>add</code> and <code>set</code> tell you how many files the folder holds and ask before sharing one that is not empty (<code>--yes</code> skips the question).</p>
-<p>To change a folder, use <strong>Edit</strong> next to it in <strong>Workspace → Volumes</strong>. To stop sharing, use <strong>Remove</strong>, then <strong>Stop sharing</strong>, or <code>house volume rm</code>.</p>
-<h2 id="when-a-bot-asks-for-a-folder">When a bot asks for a folder</h2>
-<p>A bot can ask you for a folder itself, or for a change to one it has. A card in the chat shows:</p>
+<p><code>add</code> and <code>set</code> ask before sharing a folder that is not empty (<code>--yes</code> skips the question).</p>
+<h2 id="related">Related</h2>
 <ul>
-<li>the folder, how many files it holds (or that it will be created), the access and the bots;</li>
-<li>for a change, what it is now and what it would be;</li>
-<li>which bots will restart.</li>
+<li><a href="../sideworkers/">Sideworkers</a>: helpers that share their bot's folders</li>
+<li><a href="../previews/">Previews</a>: show what a bot built in a shared project</li>
+<li><a href="../backup/">Back up and move</a>: what a backup holds, and what it leaves out</li>
 </ul>
-<p>Choose <strong>Approve</strong> (or <strong>Stop sharing</strong>, when the bot asks to give a folder up) or <strong>Deny</strong>. The card expires after 10 minutes. When you approve, the bots involved finish what they are doing, restart with the folder attached, and the bot that asked is told.</p>
-<h2 id="what-can-t-be-shared">What can't be shared</h2>
-<ul>
-<li>The root of the file system.</li>
-<li>Household's own data (its config, its install, the bots' homes and keys) and the VM runtime's data, or any folder that contains them. With a standard install, this rules out your whole home folder.</li>
-<li>A path with <code>:</code> or <code>,</code> in it.</li>
-<li>A folder inside a read-write shared folder, or a read-write folder that contains another shared folder. Share the outer folder instead.</li>
-</ul>
-<p>Each time a VM starts, Household checks every folder again. One that has since become a link, or leads into Household's own data, is not attached.</p>
-<h2 id="unplugged-disks">Unplugged disks</h2>
-<p>If a folder is missing when a VM starts, such as one on an unplugged disk, it is skipped and the bot still starts. <strong>Workspace → Volumes</strong> marks it as <strong>Folder missing</strong>. Plugging the disk back in does not restart anything: press <strong>Restart</strong> on the bot's page to attach it again. Household creates a folder only when you first share it or move it to a new path, never for an unplugged disk.</p>
-<h2 id="bot-homes">Bot homes</h2>
-<p><strong>Workspace → Volumes</strong> also lists each bot's home: where it is on your computer and where the bot sees it. This list is for information only. Homes belong to Household and survive restarts and new VMs.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-sharing-works">How sharing works</a></li><li><a href="#share-a-folder">Share a folder</a></li><li><a href="#when-a-bot-asks-for-a-folder">When a bot asks for a folder</a></li><li><a href="#what-can-t-be-shared">What can't be shared</a></li><li><a href="#unplugged-disks">Unplugged disks</a></li><li><a href="#bot-homes">Bot homes</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#when-it-helps">When it helps</a></li><li><a href="#first-check-what-is-already-there">First, check what is already there</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#share-a-folder">Share a folder</a></li><li><a href="#what-can-t-be-shared">What can't be shared</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#from-the-terminal">From the terminal</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Overview — Household docs</title>
-  <meta name="description" content="Your own AI assistants, Claude Code or Codex bots in their own microVMs on your machine, that you talk to in your messenger: the idea, how it works and how it keeps your accounts safe.">
+  <meta name="description" content="Your own AI assistants, each a coding-agent harness such as Claude Code or Codex in its own microVM on your machine, that you talk to in your messenger: the idea, how it works and how it keeps your accounts safe.">
   <meta property="og:title" content="Household overview">
   <meta property="og:description" content="Workspaces, bots, scouts: how Household runs your terminal harnesses.">
   <meta property="og:url" content="https://agents-household.dev/docs/">
@@ -173,77 +173,106 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="./" aria-current="page">Overview</a></li><li><a href="start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="bots/">Bots</a></li><li><a href="keys/">Keys</a></li><li><a href="instructions/">Instructions, skills and memory</a></li><li><a href="sideworkers/">Sideworkers</a></li><li><a href="scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="connectors/">Connectors</a></li><li><a href="network/">Network and secrets</a></li><li><a href="volumes/">Shared folders</a></li><li><a href="previews/">Previews</a></li><li><a href="mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="inboxes/">Inboxes</a></li><li><a href="schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="resources/">Resources</a></li><li><a href="backup/">Back up and move</a></li><li><a href="operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Getting started</p><h1>Household overview</h1>
-<p class="lead">Household gives you your own AI assistants. Each one is a bot running Claude Code or Codex, in its own microVM on your Mac or Linux machine, and you talk to it in your messenger: Telegram or Slack. A bot keeps its files and memory between conversations, works on its own schedule, and reaches only what you allow. Your keys stay on your machine, and the bots never see them.</p>
-<h2 id="what-you-can-do-with-it">What you can do with it</h2>
+<p class="lead">Household runs your own AI assistants on your Mac or Linux machine. Each bot is a session of a coding-agent harness such as Claude Code or Codex, in a microVM of its own, and you talk to it in a messenger such as Telegram or Slack. Ask your mail bot &quot;anything urgent?&quot; and it searches your inbox, drafts two replies and waits for your approval before sending them. It keeps its files and memory between conversations and reaches only what you allow.</p>
+<h2 id="what-you-d-use-it-for">What you'd use it for</h2>
 <ul>
-<li><strong>Talk to your assistants from anywhere.</strong> Each bot has its own thread or topic in your chat. Write to it from your phone or your laptop, like to anyone else.</li>
-<li><strong>Give each one a job.</strong> A household helper, a coding partner for your projects, an ops bot that watches your alerts at night. Each has its own instructions, skills and memory.</li>
-<li><strong>Let them act on their own.</strong> Bots can wake up on new mail, feeds or alerts, and run tasks on a schedule: a digest every weekday at 9:00, or a reminder at 18:00 today.</li>
-<li><strong>Connect your accounts with care.</strong> Give chosen bots access to mail, documents, calendars, chats or tasks, read-only or read-write.</li>
-<li><strong>Hand risky work to a throwaway VM.</strong> &quot;Read the reviews on this unfamiliar site&quot; or &quot;buy two bus tickets&quot; goes to a scout that you approve, not to the bot that holds your files.</li>
+<li><strong>A mail triage bot.</strong> A <a href="inboxes/">mail inbox</a> wakes it on new mail; the <a href="connectors/">Email connector</a> lets it search and reply, with <strong>Ask me first</strong>; a <a href="schedules/">scheduled task</a> sends you a digest every weekday at 9:00.
+Nothing leaves your mailbox until you approve it.</li>
+<li><strong>A night ops bot.</strong> A Grafana <a href="inboxes/">inbox</a> wakes it on alerts, and it reads logs and dashboards itself.
+Work that needs the production key goes to a <a href="scouts/">scout</a> that holds the key and reaches only its hosts. You approve each run from your phone; the bot never holds the key.</li>
+<li><strong>A coding partner.</strong> A read-write <a href="volumes/">shared folder</a> holds your projects.
+It starts <a href="sideworkers/">sideworkers</a> for parallel jobs, on another harness or model if you add a profile, and shows you the web app it builds with a <a href="previews/">preview</a> link.</li>
+<li><strong>A family group.</strong> A Telegram group with a topic per bot. You and your partner are <a href="channels/">owners</a> and give the orders; the kids are guests the bots chat with but don't obey.
+A read-write <a href="connectors/">Microsoft To Do</a> list is the shopping list either of you can ask a bot to update.</li>
+<li><strong>Errands on the open web.</strong> &quot;Read the reviews on this unfamiliar shop&quot; goes to the <strong>General</strong> <a href="scouts/">scout</a>, in a throwaway VM with none of the bot's files.
+You read what it found and pass on only what the bot should see.</li>
 </ul>
-<h2 id="core-ideas">Core ideas</h2>
+<h2 id="how-it-works">How it works</h2>
+<p>A small program, <code>house</code>, runs on your machine. It starts each bot's VM, talks to your messengers, and is every VM's only way to the network. You manage it in a web admin or from the terminal.</p>
 <table>
 <thead>
 <tr><th>Idea</th><th>What it is</th></tr>
 </thead>
 <tbody>
-<tr><td>Workspace</td><td>A home for a group of bots, and a trust zone. It has its own allowlist of hosts, secrets, channels, owners and CPU and memory budget.</td></tr>
-<tr><td>Bot</td><td>A long-lived assistant in a workspace. It has its own microVM with a home folder that survives restarts, its own memory, and its own thread in the chat.</td></tr>
-<tr><td>Harness</td><td>What a bot runs on: Claude Code or Codex. Anything the harness can do, the bot can do.</td></tr>
-<tr><td>Key</td><td>The model account a bot uses: a Claude or ChatGPT subscription you sign in to, or an API key.</td></tr>
-<tr><td>Channel</td><td>Where you talk to the bots: a Telegram group with a topic per bot, a private Telegram chat, or a Slack DM.</td></tr>
-<tr><td>Connectors</td><td>Your accounts (mail, Google, Slack, Microsoft To Do and more), connected to the workspace and given to the bots you choose.</td></tr>
-<tr><td>Sideworker</td><td>Extra hands a bot starts for one long or parallel job. It shares the bot's home and access, and is closed when the job is done.</td></tr>
-<tr><td>Scout</td><td>A specialist a bot calls for one risky or privileged task. It runs in a fresh VM with only the access you gave it, and only after you approve.</td></tr>
+<tr><td>Workspace</td><td>A group of bots and a trust zone: its own allowlist, secrets, channels, owners, connectors and CPU and memory budget.</td></tr>
+<tr><td>Bot</td><td>A long-lived assistant: its own microVM, a home folder, memory, schedule and thread in the chat.</td></tr>
+<tr><td>Harness</td><td>What a bot runs on, a coding agent such as Claude Code or Codex. Anything the harness can do, the bot can do.</td></tr>
+<tr><td>Key</td><td>The model account a bot uses: a subscription you sign in to, or an API key.</td></tr>
+<tr><td>Channel</td><td>Where you talk to the bots, such as a Telegram group with a topic per bot or a Slack DM.</td></tr>
+<tr><td>Connector</td><td>One of your accounts (a mailbox, Google, Slack…), given to the bots you choose, read-only or read-write.</td></tr>
+<tr><td>Inbox</td><td>Something that wakes bots on its own: mail, feeds, health checks, alerts.</td></tr>
+<tr><td>Sideworker</td><td>Extra hands a bot starts for one job. It shares the bot's home and access.</td></tr>
+<tr><td>Scout</td><td>A specialist a bot calls for one risky or privileged task, in a fresh VM, only after you approve.</td></tr>
 </tbody>
 </table>
-<p>The people who set up a workspace are its <strong>owners</strong>. Only owners can give the bots orders and approve what they ask for. Anyone else in a shared chat is a guest.</p>
-<h2 id="how-it-works">How it works</h2>
-<p>A small program, <code>house</code>, runs on your machine. It starts each bot's VM, talks to your messenger, and stands between every bot and the internet.</p>
-<ol>
-<li><strong>Install Household</strong> on your Mac or Linux machine.</li>
-<li><strong>Set it up</strong>, in the web admin or with <code>house onboard</code> in a terminal: a key, a workspace, a channel, and a first bot.</li>
-<li><strong>Start it.</strong> The first start downloads the bot's VM image.</li>
-<li><strong>Write to your bot</strong> in its thread. It answers there, and it can start sideworkers or ask for a scout when the job needs one.</li>
-<li><strong>Shape it over time</strong> in the web admin: its instructions, skills, schedule, connectors, the hosts it may reach and the folders it may see.</li>
-</ol>
-<p>Household is open source and self-hosted. Nobody but you receives your conversations, files or keys, and Household sends no telemetry. The models themselves run at your provider, Anthropic or OpenAI. The web admin listens only on your machine, at <code>http://127.0.0.1:8780</code>.</p>
+<p>The people who set up a workspace are its <strong>owners</strong>. Only owners give the bots orders and approve what they ask for. Anyone else in a shared chat is a guest.</p>
+<p>A bot's home folder and its memory survive restarts, a new VM and a switch to another harness. Software installed outside its home survives a new VM only if the bot's setup script installs it.</p>
 <h2 id="how-it-keeps-you-safe">How it keeps you safe</h2>
-<p>A bot is a capable agent with a shell. Household assumes it can make mistakes, or be talked into them by something it reads, and limits what a mistake can reach.</p>
+<p>A bot is a capable agent with a shell and root in its VM. Household assumes it will make mistakes, or be talked into them by something it reads, and limits what a mistake can reach.</p>
 <ul>
-<li><strong>One VM per bot.</strong> Every bot, sideworker and scout runs in its own microVM, with its own Linux kernel. It sees none of your files and none of the other bots' files, except folders you share on purpose. A sideworker sees its parent bot's home.</li>
-<li><strong>An allowlist for the network.</strong> Each workspace lists the hosts its bots may reach. Everything else is blocked. When a bot needs a new host, it asks in the chat, and you choose <strong>Allow 15 min</strong>, <strong>Allow forever</strong> or <strong>Deny</strong>.</li>
-<li><strong>Secrets as placeholders.</strong> A bot never holds your real API keys or secrets. It gets a placeholder instead. When the bot sends a request to that secret's own hosts, Household puts the real value into the request on its way out. Sent anywhere else, the placeholder is useless.</li>
-<li><strong>Scouts need your approval.</strong> A scout starts only when you press <strong>Run</strong> on its card, after you see the task, its access and any secret the bot wants to pass. It works in a fresh VM with none of the bot's files, and its VM is deleted when you close it. What it finds reaches you first. The bot gets its words and files only when you pass them on.</li>
-<li><strong>You approve the rest too.</strong> When a bot asks for a folder of your computer or for a link to a web app it runs, it waits for your answer in the chat. Sending mail through a connector waits for you too, unless you allowed it in advance.</li>
+<li><strong>A VM per bot, not a container.</strong> Every bot, sideworker and scout runs in its own hardware-virtualised microVM with its own Linux kernel: microsandbox (libkrun) on Apple's Hypervisor.framework on a Mac, KVM on Linux. It sees none of your files and none of the other bots', except folders you share on purpose. A sideworker sees its parent bot's home.</li>
+<li><strong>One way out, through an allowlist.</strong> A VM has no direct route to the internet or your local network. Its only way out is Household's proxy, which passes only the hosts and ports on the workspace's allowlist; UDP doesn't work. A bot that needs a new host asks in the chat for one exact name, and you choose <strong>Allow 15 min</strong> (that bot only), <strong>Allow forever</strong> (the whole workspace) or <strong>Deny</strong>. A bot's request for a name that points into a private network is refused without asking you.</li>
+<li><strong>Secrets substituted at egress.</strong> Model keys and your secrets stay on your machine; inside the VM a secret is a placeholder. For that secret's own hosts only, the proxy ends the TLS connection with a Household certificate authority the VM trusts, swaps the placeholder in the request header for the real value, and sends the request on over a new TLS connection. Traffic to any other host passes through encrypted and unopened, so a placeholder sent there is a useless string.</li>
+<li><strong>Scouts for what a bot should not hold.</strong> The untrusted web, a production key or a closed network go to a scout. It starts only when you press <strong>Run</strong>, after you see its task, its access and the names of any secrets the bot hands it. It works in a fresh VM, deleted when you close it; a scout with a key reaches only that key's hosts. Its bot gets facts, not text: how the run went and how it ended. The scout's words and files reach the bot only when you pass them on, as untrusted input, so hostile content from a site stays out of the bot's context.</li>
+<li><strong>You approve the rest.</strong> New hosts, folders of your computer, preview links and, with <strong>Ask me first</strong>, each outgoing email wait for an owner. Approval cards respond to owners only. A secret you send from the chat is deleted from it before Household reads it.</li>
 </ul>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> The placeholder trick works only for HTTP(S) requests that carry the secret as-is in a header. An SSH key, a database password, a request signature (such as AWS) or a key read from a file needs the real value inside the VM. A bot will tell you when that is the case. Put such secrets only into a bot or a scout you trust with them.</p>
-<h2 id="where-it-runs">Where it runs</h2>
+<details>
+<summary><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Placeholders don't work for every secret. Which ones need the real value?</summary>
+<p>Substitution happens at egress, not inside the VM, so it works only for HTTP(S) requests that carry the secret as-is in a header. An SSH key, a database password, a request signature (such as AWS SigV4) or a key a program reads from a file needs the real value inside the VM. A bot tells you when that is the case. Give such secrets only to a bot you trust with them, or better, to a scout.</p>
+</details>
+<h3 id="what-it-does-not-protect-against">What it does not protect against</h3>
+<p>Household limits what a bot can reach and which keys it holds. It cannot stop a bot that a web page, an email or a file has tricked (prompt injection) from misusing what it legitimately has:</p>
+<ul>
+<li><strong>Allowed hosts.</strong> Every allowed host is also a way out for your data. Allowing <code>github.com</code> opens all of GitHub, not only your repositories; <code>*</code> opens the whole public internet.</li>
+<li><strong>Read-write folders.</strong> A bot can change or delete what is in them.</li>
+<li><strong>Write connectors.</strong> Connectors work from Household on your machine, outside the allowlist. A bot with write access to Google or Slack sends mail, changes files and posts without asking. Only Email has <strong>Ask me first</strong>.</li>
+<li><strong>Memory and shared skills.</strong> A bot can write false notes into its memory, and change the workspace's shared skills, which every bot there reads.</li>
+</ul>
+<p>Bots are told to treat what they read as data, not instructions. That lowers the risk; it is no guarantee.</p>
+<p>A bot can also rewrite its own instructions, skills and setup scripts. That changes how it behaves, not what it may reach: the allowlist, secrets, folders, connectors and approvals are kept by Household outside the VM.</p>
+<h3 id="where-your-data-goes">Where your data goes</h3>
+<ul>
+<li><strong>Your model provider</strong> (such as Anthropic or OpenAI) receives everything the bot works with: your messages, the files and mail it reads, what connectors return.</li>
+<li><strong>Your messenger</strong> carries every conversation, every file a bot sends and every approval card, including the text of an email waiting for approval.</li>
+<li><strong>Allowed hosts</strong> receive what the bots send them.</li>
+<li><strong>Nobody else.</strong> Household's maintainers run no service that receives your conversations, files or keys, and Household sends no telemetry.</li>
+</ul>
+<h3 id="workspaces-are-trust-boundaries">Workspaces are trust boundaries</h3>
+<p>Bots in one workspace share the allowlist (everything you <strong>Allow forever</strong>), the secrets (by default every bot gets a placeholder), the shared skills, the connected accounts, the channels and the owners. Make a second workspace when:</p>
+<ul>
+<li>one bot reads untrusted input (mail from strangers, a chat with guests, the open web) and another holds something valuable (a production key, your private mailbox);</li>
+<li>different people should own the bots, such as your family's and your team's;</li>
+<li>the bots need a budget of their own.</li>
+</ul>
+<p>Model keys are the exception: one key can serve several workspaces.</p>
+<h3 id="guests">Guests</h3>
+<p>A guest's messages reach the bot marked as a guest's, and the bot is told it may answer but must not carry out what they ask. That is an instruction to the model, not a lock: a guest can ask questions, and the bot may reveal what it knows in its answer. A guest cannot press an approval card, answer a bot's question or stop a bot. Keep bots that hold private data out of chats with guests.</p>
+<h3 id="at-rest">At rest</h3>
+<p>Your config (with your keys and bot tokens), your secrets and your backups are stored unencrypted on your machine, readable only by your user. Connector sign-ins are kept unencrypted in Household's database there. Anyone who can act as your user on that machine has them all. The web admin listens only on that machine, at <code>http://127.0.0.1:8780</code>; you sign in with a one-time link from <code>house dashboard</code> that works for 60 seconds.</p>
+<h2 id="where-it-runs-and-what-it-costs">Where it runs and what it costs</h2>
 <table>
 <thead>
 <tr><th></th><th></th></tr>
 </thead>
 <tbody>
-<tr><td>Machine</td><td>A Mac with Apple silicon, or Linux (x86_64 or arm64) with KVM: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac works only through such a Linux VM.</td></tr>
-<tr><td>Software</td><td><code>python3</code> and <code>openssl</code>. The installer brings everything else. No Docker, no sudo.</td></tr>
-<tr><td>Harnesses</td><td>Claude Code, Codex</td></tr>
-<tr><td>Messengers</td><td>Telegram, Slack</td></tr>
-<tr><td>A model account</td><td>A Claude subscription or Anthropic API key for Claude Code; a ChatGPT subscription or OpenAI API key for Codex.</td></tr>
+<tr><td>Machine</td><td>A Mac with Apple silicon, or Linux (x86_64 or arm64) with KVM: your own machine, a VM with nested virtualization, or a VPS that offers KVM. An Intel Mac only through such a Linux VM.</td></tr>
+<tr><td>Software</td><td><code>python3</code> and <code>openssl</code>. The installer brings the rest. No Docker, no sudo.</td></tr>
+<tr><td>Harnesses today</td><td>Claude Code and Codex; more will follow.</td></tr>
+<tr><td>Messengers today</td><td>Telegram and Slack.</td></tr>
+<tr><td>Model account</td><td>A subscription or API key your harness can use: a Claude subscription or Anthropic API key for Claude Code, a ChatGPT subscription or OpenAI API key for Codex.</td></tr>
+<tr><td>Size</td><td>A new workspace may use 8 vCPU and 8 GiB of memory; you can change it.</td></tr>
 </tbody>
 </table>
+<p>Household is free and open source (AGPL-3.0). You pay your model provider: a subscription has a usage allowance, and its bots stop getting answers when it runs out until it resets; an API key is billed per use. See <a href="keys/">Keys</a> and <a href="resources/">Resources</a>.</p>
 <h2 id="next-steps">Next steps</h2>
 <ul>
-<li><a href="start/">Quick start</a>: install Household and say hi to your first bot.</li>
-<li><a href="bots/">Bots</a>: everything on a bot's page.</li>
-<li><a href="keys/">Keys</a>: which account your bots run on, and how to sign in.</li>
-<li><a href="channels/">Channels</a>: where you talk to your bots, and who else can.</li>
-<li><a href="network/">Network and secrets</a>: the allowlist, temporary access and placeholders.</li>
-<li><a href="scouts/">Scouts</a>: give bots risky jobs without risking their files.</li>
+<li><a href="start/">Quick start</a>: install Household and write to your first bot.</li>
+<li><a href="bots/">Bots</a>: how bots, sideworkers and scouts differ.</li>
+<li><a href="network/">Network and secrets</a>: the allowlist and placeholders in detail.</li>
 </ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-can-do-with-it">What you can do with it</a></li><li><a href="#core-ideas">Core ideas</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#how-it-keeps-you-safe">How it keeps you safe</a></li><li><a href="#where-it-runs">Where it runs</a></li><li><a href="#next-steps">Next steps</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-d-use-it-for">What you'd use it for</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#how-it-keeps-you-safe">How it keeps you safe</a></li><li><a href="#where-it-runs-and-what-it-costs">Where it runs and what it costs</a></li><li><a href="#next-steps">Next steps</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

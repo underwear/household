@@ -9,7 +9,7 @@ const template = (await Bun.file("landing/docs/index.html").text()).replaceAll(`
  */
 const groups: { title: string; pages: { slug: string; source: string; title: string; heading: string; description: string }[] }[] = [
   { title: "Getting started", pages: [
-    { slug: "", source: "docs/overview.md", title: "Overview", heading: "Household overview", description: "Your own AI assistants, Claude Code or Codex bots in their own microVMs on your machine, that you talk to in your messenger: the idea, how it works and how it keeps your accounts safe." },
+    { slug: "", source: "docs/overview.md", title: "Overview", heading: "Household overview", description: "Your own AI assistants, each a coding-agent harness such as Claude Code or Codex in its own microVM on your machine, that you talk to in your messenger: the idea, how it works and how it keeps your accounts safe." },
     { slug: "start", source: "docs/start.md", title: "Quick start", heading: "Quick start", description: "Install Household, set it up in the web admin or with house onboard, and write to your first bot." },
   ] },
   { title: "Bots", pages: [

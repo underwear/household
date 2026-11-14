@@ -173,27 +173,24 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="./" aria-current="page">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Running Household</p><h1>Updates and troubleshooting</h1>
-<p class="lead">Household runs on your own machine, so keeping it up to date and fixing it when something goes wrong is up to you. This page shows how to update it, keep it running in the background, check that it works, read its logs, and fix the problems people run into most.</p>
+<p class="lead"><code>house update</code> keeps Household current, a background service keeps it running, and most problems show up in <code>house doctor</code> or in a bot's logs. Troubleshooting below is ordered by what you see.</p>
 <h2 id="update-household">Update Household</h2>
-<pre><code class="language-sh">house update
+<pre><code class="language-sh">house update            # the newest release; `house update v0.10.2` for a given one
 </code></pre>
-<p>This downloads the newest release, checks it, and installs it next to the one you have. The release before stays on disk, so you can go back to it. To install a particular release instead, give its tag: <code>house update v0.10.2</code>. Release notes are on <a href="https://github.com/underwear/household/releases">GitHub</a>.</p>
-<p>The running Household keeps using the old release until you restart it:</p>
-<ul>
-<li>In a terminal: press Ctrl-C, then run <code>house start</code> again.</li>
-<li>As a background service: restart the service (see below).</li>
-</ul>
-<p>When it starts, the new release first copies your config and database aside, then moves them to the new format if it needs to. <code>house migrate</code> shows what it will change. Afterwards, <code>house doctor</code> and <code>house status</code> should both look clean.</p>
-<p><strong>To go back</strong> to the release before, stop Household, then:</p>
+<p>It installs the release next to the one you have and keeps the one before on disk. The running Household keeps the old release until you restart it: Ctrl-C and <code>house start</code> again, or restart the service. On its first start, the new release copies your config and database aside, then moves them to the new format if it needs to (<code>house migrate</code> shows what it will change). Afterwards <code>house doctor</code> and <code>house status</code> should be clean. Release notes are on <a href="https://github.com/underwear/household/releases">GitHub</a>.</p>
+<p><strong>To go back</strong>, stop Household, then:</p>
 <pre><code class="language-sh">house update &lt;previous tag&gt;
 house migrate backups               # the copies taken before migrating, newest first
 house migrate restore &lt;backup&gt;
 </code></pre>
-<p>An older release refuses a config or database that a newer one has already changed, which is why you restore the copy as well.</p>
+<p>An older release refuses a config or database a newer one has changed, which is why you restore the copy too.</p>
 <h2 id="run-it-in-the-background">Run it in the background</h2>
-<p><code>house start</code> runs in the foreground and stops with the terminal. To keep Household running after you log out and after a reboot, run <code>house start</code> as a service: launchd on a Mac, a systemd user service on Linux.</p>
-<p>Set the service to start it again <strong>whenever it exits</strong>, a clean exit too: <code>KeepAlive</code> set to <code>true</code> for launchd, <code>Restart=always</code> for systemd. A service that restarts only &quot;on failure&quot; can leave Household down. Make sure the service's <code>PATH</code> finds <code>python3</code> and <code>openssl</code>.</p>
-<p>Run only one Household at a time. While the service runs it, stop and restart it through the service, not with Ctrl-C or <code>house start</code>.</p>
+<p><code>house start</code> runs in the foreground and stops with the terminal. To keep Household running after you log out and after a reboot, run <code>house start</code> as a launchd service on a Mac or a systemd user service on Linux. The service must:</p>
+<ul>
+<li><strong>start it again whenever it exits, a clean exit too</strong>: <code>KeepAlive</code> set to <code>true</code> for launchd, <code>Restart=always</code> for systemd. A service that restarts only on failure can leave Household down;</li>
+<li><strong>have a <code>PATH</code> that finds <code>python3</code> and <code>openssl</code>.</strong></li>
+</ul>
+<p>Run only one Household at a time. While a service runs it, stop and restart it through the service, not with Ctrl-C or <code>house start</code>, or the service starts it again.</p>
 <details>
 <summary>An example for a Mac (launchd)</summary>
 <p>Save this as <code>~/Library/LaunchAgents/dev.agents-household.house.plist</code>, with your user name in place of <code>YOU</code>:</p>
@@ -220,7 +217,7 @@ house migrate restore &lt;backup&gt;
 </code></pre>
 <ul>
 <li>Start it: <code>launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.agents-household.house.plist</code></li>
-<li>Restart it, for example after an update: <code>launchctl kickstart -k gui/$(id -u)/dev.agents-household.house</code></li>
+<li>Restart it, after an update say: <code>launchctl kickstart -k gui/$(id -u)/dev.agents-household.house</code></li>
 <li>Stop it: <code>launchctl bootout gui/$(id -u)/dev.agents-household.house</code></li>
 </ul>
 </details>
@@ -241,7 +238,7 @@ WantedBy=default.target
 <ul>
 <li>Start it, and at every boot: <code>systemctl --user daemon-reload &amp;&amp; systemctl --user enable --now household</code></li>
 <li>Keep it running while you are logged out: <code>loginctl enable-linger $USER</code></li>
-<li>Restart it, for example after an update: <code>systemctl --user restart household</code></li>
+<li>Restart it, after an update say: <code>systemctl --user restart household</code></li>
 <li>Stop it: <code>systemctl --user stop household</code></li>
 <li>Its output: <code>journalctl --user -u household</code></li>
 </ul>
@@ -252,65 +249,66 @@ WantedBy=default.target
 <tr><th>Command</th><th>What it tells you</th></tr>
 </thead>
 <tbody>
-<tr><td><code>house status</code></td><td>Whether Household is running, the admin's address, and each bot's state</td></tr>
-<tr><td><code>house doctor</code></td><td>What this machine, the config, your keys and your Telegram bots still need: ✓ is fine, ✗ needs fixing</td></tr>
-<tr><td><code>house ls</code></td><td>Your keys, workspaces, bots and channels, without any secret values</td></tr>
-<tr><td><code>house workspace show &lt;workspace&gt;</code></td><td>A workspace's bots and their state, channels, owners and allowed hosts</td></tr>
-<tr><td><code>house bot show &lt;workspace&gt; &lt;bot&gt;</code></td><td>What runs a bot, what it is given and what it uses now</td></tr>
+<tr><td><code>house status</code></td><td>Whether Household runs, the admin's address, each bot's state</td></tr>
+<tr><td><code>house doctor</code></td><td>What the machine, the config, your keys and your Telegram bots still need: ✗ needs fixing</td></tr>
+<tr><td><code>house ls</code></td><td>Your keys, workspaces, bots and channels, without secret values</td></tr>
+<tr><td><code>house workspace show &lt;workspace&gt;</code></td><td>A workspace's bots, channels, owners and allowed hosts</td></tr>
+<tr><td><code>house bot show &lt;workspace&gt; &lt;bot&gt;</code></td><td>What runs a bot and what it uses now</td></tr>
 </tbody>
 </table>
-<p>In the admin, <strong>Workspaces</strong> shows every workspace at a glance, and <strong>Workspace → Bots</strong> shows each bot as <strong>Running</strong>, <strong>Not started</strong>, <strong>Stopped</strong> or <strong>Disabled</strong>.</p>
 <h2 id="read-the-logs">Read the logs</h2>
-<p><strong>In the admin</strong>, open a bot and press <strong>Logs</strong> at the top of its page:</p>
-<ul>
-<li><strong>Activity</strong> is what Household did with the bot: messages in and out, its turns, and problems. Press <strong>Network</strong> to see its network requests too, allowed or denied. Use <strong>Search…</strong> to filter, and <strong>Live</strong> or <strong>Paused</strong> to follow new lines or not.</li>
-<li><strong>Setup</strong>, <strong>On start</strong>, <strong>Docker</strong> and <strong>Kernel</strong> are logs from inside the bot's VM. <strong>Setup</strong> is the first place to look when a bot does not start.</li>
-</ul>
-<p><strong>Console</strong>, next to <strong>Logs</strong>, shows the bot's terminal as it is right now, read-only. It helps when the bot seems stuck on a question.</p>
-<p><strong>In a terminal:</strong></p>
+<p>In the admin, a bot's logs are under <strong>Logs</strong> on its page. <strong>Activity</strong> is what Household did with the bot, with its network requests if you turn them on; <strong>Setup</strong> is the first place to look when a bot does not start. <strong>Console</strong> shows the bot's terminal read-only, for a harness that has one, such as Claude Code.</p>
+<p>From the terminal (<code>house logs</code> works while Household is stopped, too):</p>
 <pre><code class="language-sh">house logs --problems                       # only what went wrong
 house logs --bot &lt;bot&gt; -f                   # one bot, following new lines
 house logs --bot &lt;bot&gt; --kind network       # its network requests, and why one was denied
 house bot logs &lt;workspace&gt; &lt;bot&gt; --source setup
 house bot screen &lt;workspace&gt; &lt;bot&gt;          # its terminal right now
 </code></pre>
-<p><code>house logs</code> also takes <code>--workspace</code>, <code>--grep &lt;words&gt;</code> and <code>-n &lt;lines&gt;</code>, and it works while Household is stopped.</p>
-<h2 id="get-into-the-admin">Get into the admin</h2>
-<pre><code class="language-sh">house dashboard
-</code></pre>
-<p>It prints a one-time sign-in link and opens it in your browser. The link works once, for 60 seconds. If the admin says <strong>That link expired or was used</strong>, run the command again. <strong>Sign out</strong> ends your session; <code>house dashboard</code> signs you in again.</p>
-<p>The admin is at <code>http://127.0.0.1:8780</code> and listens only on this machine. On a remote server, forward the same port from your computer with <code>ssh -L 8780:127.0.0.1:8780 &lt;server&gt;</code>, run <code>house dashboard --no-open</code> on the server, and open the link on your computer.</p>
-<h2 id="common-problems">Common problems</h2>
-<p><strong><code>house: command not found</code> after installing.</strong> Add <code>~/.household/bin</code> to your <code>PATH</code>. The installer prints the exact line for your shell.</p>
-<p><strong><code>house doctor</code> says virtualization is unavailable.</strong> Bots need hardware virtualization. On Linux, <code>/dev/kvm</code> must exist and be usable by you: add yourself to its group and log in again. On a VPS, pick one that offers KVM or nested virtualization. Intel Macs are not supported.</p>
-<p><strong><code>python3</code> or <code>openssl</code> is missing.</strong> Install it (on a Mac, <code>brew install python3 openssl</code>; on Linux, your package manager). If Household runs as a service, make sure the service's <code>PATH</code> finds it.</p>
-<p><strong>&quot;daemon not running; start it with <code>house start</code>&quot;.</strong> Household is not running. Start it, or start its service.</p>
-<p><strong>&quot;a daemon is already running&quot;.</strong> Only one Household runs at a time. Your background service probably runs it already: check with <code>house status</code>.</p>
-<p><strong>Household stops right after it starts.</strong> Read the last lines it printed, or the service's log. <code>house doctor</code> points at config errors. If it says other users can read your config, run the <code>chmod 600</code> command it shows: the config holds your keys and bot tokens.</p>
-<p><strong>A bot stays starting, or shows Not started.</strong> Its first start downloads the VM image, which takes a minute or two. If it takes longer, open <strong>Logs → Setup</strong> on the bot's page, or run <code>house bot logs &lt;workspace&gt; &lt;bot&gt; --source setup</code>. A failing setup script is fixed on the bot's <strong>Environment</strong> tab.</p>
-<p><strong>A bot does not answer in the chat.</strong></p>
+<h2 id="back-up-and-restore">Back up and restore</h2>
+<p><code>house export</code> writes your config with its keys, the database and the bots' homes into one archive; <code>house import &lt;file&gt;</code> restores it with Household stopped. The archive holds your keys in plain form. See <a href="../backup/">Back up and move</a>.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="household-won-t-install-or-start">Household won't install or start</h3>
 <ul>
-<li>Check that Household runs and the bot is <strong>Running</strong>.</li>
-<li>Check that the bot is in that channel: the switch on its <strong>Channels</strong> tab.</li>
-<li>Check that you are an owner: <strong>Workspace → Channels → Owners</strong>. Only owners can give bots orders.</li>
+<li><strong><code>house: command not found</code>.</strong> Add <code>~/.household/bin</code> to your <code>PATH</code>; the installer printed the exact line for your shell.</li>
+<li><strong><code>house doctor</code> says virtualization is unavailable.</strong> On Linux, <code>/dev/kvm</code> must exist and be usable by you: add yourself to its group and log in again. On a VPS, pick one with KVM or nested virtualization. Intel Macs are not supported.</li>
+<li><strong><code>python3</code> or <code>openssl</code> is missing.</strong> Install it (<code>brew install python3 openssl</code> on a Mac, your package manager on Linux). If Household runs as a service, check that the service's <code>PATH</code> finds it.</li>
+<li><strong>&quot;daemon not running&quot;.</strong> Start it with <code>house start</code>, or start its service.</li>
+<li><strong>&quot;a daemon is already running&quot;.</strong> Your service probably runs it already: <code>house status</code>.</li>
+<li><strong>It stops right after it starts.</strong> Read the last lines it printed, or the service's log. <code>house doctor</code> points at config errors. If it says others can read your config, run the <code>chmod 600</code> command it shows: the config holds your keys and bot tokens.</li>
+</ul>
+<h3 id="a-bot-doesn-t-start">A bot doesn't start</h3>
+<p>Its first start downloads the VM image, which takes a minute or two. If it takes longer, read its setup log (<strong>Logs → Setup</strong>, or <code>house bot logs &lt;workspace&gt; &lt;bot&gt; --source setup</code>). A failing setup script is fixed on the bot's <strong>Environment</strong> tab, or by asking the bot once it runs.</p>
+<h3 id="a-bot-doesn-t-answer">A bot doesn't answer</h3>
+<ul>
+<li>Check that Household runs and the bot is running: <code>house status</code>.</li>
+<li>Check that the bot is in that channel, and that you are an owner of the workspace. A bot does not take orders from guests.</li>
 <li>Look at <strong>Console</strong>: the harness may be waiting for an answer on screen.</li>
-<li>For <strong>Telegram, a thread per bot</strong>, <code>house doctor</code> tells you if Threaded Mode is off. Turn it on in BotFather: <strong>Bot Settings → Threads Settings</strong>.</li>
-<li>For a Telegram group, Topics must be on, and the bot must be an admin with <strong>Manage topics</strong> and <strong>Delete messages</strong>.</li>
-<li>Use each Telegram bot token in one place only. If another program or another Household uses the same token, Telegram hands each message to only one of them.</li>
+<li>For a Telegram group, Topics must be on, and the Telegram bot must be an admin with <strong>Manage topics</strong> and <strong>Delete messages</strong>. For a private chat with a thread per bot, Threaded Mode must be on in BotFather; <code>house doctor</code> tells you if it is off.</li>
+<li>Use each Telegram bot token in one place only. If another program or another Household uses it, Telegram hands each message to only one of them.</li>
 </ul>
-<p><strong>Bots stop getting answers from the model.</strong></p>
+<h3 id="sign-in-expired-or-the-model-stops-answering">Sign-in expired, or the model stops answering</h3>
 <ul>
-<li>A Claude sign-in ends about once a month. Your bots' chats get a reminder for five days before. Sign in again in <strong>Settings → Keys → Sign in again</strong>, or with <code>house key claude &lt;name&gt;</code>.</li>
-<li>After restoring a backup, a signed-in key shows &quot;Not signed in on this Household&quot;. Sign in again the same way.</li>
-<li>A Claude subscription token lasts a year. Make a new one with <code>claude setup-token</code>, and replace the old one in <strong>Settings → Keys</strong> or with <code>house key set &lt;name&gt;</code>.</li>
-<li>A subscription has a usage allowance. When it is used up, <strong>Settings → Keys</strong> says so, and bots on that key get no answers until it resets.</li>
+<li><strong>A Claude sign-in</strong> ends about once a month. From five days before, the chats of its bots get a daily reminder. Sign in again next to the key in <strong>Settings → Keys</strong>, or with <code>house key claude &lt;name&gt;</code>.</li>
+<li><strong>After restoring a backup</strong>, a signed-in key says it is not signed in on this Household. Sign in again the same way.</li>
+<li><strong>A Claude subscription token</strong> from <code>claude setup-token</code> lasts a year. Make a new one and replace the old one in <strong>Settings → Keys</strong> or with <code>house key set &lt;name&gt;</code>.</li>
+<li><strong>A used-up allowance.</strong> A subscription's bots get no answers until its allowance resets; <strong>Settings → Keys</strong> says so.</li>
 </ul>
-<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> You can let bots go on past the allowance: edit the key and turn on <strong>Go on in overage (billed apart from the subscription)</strong>, or run <code>house key set &lt;name&gt; --allow-overage on</code>. Your provider bills that usage separately, so it costs extra money.</p>
-<p><strong>A bot cannot reach a website or service.</strong> It reaches only the hosts the workspace allows. A bot should ask you in the chat. You can also add it yourself: <strong>Workspace → Network → Domains allowlist → Add host</strong>. <code>house logs --bot &lt;bot&gt; --kind network</code> tells you why a request was denied. Private and local addresses are never allowed. See <a href="../network/">Network and secrets</a>.</p>
-<p><strong>Something broke after an update.</strong> Go back to the release before, as shown in <a href="#update-household">Update Household</a>, and report the problem on <a href="https://github.com/underwear/household/issues">GitHub</a>.</p>
+<p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> You can let a key's bots go on past the allowance with <code>house key set &lt;name&gt; --allow-overage on</code>, or the same switch on the key. Your provider bills that usage apart from the subscription.</p>
+<h3 id="a-bot-can-t-reach-a-site">A bot can't reach a site</h3>
+<p>A bot reaches only the hosts its workspace allows, and should ask you in the chat for a new one. <code>house logs --bot &lt;bot&gt; --kind network</code> says why a request was denied. You can add a host yourself on <strong>Workspace → Network</strong>. A bot's own request for a name that points into a private network is refused without asking you; if you do want it to reach such a host, add it to the allowlist yourself. See <a href="../network/">Network and secrets</a>.</p>
+<h3 id="the-admin-won-t-open">The admin won't open</h3>
+<ul>
+<li><strong>&quot;That link expired or was used&quot;.</strong> A sign-in link works once, for 60 seconds. Run <code>house dashboard</code> again.</li>
+<li><strong>&quot;daemon not running&quot;.</strong> The admin runs inside Household: start it first.</li>
+<li><strong>&quot;port 8780 is taken&quot;.</strong> Another program uses the port. Set <code>daemon.webPort</code> in <code>~/.config/household/household.yaml</code> and restart Household.</li>
+<li><strong>On a remote server</strong>, forward the same port on both ends from your computer (<code>ssh -L 8780:127.0.0.1:8780 &lt;server&gt;</code>), run <code>house dashboard --no-open</code> on the server, and open the link on your computer.</li>
+</ul>
+<h3 id="something-broke-after-an-update">Something broke after an update</h3>
+<p>Go back to the release before, as in <a href="#update-household">Update Household</a>, and report the problem on <a href="https://github.com/underwear/household/issues">GitHub</a>.</p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#update-household">Update Household</a></li><li><a href="#run-it-in-the-background">Run it in the background</a></li><li><a href="#check-that-it-runs">Check that it runs</a></li><li><a href="#read-the-logs">Read the logs</a></li><li><a href="#get-into-the-admin">Get into the admin</a></li><li><a href="#common-problems">Common problems</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#update-household">Update Household</a></li><li><a href="#run-it-in-the-background">Run it in the background</a></li><li><a href="#check-that-it-runs">Check that it runs</a></li><li><a href="#read-the-logs">Read the logs</a></li><li><a href="#back-up-and-restore">Back up and restore</a></li><li><a href="#troubleshooting">Troubleshooting</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

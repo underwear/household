@@ -173,64 +173,61 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="./" aria-current="page">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Bots</p><h1>Instructions, skills and memory</h1>
-<p class="lead">Three things make a bot yours rather than a blank assistant. Its <strong>instructions</strong> say who it is and how it should work, and it reads them at the start of every session. <strong>Skills</strong> are how-tos it picks up when a task calls for one. <strong>Memory</strong> is what it has learned about you and your projects, kept across sessions. You can edit all three in the admin, and the bot keeps them up to date itself when you ask.</p>
-<h2 id="instructions">Instructions</h2>
-<p>A bot's standing instructions are one Markdown document, on its <strong>AGENTS.md</strong> tab. Write there what should always hold: its role, your preferences, the tone you like, rules it must follow. For example:</p>
-<pre><code class="language-markdown">## Role
-You are my cooking assistant. Plan meals for two, mostly vegetarian.
-
-## Rules
-- Ask before buying anything.
-- Keep answers short; use lists for recipes.
-</code></pre>
-<p>A new bot starts with a short default you can rewrite. Edit the document and press <strong>Save</strong> (or ⌘S). It can be up to 32 KiB.</p>
-<p>The bot reads it at the start of each session, so a change applies from its next session. After saving, <strong>Restart now…</strong> starts one right away. Its files and memory stay.</p>
-<p>It is the same document for both harnesses. Claude Code knows it as <code>CLAUDE.md</code> and Codex as <code>AGENTS.md</code>, but both read this one file. If you move a bot from Claude Code to Codex, its instructions come along.</p>
-<p><strong>The bot can update it.</strong> Tell it &quot;add to your instructions that I want summaries in Russian&quot;, and it edits the document itself. It keeps your rules and adds to them; its own additions can't override your rules or give it new permissions. Reload the tab to see what it changed.</p>
-<p>Instructions are per bot. For rules every bot of the workspace should follow, use a <a href="#skills">shared skill</a>. When a bot works in a project that has its own <code>CLAUDE.md</code> or <code>AGENTS.md</code>, those apply there too.</p>
-<p>From a terminal: <code>house bot instructions &lt;workspace&gt; &lt;bot&gt;</code> prints the document, and <code>house bot instructions set &lt;workspace&gt; &lt;bot&gt; &lt;file&gt;</code> replaces it.</p>
-<h2 id="skills">Skills</h2>
-<p>A skill is a folder with a <code>SKILL.md</code> file: a name, a line on when to use it, and the instructions. The bot sees every skill's name and description, and opens the whole skill only when a task fits. So skills can hold long, detailed procedures (&quot;how we deploy&quot;, &quot;how to file an expense&quot;) without crowding every conversation. A skill can also hold scripts and other files it needs.</p>
-<p>A bot gets skills from three places:</p>
+<p class="lead">Three things make a bot yours rather than a blank assistant. Its <strong>instructions</strong> say who it is and how it works. <strong>Skills</strong> are how-tos it opens when a task calls for one. <strong>Memory</strong> is what it has learned about you and your projects. A cooking bot's instructions say &quot;plan meals for two, mostly vegetarian&quot;; a skill lays out the weekly shopping list your way; memory knows Anna is allergic to nuts.</p>
+<h2 id="what-you-d-use-it-for">What you'd use it for</h2>
 <ul>
-<li><strong>Its own.</strong> On the bot's <strong>Skills</strong> tab, under <strong>Personal</strong>. Only this bot has them, whatever its harness.</li>
-<li><strong>Shared.</strong> On <strong>Workspace → Shared Skills</strong>. Every bot of the workspace has them, and a change there changes it for all of them. Bots can edit shared skills too.</li>
-<li><strong>Built-in.</strong> Household's own skills, named <code>household-…</code>. They teach a bot how to work in Household: schedule tasks, keep its memory, set up its VM, ask you for network access, secrets and folders, call scouts, start sideworkers, show previews and write skills. They are read-only and update with Household. You can read them on <strong>Shared Skills</strong>.</li>
+<li><strong>Give a bot a role and rules</strong>: &quot;You are my cooking assistant. Ask before buying anything.&quot;</li>
+<li><strong>Teach a procedure once</strong>: how you deploy, how to file an expense, how to write the weekly report.</li>
+<li><strong>Make every bot of a workspace work the same way</strong> with a shared skill.</li>
+<li><strong>Let it remember</strong> people, decisions and preferences across sessions.</li>
 </ul>
-<p>To add a skill yourself:</p>
-<ol>
-<li>On the bot's <strong>Skills</strong> tab or on <strong>Shared Skills</strong>, press <strong>+ New skill</strong>.</li>
-<li>Give it a <strong>Name</strong> (lowercase letters, digits and <code>-</code>) and a line under <strong>When to use it</strong>. Bots read that line to decide when to use the skill, so make it specific: &quot;Review a diff for bugs before merging&quot;.</li>
-<li>Press <strong>Create skill</strong>, then write the instructions in the editor. Add more files to the skill if it needs them.</li>
-</ol>
-<p>Bots see a new skill from their next session.</p>
-<p>The easier way is often to let the bot write it. After you've walked it through something you'll want again, say &quot;make this a skill&quot;. It chooses a personal skill for its own habits, or a shared one when every bot should work the same way. You can review and edit what it wrote on the same pages.</p>
-<p>Avoid two skills of the same name at two levels: the list tags such a skill <strong>also shared</strong>, and it confuses the bot. Keep passwords and tokens out of skills.</p>
-<p><a href="../scouts/">Scouts</a> don't see a bot's skills. Each scout gets the skills of its own capabilities, with the shared and built-in ones.</p>
-<p>From a terminal: <code>house skills &lt;workspace&gt;</code> lists the shared skills, file by file, and <code>house skills cat|put|rm &lt;workspace&gt; &lt;path&gt;</code> reads, writes or deletes one file.</p>
-<h2 id="memory">Memory</h2>
-<p>A bot's memory is a set of notes Household keeps for it: your preferences, decisions you made together, facts about people and projects. It lasts across sessions, restarts and even a switch of harness. It is private to the bot; its <a href="../sideworkers/">sideworkers</a> share it.</p>
-<p>Each note has a key, with dots for grouping: <code>people.anna</code>, <code>projects.garden</code>. One note is special: <code>core</code>, a short summary of what matters most. The bot gets <code>core</code> at the start of every session. Other notes it looks up when they become relevant.</p>
-<p>You rarely need to write memory yourself. Say &quot;remember that Anna is allergic to nuts&quot;, and the bot saves it. It also saves what it learns as it goes, and corrects old notes instead of piling up new ones.</p>
-<p>The <strong>Memory</strong> tab shows what it keeps:</p>
+<h2 id="how-it-works">How it works</h2>
+<h3 id="instructions">Instructions</h3>
+<p>One Markdown document per bot, on its <strong>AGENTS.md</strong> tab, read at the start of every session. Each harness reads the same file under its own name, such as <code>CLAUDE.md</code> for Claude Code or <code>AGENTS.md</code> for Codex, so the instructions survive a switch of harness. A change applies from the next session; restart the bot to apply it now. A project's own instruction file applies too, while the bot works there.</p>
+<h3 id="skills">Skills</h3>
+<p>A skill is a folder with a <code>SKILL.md</code> (a name, a line on when to use it, the instructions) and any files it needs. The bot sees every skill's name and line and opens one only when a task fits, so long procedures don't crowd every conversation. Skills come from three places:</p>
 <ul>
-<li><strong>Search keys and text</strong> finds notes. Notes are grouped by their dots, with <code>core</code> pinned at the top.</li>
-<li>Open a note to <strong>Edit</strong> or <strong>Preview</strong> it. <strong>History</strong> lists its versions, who made each (you or the bot) and when. <strong>Use as draft</strong> brings an old version back into the editor.</li>
-<li><strong>New note</strong> adds one by key. Deleting a note keeps its versions in History; <strong>Show deleted</strong> lists such notes.</li>
+<li><strong>Its own</strong>, on the bot's <strong>Skills</strong> tab. Only this bot has them, whatever its harness.</li>
+<li><strong>Shared</strong>, on <strong>Workspace → Shared Skills</strong>. Every bot of the workspace has them; a change there changes it for all.</li>
+<li><strong>Built-in</strong>, named <code>household-…</code>. They teach a bot how to work in Household: schedule tasks, keep memory, set up its VM, ask for hosts, secrets and folders, call scouts, start sideworkers. They are read-only and update with Household.</li>
 </ul>
-<p>Memory is the bot's own notes, not orders: when they disagree with what you say now, your words win. Keep passwords and tokens out of it. In a group chat the bot keeps private notes to itself unless you allow otherwise.</p>
-<p>From a terminal: <code>house bot memory &lt;workspace&gt; &lt;bot&gt;</code> lists the notes, and <code>house bot memory get|set|rm &lt;workspace&gt; &lt;bot&gt; &lt;key&gt;</code> works on one.</p>
+<p><a href="../scouts/">Scouts</a> don't get a bot's own skills. Each gets the skills of its capabilities, with the shared and built-in ones.</p>
+<h3 id="memory">Memory</h3>
+<p>Notes Household keeps for the bot outside its VM, so they survive restarts, new VMs and a switch of harness. Each has a key, with dots for grouping (<code>people.anna</code>). One note, <code>core</code>, sums up what matters most: the bot gets it at the start of every session and looks up the rest when relevant. Memory is private to the bot and its <a href="../sideworkers/">sideworkers</a>. It is notes, not orders: when one disagrees with what you say now, your words win. In a group chat the bot keeps private notes to itself unless you allow otherwise.</p>
+<h3 id="when-the-bot-edits-itself">When the bot edits itself</h3>
+<p>The bot can change its own instructions, its own skills, the shared skills, its memory and its <a href="../bots/">environment scripts</a>, without asking you. What limits it:</p>
+<ul>
+<li><strong>None of it grants access.</strong> Hosts, secrets, folders, connectors and scout runs are Household settings the bot can only ask for, and only an owner approves. Environment scripts run inside its own VM, not on your machine.</li>
+<li><strong>Your rules are kept by request, not by lock.</strong> The bot is told to keep your instructions and that its own additions can't override them. A bot talked into it by hostile content could still rewrite them.</li>
+<li><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>A shared skill reaches every bot.</strong> A bad edit by one bot shows up in all the workspace's bots from their next session.</li>
+<li><strong>Only memory keeps versions</strong>, with who wrote each (you or the bot). Instructions and skills keep no history. Look at what changed now and then, and keep your own copy of instructions you care about.</li>
+</ul>
 <h2 id="what-goes-where">What goes where</h2>
 <ul>
 <li><strong>Always true</strong> (who it is, your rules) → instructions.</li>
-<li><strong>How to do a recurring kind of task</strong> → a skill: personal, or shared for the whole workspace.</li>
+<li><strong>How to do a recurring kind of task</strong> → a skill: its own, or shared for the whole workspace.</li>
+<li><strong>Rules every bot should follow</strong> → a shared skill, since instructions are per bot.</li>
 <li><strong>Facts and decisions</strong> it should recall → memory.</li>
 <li><strong>Something to do later or on repeat</strong> → a <a href="../schedules/">scheduled task</a>.</li>
-<li><strong>Software it needs installed</strong> → its setup script, on the bot's <strong>Environment</strong> tab (see <a href="../bots/">Bots</a>).</li>
+<li><strong>Software it needs installed</strong> → its <strong>Setup</strong> script on the <strong>Environment</strong> tab (see <a href="../bots/">Bots</a>).</li>
 </ul>
+<h2 id="set-it-up">Set it up</h2>
+<p>Usually you just say it: &quot;add to your instructions…&quot;, &quot;make this a skill&quot;, &quot;remember that…&quot;. Review what the bot wrote on the same tabs. To write them yourself: the <strong>AGENTS.md</strong>, <strong>Skills</strong> and <strong>Memory</strong> tabs, and <strong>Shared Skills</strong>. For a skill, the line under <strong>When to use it</strong> decides when the bot opens it, so make it specific: &quot;Review a diff for bugs before merging&quot;, not &quot;Code review&quot;.</p>
+<p>From the terminal: <code>house bot instructions [set] &lt;workspace&gt; &lt;bot&gt;</code>, <code>house skills &lt;workspace&gt;</code> and <code>house skills cat|put|rm &lt;workspace&gt; &lt;path&gt;</code>, <code>house bot memory &lt;workspace&gt; &lt;bot&gt;</code> and <code>house bot memory get|set|rm &lt;workspace&gt; &lt;bot&gt; &lt;key&gt;</code>.</p>
+<h2 id="limits-and-good-to-know">Limits and good to know</h2>
+<ul>
+<li>Instructions: up to 32 KiB. A memory note: up to 32,000 characters.</li>
+<li>Bots see a new skill from their next session.</li>
+<li>Avoid two skills of one name at two levels: the list tags such a skill <strong>also shared</strong>, and it confuses the bot.</li>
+<li>Keep passwords and tokens out of all three: they are stored as plain text and read into the bot's conversation. Give the bot a <a href="../network/">secret</a> instead.</li>
+</ul>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p>A morning brief that stays the same in every session: write a skill <code>morning-brief</code> (&quot;When to use it: the 9:00 scheduled brief&quot;) that says which mails count, how to group them and to keep it under ten lines. Then add a <a href="../schedules/">scheduled task</a> on weekdays at 9:00 that just says &quot;Run your morning brief and send it to me here&quot;. Changing the brief is now an edit to one skill, not to the schedule.</p>
+<h2 id="related">Related</h2>
+<p><a href="../bots/">Bots</a> · <a href="../schedules/">Scheduled tasks</a> · <a href="../sideworkers/">Sideworkers</a></p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#instructions">Instructions</a></li><li><a href="#skills">Skills</a></li><li><a href="#memory">Memory</a></li><li><a href="#what-goes-where">What goes where</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-d-use-it-for">What you'd use it for</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-goes-where">What goes where</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#limits-and-good-to-know">Limits and good to know</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

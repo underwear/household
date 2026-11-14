@@ -173,52 +173,57 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="../schedules/">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="./" aria-current="page">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Running Household</p><h1>Back up and move</h1>
-<p class="lead">One command saves your whole Household (every workspace and every bot) into a single file. Another puts it back, on this computer or a new one. Use it for regular backups and to move Household to another machine.</p>
-<p>Backups are made from the command line. There is no backup of a single workspace or bot yet, and no backup button in the admin (<strong>Backup</strong> in its menu is marked <em>soon</em>).</p>
-<h2 id="make-a-backup">Make a backup</h2>
-<pre><code class="language-sh">house export                          # household-YYYYMMDD-HHMM.tar.gz in the current folder
-house export ~/backups/house.tar.gz   # or where you say
-</code></pre>
-<p>Household can keep running. Each bot pauses for a moment while its files are copied, and messages to it wait. Close all sideworkers first: the export refuses to run while any are open. It never writes over an existing file.</p>
-<p>A backup holds:</p>
+<p class="lead">One command saves your whole Household (every workspace and every bot) into a single file. Another puts it back, on this computer or a new one. Use it for regular backups, before a risky change, and to move Household to another machine.</p>
+<p>Backups are made from the terminal. There is no backup of a single workspace or bot yet, and no backup button in the admin.</p>
+<h2 id="what-a-backup-holds">What a backup holds</h2>
 <ul>
 <li>your settings: workspaces, bots, channels, owners, network rules, inboxes, keys, secrets and bot tokens;</li>
-<li>chat history, the bots' memory, scheduled tasks and inbox events;</li>
+<li>chat history, the bots' memory, scheduled tasks, inbox events and connected accounts;</li>
 <li>every bot's home folder: its projects, sessions, skills, instructions, and anything it installed there;</li>
 <li>the workspace's shared skills, ChatGPT sign-ins, and the certificate the bots trust.</li>
 </ul>
 <p>It does not hold:</p>
 <ul>
-<li>logs;</li>
-<li>what a bot installed outside its home. Its <strong>Setup</strong> script brings that back on the first start;</li>
-<li><a href="../volumes/">shared folders</a>. Those are your own files: back them up the way you back up the rest of your computer.</li>
+<li><strong>Claude sign-ins.</strong> They renew every few hours and each renewal ends the one before, so a copy would be dead within hours. After a restore, use <strong>Sign in again</strong> on the <strong>Keys</strong> page.</li>
+<li><strong>What a bot installed outside its home.</strong> Its <strong>Setup</strong> script brings that back on the first start.</li>
+<li><strong><a href="../volumes/">Shared folders</a>.</strong> Those are your own files: back them up the way you back up the rest of your computer.</li>
+<li><strong>Logs.</strong></li>
 </ul>
 <p><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Warning" role="img"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>A backup contains your keys and tokens in plain form.</strong> Household saves it readable only by you, but anyone who gets the file gets your keys. Keep it like a password file.</p>
+<h2 id="make-a-backup">Make a backup</h2>
+<pre><code class="language-sh">house export                          # household-YYYYMMDD-HHMM.tar.gz in the current folder
+house export ~/backups/house.tar.gz   # or where you say
+</code></pre>
+<p>Household can keep running: each bot pauses for a moment while its files are copied, and messages to it wait. Close all <a href="../sideworkers/">sideworkers</a> first: they share their bots' files, so the export refuses to run while any are open. It never writes over an existing file.</p>
 <h2 id="restore">Restore</h2>
-<p>Stop Household first: <code>Ctrl-C</code> in its terminal, or through your service if you run it as one (see <a href="../start/">Start</a>). Then:</p>
+<p>Stop Household first (see <a href="../operating/">Updates and troubleshooting</a>), then:</p>
 <pre><code class="language-sh">house import household-20261109-0300.tar.gz
 house doctor
 house start
 </code></pre>
-<p>On a machine that already has a Household, import refuses to overwrite anything. Add <code>--force</code> to replace it: your current settings, database and certificate are moved aside as <code>*.bak-…</code> files, and the bots' home folders are replaced. If a bot's VM is still running, import says which one and how to stop it.</p>
+<p>On a machine that already has a Household, import refuses to overwrite anything. <code>--force</code> replaces it: your current settings, database and certificate are moved aside as <code>*.bak-…</code> files, and the bots' home folders are replaced.</p>
 <p>A backup from an older Household restores with a warning. One from a newer Household is refused: run <code>house update</code> first.</p>
 <h2 id="move-to-another-machine">Move to another machine</h2>
 <ol>
 <li>Run <code>house export</code> on the old machine.</li>
 <li><a href="../start/">Install Household</a> on the new one. Skip <code>house onboard</code>: your settings come from the backup.</li>
 <li>Copy the archive over, then run <code>house import &lt;file&gt;</code> and <code>house start</code>.</li>
+<li>Sign in to Claude again if your keys use a Claude sign-in.</li>
 </ol>
 <p>Stop Household on the old machine before you start it on the new one. Otherwise both would answer the same bots.</p>
-<h2 id="just-the-settings">Just the settings</h2>
-<p>All your settings are in one plain file, <code>~/.config/household/household.yaml</code>. You can keep a copy of it, edit it by hand, and run <code>house reload</code> to apply your changes. It does not hold chat history, memory or the bots' files: for those, use <code>house export</code>.</p>
-<h2 id="updates">Updates</h2>
-<p>When a new version has to convert your settings or database, Household copies both aside first, as it starts. To go back to one of those copies:</p>
-<pre><code class="language-sh">house migrate backups                # the copies, newest first
-house migrate restore &lt;name&gt;         # put one back (Household stopped)
-</code></pre>
+<h2 id="good-to-know">Good to know</h2>
+<ul>
+<li><strong>Settings only:</strong> all of them are in one plain file, <code>~/.config/household/household.yaml</code>. Keep a copy, or edit it and run <code>house reload</code>. It holds no chat history, memory or bot files.</li>
+<li><strong>Before an update</strong> converts your settings or database, Household copies both aside. <code>house migrate backups</code> lists the copies; <code>house migrate restore &lt;name&gt;</code> puts one back while Household is stopped.</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li><a href="../operating/">Updates and troubleshooting</a>: stopping, starting and updating Household.</li>
+<li><a href="../start/">Quick start</a>: installing on a new machine.</li>
+</ul>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#make-a-backup">Make a backup</a></li><li><a href="#restore">Restore</a></li><li><a href="#move-to-another-machine">Move to another machine</a></li><li><a href="#just-the-settings">Just the settings</a></li><li><a href="#updates">Updates</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-a-backup-holds">What a backup holds</a></li><li><a href="#make-a-backup">Make a backup</a></li><li><a href="#restore">Restore</a></li><li><a href="#move-to-another-machine">Move to another machine</a></li><li><a href="#good-to-know">Good to know</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

@@ -173,34 +173,44 @@
     <nav class="side" aria-label="Docs"><h3>Getting started</h3><ul><li><a href="../">Overview</a></li><li><a href="../start/">Quick start</a></li></ul><h3>Bots</h3><ul><li><a href="../bots/">Bots</a></li><li><a href="../keys/">Keys</a></li><li><a href="../instructions/">Instructions, skills and memory</a></li><li><a href="../sideworkers/">Sideworkers</a></li><li><a href="../scouts/">Scouts</a></li></ul><h3>Talking to bots</h3><ul><li><a href="../channels/">Channels</a></li></ul><h3>What bots can reach</h3><ul><li><a href="../connectors/">Connectors</a></li><li><a href="../network/">Network and secrets</a></li><li><a href="../volumes/">Shared folders</a></li><li><a href="../previews/">Previews</a></li><li><a href="../mcp/">MCP servers</a></li></ul><h3>Automation</h3><ul><li><a href="../inboxes/">Inboxes</a></li><li><a href="./" aria-current="page">Scheduled tasks</a></li></ul><h3>Running Household</h3><ul><li><a href="../resources/">Resources</a></li><li><a href="../backup/">Back up and move</a></li><li><a href="../operating/">Updates and troubleshooting</a></li></ul></nav>
 
     <article><p class="crumb">Automation</p><h1>Scheduled tasks</h1>
-<p class="lead">A scheduled task is a message your bot gets from you at a set time, once or on repeat. &quot;Every weekday at 9:00, summarise my unread mail.&quot; &quot;On Friday at 17:00, remind me to send the invoice.&quot; &quot;Tomorrow at 8:00, check if the flight is delayed.&quot; The bot does the work in its own session when the time comes, and tells you what you asked it to. Household keeps the schedule, so it survives restarts and new sessions.</p>
-<h2 id="ask-the-bot">Ask the bot</h2>
-<p>The simplest way is to say it in the chat:</p>
+<p class="lead">A scheduled task is a set of instructions your bot gets at a set time, once or on repeat. &quot;Every weekday at 9:00, summarise my unread mail and send it to me here.&quot; The bot does the work in its own session when the time comes. Household keeps the schedule, so it survives restarts, new VMs and a switch of harness.</p>
+<h2 id="what-you-d-use-it-for">What you'd use it for</h2>
+<ul>
+<li><strong>Digests</strong>: unread mail at 9:00, the week's releases on Friday.</li>
+<li><strong>Reminders</strong>: &quot;On Friday at 17:00, remind me to send the invoice.&quot;</li>
+<li><strong>One-off checks later</strong>: &quot;Tomorrow at 8:00, check if the flight is delayed.&quot;</li>
+<li><strong>Routine upkeep</strong>: a monthly review of the bot's notes, a nightly pull of the repositories it works on.</li>
+</ul>
+<h2 id="how-it-works">How it works</h2>
+<ul>
+<li><strong>Each bot has its own tasks.</strong> Sideworkers and scouts have none; a sideworker asks the bot that started it.</li>
+<li><strong>At its time, the bot gets the instructions</strong> and works on them in its session. Nothing is posted to your chat by itself: the bot writes to you only if the instructions say so.</li>
+<li><strong>The bot may not remember setting it up.</strong> By then it may be in a fresh session, so the instructions must stand alone. Facts it should rely on belong in the instructions or in its <a href="../instructions/#memory">memory</a>.</li>
+<li><strong>Household's schedule, not the VM's.</strong> Bots are told to use it rather than a crontab or a sleeping process inside the VM, which would not survive a new VM.</li>
+<li><strong>One time zone</strong> for all workspaces and bots: <strong>Household → Settings → Time zone</strong>, or <code>house timezone Europe/Madrid</code>. Bots get the current time and zone with every message, so &quot;tomorrow at 9&quot; means 9:00 there. <a href="../bots/">Scheduled restarts</a> use it too.</li>
+</ul>
+<h2 id="what-you-decide">What you decide</h2>
+<h3 id="schedule-inbox-or-restart">Schedule, inbox or restart?</h3>
+<ul>
+<li><strong>Something at a time</strong> (a digest, a reminder, a weekly review) → a scheduled task.</li>
+<li><strong>Something when it happens</strong> (new mail, a site down, an alert) → an <a href="../inboxes/">inbox</a>. Household checks the source itself and wakes the bot only when there is an event. A task every 5 minutes asking &quot;is the site up?&quot; spends a model turn each time; a health check inbox spends none until the site fails.</li>
+<li><strong>A clean context</strong> for a long-lived bot → its scheduled restart on the <strong>Lifecycle</strong> tab (see <a href="../bots/">Bots</a>), not a task.</li>
+</ul>
+<p>The two combine: an inbox on <strong>Silent</strong> collects events without waking the bot, and a task asks it to summarise them once a day.</p>
+<h3 id="write-it-so-it-lands">Write it so it lands</h3>
+<p>Say what to do, where the facts are, and whom to tell: &quot;Summarise the mail received since yesterday 9:00, newest first, five lines at most, and send it to me here.&quot; A task that does not say &quot;send it to me&quot; may run and stay silent.</p>
+<h2 id="set-it-up">Set it up</h2>
+<p>The easiest way is to ask in the chat:</p>
 <blockquote>
 <p>Remind me every Monday at 10:00 to water the plants.</p>
 </blockquote>
 <blockquote>
 <p>In two hours, check whether the build passed and tell me.</p>
 </blockquote>
-<p>The bot creates the task itself and confirms. Ask it what it has scheduled, or to change or cancel a task, the same way. Every task it makes shows up on its <strong>Scheduled tasks</strong> tab, where you can edit or cancel it.</p>
-<p>Each bot has its own tasks. Sideworkers and scouts have none; a sideworker asks the bot that started it.</p>
-<h2 id="add-one-yourself">Add one yourself</h2>
-<ol>
-<li>Open the bot's page and its <strong>Scheduled tasks</strong> tab. Press <strong>+ New task</strong>.</li>
-<li><strong>Name</strong> it, for example &quot;Morning digest&quot;.</li>
-<li>Under <strong>When</strong>, choose <strong>Once</strong> or <strong>Repeating</strong>:
-<ul>
-<li><strong>Once</strong>: pick the <strong>Date and time</strong>.</li>
-<li><strong>Repeating</strong>: write a <strong>Schedule</strong> as a cron expression (see below). Below the field you see it in words, like &quot;Weekdays at 09:00&quot;.</li>
-</ul>
-</li>
-<li>Under <strong>Instructions</strong>, write what the bot should do. Say where to report, such as &quot;and send me the result here&quot;. The bot gets this as a message from you. By then it may be in a new session that doesn't remember today's conversation, so give it everything it needs to know.</li>
-<li>Press <strong>Schedule task</strong>.</li>
-</ol>
-<p>The tab lists what is due, soonest first, with <strong>Edit</strong> and <strong>Cancel</strong> on each. Cancelling a repeating task stops future runs; a run already in progress finishes. The bot's <strong>Overview</strong> shows the next task and how the last one went.</p>
-<p>From a terminal: <code>house bot tasks &lt;workspace&gt; &lt;bot&gt;</code> lists them, and <code>house bot tasks add &lt;workspace&gt; &lt;bot&gt; --name &lt;name&gt; --at 2026-12-01T09:00</code> (or <code>--cron &quot;&lt;expression&gt;&quot;</code>) adds one, with the instructions from <code>--text</code> or typed in.</p>
-<h2 id="repeating-schedules">Repeating schedules</h2>
-<p>A repeating schedule is a cron expression: five fields for minute, hour, day of the month, month and day of the week. <code>*</code> means &quot;any&quot;. Common ones:</p>
+<p>The bot creates the task and confirms; ask it the same way to list, change or cancel tasks. To add one yourself: the bot's <strong>Scheduled tasks</strong> tab → <strong>+ New task</strong>. A repeating task takes a cron expression; the tab shows it in words below the field.</p>
+<p>From the terminal: <code>house bot tasks &lt;workspace&gt; &lt;bot&gt;</code> lists them; <code>house bot tasks add &lt;workspace&gt; &lt;bot&gt; --name &lt;name&gt; --at 2026-12-01T09:00</code> (or <code>--cron &quot;&lt;expression&gt;&quot;</code>) adds one, with the instructions from <code>--text</code> or typed in; <code>house bot tasks set|rm</code> changes or removes one.</p>
+<h3 id="cron-in-brief">Cron in brief</h3>
+<p>Five fields: minute, hour, day of the month, month, day of the week (0 is Sunday). <code>*</code> means &quot;any&quot;.</p>
 <table>
 <thead>
 <tr><th>Schedule</th><th>Means</th></tr>
@@ -209,29 +219,27 @@
 <tr><td><code>0 9 * * 1-5</code></td><td>Weekdays at 09:00</td></tr>
 <tr><td><code>30 7 * * *</code></td><td>Every day at 07:30</td></tr>
 <tr><td><code>0 10 * * 0,6</code></td><td>Weekends at 10:00</td></tr>
-<tr><td><code>0 18 * * 5</code></td><td>Every Friday at 18:00</td></tr>
 <tr><td><code>0 9 1 * *</code></td><td>Monthly on day 1 at 09:00</td></tr>
-<tr><td><code>15 * * * *</code></td><td>Every hour at :15</td></tr>
 <tr><td><code>*/30 * * * *</code></td><td>Every 30 minutes</td></tr>
 </tbody>
 </table>
-<p>Days of the week count from 0 (Sunday) to 6 (Saturday). Not sure? Describe it to the bot in words and let it write the expression.</p>
-<h2 id="time-zone">Time zone</h2>
-<p>All times are in the Household time zone, one for all workspaces and bots. Set it under <strong>Household → Settings → Time zone</strong> (the <strong>Household</strong> card in the sidebar, then <strong>Settings</strong>), or with <code>house timezone Europe/Madrid</code>. The <strong>Scheduled tasks</strong> tab names the zone it uses and links to the setting.</p>
-<p>Bots get the current time and zone with every message, so &quot;tomorrow at 9&quot; in the chat means 9:00 in that zone. <a href="../bots/">Scheduled restarts</a> on the <strong>Lifecycle</strong> tab use it too.</p>
-<h2 id="when-a-task-runs">When a task runs</h2>
-<p>At its time, Household sends the instructions to the bot as a message from you. The bot works on it in its own session. Nothing is posted to your chat by itself: the bot writes to you only if the instructions say so. That is why it pays to end them with whom to tell, and where.</p>
-<p>Under <strong>Recent runs</strong> on the tab, each run shows its state: <strong>Queued</strong>, <strong>Sending</strong>, <strong>Running</strong>, <strong>Replied</strong> or <strong>Failed</strong>. Open one to see its timings, the instructions it got and <strong>What the bot said</strong>. The folded <strong>Audit log</strong> below them records what happened to each task.</p>
-<p>A few things to know:</p>
+<p>Not sure? Describe it to the bot in words and let it write the expression.</p>
+<h2 id="limits-and-good-to-know">Limits and good to know</h2>
 <ul>
-<li><strong>Failed runs are not retried.</strong> If a run fails, it waits for its next time; a one-time task does not run again.</li>
-<li><strong>Missed runs happen once, late.</strong> If Household was not running at the time (your computer was off, say), the task runs once when it is back, not once for every missed time.</li>
-<li><strong>No pile-ups.</strong> A repeating run is skipped while the previous one still runs.</li>
-<li><strong>Write instructions that stand alone.</strong> The bot may not remember the conversation in which you set the task up. Facts it should rely on belong in the instructions themselves or in its <a href="../instructions/#memory">memory</a>.</li>
+<li><strong>Failed runs are not retried.</strong> A repeating task waits for its next time; a one-time task does not run again.</li>
+<li><strong>Missed runs happen once, late.</strong> If Household was not running at the time, the task runs once when it is back, not once per missed time.</li>
+<li><strong>No pile-ups.</strong> A repeating run is skipped while the previous one is still unfinished.</li>
+<li><strong>Cancelling</strong> a repeating task stops future runs; one in progress finishes.</li>
+<li><strong>Every run is a model turn</strong> on the bot's <a href="../keys/">key</a>: a task every few minutes costs allowance or money.</li>
+<li>Instructions: up to 32,000 characters. <strong>Recent runs</strong> on the tab show what the bot said for each run.</li>
 </ul>
+<h2 id="put-it-to-use">Put it to use</h2>
+<p>A mail triage bot: give it your mailbox as an <a href="../inboxes/">inbox</a> on <strong>Silent</strong> and the Email <a href="../connectors/">connector</a> with <strong>Ask me first</strong> for sending. Add a task on weekdays at 9:00: &quot;Go through the mail since yesterday 9:00, draft replies to anything that needs one, and send me a list here.&quot; It reads all night without waking anyone, and nothing leaves your mailbox until you approve it.</p>
+<h2 id="related">Related</h2>
+<p><a href="../inboxes/">Inboxes</a> · <a href="../instructions/">Instructions, skills and memory</a> · <a href="../bots/">Bots</a></p>
 </article>
 
-    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#ask-the-bot">Ask the bot</a></li><li><a href="#add-one-yourself">Add one yourself</a></li><li><a href="#repeating-schedules">Repeating schedules</a></li><li><a href="#time-zone">Time zone</a></li><li><a href="#when-a-task-runs">When a task runs</a></li></ul></nav>
+    <nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#what-you-d-use-it-for">What you'd use it for</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#what-you-decide">What you decide</a></li><li><a href="#set-it-up">Set it up</a></li><li><a href="#limits-and-good-to-know">Limits and good to know</a></li><li><a href="#put-it-to-use">Put it to use</a></li><li><a href="#related">Related</a></li></ul></nav>
   </div>
   <script>
     // highlight the section being read in "On this page": the last heading above the top fifth of the screen

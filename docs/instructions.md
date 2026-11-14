@@ -1,80 +1,69 @@
 # Instructions, skills and memory
 
-Three things make a bot yours rather than a blank assistant. Its **instructions** say who it is and how it should work, and it reads them at the start of every session. **Skills** are how-tos it picks up when a task calls for one. **Memory** is what it has learned about you and your projects, kept across sessions. You can edit all three in the admin, and the bot keeps them up to date itself when you ask.
+Three things make a bot yours rather than a blank assistant. Its **instructions** say who it is and how it works. **Skills** are how-tos it opens when a task calls for one. **Memory** is what it has learned about you and your projects. A cooking bot's instructions say "plan meals for two, mostly vegetarian"; a skill lays out the weekly shopping list your way; memory knows Anna is allergic to nuts.
 
-## Instructions
+## What you'd use it for
 
-A bot's standing instructions are one Markdown document, on its **AGENTS.md** tab. Write there what should always hold: its role, your preferences, the tone you like, rules it must follow. For example:
+- **Give a bot a role and rules**: "You are my cooking assistant. Ask before buying anything."
+- **Teach a procedure once**: how you deploy, how to file an expense, how to write the weekly report.
+- **Make every bot of a workspace work the same way** with a shared skill.
+- **Let it remember** people, decisions and preferences across sessions.
 
-```markdown
-## Role
-You are my cooking assistant. Plan meals for two, mostly vegetarian.
+## How it works
 
-## Rules
-- Ask before buying anything.
-- Keep answers short; use lists for recipes.
-```
+### Instructions
 
-A new bot starts with a short default you can rewrite. Edit the document and press **Save** (or ⌘S). It can be up to 32 KiB.
+One Markdown document per bot, on its **AGENTS.md** tab, read at the start of every session. Each harness reads the same file under its own name, such as `CLAUDE.md` for Claude Code or `AGENTS.md` for Codex, so the instructions survive a switch of harness. A change applies from the next session; restart the bot to apply it now. A project's own instruction file applies too, while the bot works there.
 
-The bot reads it at the start of each session, so a change applies from its next session. After saving, **Restart now…** starts one right away. Its files and memory stay.
+### Skills
 
-It is the same document for both harnesses. Claude Code knows it as `CLAUDE.md` and Codex as `AGENTS.md`, but both read this one file. If you move a bot from Claude Code to Codex, its instructions come along.
+A skill is a folder with a `SKILL.md` (a name, a line on when to use it, the instructions) and any files it needs. The bot sees every skill's name and line and opens one only when a task fits, so long procedures don't crowd every conversation. Skills come from three places:
 
-**The bot can update it.** Tell it "add to your instructions that I want summaries in Russian", and it edits the document itself. It keeps your rules and adds to them; its own additions can't override your rules or give it new permissions. Reload the tab to see what it changed.
+- **Its own**, on the bot's **Skills** tab. Only this bot has them, whatever its harness.
+- **Shared**, on **Workspace → Shared Skills**. Every bot of the workspace has them; a change there changes it for all.
+- **Built-in**, named `household-…`. They teach a bot how to work in Household: schedule tasks, keep memory, set up its VM, ask for hosts, secrets and folders, call scouts, start sideworkers. They are read-only and update with Household.
 
-Instructions are per bot. For rules every bot of the workspace should follow, use a [shared skill](#skills). When a bot works in a project that has its own `CLAUDE.md` or `AGENTS.md`, those apply there too.
+[Scouts](../scouts/) don't get a bot's own skills. Each gets the skills of its capabilities, with the shared and built-in ones.
 
-From a terminal: `house bot instructions <workspace> <bot>` prints the document, and `house bot instructions set <workspace> <bot> <file>` replaces it.
+### Memory
 
-## Skills
+Notes Household keeps for the bot outside its VM, so they survive restarts, new VMs and a switch of harness. Each has a key, with dots for grouping (`people.anna`). One note, `core`, sums up what matters most: the bot gets it at the start of every session and looks up the rest when relevant. Memory is private to the bot and its [sideworkers](../sideworkers/). It is notes, not orders: when one disagrees with what you say now, your words win. In a group chat the bot keeps private notes to itself unless you allow otherwise.
 
-A skill is a folder with a `SKILL.md` file: a name, a line on when to use it, and the instructions. The bot sees every skill's name and description, and opens the whole skill only when a task fits. So skills can hold long, detailed procedures ("how we deploy", "how to file an expense") without crowding every conversation. A skill can also hold scripts and other files it needs.
+### When the bot edits itself
 
-A bot gets skills from three places:
+The bot can change its own instructions, its own skills, the shared skills, its memory and its [environment scripts](../bots/), without asking you. What limits it:
 
-- **Its own.** On the bot's **Skills** tab, under **Personal**. Only this bot has them, whatever its harness.
-- **Shared.** On **Workspace → Shared Skills**. Every bot of the workspace has them, and a change there changes it for all of them. Bots can edit shared skills too.
-- **Built-in.** Household's own skills, named `household-…`. They teach a bot how to work in Household: schedule tasks, keep its memory, set up its VM, ask you for network access, secrets and folders, call scouts, start sideworkers, show previews and write skills. They are read-only and update with Household. You can read them on **Shared Skills**.
-
-To add a skill yourself:
-
-1. On the bot's **Skills** tab or on **Shared Skills**, press **+ New skill**.
-2. Give it a **Name** (lowercase letters, digits and `-`) and a line under **When to use it**. Bots read that line to decide when to use the skill, so make it specific: "Review a diff for bugs before merging".
-3. Press **Create skill**, then write the instructions in the editor. Add more files to the skill if it needs them.
-
-Bots see a new skill from their next session.
-
-The easier way is often to let the bot write it. After you've walked it through something you'll want again, say "make this a skill". It chooses a personal skill for its own habits, or a shared one when every bot should work the same way. You can review and edit what it wrote on the same pages.
-
-Avoid two skills of the same name at two levels: the list tags such a skill **also shared**, and it confuses the bot. Keep passwords and tokens out of skills.
-
-[Scouts](../scouts/) don't see a bot's skills. Each scout gets the skills of its own capabilities, with the shared and built-in ones.
-
-From a terminal: `house skills <workspace>` lists the shared skills, file by file, and `house skills cat|put|rm <workspace> <path>` reads, writes or deletes one file.
-
-## Memory
-
-A bot's memory is a set of notes Household keeps for it: your preferences, decisions you made together, facts about people and projects. It lasts across sessions, restarts and even a switch of harness. It is private to the bot; its [sideworkers](../sideworkers/) share it.
-
-Each note has a key, with dots for grouping: `people.anna`, `projects.garden`. One note is special: `core`, a short summary of what matters most. The bot gets `core` at the start of every session. Other notes it looks up when they become relevant.
-
-You rarely need to write memory yourself. Say "remember that Anna is allergic to nuts", and the bot saves it. It also saves what it learns as it goes, and corrects old notes instead of piling up new ones.
-
-The **Memory** tab shows what it keeps:
-
-- **Search keys and text** finds notes. Notes are grouped by their dots, with `core` pinned at the top.
-- Open a note to **Edit** or **Preview** it. **History** lists its versions, who made each (you or the bot) and when. **Use as draft** brings an old version back into the editor.
-- **New note** adds one by key. Deleting a note keeps its versions in History; **Show deleted** lists such notes.
-
-Memory is the bot's own notes, not orders: when they disagree with what you say now, your words win. Keep passwords and tokens out of it. In a group chat the bot keeps private notes to itself unless you allow otherwise.
-
-From a terminal: `house bot memory <workspace> <bot>` lists the notes, and `house bot memory get|set|rm <workspace> <bot> <key>` works on one.
+- **None of it grants access.** Hosts, secrets, folders, connectors and scout runs are Household settings the bot can only ask for, and only an owner approves. Environment scripts run inside its own VM, not on your machine.
+- **Your rules are kept by request, not by lock.** The bot is told to keep your instructions and that its own additions can't override them. A bot talked into it by hostile content could still rewrite them.
+- ⚠️ **A shared skill reaches every bot.** A bad edit by one bot shows up in all the workspace's bots from their next session.
+- **Only memory keeps versions**, with who wrote each (you or the bot). Instructions and skills keep no history. Look at what changed now and then, and keep your own copy of instructions you care about.
 
 ## What goes where
 
 - **Always true** (who it is, your rules) → instructions.
-- **How to do a recurring kind of task** → a skill: personal, or shared for the whole workspace.
+- **How to do a recurring kind of task** → a skill: its own, or shared for the whole workspace.
+- **Rules every bot should follow** → a shared skill, since instructions are per bot.
 - **Facts and decisions** it should recall → memory.
 - **Something to do later or on repeat** → a [scheduled task](../schedules/).
-- **Software it needs installed** → its setup script, on the bot's **Environment** tab (see [Bots](../bots/)).
+- **Software it needs installed** → its **Setup** script on the **Environment** tab (see [Bots](../bots/)).
+
+## Set it up
+
+Usually you just say it: "add to your instructions…", "make this a skill", "remember that…". Review what the bot wrote on the same tabs. To write them yourself: the **AGENTS.md**, **Skills** and **Memory** tabs, and **Shared Skills**. For a skill, the line under **When to use it** decides when the bot opens it, so make it specific: "Review a diff for bugs before merging", not "Code review".
+
+From the terminal: `house bot instructions [set] <workspace> <bot>`, `house skills <workspace>` and `house skills cat|put|rm <workspace> <path>`, `house bot memory <workspace> <bot>` and `house bot memory get|set|rm <workspace> <bot> <key>`.
+
+## Limits and good to know
+
+- Instructions: up to 32 KiB. A memory note: up to 32,000 characters.
+- Bots see a new skill from their next session.
+- Avoid two skills of one name at two levels: the list tags such a skill **also shared**, and it confuses the bot.
+- Keep passwords and tokens out of all three: they are stored as plain text and read into the bot's conversation. Give the bot a [secret](../network/) instead.
+
+## Put it to use
+
+A morning brief that stays the same in every session: write a skill `morning-brief` ("When to use it: the 9:00 scheduled brief") that says which mails count, how to group them and to keep it under ten lines. Then add a [scheduled task](../schedules/) on weekdays at 9:00 that just says "Run your morning brief and send it to me here". Changing the brief is now an edit to one skill, not to the schedule.
+
+## Related
+
+[Bots](../bots/) · [Scheduled tasks](../schedules/) · [Sideworkers](../sideworkers/)
