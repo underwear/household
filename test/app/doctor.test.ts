@@ -8,6 +8,7 @@ import { ConfigStore } from "../../src/infra/config-store";
 import { resolvePaths } from "../../src/infra/paths";
 import { fakeTelegram } from "../fake-telegram";
 import { tempDir } from "../helpers";
+import { serveControl } from "../../src/infra/control-socket";
 
 const GOOD = "4242:good-token-of-the-house-bot-0001";
 const telegram = fakeTelegram(GOOD);
@@ -24,6 +25,16 @@ const healthy: DoctorDeps["run"] = async ([command]) => ({
   ok: true,
   stdout: command === "msb" ? "msb 0.7.13" : command === "docker" ? "OrbStack, Docker 29.4.0" : "OpenSSL 4.0.3 29 Sep 2026",
   stderr: "",
+});
+
+test("doctor reports a blocked bot even when the daemon and other bots are running", async () => {
+  const { paths, check } = await setup(healthy);
+  const control = await serveControl(paths.socket, { "/status": async () => ({ state: "running", pets: [], subjects: [],
+    problems: [{ house: "work", pet: "sibling", message: "Cannot check shared folder 'cloud': access check unavailable" }],
+  }) });
+  try {
+    expect((await check()).filter(finding => !finding.ok)).toContainEqual({ ok: false, text: "bot work/sibling: Cannot check shared folder 'cloud': access check unavailable" });
+  } finally { await control.stop(); }
 });
 
 /** A house with a pet on key `claude` and a private chat with the bot of `token`. */

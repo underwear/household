@@ -118,6 +118,7 @@ export async function doctor({ paths, config, agents, run, telegramApi, released
         ? { ok: true, text: `daemon: ${status.state}, ${status.pets.length} pets` }
         : { ok: true, text: "daemon: not running; start it with `house start`" },
     );
+    for (const problem of status?.problems ?? []) findings.push({ ok: false, text: `bot ${problem.house}/${problem.pet}: ${problem.message}` });
   } catch (error) {
     findings.push({ ok: false, text: `daemon: does not answer properly (${(error as Error).message})` });
   }

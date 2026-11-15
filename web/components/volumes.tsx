@@ -19,6 +19,7 @@ const titleOf = (house: WorkspaceView, bot: string) => house.pets.find((pet) => 
 /** Why a volume is not mounted, in a line. */
 const problemText = (volume: VolumeView) => volume.problem === "unsafe"
   ? "Not mounted: the folder is no longer the one that was shared (a link now?). Share it again."
+  : volume.problem === "unavailable" ? "Access check unavailable. Check macOS Files and Folders / iCloud Drive permission or folder availability, then reload Household."
   : "Folder missing: not mounted. Restart its bots once it is back.";
 
 /** The workspace's volumes and homes, loaded, and how to save a change and load them again. */

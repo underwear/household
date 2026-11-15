@@ -80,6 +80,9 @@ export interface PetStatus {
   state: string;
 }
 
+export interface PetPreparationProblem { house: string; pet: string; message: string }
+class VolumeUnavailable extends Error {}
+
 /** Whether a (re)started pet got ready. */
 export interface PetStart {
   house: string;
@@ -120,6 +123,8 @@ type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "prepareImage">;
  */
 export class PetPlane {
   readonly progress = new LifecycleProgress();
+  private readonly preparationIssues = new Map<string, PetPreparationProblem>();
+  get preparationProblems(): PetPreparationProblem[] { return [...this.preparationIssues.values()]; }
   /** Each agent's image, prepared once: two VMs booting at once wait for the same download, never start two. */
   private readonly images = new Map<string, ImageEntry>();
   private waiting = true;
@@ -149,6 +154,7 @@ export class PetPlane {
     private readonly transport: PetTransport,
     private readonly skills?: HouseSkills,
     private readonly instructions?: PetInstructions,
+    private readonly checkMount: typeof mountable = mountable,
   ) {
     this.mine = `${LABEL.owner}=${owner}`;
   }
@@ -178,9 +184,10 @@ export class PetPlane {
   private async reconcileVms(
     pets: PlacedPet[],
     onStopped: (pet: { house: string; pet: string }) => Promise<void> = async () => {},
-  ): Promise<{ started: PlacedPet[]; removed: string[] }> {
+  ): Promise<{ started: PlacedPet[]; removed: string[]; blocked?: PetPreparationProblem[] }> {
     const existing = new Map((await this.progress.run("reading VM configuration", () => this.runtime.listContainers(this.mine))).map((info) => [info.name, info]));
     const wanted = new Set(pets.map(({ house, pet }) => petContainer(house, pet)));
+    for (const name of this.preparationIssues.keys()) if (!wanted.has(name)) this.preparationIssues.delete(name);
     for (const name of wanted) {
       const present = existing.get(name) ?? await this.progress.run("checking VM ownership", () => this.runtime.container(name), pets.find(pet => petContainer(pet.house, pet.pet) === name));
       if (present && ownerOf(present) !== this.owner) throw new Error(`bot runtime ${name} belongs to another Household; refusing to replace it`);
@@ -196,10 +203,12 @@ export class PetPlane {
       removed.push(name);
     }
     const started: PlacedPet[] = [];
+    const blocked: PetPreparationProblem[] = [];
     for (const placed of pets) {
       const name = petContainer(placed.house, placed.pet);
       const current = existing.get(name);
       if (placed.enabled === false) {
+        this.preparationIssues.delete(name);
         if (current?.state === "paused") throw new Error("bot VM is paused; finish its backup before disabling");
         if (current && current.state !== "stopped") {
           await this.progress.run("stopping disabled VM", () => this.stop(name), placed);
@@ -213,7 +222,21 @@ export class PetPlane {
         continue; // Retain the VM and disks; do not build or start disabled pets.
       }
       await this.progress.run("preparing instructions", () => this.prepareInstructions(placed), placed);
-      const vm = await this.progress.run("preparing image and mounts", () => this.vm(placed), placed);
+      let vm: PetVm;
+      try { vm = await this.progress.run("preparing image and mounts", () => this.vm(placed), placed); }
+      catch (error) {
+        if (!(error instanceof VolumeUnavailable)) throw error;
+        // The old VM may retain a write mount the new config revokes. Without a complete preflight we cannot
+        // prove it is safe to keep running. Stop only this bot, retain its disks, and continue the other bots.
+        if (current && current.state !== "stopped") {
+          await this.progress.run("stopping bot with unavailable folder access", () => this.stop(name), placed);
+          await this.progress.run("sending stopped notice", () => onStopped({ house: placed.house, pet: placed.pet }), placed);
+        }
+        const problem = { house: placed.house, pet: placed.pet, message: `${error.message} This bot was not started; its home and disks are retained.` };
+        this.preparationIssues.set(name, problem);
+        blocked.push(problem);
+        continue;
+      }
       this.runtime.configureEnvironmentSetup?.(name, placed.scout?.setup ?? placed.environment?.setup, placed.environment?.onStart);
       // A VM that is not running gets its folders as they can be mounted now: a stored mount of a folder gone since (an
       // unplugged disk) would keep it from starting, and one that came back is mounted. A running one is left as it is.
@@ -245,7 +268,7 @@ export class PetPlane {
       await this.progress.run("starting VM and agent", () => this.runtime.startContainer!(name), placed);
       started.push(placed);
     }
-    return { started, removed };
+    return { started, removed, ...(blocked.length ? { blocked } : {}) };
   }
 
   private async stop(name: string): Promise<void> {
@@ -453,14 +476,15 @@ export class PetPlane {
   }
 
   private async vm(placed: PlacedPet): Promise<PetVm> {
+    this.preparationIssues.delete(petContainer(placed.house, placed.pet));
     const { house, pet, agent, model, reasoningEffort, mode, settings, keyUse, secrets = [] } = placed;
-    const image = await this.image(agent);
+    const image = await this.progress.run("preparing agent image", () => this.image(agent), placed);
     const name = petContainer(house, pet);
     const { host, proxyPort, relayPort } = this.transport;
     const token = this.transport.tokenFor({ house, pet });
     const proxy = `http://household:${token}@${host}:${proxyPort}`;
     const relay = `http://${host}:${relayPort}`;
-    const skillsPath = placed.scout?.skillsPath ?? (this.skills && agent.skillsDirectory ? await this.skills.ensure(house) : undefined);
+    const skillsPath = placed.scout?.skillsPath ?? (this.skills && agent.skillsDirectory ? await this.progress.run("preparing skills directory", () => this.skills!.ensure(house), placed) : undefined);
     // The relay is on the house network itself; everything else goes through the proxy. The key is a placeholder of
     // its kind (its value is the gateway's): another key of the same kind changes nothing. Its house's secrets as
     // placeholders, under what Household and the agent set (their names cannot clash: core/secrets.ts reserves those).
@@ -511,7 +535,8 @@ export class PetPlane {
   private async volumeMounts(placed: PlacedPet): Promise<Mount[]> {
     const mounts: Mount[] = [];
     for (const volume of placed.volumes ?? []) {
-      const state = await mountable(volume.path, this.protectedDirs);
+      const state = await this.progress.run(`checking shared folder ${volume.name}`, () => this.checkMount(volume.path, this.protectedDirs), placed);
+      if (state === "unavailable") throw new VolumeUnavailable(`Cannot check shared folder '${volume.name}': access was denied or the check timed out. Check macOS Files and Folders / iCloud Drive permission or folder availability, then reload Household.`);
       if (state === "ok") mounts.push({ type: "bind", source: volume.path, target: volumeTarget(volume.name), readOnly: volume.access === "read" });
       else console.warn(`bot ${placed.house}/${placed.pet}: volume ${volume.name} not mounted: ${state === "missing" ? `${volume.path} is not there` : `${volume.path} is no longer the plain folder that was shared (a link, or Household's own)`}`);
     }
