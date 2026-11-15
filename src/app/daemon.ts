@@ -453,7 +453,7 @@ export async function startDaemon(deps: DaemonDeps) {
     const operations = pets.progress.pending;
     return {
       state, subjects,
-      pets: shown ?? placed.map(({ house, pet, agent }) => ({ house, pet, agent: agent.name, container: petContainer(house, pet), state: "unknown" })),
+      pets: shown ?? placed.map(({ house, pet, agent, enabled }) => ({ house, pet, agent: agent.name, container: petContainer(house, pet), state: enabled === false ? "disabled" : "unknown" })),
       web: webStatus(), ...(operations.length ? { operations } : {}), ...(!shown ? { petStatusUnavailable: true as const } : {}),
       ...(cached ? { petStatusAgeMs: Math.max(0, Date.now() - cached.at) } : {}),
     };

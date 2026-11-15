@@ -1732,3 +1732,18 @@ test("matching permission closure survives throttling while unrelated completion
     expect(await waiting).toEqual({});
   } finally { delivery.stop(); }
 });
+
+test("a screen-only dialog discovered while sending an idle pet's scheduled prompt leaves it idle once the screen clears", async () => {
+  let visible = true;
+  const s = setup({ visible: async () => visible });
+  const send = s.pet.agent.send;
+  s.pet.agent.send = async () => ({ status: "refused", reason: "native permission", blockedBy: "dialog" });
+  try {
+    s.delivery.send("work", "sibling", { text: "daily digest", origin: "cron" });
+    await waitFor(() => s.updates.some(update => update.kind === "dialog" && update.dialog === "unknown"));
+    s.pet.agent.send = send;
+    visible = false; // the transient screen went away; no turn ran, so no Stop will ever come
+    await waitFor(() => s.sent.length === 1);
+    expect(s.sent[0]!.text).toContain("daily digest");
+  } finally { s.delivery.stop(); }
+});
