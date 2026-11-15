@@ -11,6 +11,7 @@ import type { ContainerInfo, ContainerRuntime, ContainerSpec, Mount, PetRuntime 
 import type { PlacedPet } from "./agents";
 import { VOLUMES_ROOT, volumeTarget } from "../core/volumes";
 import { mountable } from "../infra/volume-folders";
+import { LifecycleProgress } from "./lifecycle-progress";
 
 /** House and pet names cannot contain `.`, so no two (house, pet) pairs share a container or volume name. */
 export const petContainer = (house: string, pet: string) => `household.${house}.${pet}`;
@@ -118,6 +119,7 @@ type ExecutionRuntime = PetRuntime & Pick<ContainerRuntime, "prepareImage">;
  * Docker disks. Homes stay.
  */
 export class PetPlane {
+  readonly progress = new LifecycleProgress();
   /** Each agent's image, prepared once: two VMs booting at once wait for the same download, never start two. */
   private readonly images = new Map<string, ImageEntry>();
   private waiting = true;
@@ -169,27 +171,28 @@ export class PetPlane {
    * stops or replaces. Resolves to the started pets and the removed VMs.
    */
   async reconcile(pets: PlacedPet[], onStopped: (pet: { house: string; pet: string }) => Promise<void> = async () => {}) {
-    await this.refreshResources();
+    await this.progress.run("reading VM inventory", () => this.refreshResources());
     try { return await this.reconcileVms(pets, onStopped); }
-    finally { await this.refreshResources(); }
+    finally { await this.progress.run("refreshing VM inventory", () => this.refreshResources()); }
   }
   private async reconcileVms(
     pets: PlacedPet[],
     onStopped: (pet: { house: string; pet: string }) => Promise<void> = async () => {},
   ): Promise<{ started: PlacedPet[]; removed: string[] }> {
-    const existing = new Map((await this.runtime.listContainers(this.mine)).map((info) => [info.name, info]));
+    const existing = new Map((await this.progress.run("reading VM configuration", () => this.runtime.listContainers(this.mine))).map((info) => [info.name, info]));
     const wanted = new Set(pets.map(({ house, pet }) => petContainer(house, pet)));
     for (const name of wanted) {
-      const present = existing.get(name) ?? await this.runtime.container(name);
+      const present = existing.get(name) ?? await this.progress.run("checking VM ownership", () => this.runtime.container(name), pets.find(pet => petContainer(pet.house, pet.pet) === name));
       if (present && ownerOf(present) !== this.owner) throw new Error(`bot runtime ${name} belongs to another Household; refusing to replace it`);
     }
     const removed: string[] = [];
     for (const [name, info] of existing) {
       if (wanted.has(name)) continue;
       const house = info.labels[LABEL.house], pet = info.labels[LABEL.pet];
-      if (house && pet) await this.beforeStop(house, pet);
-      await this.runtime.removeContainer(name);
-      if (house && pet) await this.runtime.removeDisk?.(petDockerDisk(house, pet));
+      const subject = house && pet ? { house, pet } : undefined;
+      if (house && pet) await this.progress.run("closing bot services", () => this.beforeStop(house, pet), subject);
+      await this.progress.run("removing unused VM", () => this.runtime.removeContainer(name), subject);
+      if (house && pet) await this.progress.run("removing unused VM disk", async () => this.runtime.removeDisk?.(petDockerDisk(house, pet)), subject);
       removed.push(name);
     }
     const started: PlacedPet[] = [];
@@ -199,18 +202,18 @@ export class PetPlane {
       if (placed.enabled === false) {
         if (current?.state === "paused") throw new Error("bot VM is paused; finish its backup before disabling");
         if (current && current.state !== "stopped") {
-          await this.stop(name);
-          await onStopped({ house: placed.house, pet: placed.pet });
+          await this.progress.run("stopping disabled VM", () => this.stop(name), placed);
+          await this.progress.run("sending stopped notice", () => onStopped({ house: placed.house, pet: placed.pet }), placed);
         }
         if (current && placed.agent.sessionFile) {
           if (!this.runtime.resetSession) throw new Error("runtime cannot reset this harness’s session");
-          await this.runtime.resetSession(petVolume(placed.house, placed.pet), placed.agent.sessionFile);
+          await this.progress.run("resetting disabled agent session", () => this.runtime.resetSession!(petVolume(placed.house, placed.pet), placed.agent.sessionFile!), placed);
         }
-        if (current) await this.runtime.configureResources?.(name, petResources(placed));
+        if (current) await this.progress.run("configuring VM resources", async () => this.runtime.configureResources?.(name, petResources(placed)), placed);
         continue; // Retain the VM and disks; do not build or start disabled pets.
       }
-      await this.prepareInstructions(placed);
-      const vm = await this.vm(placed);
+      await this.progress.run("preparing instructions", () => this.prepareInstructions(placed), placed);
+      const vm = await this.progress.run("preparing image and mounts", () => this.vm(placed), placed);
       this.runtime.configureEnvironmentSetup?.(name, placed.scout?.setup ?? placed.environment?.setup, placed.environment?.onStart);
       // A VM that is not running gets its folders as they can be mounted now: a stored mount of a folder gone since (an
       // unplugged disk) would keep it from starting, and one that came back is mounted. A running one is left as it is.
@@ -222,24 +225,24 @@ export class PetPlane {
         this.relaunching(placed.house, placed.pet, change === "recreate" ? { kind: "recreate" } : { kind: "relaunch", ...(before ? { changed: changedKeys(before, vm.spec.env ?? {}) } : {}) });
       }
       if (change === "create" || change === "recreate") {
-        await this.beforeStop(placed.house, placed.pet);
-        await this.runtime.removeContainer(name);
-        if (current && current.state !== "stopped") await onStopped({ house: placed.house, pet: placed.pet });
-        await this.runtime.runContainer(vm.spec);
+        await this.progress.run("closing bot services", () => this.beforeStop(placed.house, placed.pet), placed);
+        await this.progress.run("removing old VM", () => this.runtime.removeContainer(name), placed);
+        if (current && current.state !== "stopped") await this.progress.run("sending stopped notice", () => onStopped({ house: placed.house, pet: placed.pet }), placed);
+        await this.progress.run("starting VM and agent", () => this.runtime.runContainer(vm.spec), placed);
         started.push(placed);
         continue;
       }
       if (change === "relaunch") {
         if (current!.state !== "stopped") {
-          await this.stop(name);
-          await onStopped({ house: placed.house, pet: placed.pet });
+          await this.progress.run("stopping VM", () => this.stop(name), placed);
+          await this.progress.run("sending stopped notice", () => onStopped({ house: placed.house, pet: placed.pet }), placed);
         }
-        await this.applyLaunch(name, current!, vm);
+        await this.progress.run("updating launch configuration", () => this.applyLaunch(name, current!, vm), placed);
       }
-      await this.runtime.configureResources?.(name, petResources(placed));
+      await this.progress.run("configuring VM resources", async () => this.runtime.configureResources?.(name, petResources(placed)), placed);
       if (change === "adopt") continue;
       if (!this.runtime.startContainer) throw new Error("runtime does not support starting a bot VM");
-      await this.runtime.startContainer(name);
+      await this.progress.run("starting VM and agent", () => this.runtime.startContainer!(name), placed);
       started.push(placed);
     }
     return { started, removed };
@@ -261,8 +264,8 @@ export class PetPlane {
 
   /** Restarts the same owned VM, on its current launch configuration; never creates/removes it or discards its disks. */
   async restart(placed: PlacedPet, onLeave: () => Promise<void> = async () => {}, onStopped: () => Promise<void> = async () => {}): Promise<void> {
-    try { await this.restartVm(placed, onLeave, onStopped); }
-    finally { await this.refreshResources(); }
+    try { await this.progress.run("restarting VM and agent", () => this.restartVm(placed, onLeave, onStopped), placed); }
+    finally { await this.progress.run("refreshing VM inventory", () => this.refreshResources()); }
   }
   private async restartVm(placed: PlacedPet, onLeave: () => Promise<void> = async () => {}, onStopped: () => Promise<void> = async () => {}): Promise<void> {
     if (placed.enabled === false) throw new Error("bot is disabled; enable it before restarting");
@@ -304,7 +307,7 @@ export class PetPlane {
   /** Waits for each pet to get ready, up to the timeout. */
   async awaitReady(pets: PlacedPet[]): Promise<PetStart[]> {
     const results: PetStart[] = [];
-    for (const placed of pets) results.push({ house: placed.house, pet: placed.pet, ...(await this.waitReady(placed)) });
+    for (const placed of pets) results.push({ house: placed.house, pet: placed.pet, ...(await this.progress.run("checking agent readiness", () => this.waitReady(placed), placed)) });
     return results;
   }
 
