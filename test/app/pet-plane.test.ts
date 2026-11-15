@@ -1,6 +1,6 @@
 import { PetInstructions } from "../../src/infra/pet-instructions";
 import { HouseSkills } from "../../src/infra/house-skills";
-import { tempDir } from "../helpers";
+import { tempDir, waitFor } from "../helpers";
 import { expect, test } from "bun:test";
 import type { AgentAdapter } from "../../src/core/agent";
 import type { PlacedPet } from "../../src/app/agents";
@@ -41,6 +41,30 @@ function setup(timeoutMs = 50) {
   runtime.output = () => "READY";
   return { runtime, plane: new PetPlane(runtime, "/state/tls/ca.crt", "me", timeoutMs, TRANSPORT) };
 }
+
+test("a live agent does not hide an unfinished VM launch or the bot blocking the next launch", async () => {
+  const { runtime, plane } = setup();
+  const create = runtime.runContainer.bind(runtime);
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  runtime.runContainer = async spec => { await create(spec); await gate; };
+  const reconcile = plane.reconcile(pets);
+  try {
+    await waitFor(() => runtime.specs.length === 1);
+    expect((await plane.status(pets))[0]!.state).toBe("running");
+    expect(plane.progress.pending).toEqual([{ phase: "starting VM and agent", house: "work", pet: "sibling", elapsedMs: expect.any(Number) }]);
+    expect(runtime.specs).toHaveLength(1);
+  } finally { finish(); await reconcile; }
+  expect(runtime.specs).toHaveLength(2);
+  expect(plane.progress.pending).toEqual([]);
+});
+
+test("a failed VM launch clears its progress instead of leaving a stale starting phase", async () => {
+  const { runtime, plane } = setup();
+  runtime.runContainer = async () => { throw new Error("launch failed"); };
+  await expect(plane.reconcile(pets)).rejects.toThrow("launch failed");
+  expect(plane.progress.pending).toEqual([]);
+});
 
 test("missing pets are started: own image, labels, limits, home volume, CA, proxy, relay", async () => {
   const { runtime, plane } = setup();

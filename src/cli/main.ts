@@ -259,6 +259,9 @@ async function status(paths: Paths): Promise<void> {
     return;
   }
   console.log(`daemon: ${report.state}`);
+  for (const operation of report.operations ?? []) console.log(`waiting: ${operation.house && operation.pet ? `${operation.house}/${operation.pet}: ` : ""}${operation.phase} (${Math.floor(operation.elapsedMs / 1000)}s)`);
+  if (report.petStatusUnavailable) console.log("bot statuses: unavailable; could not read runtime status");
+  if (report.petStatusAgeMs !== undefined) console.log(`bot statuses: cached (${Math.floor(report.petStatusAgeMs / 1000)}s old); could not refresh runtime status`);
   if (report.web) console.log("url" in report.web ? `web UI: ${report.web.url} (sign in: house dashboard)` : `web UI off: ${report.web.off}`);
   for (const { subject, policy } of report.subjects) {
     const allow = policy.allow.map(formatEndpoint).join(", ") || "-";

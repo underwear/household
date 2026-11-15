@@ -228,12 +228,70 @@ test("while starting, status answers and reloads wait for the startup to finish"
   runtime.gate = new Promise((resolve) => (finishBuild = resolve)); // the pet's image build
   const starting = startDaemon(deps);
   await waitFor(() => runtime.calls.some((call) => call.startsWith("build ")));
-  expect(await status(paths.socket)).toMatchObject({ state: "starting" });
+  expect(await status(paths.socket)).toMatchObject({ state: "starting", operations: [{ house: "work", pet: "sibling", phase: "preparing image and mounts", elapsedMs: expect.any(Number) }] });
   await config.createHouse("home");
   const reload = callControl<StatusReport>(paths.socket, "/reload");
   finishBuild();
   expect((await reload)!.subjects.map((s) => s.subject.name)).toEqual(["work", "home"]);
-  await (await starting).stop();
+  const daemon = await starting;
+  expect((await status(paths.socket))!.operations).toBeUndefined();
+  await daemon.stop();
+});
+
+test("status exposes the pending startup phase when the runtime inventory is stuck and coalesces probes", async () => {
+  const { paths, config, runtime, deps } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { key: "claude" });
+  const list = runtime.listContainers.bind(runtime);
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  let reads = 0;
+  let blocked = false;
+  runtime.listContainers = async label => {
+    blocked ||= deps.pets.progress.pending.some(operation => operation.phase === "reading VM inventory");
+    if (blocked) { reads++; await gate; }
+    return list(label);
+  };
+  const starting = startDaemon(deps);
+  try {
+    await waitFor(() => reads === 1);
+    const reports = await Promise.all([status(paths.socket), status(paths.socket)]);
+    for (const report of reports) expect(report).toMatchObject({
+      state: "starting", petStatusUnavailable: true,
+      operations: [{ phase: "reading VM inventory", elapsedMs: expect.any(Number) }],
+      pets: [{ house: "work", pet: "sibling", state: "unknown" }],
+    });
+    expect(reads).toBe(2); // One lifecycle read and one shared status read.
+  } finally { finish(); await (await starting).stop(); }
+});
+
+test("a status probe completing after its response deadline is cached and labelled on later slow reads", async () => {
+  const { paths, config, runtime, deps } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { key: "claude" });
+  const daemon = await startDaemon(deps);
+  const list = runtime.listContainers.bind(runtime);
+  const readers: (() => void)[] = [];
+  let completed = 0;
+  runtime.listContainers = async label => {
+    await new Promise<void>(resolve => { readers.push(resolve); });
+    const result = await list(label);
+    completed++;
+    return result;
+  };
+  try {
+    expect((await status(paths.socket))!.petStatusUnavailable).toBe(true);
+    runtime.containers.get("household.work.sibling")!.state = "paused";
+    readers.shift()!();
+    await waitFor(() => completed === 1);
+    const report = (await status(paths.socket))!;
+    expect(report.petStatusUnavailable).toBeUndefined();
+    expect(report.petStatusAgeMs).toEqual(expect.any(Number));
+    expect(report.pets[0]!.state).toBe("paused");
+  } finally {
+    for (const finish of readers) finish();
+    await daemon.stop();
+  }
 });
 
 test("stop waits for an in-flight reload before it stops the gateway", async () => {

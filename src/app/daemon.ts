@@ -172,6 +172,12 @@ export interface StatusReport {
   state: "starting" | "running";
   subjects: SubjectSpec[];
   pets: PetStatus[];
+  /** The lifecycle steps being awaited, even while the daemon has not finished starting. */
+  operations?: import("./lifecycle-progress").LifecycleOperation[];
+  /** The runtime status probe did not complete; `unknown` states are diagnostic fallbacks. */
+  petStatusUnavailable?: true;
+  /** Present when these are the last successful statuses rather than a fresh runtime response. */
+  petStatusAgeMs?: number;
   /** None until the start gets to it. */
   web?: WebStatus;
 }
@@ -421,7 +427,37 @@ export async function startDaemon(deps: DaemonDeps) {
     exec: (house, pet) => pets.exec(house, pet), cacheFile: join(paths.stateDir, "model-catalog.json"),
     log: (text) => events.error(text),
   });
-  const report = async (): Promise<StatusReport> => ({ state, subjects, pets: await pets.status(placed), web: webStatus() });
+  let statusProbe: { placed: PlacedPet[]; result: Promise<PetStatus[] | undefined> } | undefined;
+  let statusCache: { placed: PlacedPet[]; statuses: PetStatus[]; at: number } | undefined;
+  const report = async (): Promise<StatusReport> => {
+    // Coalesce read-only probes, including ones still running after the response deadline. Never queue more
+    // inventory calls just because the owner keeps checking a stuck runtime.
+    if (!statusProbe) {
+      const snapshot = placed;
+      const probe = { placed: snapshot, result: pets.status(snapshot).then(statuses => {
+        statusCache = { placed: snapshot, statuses, at: Date.now() };
+        return statuses;
+      }, () => undefined) };
+      statusProbe = probe;
+      void probe.result.finally(() => { if (statusProbe === probe) statusProbe = undefined; });
+    }
+    const probe = statusProbe;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const statuses = await Promise.race([
+      probe.result,
+      new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), 1000); }),
+    ]).finally(() => clearTimeout(timer));
+    const fresh = statuses !== undefined && probe.placed === placed;
+    const cached = !fresh && statusCache?.placed === placed ? statusCache : undefined;
+    const shown = fresh ? statuses : cached?.statuses;
+    const operations = pets.progress.pending;
+    return {
+      state, subjects,
+      pets: shown ?? placed.map(({ house, pet, agent }) => ({ house, pet, agent: agent.name, container: petContainer(house, pet), state: "unknown" })),
+      web: webStatus(), ...(operations.length ? { operations } : {}), ...(!shown ? { petStatusUnavailable: true as const } : {}),
+      ...(cached ? { petStatusAgeMs: Math.max(0, Date.now() - cached.at) } : {}),
+    };
+  };
 
   // Docker work runs one job at a time: overlapping CLI commands would otherwise race, e.g. both creating
   // the same network. A failed job leaves the previous state in place.
@@ -544,6 +580,17 @@ export async function startDaemon(deps: DaemonDeps) {
     log: (caller, text) => events.info(`bot ${caller.house}/${caller.pet}: preview ${text}`),
   });
   pets.onBeforeStop((house, pet) => previews.closePet({ house, pet }));
+  pets.progress.onSlow = operation => {
+    const target = operation.house && operation.pet ? `bot ${operation.house}/${operation.pet}` : "Household";
+    const text = `${target}: still waiting for ${operation.phase} after ${Math.floor(operation.elapsedMs / 1000)}s${state === "starting" ? "; startup is incomplete and scheduled tasks are waiting" : ""}`;
+    events.error(text);
+    const targets = operation.house && operation.pet ? [{ house: operation.house, pet: operation.pet }]
+      : (appliedHousehold?.houses ?? []).flatMap(house => {
+        const pet = house.pets.find(pet => pet.enabled !== false && !pet.scout && !pet.sideworker);
+        return pet ? [{ house: house.name, pet: pet.name }] : [];
+      });
+    for (const { house, pet } of targets) void chat.notice(house, pet, text).catch(() => {});
+  };
   // A reload that restarts a bot says why: what in its launch changed (names only), or a new image or mounts.
   pets.onRelaunch((house, pet, why) => events.info(`bot ${house}/${pet}: restarting to apply ${why.kind === "recreate" ? "a new image or mounts" : why.changed?.length ? `changed ${why.changed.join(", ")}` : "a changed launch configuration"}`));
   const lifecycleTitle = (house: string, pet: string) => petDisplay(appliedHousehold?.houses.find(item => item.name === house)?.pets.find(item => item.name === pet) ?? { name: pet });
@@ -563,9 +610,9 @@ export async function startDaemon(deps: DaemonDeps) {
       if (start.warning) events.error(`${name}: ${start.warning}`);
       else if (!start.ready) events.error(`${name} ${notReady(start)}`);
       const title = lifecycleTitle(start.house, start.pet);
-      await chat.notice(start.house, start.pet, start.ready ? degraded ? `${title}: ${degraded}` : `${title} started.` : start.exited
+      await pets.progress.run("sending started notice", () => chat.notice(start.house, start.pet, start.ready ? degraded ? `${title}: ${degraded}` : `${title} started.` : start.exited
         ? `${title}: the VM is up, but the agent stopped while starting${compact(start.output ?? "") ? ` (${compact(start.output!)})` : ""}. \`house bot restart ${start.house} ${start.pet}\``
-        : `${title}: the VM is up, but the agent is not responding. \`house bot attach ${start.house} ${start.pet}\``);
+        : `${title}: the VM is up, but the agent is not responding. \`house bot attach ${start.house} ${start.pet}\``), start);
       const parent = sideworkers.worker(start.house, start.pet)?.parent;
       if (start.ready && setupResult?.status === "failed" && setupResult.attempted !== false) {
         delivery.send(start.house, start.pet, { origin: parent ? "internal" : "cli", text: parent ? `Household: Your inherited setup script failed. Inspect ~/environment/setup.log as diagnostic data. Ask parent ${parent} through house_send to repair the shared script, then call environment_setup to retry. Do not retry unchanged failures indefinitely.` : ENVIRONMENT_SETUP_RECOVERY_PROMPT });
@@ -617,7 +664,7 @@ export async function startDaemon(deps: DaemonDeps) {
       events.info(`reconciled: ${subjects.map((s) => s.subject.name).join(", ") || "no workspaces"}`);
       placed = wanted;
       // Back to back: a channel's first message must find its pet's mailbox, and the mailboxes' notices the channel.
-      await chat.setHouses(houses);
+      await pets.progress.run("opening chat channels", () => chat.setHouses(houses));
       scouts.opened(); // a starting scout's thread exists now: its card goes up before its VM boots
       delivery.setPets(wanted);
       const warnings = houses.flatMap((house) =>
@@ -629,7 +676,7 @@ export async function startDaemon(deps: DaemonDeps) {
       const { started, removed } = await pets.reconcile(wanted, announceStopped);
       for (const pet of started) delivery.restarted(pet.house, pet.pet); // before anything reaches the new session
       for (const name of removed) events.info(`removed ${name}: no longer in the config (its home volume stays)`);
-      await delivery.adopt(wanted.filter((pet) => pet.enabled !== false && !started.includes(pet)));
+      await pets.progress.run("checking existing agent dialogs", () => delivery.adopt(wanted.filter((pet) => pet.enabled !== false && !started.includes(pet))));
       const recovering = wanted.filter((pet) => pet.enabled !== false && !started.includes(pet) && delivery.isSuspended(pet.house, pet.pet));
       const ready = [...await announceStarted(started), ...await pets.awaitReady(recovering)];
       for (const pet of wanted) {
