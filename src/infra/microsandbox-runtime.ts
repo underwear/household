@@ -8,6 +8,7 @@ import type { ContainerInfo, ContainerSpec, ImageBuilder, PetRuntime } from "./r
 import { ENVIRONMENT_SETUP_HOST_TIMEOUT_MS, environmentScript, type EnvironmentSetupResult } from "./environment-setup";
 import { GUEST_SERVICES_INSTALL, GUEST_SERVICES_READY, GUEST_SERVICES_SCRIPT } from "./guest-services";
 import { msbCommand } from "./release";
+import { collectCommand } from "./process";
 
 export const MICROSANDBOX_VERSION = "0.7.13";
 export const ACTIVE_RESOURCES_LABEL = "household.active-resources";
@@ -32,14 +33,9 @@ const run: MicrosandboxRun = async (command, options) => {
     const child = Bun.spawn(command, {
       stdin: options.inherit ? "inherit" : options.stdin === undefined ? "ignore" : new Blob([options.stdin]),
       stdout: options.inherit ? "inherit" : "pipe", stderr: options.inherit ? "inherit" : "pipe",
-      ...(options.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
       signal: options.signal, killSignal: "SIGKILL",
     });
-    const [stdout, stderr, code] = await Promise.all([
-      options.inherit ? "" : new Response(child.stdout).text(),
-      options.inherit ? "" : new Response(child.stderr).text(), child.exited,
-    ]);
-    return { ok: code === 0, stdout, stderr, code };
+    return await collectCommand(child, options);
   } catch { return { ok: false, stdout: "", stderr: "" }; }
 };
 
