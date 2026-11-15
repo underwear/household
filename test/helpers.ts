@@ -4,6 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Clock } from "../src/core/clock";
 
+// Tests must not see the environment of the machine running them: inside a Household bot's VM, its proxy
+// would capture the tests' local HTTPS servers and its HOUSEHOLD_* launch settings would reach the bridges
+// under test. Opt-in QA settings stay.
+for (const name of Object.keys(process.env)) {
+  const proxy = /^(https?|all|no)_proxy$/i.test(name);
+  const household = name.startsWith("HOUSEHOLD_") && !name.startsWith("HOUSEHOLD_QA_") && !["HOUSEHOLD_PRIVATE_BACKUP", "HOUSEHOLD_NATIVE_ADAPTER_SMOKE"].includes(name);
+  if (proxy || household) delete process.env[name];
+}
+
 // Preloaded (bunfig.toml), so this afterAll is global and runs once after all test files.
 const root = mkdtempSync(join(tmpdir(), "household-test-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));

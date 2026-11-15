@@ -455,13 +455,13 @@ test("unknown human content is unsupported and logs field names without content;
   api.push({ message: fromOwner({ rich_message: { blocks: [{ type: "future_block", text: "do not lose me" }] } }, 2) });
   api.push({ message: fromOwner({ rich_message: { blocks: [] } }, 3) });
   api.push({ message: fromOwner({}, 4) });
-  for (const [i, fields] of [{ pinned_message: {} }, { forum_topic_created: { name: "Topic" } }, { new_chat_members: [OLEG] }, { message_auto_delete_timer_changed: { message_auto_delete_time: 60 } }].entries()) {
+  for (const [i, fields] of [{ pinned_message: {} }, { forum_topic_created: { name: "Topic" } }, { new_chat_members: [OLEG] }, { message_auto_delete_timer_changed: { message_auto_delete_time: 60 } }, { connected_website: "example.com" }, { passport_data: { data: [] } }].entries()) {
     api.push({ message: fromOwner(fields, i + 5) });
   }
-  api.push({ message: fromOwner({ rich_message: { blocks: [{ type: "photo", photo: [] }] }, document: { file_id: "doc" } }, 9) });
+  api.push({ message: fromOwner({ rich_message: { blocks: [{ type: "photo", photo: [] }] }, document: { file_id: "doc" } }, 11) });
   listen(open());
   await waitFor(() => received.length === 5);
-  await waitFor(() => lines.filter(line => line.includes("skipped (a service message)")).length === 4);
+  await waitFor(() => lines.filter(line => line.includes("skipped (a service message)")).length === 6);
   expect(received.map(message => message.kind)).toEqual(Array(5).fill("unsupported"));
   expect(received[0]).toMatchObject({ what: "unknown content" });
   expect(received[1]).toMatchObject({ what: "rich_message" });

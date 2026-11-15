@@ -99,7 +99,7 @@ const SERVICE = [
   "group_chat_created", "supergroup_chat_created", "channel_chat_created", "message_auto_delete_timer_changed",
   "migrate_to_chat_id", "migrate_from_chat_id", "pinned_message", "chat_owner_left", "chat_owner_changed",
   "successful_payment", "refunded_payment", "users_shared", "chat_shared", "gift", "unique_gift", "gift_upgrade_sent",
-  "write_access_allowed", "proximity_alert_triggered", "boost_added", "chat_background_set",
+  "write_access_allowed", "connected_website", "passport_data", "proximity_alert_triggered", "boost_added", "chat_background_set",
   "checklist_tasks_done", "checklist_tasks_added", "community_chat_added", "community_chat_joined", "community_chat_removed",
   "direct_message_price_changed", "forum_topic_created", "forum_topic_edited", "forum_topic_closed", "forum_topic_reopened",
   "general_forum_topic_hidden", "general_forum_topic_unhidden", "giveaway_created", "giveaway_completed", "managed_bot_created",

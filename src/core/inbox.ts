@@ -50,7 +50,9 @@ export class PetInbox {
       if (this.dialog) return false;
       this.dialog = true;
       // A child may ask after the main turn has already ended; it does not make the main session busy.
-      if (!event.agent) this.current = "busy";
+      // Neither does a dialog only seen on screen: no hook names its turn, so no Stop is sure to end it,
+      // and the idle probe before scheduled and inbox prompts already guards a session that is still working.
+      if (!event.agent && event.dialog !== "unknown") this.current = "busy";
       return true;
     }
     this.current = next(this.current, event);

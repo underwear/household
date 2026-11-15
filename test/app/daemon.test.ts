@@ -294,6 +294,35 @@ test("a status probe completing after its response deadline is cached and labell
   }
 });
 
+test("an unavailable status probe does not claim a disabled bot has stopped while shutdown is pending", async () => {
+  const { paths, config, runtime, deps } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { key: "claude" });
+  const daemon = await startDaemon(deps);
+  const stop = runtime.stopContainer.bind(runtime);
+  const list = runtime.listContainers.bind(runtime);
+  let stopping = false;
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  runtime.stopContainer = async name => { stopping = true; await gate; await stop(name); };
+  runtime.listContainers = async label => { if (stopping) await gate; return list(label); };
+  let reload: Promise<unknown> | undefined;
+  try {
+    await config.updatePet("work", "sibling", { enabled: false });
+    reload = callControl(paths.socket, "/reload");
+    await waitFor(() => stopping);
+    const report = (await status(paths.socket))!;
+    expect(runtime.containers.get("household.work.sibling")!.state).toBe("running");
+    expect(report.petStatusUnavailable).toBe(true);
+    expect(report.pets[0]!.state).toBe("unknown");
+  } finally {
+    stopping = false;
+    finish();
+    await reload;
+    await daemon.stop();
+  }
+});
+
 test("stop waits for an in-flight reload before it stops the gateway", async () => {
   const { paths, config, runtime, deps } = setup();
   const daemon = await startDaemon(deps);

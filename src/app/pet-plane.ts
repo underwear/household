@@ -441,7 +441,9 @@ export class PetPlane {
     }
     return pets.map(({ house, pet, agent, enabled }) => {
       const container = petContainer(house, pet);
-      return { house, pet, agent: agent.name, container, state: enabled === false && !ALIVE.has(states.get(container) ?? "") ? "disabled" : states.get(container) ?? "missing" };
+      const state = states.get(container) ?? "missing";
+      // Requested disablement does not prove that a VM has stopped, particularly during a failed status probe.
+      return { house, pet, agent: agent.name, container, state: enabled === false && ["stopped", "exited", "missing"].includes(state) ? "disabled" : state };
     });
   }
 
