@@ -284,6 +284,7 @@ test("status survives a VM disappearing during inventory without hiding other pe
     return container(name);
   };
   expect((await plane.status(pets)).map(({ state }) => state)).toEqual(["unknown", "running"]);
+  expect((await plane.status(pets.map(pet => ({ ...pet, enabled: false })))).map(({ state }) => state)).toEqual(["unknown", "running"]);
   runtime.container = async (name) => name.endsWith(".sibling") ? undefined : container(name);
   expect((await plane.status(pets)).map(({ state }) => state)).toEqual(["missing", "running"]);
   const before = runtime.calls.length;

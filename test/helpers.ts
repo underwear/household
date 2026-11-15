@@ -9,7 +9,7 @@ import type { Clock } from "../src/core/clock";
 // under test. Opt-in QA settings stay.
 for (const name of Object.keys(process.env)) {
   const proxy = /^(https?|all|no)_proxy$/i.test(name);
-  const household = name.startsWith("HOUSEHOLD_") && !name.startsWith("HOUSEHOLD_QA_") && name !== "HOUSEHOLD_PRIVATE_BACKUP";
+  const household = name.startsWith("HOUSEHOLD_") && !name.startsWith("HOUSEHOLD_QA_") && !["HOUSEHOLD_PRIVATE_BACKUP", "HOUSEHOLD_NATIVE_ADAPTER_SMOKE"].includes(name);
   if (proxy || household) delete process.env[name];
 }
 
