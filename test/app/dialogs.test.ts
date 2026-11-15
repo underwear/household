@@ -123,8 +123,8 @@ test("a dialog answered in the agent's session ends without an answer; when Hous
   aborted.abort();
   expect(await terminal).toBeUndefined();
   expect(timer.cancelled).toBe(true);
-  expect(calls.at(-1)).toBe("resolve card-1: Answered in the terminal");
-  expect(lines).toContain("bot work/sibling: dialog answered in the terminal");
+  expect(calls.at(-1)).toBe("resolve card-1: Request closed");
+  expect(lines).toContain("bot work/sibling: dialog request no longer pending");
   expect(await ask(color, AbortSignal.abort())).toBeUndefined(); // gone before any card
   expect(calls).toHaveLength(2);
 

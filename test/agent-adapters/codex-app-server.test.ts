@@ -385,5 +385,5 @@ test("a failed Codex bridge answers status with its reason instead of nothing", 
   const status = { ready: false, failure: "Codex startup failed while signing in: Codex request timed out" };
   const exec = async () => ({ ok: true, output: JSON.stringify(status) });
   expect(await codexAppServer.isReady(exec)).toEqual({ ready: false, output: status.failure });
-  expect(await codexAppServer.dialogVisible(exec)).toBe(true);
+  expect(await codexAppServer.dialogVisible(exec)).toBeUndefined();
 });

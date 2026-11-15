@@ -800,7 +800,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       // One only the terminal can answer (seen on screen after a restart, or asked without the hook): the person is told.
       const { found } = this.channels.spotsOf(house, pet);
       if (update.dialog === "unknown" && found && this.budget("terminal notices", house, pet).take()) {
-        void this.notice(house, pet, `${petTitle(found)} is waiting for an answer in the terminal: \`house pet attach\``);
+        void this.notice(house, pet, `${petTitle(found)} is waiting for an answer in the terminal. Send /stop here to cancel the request, or open \`house bot attach ${house} ${pet}\`. Messages are kept in the queue until this request is resolved.`);
       }
       return update.dialog ? this.live.dialogOpened(house, pet, update.dialog, update.input) : this.live.dialogClosed(house, pet);
     }

@@ -143,7 +143,6 @@ test("hook payloads from a real session become agent-neutral events", async () =
   const turn = TURN;
   expect(await events("SessionStart-0")).toEqual([closed, { kind: "session-started", model: "claude-sonnet-5-5" }]);
   expect(await events("UserPromptSubmit-0")).toEqual([
-    closed,
     { kind: "prompt-accepted", text: expect.stringMatching(/^Run the shell command 'echo hello > note.txt'/), turn },
   ]);
   const bash = "toolu_01RiV8ez3ZXz94MeoegpspuF";
@@ -167,7 +166,7 @@ test("hook payloads from a real session become agent-neutral events", async () =
     { kind: "dialog-opened", dialog: "unknown", summary: "Claude needs your permission" },
     { kind: "notification", text: "Claude needs your permission" },
   ]);
-  expect(await events("Stop-0")).toEqual([closed, { kind: "turn-finished", text: expect.stringContaining("You picked green"), turn }]);
+  expect(await events("Stop-0")).toEqual([{ kind: "dialog-closed", turn }, { kind: "turn-finished", text: expect.stringContaining("You picked green"), turn }]);
   expect(claudeCodeTmux.translate({ hook_event_name: "PreCompact" })).toEqual([]);
   expect(claudeCodeTmux.translate("not an object")).toEqual([]);
   expect(claudeCodeTmux.translate({ hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: { command: "rm -rf /" } })).toEqual([
@@ -215,7 +214,7 @@ test("control characters never reach the agent as keys", async () => {
 test("send refuses, typing nothing, while a dialog is on screen, the box is not empty or the screen is unreadable", async () => {
   for (const name of ["ask", "plan", "perm"]) {
     const dialog = fakeExec([screen(name)]);
-    expect(await claudeCodeTmux.send(dialog.exec, "x", yes)).toEqual({ status: "refused", reason: "a dialog is on screen" });
+    expect(await claudeCodeTmux.send(dialog.exec, "x", yes)).toEqual({ status: "refused", reason: "a dialog is on screen", blockedBy: "dialog" });
     expect(dialog.calls).toEqual(["tmux display-message -p -t =main:0.0 #{pane_in_mode}", "tmux capture-pane -p -e -t =main:0.0"]);
   }
   const typing = fakeExec([READY.replace("❯\n", "❯ someone types\n")]);
@@ -244,7 +243,7 @@ test("the input box is the dialog marker on real screens; past prompts and menu 
   expect(inputBox(lastOption)).toBeUndefined(); // the selected option sits right under a rule
   expect(await claudeCodeTmux.dialogVisible(fakeExec([screen("ask")]).exec)).toBe(true);
   expect(await claudeCodeTmux.dialogVisible(fakeExec([screen("idle")]).exec)).toBe(false);
-  expect(await claudeCodeTmux.dialogVisible(fakeExec([READY], "capture-pane").exec)).toBe(true); // cannot tell
+  expect(await claudeCodeTmux.dialogVisible(fakeExec([READY], "capture-pane").exec)).toBeUndefined();
 });
 
 test("failed tools and Household's own tools become agent-neutral events; the agent's text is no event", async () => {
@@ -268,11 +267,11 @@ test("failed tools and Household's own tools become agent-neutral events; the ag
   expect(claudeCodeTmux.translate(other)[0]).not.toHaveProperty("internal");
   // A turn ending in an API error: StopFailure, the turn's id; a session going on (compacted, cleared, resumed) loses nothing.
   expect(claudeCodeTmux.translate({ hook_event_name: "StopFailure", prompt_id: turn, error: "overloaded_error", last_assistant_message: "" })).toEqual([
-    { kind: "dialog-closed" },
+    { kind: "dialog-closed", turn },
     { kind: "turn-failed", error: "overloaded_error", turn },
   ]);
   for (const source of ["compact", "clear", "resume"]) {
-    expect(claudeCodeTmux.translate({ ...(await fixture("SessionStart-0")), source })).toEqual([{ kind: "dialog-closed" }, { kind: "session-started", model: "claude-sonnet-5-5", continues: true }]);
+    expect(claudeCodeTmux.translate({ ...(await fixture("SessionStart-0")), source })).toEqual([{ kind: "session-started", model: "claude-sonnet-5-5", continues: true }]);
   }
   // Cut short on code points: an emoji is never halved; a lone surrogate is mended.
   const long = { ...(await fixture("PreToolUse-0")), tool_input: { command: `${"x".repeat(118)}🐾🐾🐾 \uD800` } };

@@ -21,7 +21,7 @@ test.skipIf(process.env.E2E_CLAUDE_TMUX !== "1")("native Claude 2.1.323 + tmux: 
   const run = (args: string[], stdin?: string) => docker(["exec", ...(stdin === undefined ? [] : ["-i"]), name, ...args], stdin);
   const screen = () => run(["tmux", "capture-pane", "-p", "-e", "-t", "=main:0.0"]);
   const hooks = async () => (await run(["cat", "/tmp/qa/hooks.jsonl"])).trim().split(/\n/).filter(Boolean).map(line => JSON.parse(line));
-  async function until(check: () => Promise<boolean>, label: string, ms = 15_000) {
+  async function until(check: () => Promise<boolean | undefined>, label: string, ms = 15_000) {
     const end = Date.now() + ms;
     while (Date.now() < end) { if (await check()) return; await Bun.sleep(100); }
     throw new Error(`Timed out: ${label}\n${await screen().catch(() => "no pane")}`);

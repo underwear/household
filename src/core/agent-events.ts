@@ -44,7 +44,7 @@ export type AgentEvent =
   /** A native automatic review decision, correlated only by its exact target call id when available. */
   | { kind: "tool-review"; review: string; call?: string; turn?: string; agent?: string; status: "inProgress" | "approved" | "denied" | "timedOut" | "aborted"; scope?: string }
   | ({ kind: "dialog-opened"; dialog: DialogKind; summary: string } & DialogIdentity)
-  /** No identity: all dialogs ended (session/turn boundary or an empty terminal). */
+  /** No identity: all dialogs ended (a new session or an empty terminal). A turn may end while a subagent still asks. */
   | ({ kind: "dialog-closed" } & DialogIdentity)
   | { kind: "notification"; text: string; audience?: "chat" }
   /** `text`: the turn's last message. */

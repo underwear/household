@@ -49,7 +49,7 @@ test("a subagent dialog still blocks delivery until it closes", () => {
   inbox.observe({ kind: "tool-finished", tool: "Bash", agent: "other-background" });
   expect(inbox.activity).toBe("dialog");
   inbox.observe({ ...closed, agent: "background" });
-  expect(inbox.activity).toBe("busy");
+  expect(inbox.activity).toBe("idle");
   expect(texts(inbox)).toEqual(["waiting"]);
 });
 
@@ -65,7 +65,26 @@ test("only dialog-closed closes a dialog: background work goes on while it waits
     expect(inbox.activity).toBe("dialog");
   }
   expect(inbox.observe(closed)).toBe(true);
-  expect(inbox.activity).toBe("busy");
+  expect(inbox.activity).toBe("idle"); // the main turn ended while the dialog still covered its input
+});
+
+test("closing a subagent dialog restores the finished main turn, whether the child asks before or after Stop", () => {
+  for (const origin of ["cron", "inbox"] as const) {
+   for (const asksFirst of [true, false]) {
+    const inbox = new PetInbox();
+    inbox.observe({ kind: "prompt-accepted", text: "research" });
+    if (asksFirst) inbox.observe({ ...dialog, agent: "lg" });
+    inbox.push({ ...message(1, "scheduled work"), origin });
+    inbox.observe({ kind: "turn-finished", text: "Waiting for LG" });
+    if (!asksFirst) inbox.observe({ ...dialog, agent: "lg" });
+    inbox.observe({ kind: "tool-finished", tool: "Bash", agent: "lg" });
+    expect(inbox.activity).toBe("dialog");
+    expect(texts(inbox)).toEqual([]);
+    inbox.observe(closed);
+    expect(inbox.activity).toBe("idle");
+    expect(texts(inbox)).toEqual(["scheduled work"]);
+   }
+  }
 });
 
 test("a close with no dialog open and a second open are not worth recording", () => {

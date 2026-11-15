@@ -598,7 +598,7 @@ test("permissions are not counted with dialogs: an agent that asks often still g
   // A dialog seen only on screen (after a restart, or asked without the hook): the person is told where to answer.
   chat.onDelivery({ kind: "dialog", house: "work", pet: "sibling", dialog: "unknown" });
   await waitFor(() => channel.calls.some((call) => call.includes("is waiting for an answer in the terminal")));
-  expect(channel.calls.at(-1)).toBe("notice 🤖 Sibling: Sibling is waiting for an answer in the terminal: `house pet attach`");
+  expect(channel.calls.at(-1)).toBe("notice 🤖 Sibling: Sibling is waiting for an answer in the terminal. Send /stop here to cancel the request, or open `house bot attach work sibling`. Messages are kept in the queue until this request is resolved.");
   await chat.stop();
 });
 

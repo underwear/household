@@ -56,6 +56,8 @@ export class Mailbox {
   /** Dialogs put to the person, each with its own identity and cancellation. */
   readonly asking: { controller: AbortController; dialog?: OpenDialog }[] = [];
   readonly dialogState = new DialogState();
+  /** The sole main dialog actually seen on screen; absence before first paint proves nothing. */
+  screenDialog?: OpenDialog;
   private readonly events: TokenBucket;
   private dropped = 0;
   private report?: ReturnType<typeof setTimeout>;

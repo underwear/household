@@ -73,7 +73,7 @@ export class Dialogs {
       }
       void this.finish(pending, { kind: "timeout", answers: [...pending.answers] }, "not answered in time", "Time to answer ran out");
     });
-    const abort = () => void this.finish(pending, undefined, "answered in the terminal", "Answered in the terminal");
+    const abort = () => void this.finish(pending, undefined, "request no longer pending", "Request closed");
     pending.settle = (answer) => {
       cancel();
       signal?.removeEventListener("abort", abort);

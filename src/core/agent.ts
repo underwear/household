@@ -133,8 +133,8 @@ export interface AgentAdapter {
   interrupt?(exec: Exec): Promise<{ status: "stopped" | "idle" | "failed"; leftover?: string }>;
   /** Resume pointer filename in home; detached while the VM is stopped on explicit restart. */
   readonly sessionFile?: string;
-  /** Whether something other than the agent's input (a dialog) is on screen; true when it cannot tell. */
-  dialogVisible(exec: Exec): Promise<boolean>;
+  /** Whether a dialog is on screen; undefined when it cannot tell. Unknown is blocked, never proof of a dialog's appearance. */
+  dialogVisible(exec: Exec): Promise<boolean | undefined>;
   /** Interactive command (with a TTY) that puts a person into the agent's session, if it has one. */
   readonly attach?: string[];
   /** Fixed read-only screen capture command; no caller-supplied arguments or terminal input. */
@@ -171,7 +171,7 @@ export function placedKeyUse(use: KeyUse, agent: Pick<AgentAdapter, "settings">,
 export type SendResult =
   | { status: "sent" }
   /** Nothing was typed: the caller may try again later. */
-  | { status: "refused"; reason: string }
+  | { status: "refused"; reason: string; blockedBy?: "dialog" }
   /** The text may sit in the agent's input, not submitted: trying again could type it twice. */
   | { status: "stuck"; reason: string };
 

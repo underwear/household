@@ -162,7 +162,7 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promis
   const before = await screen(exec);
   if (before === undefined) return { status: "refused", reason: "cannot read the session" };
   const box = inputBox(before);
-  if (box === undefined) return { status: "refused", reason: "a dialog is on screen" };
+  if (box === undefined) return { status: "refused", reason: "a dialog is on screen", blockedBy: "dialog" };
   if (box !== "") return { status: "refused", reason: "the input box is not empty" };
   if (!canSubmit()) return { status: "refused", reason: "a dialog opened" };
   if (!(await exec(["tmux", "load-buffer", "-b", "household", "-"], typeable(text))).ok) {
@@ -313,7 +313,7 @@ export const claudeCodeTmux: AgentAdapter = {
   interrupt,
   async dialogVisible(exec) {
     const shown = await screen(exec);
-    return shown === undefined || inputBox(shown) === undefined;
+    return shown === undefined ? undefined : inputBox(shown) === undefined;
   },
   attach: ["tmux", "attach-session", "-t", "main"],
   terminalSnapshot: ["tmux", "capture-pane", "-p", "-t", "=main:0.0", "-S", "-200"],

@@ -36,6 +36,9 @@ export class DialogState {
     const matches = this.open.filter(dialog => {
       if (!targeted) return true;
       if (!sameScope(dialog, event)) return false;
+      // A turn ending dismisses only its own known dialogs, never a different subagent or an
+      // unscoped permission observed on screen while the main turn processed a task notification.
+      if (!event.call && !event.input) return event.turn !== undefined && dialog.turn === event.turn;
       if (dialog.call && event.call) return dialog.call === event.call;
       if (!dialog.input || dialog.input !== event.input) return false;
       // Identical parallel calls cannot be distinguished by their input. Keep waiting for the screen.

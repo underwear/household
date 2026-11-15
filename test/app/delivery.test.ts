@@ -43,7 +43,7 @@ function setup(
     memory?: () => {revision: number | string; text: string};
     sanitizeEvent?: (house: string, pet: string, event: AgentEvent) => AgentEvent;
     sends?: (SendResult | Promise<SendResult>)[];
-    visible?: () => Promise<boolean>;
+    visible?: () => Promise<boolean | undefined>;
     idle?: () => Promise<boolean>;
     eventsPerSecond?: number;
     store?: SqliteStore;
@@ -1512,6 +1512,148 @@ test("Claude parallel Bash completion cannot close a pending Read permission; ex
   } finally { delivery.stop(); }
 });
 
+test("a subagent permission hook stays answerable while the main terminal still shows an input box", async () => {
+  let signal: AbortSignal | undefined;
+  const answer = Promise.withResolvers<DialogAnswer>();
+  const s = setup({ nativeClaude: true, visible: async () => false, answer: received => { signal = received; return answer.promise; } });
+  const state = () => s.send("room dimensions", "room"); // replaying a known ref only reads its delivery state
+  const call = { prompt_id: "research", agent_id: "lg", tool_name: "Bash", tool_input: { command: "curl https://example.com" }, tool_use_id: "download" };
+  try {
+    await s.delivery.onPayload("work", "sibling", { ...call, hook_event_name: "PreToolUse" });
+    const waiting = s.delivery.onPayload("work", "sibling", { ...call, hook_event_name: "PermissionRequest", tool_use_id: undefined });
+    state();
+    await Bun.sleep(35); // screen probes used to dismiss the synchronous hook before its prompt was drawn
+    expect(signal!.aborted).toBe(false);
+    expect(state()).toEqual({ activity: "dialog", queued: 1 });
+    expect(s.sent).toHaveLength(0);
+    for (const payload of [
+      { hook_event_name: "UserPromptSubmit", prompt_id: "notification", prompt: "<task-notification>Another agent completed</task-notification>" },
+      { hook_event_name: "Stop", prompt_id: "notification", last_assistant_message: "Waiting for LG" },
+      { hook_event_name: "Stop", prompt_id: "research", last_assistant_message: "Main turn ended; LG still asks" },
+      { hook_event_name: "SessionStart", source: "compact" },
+      { hook_event_name: "StopFailure", prompt_id: "notification", error: "overloaded_error" },
+    ]) await s.delivery.onPayload("work", "sibling", payload);
+    expect(signal!.aborted).toBe(false);
+    expect(state().activity).toBe("dialog");
+    answer.resolve({ kind: "deny" });
+    expect(await waiting).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
+    await waitFor(() => s.sent.length === 1);
+    expect(s.sent[0]!.text).toContain("room dimensions");
+  } finally { s.delivery.stop(); }
+});
+
+test("ending the exact main turn cancels its pending question even when its HTTP hook still waits", async () => {
+  let signal: AbortSignal | undefined;
+  const s = setup({ nativeClaude: true, visible: async () => false, answer: received => {
+    signal = received;
+    return new Promise(resolve => received!.addEventListener("abort", () => resolve(undefined), { once: true }));
+  } });
+  const call = { hook_event_name: "PermissionRequest", prompt_id: "question-turn", tool_name: "AskUserQuestion", tool_input: { questions: [{ question: "Depth?", options: [{ label: "60 cm" }], multiSelect: false }] } };
+  try {
+    const waiting = s.delivery.onPayload("work", "sibling", call);
+    s.send("room dimensions");
+    await s.delivery.onPayload("work", "sibling", { hook_event_name: "Stop", prompt_id: "different-turn" });
+    expect(signal!.aborted).toBe(false);
+    await s.delivery.onPayload("work", "sibling", { hook_event_name: "Stop", prompt_id: "question-turn" });
+    expect(await waiting).toEqual({});
+    expect(signal!.aborted).toBe(true);
+    await waitFor(() => s.sent.length === 1);
+  } finally { s.delivery.stop(); }
+});
+
+test("a main question seen on screen and then dismissed closes even if its HTTP hook is still alive", async () => {
+  let visible = false, probes = 0, signal: AbortSignal | undefined;
+  const s = setup({ nativeClaude: true, visible: async () => { probes++; return visible; }, answer: received => {
+    signal = received;
+    return new Promise(resolve => received!.addEventListener("abort", () => resolve(undefined), { once: true }));
+  } });
+  try {
+    const waiting = s.delivery.onPayload("work", "sibling", { hook_event_name: "PermissionRequest", prompt_id: "question-turn", tool_name: "AskUserQuestion", tool_input: { questions: [{ question: "Depth?", options: [{ label: "60 cm" }], multiSelect: false }] } });
+    s.send("room dimensions");
+    await waitFor(() => probes > 0);
+    expect(signal!.aborted).toBe(false); // the hook ran before the menu was painted
+    visible = true;
+    const before = probes;
+    await waitFor(() => probes > before);
+    visible = false; // Escape, no completion hook
+    expect(await waiting).toEqual({});
+    expect(signal!.aborted).toBe(true);
+    await waitFor(() => s.sent.length === 1);
+  } finally { s.delivery.stop(); }
+});
+
+test("a failed Claude screen read followed by an ordinary input is not a terminal answer", async () => {
+  const ready = await Bun.file(join(import.meta.dir, "../agent-adapters/screens/idle.txt")).text();
+  let readable = false, probes = 0, signal: AbortSignal | undefined;
+  const answer = Promise.withResolvers<DialogAnswer>();
+  const s = setup({ nativeClaude: true, visible: () => {
+    probes++;
+    return claudeCodeTmux.dialogVisible(async () => ({ ok: readable, output: readable ? ready : "" }));
+  }, answer: received => { signal = received; return answer.promise; } });
+  try {
+    const waiting = s.delivery.onPayload("work", "sibling", { hook_event_name: "PermissionRequest", prompt_id: "permission", tool_name: "Bash", tool_input: { command: "curl https://example.com" } });
+    s.send("room dimensions");
+    await waitFor(() => probes > 0);
+    const before = probes;
+    readable = true;
+    await waitFor(() => probes > before);
+    expect(signal!.aborted).toBe(false);
+    expect(s.sent).toHaveLength(0);
+    answer.resolve({ kind: "deny" });
+    expect(await waiting).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
+    await waitFor(() => s.sent.length === 1);
+  } finally { s.delivery.stop(); }
+});
+
+test("background task turns cannot clear a permission that only the terminal can answer", async () => {
+  let visible = true;
+  const s = setup({ nativeClaude: true, visible: async () => visible });
+  const state = () => s.send("room dimensions", "room");
+  try {
+    await s.delivery.onPayload("work", "sibling", { hook_event_name: "Notification", notification_type: "permission_prompt", message: "Claude needs your permission" });
+    state();
+    await s.delivery.onPayload("work", "sibling", { hook_event_name: "UserPromptSubmit", prompt_id: "notification", prompt: "<task-notification>Another agent completed</task-notification>" });
+    await s.delivery.onPayload("work", "sibling", { hook_event_name: "Stop", prompt_id: "notification", last_assistant_message: "Waiting" });
+    expect(state()).toEqual({ activity: "dialog", queued: 1 });
+    expect(s.sent).toHaveLength(0);
+    visible = false; // the person dismisses the native permission with Escape
+    await waitFor(() => s.sent.length === 1);
+    expect(state().queued).toBe(0);
+  } finally { s.delivery.stop(); }
+});
+
+test("a dialog discovered while sending updates status and notifies the owner until the screen is clear", async () => {
+  let visible = true;
+  const s = setup({ visible: async () => visible });
+  const state = () => s.send("room dimensions", "room");
+  s.pet.agent.send = async () => ({ status: "refused", reason: "native permission", blockedBy: "dialog" });
+  try {
+    state();
+    await waitFor(() => state().activity === "dialog");
+    expect(s.updates.filter(update => update.kind === "dialog" && update.dialog === "unknown")).toHaveLength(1);
+    expect(s.store.unfinished("work", "sibling")[0]!.status).toBe("received");
+    s.pet.agent.send = async (_, text) => { s.sent.push({ text, at: Date.now(), canSubmit: () => true }); return { status: "sent" }; };
+    visible = false;
+    await waitFor(() => s.sent.length === 1);
+  } finally { s.delivery.stop(); }
+});
+
+test("the owner's stop dismisses a terminal-only request and resumes its queued messages without another hook", async () => {
+  const s = setup({ visible: async () => true });
+  const send = s.pet.agent.send;
+  s.pet.agent.send = async () => ({ status: "refused", reason: "native permission", blockedBy: "dialog" });
+  try {
+    s.send("room dimensions");
+    await waitFor(() => s.updates.some(update => update.kind === "dialog" && update.dialog === "unknown"));
+    s.pet.agent.send = send;
+    expect(await s.delivery.interrupt("work", "sibling", async () => false)).toEqual({ status: "stopped" });
+    expect(s.interrupts).toEqual(["Escape"]);
+    await waitFor(() => s.sent.length === 1);
+    expect(s.sent[0]!.text).toContain("room dimensions");
+    expect(s.updates.some(update => update.kind === "dialog" && update.dialog === undefined)).toBe(true);
+  } finally { s.delivery.stop(); }
+});
+
 test("Claude identical parallel calls remain ambiguous until a matching id or terminal closure resolves them", async () => {
   const signals: AbortSignal[] = [];
   const { delivery, post } = setup({ nativeClaude: true, visible: async () => true, answer: signal => {
@@ -1527,7 +1669,7 @@ test("Claude identical parallel calls remain ambiguous until a matching id or te
     // A repeated completion of the other identical call must not claim the remaining call's dialog.
     await delivery.onPayload("work", "sibling", { ...payload, hook_event_name: "PostToolUse", tool_use_id: "first" });
     expect(signals[0]!.aborted).toBe(false);
-    await delivery.onPayload("work", "sibling", { hook_event_name: "Stop", prompt_id: "turn" });
+    await delivery.onPayload("work", "sibling", { hook_event_name: "SessionStart", source: "startup" });
     expect(await waiting).toEqual({});
   } finally { delivery.stop(); }
 });

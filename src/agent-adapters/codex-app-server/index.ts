@@ -86,6 +86,5 @@ export const codexAppServer: AgentAdapter = {
     const result = await control(exec, "interrupt");
     return { status: result?.status === "stopped" ? "stopped" : result?.status === "idle" ? "idle" : "failed" };
   },
-  // A bridge that is gone (or only left its failure behind) counts as blocked, as an unreachable one always has.
-  async dialogVisible(exec) { const state = await control(exec, "status"); return !state || state.failure !== undefined || state.dialog === true; },
+  async dialogVisible(exec) { const state = await control(exec, "status"); return !state || state.failure !== undefined ? undefined : state.dialog === true; },
 };

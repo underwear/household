@@ -153,7 +153,8 @@ export class Delivery {
       const box = this.boxes.get(key(house, pet));
       if (!box || box.inbox.activity === "dialog") continue;
       const seen = box.dialogs;
-      if (!(await box.agent.dialogVisible(this.execIn(house, pet))) || !this.current(house, pet, box, seen)) continue;
+      const visible = await box.agent.dialogVisible(this.execIn(house, pet));
+      if (visible === false || !this.current(house, pet, box, seen)) continue;
       this.record(house, pet, box, { kind: "dialog-opened", dialog: "unknown", summary: "already on screen" });
     }
   }
@@ -186,6 +187,7 @@ export class Delivery {
     if (!answer) return {}; // it stays with the person in the agent's session
     if (this.boxes.get(key(house, pet)) !== box) return {};
     if (opened) box.dialogState.remove(opened);
+    this.watchDialogs(house, pet, box);
     const remaining = box.dialogState.open.at(-1);
     if (remaining) this.report({ kind: "dialog", house, pet, dialog: remaining.dialog, ...(remaining.input ? { input: remaining.input } : {}) });
     if (box.dialogState.open.length === 0 && box.asking.length === 0) {
@@ -272,7 +274,12 @@ export class Delivery {
     }
     if (box.inbox.activity === "idle" || !box.agent.interrupt) return { status: box.agent.interrupt ? "idle" : "failed" };
     const result = await box.agent.interrupt(this.execIn(house, pet));
-    if (result.status === "stopped") box.inbox.stopped();
+    if (result.status === "stopped") {
+      this.record(house, pet, box, { kind: "dialog-closed" });
+      box.inbox.stopped();
+      box.retry.reset();
+      if (box.inbox.size) box.retry.schedule(() => void this.flush(house, pet));
+    }
     this.events.info(`${name}: ${{ stopped: "stopped by its person", idle: "was doing nothing to stop", failed: "could not be stopped" }[result.status]}`);
     return result;
   }
@@ -443,12 +450,11 @@ export class Delivery {
     const opened = event.kind === "dialog-opened" ? box.dialogState.opened(event) : undefined;
     if (opened) {
       // Even a second dialog invalidates an in-flight terminal probe.
-      box.dialogs += 1;
-      box.watch.reset();
-      box.watch.schedule(() => void this.watchDialog(house, pet, box));
+      this.watchDialogs(house, pet, box);
     }
     if (event.kind === "dialog-closed") {
       const closed = box.dialogState.closed(event);
+      if (closed.length) this.watchDialogs(house, pet, box);
       const all = !(event.call || event.input || event.turn || event.agent);
       for (const asking of box.asking) if (all || (asking.dialog && closed.includes(asking.dialog))) asking.controller.abort();
       if (!all && closed.length === 0) return;
@@ -458,7 +464,7 @@ export class Delivery {
         return;
       }
     }
-    if (event.kind === "session-started") box.dialogState.clear();
+    if (event.kind === "session-started" && !event.continues) box.dialogState.clear();
     if (event.kind === "session-started") { box.memoryRevision = undefined; box.memoryEpoch++; }
     this.restarting.get(key(house, pet))?.(event);
     if (!box.inbox.observe(event)) {
@@ -559,11 +565,29 @@ export class Delivery {
   private async watchDialog(house: string, pet: string, box: Mailbox): Promise<void> {
     const seen = box.dialogs;
     if (!this.current(house, pet, box, seen) || box.inbox.activity !== "dialog") return;
+    // PermissionRequest is synchronous: while its hook waits for our answer the native prompt may not be
+    // drawn at all, especially for a background agent. An empty main input cannot dismiss that request.
+    // A main dialog can still be dismissed in the terminal: first observe it drawn, then gone.
+    const only = box.dialogState.open.length === 1 ? box.dialogState.open[0] : undefined;
+    if (box.asking.length && (!only || only.agent !== undefined)) return box.watch.schedule(() => void this.watchDialog(house, pet, box));
     const visible = await box.agent.dialogVisible(this.execIn(house, pet));
     if (!this.current(house, pet, box, seen) || box.inbox.activity !== "dialog") return;
-    if (visible) return box.watch.schedule(() => void this.watchDialog(house, pet, box));
+    if (visible === undefined) return box.watch.schedule(() => void this.watchDialog(house, pet, box));
+    if (visible) {
+      box.screenDialog = only;
+      return box.watch.schedule(() => void this.watchDialog(house, pet, box));
+    }
+    if (box.asking.length && box.screenDialog !== only) return box.watch.schedule(() => void this.watchDialog(house, pet, box));
     this.record(house, pet, box, { kind: "dialog-closed" });
     void this.flush(house, pet);
+  }
+
+  /** Membership changes invalidate a terminal observation, including when one of parallel dialogs closes. */
+  private watchDialogs(house: string, pet: string, box: Mailbox): void {
+    box.dialogs += 1;
+    box.screenDialog = undefined;
+    box.watch.reset();
+    if (box.dialogState.open.length) box.watch.schedule(() => void this.watchDialog(house, pet, box));
   }
 
   /** The box still belongs to the pet and no dialog opened since `seen`. */
@@ -656,6 +680,9 @@ export class Delivery {
           for (const message of scheduled) this.mark(message, "received");
           if (result.reason !== box.refusal) this.events.info(`${name}: message kept in queue (${result.reason}); retrying`);
           box.refusal = result.reason;
+          if (result.blockedBy === "dialog" && box.inbox.activity !== "dialog") {
+            this.record(house, pet, box, { kind: "dialog-opened", dialog: "unknown", summary: "on screen while sending" });
+          }
           box.retry.schedule(() => void this.flush(house, pet));
           return;
         }

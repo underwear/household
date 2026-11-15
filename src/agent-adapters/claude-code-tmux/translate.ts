@@ -6,8 +6,9 @@ import { actionOf, short as cut } from "./actions";
 // Unknown hooks and malformed payloads give no events.
 //
 // Dialogs open on PermissionRequest and Elicitation, and already on PreToolUse of the tools that always ask
-// (it is synchronous, so it arrives before the dialog is drawn). They close on a new prompt, a new session, the
-// end of the turn, or their own tool finishing. Parallel tools never close one another’s dialogs. A dialog
+// (it is synchronous, so it arrives before the dialog is drawn). They close on a new session or their own tool
+// finishing. Main turns and synthetic background-task prompts can run while a subagent's dialog still waits.
+// Parallel tools never close one another’s dialogs. A dialog
 // dismissed with Esc fires no hook: Delivery then looks at the screen.
 //
 // A turn is named by `prompt_id`, which every hook of it carries. Subagents' tool hooks carry `agent_id`; their text never comes.
@@ -63,14 +64,15 @@ export function translateHook(payload: unknown): AgentEvent[] {
   const input = record(hook.tool_input);
   const turn = present({ turn: text(hook.prompt_id) });
   const call = present({ ...turn, call: text(hook.tool_use_id), agent: text(hook.agent_id) });
+  const ended: AgentEvent[] = turn.turn ? [{ kind: "dialog-closed", ...turn, ...present({ agent: text(hook.agent_id) }) }] : [];
   const ms = typeof hook.duration_ms === "number" && hook.duration_ms >= 0 ? { ms: hook.duration_ms } : {};
   switch (hook.hook_event_name) {
     case "SessionStart": {
       const continues = CONTINUES.includes(text(hook.source)) ? { continues: true as const } : {};
-      return [CLOSED, { kind: "session-started", ...(text(hook.model) ? { model: text(hook.model) } : {}), ...continues }];
+      return [...(continues.continues ? [] : [CLOSED]), { kind: "session-started", ...(text(hook.model) ? { model: text(hook.model) } : {}), ...continues }];
     }
     case "UserPromptSubmit":
-      return [CLOSED, { kind: "prompt-accepted", text: text(hook.prompt), ...turn }];
+      return [{ kind: "prompt-accepted", text: text(hook.prompt), ...turn }];
     case "PreToolUse": {
 
       const { action, summary, internal } = actionOf(tool, input);
@@ -101,9 +103,9 @@ export function translateHook(payload: unknown): AgentEvent[] {
       return [...prompt, { kind: "notification", text: text(hook.message) }];
     }
     case "Stop":
-      return [CLOSED, { kind: "turn-finished", text: text(hook.last_assistant_message), ...turn }];
+      return [...ended, { kind: "turn-finished", text: text(hook.last_assistant_message), ...turn }];
     case "StopFailure": // instead of Stop, when the turn ends in an API error
-      return [CLOSED, { kind: "turn-failed", error: short(text(hook.error) || "unknown"), ...turn }];
+      return [...ended, { kind: "turn-failed", error: short(text(hook.error) || "unknown"), ...turn }];
     default:
       return [];
   }

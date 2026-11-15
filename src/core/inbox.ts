@@ -21,14 +21,15 @@ export interface Next {
  * closes only on `dialog-closed`: other events may come from the agent's background work while it waits.
  */
 export class PetInbox {
-  private current: Activity = "idle";
+  private current: Exclude<Activity, "dialog"> = "idle";
+  private dialog = false;
   private readonly waiting: Message[] = [];
   /** Ids of messages no later one may join: boundaries the queue does not show (`close`). */
   private readonly closed = new Set<number>();
   private readonly catchup = new Set<number>();
 
   get activity(): Activity {
-    return this.current;
+    return this.dialog ? "dialog" : this.current;
   }
 
   get size(): number {
@@ -40,8 +41,18 @@ export class PetInbox {
    * is open (adapters close on every turn end), or opening while one already is (agents may report it twice).
    */
   observe(event: AgentEvent): boolean {
-    if (event.kind === "dialog-closed" && this.current !== "dialog") return false;
-    if (event.kind === "dialog-opened" && this.current === "dialog") return false;
+    if (event.kind === "dialog-closed") {
+      if (!this.dialog) return false;
+      this.dialog = false;
+      return true;
+    }
+    if (event.kind === "dialog-opened") {
+      if (this.dialog) return false;
+      this.dialog = true;
+      // A child may ask after the main turn has already ended; it does not make the main session busy.
+      if (!event.agent) this.current = "busy";
+      return true;
+    }
     this.current = next(this.current, event);
     return true;
   }
@@ -49,6 +60,7 @@ export class PetInbox {
   /** The agent was stopped (no event says so): it waits for input, no dialog open. */
   stopped(): void {
     this.current = "idle";
+    this.dialog = false;
   }
 
   push(message: Message, catchup = false): void {
@@ -68,7 +80,7 @@ export class PetInbox {
   next(max: number): Next {
     const { waiting, closed } = this;
     const first = waiting[0];
-    if (this.current === "dialog" || !first || ((first.origin === "cron" || first.origin === "inbox") && this.current !== "idle")) return { messages: [], complete: true };
+    if (this.dialog || !first || ((first.origin === "cron" || first.origin === "inbox") && this.current !== "idle")) return { messages: [], complete: true };
     if (first.origin === "inbox" && this.catchup.has(first.id) && first.header && first.place) {
       const messages: Message[] = [];
       const groups = new Set<string>();
@@ -108,14 +120,12 @@ export class PetInbox {
   }
 }
 
-function next(current: Activity, event: AgentEvent): Activity {
-  if (event.kind === "dialog-opened") return "dialog";
-  if (event.kind === "dialog-closed") return "busy";
+function next(current: Exclude<Activity, "dialog">, event: AgentEvent): Exclude<Activity, "dialog"> {
   // Background tools do not occupy the main session's input. In particular, they must not revoke a
   // scheduled prompt's idle check between its paste and Enter. Their dialogs still block input above.
   if ((event.kind === "tool-started" || event.kind === "tool-finished") && event.agent) return current;
   // A session that goes on (compacted mid-turn) is as busy as it was.
-  if (current === "dialog" || event.kind === "notification" || event.kind === "tool-review") return current;
+  if (event.kind === "notification" || event.kind === "tool-review") return current;
   if (event.kind === "session-started" && event.continues) return current;
   return ["session-started", "turn-finished", "turn-failed"].includes(event.kind) ? "idle" : "busy";
 }
