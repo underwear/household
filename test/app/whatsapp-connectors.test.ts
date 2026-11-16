@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { proto } from "baileys";
+import { makeEventBuffer, proto } from "baileys";
 import { ConnectorWrites, connectorWriteCard, type ConnectorWriteApproval, type ConnectorWriteView } from "../../src/app/connector-writes";
 import { WhatsAppConnectors } from "../../src/app/whatsapp-connectors";
 import { whatsappConnectorTools } from "../../src/app/whatsapp-connector-tools";
@@ -251,7 +251,7 @@ test("only a message's own author can edit or delete it, and LIDs fold into numb
   w.editMessage("c", chat, "a", { text: "too late", at: 50 }, { fromMe: false, sender: "34611222333@s.whatsapp.net" });
   const [gone] = w.messages("c", chat, { limit: 10 });
   expect(gone).toMatchObject({ text: "edited twice", deleted: new Date(40_000).toISOString(), previous: [{ text: "mine" }, { text: "edited" }] });
-  expect(gone!.note).toBe(`Edited 2 times by its author: text is the last version, previous the earlier ones, oldest first; then deleted for everyone by its author at ${new Date(40_000).toISOString()}: the other side no longer sees it; Household kept it.`);
+  expect(gone!.note).toBe(`Edited 2 times by its author: text is the last version, previous the earlier ones, oldest first; then deleted for everyone by its author at ${new Date(40_000).toISOString()}: people in the chat no longer see it; Household kept its text.`);
   expect(b!.note).toStartWith("Deleted for everyone");
   expect(w.search("c", { query: "mine", limit: 5 }).map(m => m.id)).toEqual(["a"]);
   expect(w.search("c", { query: "twice", limit: 5 }).map(m => m.id)).toEqual(["a"]);
@@ -272,4 +272,68 @@ test("group replies quote the right sender; a removed workspace unlinks and forg
   await new Promise(r => setTimeout(r, 0));
   expect(client.loggedOut).toBe(true);
   expect(s.store.whatsapp.counts(id).messages).toBe(0);
+});
+
+test("edits and deletions heard of before their message, replays, admins, and missed edits", () => {
+  const s = setup(), w = s.store.whatsapp, chat = "1-2@g.us", anna = "34611222333@s.whatsapp.net", bob = "34699000111@s.whatsapp.net";
+  const one = (id: string) => w.message("c", chat, id)!;
+  // An edit arrives before its message: a placeholder, filled in when the message comes, original first.
+  w.editMessage("c", chat, "e", { text: "v2", at: 20 }, { fromMe: false, sender: anna });
+  expect(one("e")).toMatchObject({ text: "v2", unseen: true, previous: [{ text: null }] });
+  expect(one("e").note).toContain("not seen by Household");
+  w.editMessage("c", chat, "e", { text: "v3", at: 30 }, { fromMe: false, sender: anna });
+  w.addMessages("c", [{ chat, id: "e", fromMe: false, sender: anna, at: 10, kind: "text", text: "v1" }]);
+  expect(one("e")).toMatchObject({ text: "v3", at: new Date(10_000).toISOString(), previous: [{ text: "v1", until: new Date(20_000).toISOString() }, { text: "v2" }] });
+  expect(one("e").unseen).toBeUndefined();
+  // A replayed older edit changes nothing.
+  w.editMessage("c", chat, "e", { text: "v2", at: 20 }, { fromMe: false, sender: anna });
+  expect(one("e")).toMatchObject({ text: "v3", previous: [{ text: "v1" }, { text: "v2" }] });
+  // Someone else's "edit" of a message not seen yet is dropped when the real author's message arrives.
+  w.editMessage("c", chat, "f", { text: "forged", at: 20 }, { fromMe: false, sender: bob });
+  w.addMessages("c", [{ chat, id: "f", fromMe: false, sender: anna, at: 10, kind: "text", text: "real" }]);
+  expect(one("f")).toMatchObject({ text: "real" });
+  expect(one("f").previous).toBeUndefined();
+  // A deletion before its message: the message arrives and stays marked, with its file.
+  w.editMessage("c", chat, "d", { deleted: 40 }, { fromMe: false, sender: anna });
+  w.addMessages("c", [{ chat, id: "d", fromMe: false, sender: anna, at: 35, kind: "image", text: "photo", media: { mimetype: "image/jpeg" }, raw: "{}" }]);
+  expect(one("d")).toMatchObject({ text: "photo", kind: "image", deleted: new Date(40_000).toISOString(), raw: "{}" });
+  expect(one("d").deletedBy).toBeUndefined();
+  // A group admin deletes someone else's message: marked, and by whom; deleting a seen media message asks for its file.
+  w.upsertContact("c", { jid: bob, name: "Bob" });
+  w.addMessages("c", [{ chat, id: "g", fromMe: false, sender: anna, at: 50, kind: "video", text: "", media: { mimetype: "video/mp4" }, raw: "{\"v\":1}" }]);
+  expect(w.editMessage("c", chat, "g", { deleted: 60 }, { fromMe: false, sender: bob })).toEqual({ fetch: "{\"v\":1}" });
+  expect(one("g")).toMatchObject({ deleted: new Date(60_000).toISOString(), deletedBy: "Bob" });
+  expect(one("g").note).toContain("by Bob, a group admin, not its author");
+  w.saveFile("c", chat, "g", new Uint8Array([7]));
+  expect(w.file("c", chat, "g")).toEqual(new Uint8Array([7]));
+  // In a direct chat only the author can delete.
+  w.addMessages("c", [{ chat: anna, id: "h", fromMe: false, sender: anna, at: 70, kind: "text", text: "dm" }]);
+  w.editMessage("c", anna, "h", { deleted: 80 }, { fromMe: true });
+  expect(w.message("c", anna, "h")!.deleted).toBeUndefined();
+  // A message delivered again with a text Household never had: kept as an edit it missed, never a silent overwrite.
+  w.addMessages("c", [{ chat: anna, id: "h", fromMe: false, sender: anna, at: 70, kind: "text", text: "dm, changed" }]);
+  expect(w.message("c", anna, "h")).toMatchObject({ text: "dm, changed", previous: [{ text: "dm" }] });
+  w.addMessages("c", [{ chat: anna, id: "h", fromMe: false, sender: anna, at: 70, kind: "text", text: "dm" }]);
+  expect(w.message("c", anna, "h")!.text).toBe("dm, changed");
+  // The chat list tells a deleted last message apart.
+  expect(w.chats("c", { limit: 10 }).find(c => c.jid === chat)).toMatchObject({ lastDeleted: true, lastKind: "video" });
+});
+
+test("taking messages as Baileys emits them keeps the original an edit replaces", async () => {
+  const logger: any = { level: "silent", child: () => logger, trace() {}, debug() {}, info() {}, warn() {}, error() {} };
+  const ev: any = makeEventBuffer(logger);
+  const seen: any[] = [], heard: any[] = [];
+  const emit = ev.emit.bind(ev);
+  ev.emit = (e: string, d: any) => { if (e === "messages.upsert") for (const m of d.messages) seen.push(convert(m)); return emit(e, d); };
+  ev.on("messages.upsert", (d: any) => heard.push(...d.messages.map((m: any) => JSON.stringify(m.message))));
+  ev.buffer();
+  const key = { remoteJid: "34611222333@s.whatsapp.net", fromMe: false, id: "A" };
+  ev.emit("messages.upsert", { type: "notify", messages: [{ key, messageTimestamp: 10, message: { conversation: "first" } }] });
+  ev.emit("messages.upsert", { type: "notify", messages: [{ key: { ...key, id: "E" }, messageTimestamp: 20, message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.MESSAGE_EDIT, key, editedMessage: { conversation: "second" } } } }] });
+  ev.emit("messages.update", [{ key, update: { message: { editedMessage: { message: { conversation: "second" } } } } }]);
+  await ev.flush();
+  // What listeners get is already folded: the original reads "second". The captured one keeps "first".
+  expect(heard[0]).toContain("second");
+  expect(seen[0]).toMatchObject({ message: { text: "first" } });
+  expect(seen[1]).toMatchObject({ edit: { id: "A", change: { text: "second", at: 20 } } });
 });

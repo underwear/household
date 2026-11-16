@@ -135,7 +135,8 @@ export class WhatsAppConnectors {
     for (const [id, p] of this.pairings) if (p.binding === binding && p.house === house) this.drop(id);
     if (this.pairings.size >= 5) throw new HouseholdError("Too many WhatsApp pairings in progress; retry in a few minutes");
     const id = randomUUID(), auth = randomUUID();
-    const link: Link = { auth, connection: parsed.data.connection ?? randomUUID(), status: "connecting", client: undefined as unknown as WhatsAppClient };
+    // A pairing keeps what it sees apart until it is known to be the right account: it never writes into another's history.
+    const link: Link = { auth, connection: randomUUID(), status: "connecting", client: undefined as unknown as WhatsAppClient };
     const p: Pairing = {
       house, binding, pets, writePolicy: parsed.data.writePolicy, link, expires: this.now() + PAIRING_MS, timer: setTimeout(() => this.drop(id), PAIRING_MS),
       ...(parsed.data.name ? { name: parsed.data.name } : {}), ...(parsed.data.connection ? { target: parsed.data.connection } : {}),
@@ -170,9 +171,8 @@ export class WhatsAppConnectors {
     const target = items.find(c => c.house === p.house && (p.target ? c.id === p.target : c.phone === me.phone));
     if (p.target && (!target || target.phone !== me.phone)) {
       p.error = target ? `That phone is +${me.phone}, but this connection is +${target.phone}. Scan with the right phone.` : "This connection was removed.";
-      // The connection paired again keeps everything; only this stray device goes.
-      void p.link.client.logout(); this.data.authClear(p.link.auth);
-      if (!p.target) this.data.clear(p.link.connection);
+      // The connection paired again keeps everything; only this stray device and what it saw go.
+      void p.link.client.logout().catch(() => {}); this.data.authClear(p.link.auth); this.data.clear(p.link.connection);
       return;
     }
     if (target) {
@@ -217,11 +217,11 @@ export class WhatsAppConnectors {
     if (!p) return;
     this.pairings.delete(id); clearTimeout(p.timer);
     if (p.connected) return;
+    this.data.clear(p.link.connection);
     // The phone may have just linked it: unlink, best effort, rather than leave a device behind.
     const client = p.link.client;
     void Promise.race([client.logout(), new Promise(resolve => setTimeout(resolve, 5_000))]).catch(() => {}).finally(() => client.end());
     this.data.authClear(p.link.auth);
-    if (!p.target) this.data.clear(p.link.connection);
   }
 
   setAccess(house: string, id: string, input: unknown) {
@@ -306,10 +306,11 @@ export class WhatsAppConnectors {
         if (!this.files) throw new HouseholdError("File transfer is unavailable");
         const m = this.data.message(c.id, params.chat, params.messageId);
         if (!m) throw new HouseholdError("Message not found in this chat; read the chat first");
-        if (!m.raw) throw new HouseholdError("This message has no file");
-        if ((m.media?.size ?? 0) > FILE_MAX) throw new HouseholdError(`This file is too large to save (over ${FILE_MAX / 1024 / 1024} MB)`);
+        const kept = this.data.file(c.id, params.chat, params.messageId);
+        if (!m.raw && !kept) throw new HouseholdError("This message has no file");
+        if (!kept && (m.media?.size ?? 0) > FILE_MAX) throw new HouseholdError(`This file is too large to save (over ${FILE_MAX / 1024 / 1024} MB)`);
         let bytes: Uint8Array;
-        try { bytes = await this.live(c).download(m.raw); }
+        try { bytes = kept ?? await this.live(c).download(m.raw!); }
         catch (error) { if (error instanceof HouseholdError) throw error; throw new HouseholdError("WhatsApp could not deliver this file; it may have expired on the sender's phone"); }
         if (bytes.length > FILE_MAX) throw new HouseholdError("This file is too large to save");
         this.allowed(caller, id);

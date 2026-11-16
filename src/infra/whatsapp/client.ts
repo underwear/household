@@ -3,7 +3,8 @@ import makeWASocket, {
   jidNormalizedUser, makeCacheableSignalKeyStore, normalizeMessageContent, proto, toNumber,
   type AuthenticationCreds, type AuthenticationState, type SignalDataTypeMap, type WAMessage, type WASocket,
 } from "baileys";
-import type { WhatsAppContact, WhatsAppKind, WhatsAppMessage, WhatsAppStore } from "./store";
+import type { WhatsAppAuthor, WhatsAppChange, WhatsAppContact, WhatsAppKind, WhatsAppMessage, WhatsAppStore } from "./store";
+export type { WhatsAppAuthor, WhatsAppChange };
 
 /** A quoted or reacted-to message: what WhatsApp needs to point at one. */
 export interface WhatsAppMessageRef { chat: string; id: string; fromMe: boolean; sender?: string; text?: string }
@@ -77,15 +78,13 @@ const pn = (jid: string | null | undefined, alt?: string | null) => {
 };
 const KINDS: Record<string, WhatsAppKind> = {
   conversation: "text", extendedTextMessage: "text", imageMessage: "image", videoMessage: "video", ptvMessage: "video", audioMessage: "audio",
-  documentMessage: "document", documentWithCaptionMessage: "document", stickerMessage: "sticker", locationMessage: "location", liveLocationMessage: "location",
+  documentMessage: "document", stickerMessage: "sticker", locationMessage: "location", liveLocationMessage: "location",
   contactMessage: "contact", contactsArrayMessage: "contact", pollCreationMessage: "poll", pollCreationMessageV2: "poll", pollCreationMessageV3: "poll",
 };
 const MEDIA = new Set<WhatsAppKind>(["image", "video", "audio", "document", "sticker"]);
 
 /** A message as Household keeps it, or what it changes: an edit, a deletion. Reactions and protocol noise are skipped. */
 /** Who an edit or deletion comes from: it may change only that author's own message. */
-export interface WhatsAppAuthor { fromMe: boolean; sender?: string }
-export type WhatsAppChange = { text: string; at: number } | { deleted: number };
 export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { chat: string; id: string; change: WhatsAppChange; by: WhatsAppAuthor } } | undefined {
   const key = m.key as WAMessage["key"] & { remoteJidAlt?: string; participantAlt?: string };
   const chat = pn(key.remoteJid, key.remoteJidAlt);
@@ -103,14 +102,15 @@ export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { 
     if (protocol.type === proto.Message.ProtocolMessage.Type.REVOKE) return { edit: { chat, id: protocol.key.id, change: { deleted: toNumber(m.messageTimestamp) || Math.floor(Date.now() / 1000) }, by } };
     if (protocol.type === proto.Message.ProtocolMessage.Type.MESSAGE_EDIT) {
       const edited = normalizeMessageContent(protocol.editedMessage);
-      const text = edited?.conversation ?? edited?.extendedTextMessage?.text ?? edited?.imageMessage?.caption ?? edited?.videoMessage?.caption;
-      if (text) return { edit: { chat, id: protocol.key.id, change: { text, at: toNumber(m.messageTimestamp) || Math.floor(Date.now() / 1000) }, by } };
+      // A caption may be edited to nothing: an empty text is an edit too.
+      const text = edited?.conversation ?? edited?.extendedTextMessage?.text ?? edited?.imageMessage?.caption ?? edited?.videoMessage?.caption ?? edited?.documentMessage?.caption;
+      if (typeof text === "string") return { edit: { chat, id: protocol.key.id, change: { text, at: toNumber(m.messageTimestamp) || Math.floor(Date.now() / 1000) }, by } };
     }
     return;
   }
   const kind = KINDS[type];
   if (!kind) return;
-  const inner: any = type === "documentWithCaptionMessage" ? content.documentWithCaptionMessage?.message?.documentMessage : (content as any)[type];
+  const inner: any = (content as any)[type];
   let text = "";
   if (type === "conversation") text = content.conversation ?? "";
   else if (kind === "location") text = [inner?.name, inner?.address, inner?.degreesLatitude !== undefined ? `${inner.degreesLatitude},${inner.degreesLongitude}` : undefined].filter(Boolean).join(" · ");
@@ -142,39 +142,69 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
   const { state, saveCreds } = authState(store, auth);
   const logger = silent(log);
   let sock: WASocket, ended = false, failures = 0, timer: ReturnType<typeof setTimeout> | undefined, codeAsked = false, opened = false;
-  /** A LID the event named without its number: the number WhatsApp mapped it to, if known, so a person stays one chat. */
-  const alt = async (jid: string | null | undefined, given: string | null | undefined) => {
-    if (given || !jid || !isLidUser(jid)) return given ?? undefined;
-    return (await sock.signalRepository.lidMapping.getPNForLID(jid).catch(() => null)) ?? undefined;
+  /** LIDs already folded into their numbers in the store. */
+  const folded = new Map<string, string>();
+  /** A LID's number, if WhatsApp mapped it; what was kept under the LID moves to the number once. */
+  const number = async (jid: string | undefined) => {
+    if (!jid || !isLidUser(jid)) return jid;
+    if (folded.has(jid)) return folded.get(jid)!;
+    const found = await sock.signalRepository.lidMapping.getPNForLID(jid).catch(() => null);
+    if (!found) return jid;
+    const pnJid = jidNormalizedUser(found);
+    folded.set(jid, pnJid);
+    store.mergeJid(connection(), jid, pnJid);
+    return pnJid;
   };
   let queue = Promise.resolve();
-  /** Saved in order, one batch after the other. */
-  const save = (messages: WAMessage[]) => {
-    queue = queue.then(async () => {
-      const fresh: WhatsAppMessage[] = [];
-      for (const m of messages) {
-        try {
-          const key = m.key as WAMessage["key"] & { remoteJidAlt?: string; participantAlt?: string };
-          const remoteJidAlt = await alt(key.remoteJid, key.remoteJidAlt), participantAlt = await alt(key.participant, key.participantAlt);
-          const result = convert({ ...m, key: { ...key, ...(remoteJidAlt ? { remoteJidAlt } : {}), ...(participantAlt ? { participantAlt } : {}) } } as WAMessage);
-          if (!result) continue;
-          if ("edit" in result) store.editMessage(connection(), result.edit.chat, result.edit.id, result.edit.change, result.edit.by);
-          else fresh.push(result.message);
-        } catch (error) { log?.(`whatsapp: a message was skipped: ${(error as Error).message}`); }
-      }
-      if (fresh.length) store.addMessages(connection(), fresh);
-    }).catch(error => log?.(`whatsapp: messages were not saved: ${(error as Error).message}`));
+  const later = (work: () => Promise<void> | void) => {
+    queue = queue.then(async () => { if (!ended) await work(); }).catch(error => log?.(`whatsapp: ${(error as Error).message}`));
     return queue;
   };
-  const contacts = (list: any[]) => { for (const c of list) { const v = c?.id ? contact(c) : undefined; if (v) store.upsertContact(connection(), v); } };
-  const chats = (list: any[]) => {
+  /** A deleted message's file, fetched while WhatsApp may still have it. */
+  const keepFile = async (chat: string, id: string, raw: string) => {
+    try {
+      const message = JSON.parse(raw, BufferJSON.reviver) as WAMessage;
+      const size = toNumber((normalizeMessageContent(message.message) as any)?.[getContentType(normalizeMessageContent(message.message)) ?? ""]?.fileLength);
+      if (size > 64 * 1024 * 1024) return;
+      const bytes = await downloadMediaMessage(message, "buffer", {}, { logger, reuploadRequest: sock.updateMediaMessage });
+      store.saveFile(connection(), chat, id, new Uint8Array(bytes));
+    } catch (error) { log?.(`whatsapp: a deleted message's file could not be kept: ${(error as Error).message}`); }
+  };
+  /**
+   * Messages as WhatsApp delivered them, converted at once (before Baileys' event buffer can fold an edit or a
+   * deletion into its original), then saved strictly in order: an edit always finds the message before it.
+   */
+  const save = (messages: WAMessage[]) => {
+    if (ended) return queue;
+    const converted: ReturnType<typeof convert>[] = [];
+    for (const m of messages) {
+      try { converted.push(convert(m)); } catch (error) { log?.(`whatsapp: a message was skipped: ${(error as Error).message}`); }
+    }
+    return later(async () => {
+      for (const item of converted) {
+        if (!item) continue;
+        if ("edit" in item) {
+          const e = item.edit, chat = (await number(e.chat))!, sender = await number(e.by.sender);
+          const { fetch } = store.editMessage(connection(), chat, e.id, e.change, { fromMe: e.by.fromMe, ...(sender ? { sender } : {}) });
+          if (fetch) await keepFile(chat, e.id, fetch);
+        } else {
+          const m = item.message, chat = (await number(m.chat))!, sender = await number(m.sender);
+          store.addMessages(connection(), [{ ...m, chat, ...(sender ? { sender } : {}) }]);
+        }
+      }
+    });
+  };
+  const contacts = (list: any[]) => later(async () => {
+    for (const c of list) { const v = c?.id ? contact(c) : undefined; if (v) store.upsertContact(connection(), { ...v, jid: (await number(v.jid))! }); }
+  });
+  const chats = (list: any[]) => later(async () => {
     for (const c of list) {
-      const jid = pn(c?.id, c?.pnJid);
+      const jid = await number(pn(c?.id, c?.pnJid));
       if (!jid || jid === "status@broadcast") continue;
       const last = toNumber(c.conversationTimestamp ?? c.lastMessageRecvTimestamp) || undefined;
       store.upsertChat(connection(), jid, { ...(c.name ? { name: c.name } : {}), ...(last ? { last } : {}) });
     }
-  };
+  });
   const connect = () => {
     if (ended) return;
     events.status("connecting");
@@ -184,14 +214,22 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
     } as any);
     const current = sock;
     sock.ev.on("creds.update", saveCreds);
-    sock.ev.on("messaging-history.set", ({ chats: c, contacts: p, messages }) => { contacts(p ?? []); chats(c ?? []); save(messages ?? []); });
-    sock.ev.on("messages.upsert", ({ messages }) => save(messages));
-    sock.ev.on("chats.upsert", c => chats(c));
-    sock.ev.on("chats.update", c => chats(c as any[]));
-    sock.ev.on("contacts.upsert", p => contacts(p));
-    sock.ev.on("contacts.update", p => contacts(p as any[]));
-    sock.ev.on("lid-mapping.update", ({ lid, pn: number }) => {
-      if (lid && number) queue = queue.then(() => store.mergeJid(connection(), jidNormalizedUser(lid), jidNormalizedUser(number))).catch(() => {});
+    // Messages and history are taken as they are emitted, not from the buffered events Baileys hands listeners
+    // after a reconnect: those have edits and deletions already folded into their originals, losing the original.
+    const emit = sock.ev.emit.bind(sock.ev);
+    (sock.ev as any).emit = (event: string, data: any) => {
+      if (current === sock && !ended) {
+        if (event === "messages.upsert") void save(data?.messages ?? []);
+        if (event === "messaging-history.set") { void contacts(data?.contacts ?? []); void chats(data?.chats ?? []); void save(data?.messages ?? []); }
+      }
+      return emit(event as any, data);
+    };
+    sock.ev.on("chats.upsert", c => void chats(c));
+    sock.ev.on("chats.update", c => void chats(c as any[]));
+    sock.ev.on("contacts.upsert", p => void contacts(p));
+    sock.ev.on("contacts.update", p => void contacts(p as any[]));
+    sock.ev.on("lid-mapping.update", ({ lid, pn: mapped }) => {
+      if (lid && mapped) void later(() => { const from = jidNormalizedUser(lid), to = jidNormalizedUser(mapped); folded.set(from, to); store.mergeJid(connection(), from, to); });
     });
     sock.ev.on("connection.update", update => {
       if (current !== sock || ended) return;

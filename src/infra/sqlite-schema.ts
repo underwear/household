@@ -435,10 +435,11 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
   CREATE TABLE whatsapp_messages (
     connection TEXT NOT NULL, chat TEXT NOT NULL, id TEXT NOT NULL, sender TEXT, from_me INTEGER NOT NULL,
     at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, quoted TEXT, media TEXT, raw TEXT,
-    edited INTEGER, deleted INTEGER, versions TEXT,
+    edited INTEGER, deleted INTEGER, deleted_by TEXT, versions TEXT, placeholder INTEGER,
     PRIMARY KEY (connection, chat, id));
   CREATE INDEX whatsapp_messages_at ON whatsapp_messages(connection, chat, at);
   CREATE INDEX whatsapp_messages_recent ON whatsapp_messages(connection, at);
+  CREATE TABLE whatsapp_files (connection TEXT NOT NULL, chat TEXT NOT NULL, id TEXT NOT NULL, bytes BLOB NOT NULL, PRIMARY KEY (connection, chat, id));
   -- Search finds a message by its current text and by every earlier version (versions: JSON, indexed as its texts).
   CREATE VIRTUAL TABLE whatsapp_message_search USING fts5(text,versions,content='whatsapp_messages',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
   CREATE TRIGGER whatsapp_message_insert AFTER INSERT ON whatsapp_messages BEGIN
