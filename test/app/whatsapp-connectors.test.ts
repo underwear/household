@@ -226,8 +226,8 @@ test("convert keeps text, media, replies and edits, and skips what bots can't us
   expect(image).toMatchObject({ message: { chat: "34633@s.whatsapp.net", kind: "image", text: "look", media: { mimetype: "image/jpeg", size: 2048 } } });
   expect((image as any).message.raw).toContain("imageMessage");
   const edit = convert({ key: key({}), message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.MESSAGE_EDIT, key: { id: "OLD" }, editedMessage: { conversation: "fixed" } } } } as any);
-  expect(edit).toEqual({ edit: { chat: "34611222333@s.whatsapp.net", id: "OLD", text: "fixed", by: { fromMe: false, sender: "34611222333@s.whatsapp.net" } } });
-  expect(convert({ key: key({}), message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.REVOKE, key: { id: "OLD" } } } } as any)).toMatchObject({ edit: { text: "[deleted]" } });
+  expect(edit).toEqual({ edit: { chat: "34611222333@s.whatsapp.net", id: "OLD", change: { text: "fixed", at: expect.any(Number) }, by: { fromMe: false, sender: "34611222333@s.whatsapp.net" } } });
+  expect(convert({ key: key({}), messageTimestamp: 7, message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.REVOKE, key: { id: "OLD" } } } } as any)).toMatchObject({ edit: { id: "OLD", change: { deleted: 7 } } });
   expect(convert({ key: key({}), message: { reactionMessage: { text: "👍" } } } as any)).toBeUndefined();
   expect(convert({ key: key({ remoteJid: "status@broadcast" }), message: { conversation: "story" } } as any)).toBeUndefined();
 });
@@ -235,10 +235,17 @@ test("convert keeps text, media, replies and edits, and skips what bots can't us
 test("only a message's own author can edit or delete it, and LIDs fold into numbers", () => {
   const s = setup(), w = s.store.whatsapp, chat = "1-2@g.us";
   w.addMessages("c", [{ chat, id: "a", fromMe: false, sender: "34611222333@s.whatsapp.net", at: 1, kind: "text", text: "mine" }, { chat, id: "b", fromMe: true, at: 2, kind: "text", text: "owner's" }]);
-  w.editMessage("c", chat, "a", "forged", { fromMe: false, sender: "34699000111@s.whatsapp.net" });
-  w.editMessage("c", chat, "b", "forged", { fromMe: false, sender: "34611222333@s.whatsapp.net" });
-  w.editMessage("c", chat, "a", "edited", { fromMe: false, sender: "34611222333@s.whatsapp.net" });
-  expect(w.messages("c", chat, { limit: 10 }).map(m => m.text)).toEqual(["edited", "owner's"]);
+  w.editMessage("c", chat, "a", { text: "forged", at: 5 }, { fromMe: false, sender: "34699000111@s.whatsapp.net" });
+  w.editMessage("c", chat, "b", { text: "forged", at: 5 }, { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  w.editMessage("c", chat, "a", { text: "edited", at: 10 }, { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  w.editMessage("c", chat, "a", { text: "edited twice", at: 20 }, { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  w.editMessage("c", chat, "b", { deleted: 30 }, { fromMe: true });
+  // The original arriving again (history sync) changes nothing.
+  w.addMessages("c", [{ chat, id: "a", fromMe: false, sender: "34611222333@s.whatsapp.net", at: 1, kind: "text", text: "mine" }]);
+  const [a, b] = w.messages("c", chat, { limit: 10 });
+  expect(a).toMatchObject({ text: "edited twice", edited: new Date(20_000).toISOString(), previous: [{ text: "mine", until: new Date(10_000).toISOString() }, { text: "edited", until: new Date(20_000).toISOString() }] });
+  expect(b).toMatchObject({ text: "owner's", deleted: new Date(30_000).toISOString() });
+  expect(w.search("c", { query: "owner", limit: 5 }).map(m => m.id)).toEqual(["b"]);
   w.addMessages("c", [{ chat: "77@lid", id: "x", fromMe: false, sender: "77@lid", at: 3, kind: "text", text: "via lid" }]);
   w.upsertContact("c", { jid: "77@lid", notify: "Anna" });
   w.mergeJid("c", "77@lid", "34622000000@s.whatsapp.net");

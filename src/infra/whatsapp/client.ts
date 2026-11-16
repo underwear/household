@@ -85,7 +85,8 @@ const MEDIA = new Set<WhatsAppKind>(["image", "video", "audio", "document", "sti
 /** A message as Household keeps it, or what it changes: an edit, a deletion. Reactions and protocol noise are skipped. */
 /** Who an edit or deletion comes from: it may change only that author's own message. */
 export interface WhatsAppAuthor { fromMe: boolean; sender?: string }
-export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { chat: string; id: string; text: string; by: WhatsAppAuthor } } | undefined {
+export type WhatsAppChange = { text: string; at: number } | { deleted: number };
+export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { chat: string; id: string; change: WhatsAppChange; by: WhatsAppAuthor } } | undefined {
   const key = m.key as WAMessage["key"] & { remoteJidAlt?: string; participantAlt?: string };
   const chat = pn(key.remoteJid, key.remoteJidAlt);
   if (!chat || !key.id || chat === "status@broadcast" || chat.endsWith("@newsletter")) return;
@@ -99,11 +100,11 @@ export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { 
   if (type === "protocolMessage" && protocol?.key?.id) {
     const by = { fromMe, ...(sender ? { sender } : {}) };
     if (!fromMe && !sender) return;
-    if (protocol.type === proto.Message.ProtocolMessage.Type.REVOKE) return { edit: { chat, id: protocol.key.id, text: "[deleted]", by } };
+    if (protocol.type === proto.Message.ProtocolMessage.Type.REVOKE) return { edit: { chat, id: protocol.key.id, change: { deleted: toNumber(m.messageTimestamp) || Math.floor(Date.now() / 1000) }, by } };
     if (protocol.type === proto.Message.ProtocolMessage.Type.MESSAGE_EDIT) {
       const edited = normalizeMessageContent(protocol.editedMessage);
       const text = edited?.conversation ?? edited?.extendedTextMessage?.text ?? edited?.imageMessage?.caption ?? edited?.videoMessage?.caption;
-      if (text) return { edit: { chat, id: protocol.key.id, text, by } };
+      if (text) return { edit: { chat, id: protocol.key.id, change: { text, at: toNumber(m.messageTimestamp) || Math.floor(Date.now() / 1000) }, by } };
     }
     return;
   }
@@ -157,7 +158,7 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
           const remoteJidAlt = await alt(key.remoteJid, key.remoteJidAlt), participantAlt = await alt(key.participant, key.participantAlt);
           const result = convert({ ...m, key: { ...key, ...(remoteJidAlt ? { remoteJidAlt } : {}), ...(participantAlt ? { participantAlt } : {}) } } as WAMessage);
           if (!result) continue;
-          if ("edit" in result) store.editMessage(connection(), result.edit.chat, result.edit.id, result.edit.text, result.edit.by);
+          if ("edit" in result) store.editMessage(connection(), result.edit.chat, result.edit.id, result.edit.change, result.edit.by);
           else fresh.push(result.message);
         } catch (error) { log?.(`whatsapp: a message was skipped: ${(error as Error).message}`); }
       }

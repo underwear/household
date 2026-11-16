@@ -435,6 +435,7 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
   CREATE TABLE whatsapp_messages (
     connection TEXT NOT NULL, chat TEXT NOT NULL, id TEXT NOT NULL, sender TEXT, from_me INTEGER NOT NULL,
     at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, quoted TEXT, media TEXT, raw TEXT,
+    edited INTEGER, deleted INTEGER, versions TEXT,
     PRIMARY KEY (connection, chat, id));
   CREATE INDEX whatsapp_messages_at ON whatsapp_messages(connection, chat, at);
   CREATE INDEX whatsapp_messages_recent ON whatsapp_messages(connection, at);
