@@ -119,6 +119,8 @@ export class WhatsAppStore {
           this.db.run(`UPDATE whatsapp_messages SET sender=?, from_me=?, at=?, kind=?, text=?, quoted=?, media=?, raw=?, edited=?, versions=?, deleted=?, deleted_by=?, placeholder=NULL WHERE connection=? AND chat=? AND id=?`,
             [m.sender ?? null, m.fromMe ? 1 : 0, m.at, m.kind, text, m.quoted ?? null, media, m.raw ?? null, edited, versions.length ? JSON.stringify(versions) : null, deleted, by, connection, m.chat, m.id]);
         } else {
+          // Seen again only if it is the same author's message: anyone else reusing its id changes nothing.
+          if (!!row.from_me !== m.fromMe || (!m.fromMe && row.sender !== (m.sender ?? null))) continue;
           const versions = versionsOf(row.versions);
           if (m.text && m.text !== row.text && !versions.some(v => v.text === m.text)) {
             const now = Math.max(m.at, Math.floor(Date.now() / 1000));
@@ -168,7 +170,11 @@ export class WhatsAppStore {
       // WhatsApp edits nothing after a deletion; an edit made before it may still arrive late.
       if (!author || (row.deleted && change.at >= row.deleted)) return {};
       const versions = versionsOf(row.versions);
-      if (change.text === row.text || versions.some(v => v.text === change.text)) return {};
+      // A replay is the same edit again: the same text made at the same time. A text the message had before can
+      // come back (A → B → A), so texts alone never decide.
+      const made = (i: number) => versions[i + 1]?.text ?? row.text;
+      if (versions.some((v, i) => v.until === change.at && made(i) === change.text)) return {};
+      if (change.text === row.text && (!row.edited || change.at >= row.edited)) return {};
       if (row.edited && change.at < row.edited) {
         // An edit arriving after a later one: it goes where it happened. The version it replaced lasted until
         // this edit; its own text lasted until the next one.

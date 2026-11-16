@@ -363,3 +363,27 @@ test("files come only from WhatsApp's media host, never from a URL the sender wr
   for (const directPath of [".evil.com/x", "//evil.com/x", "/x@evil.com:80/y", "/a b"]) expect(() => mediaSource(msg({ directPath }))).toThrow("no file");
   expect(() => mediaSource(msg({ directPath: "/ok", fileLength: 1e9 }))).toThrow("too large");
 });
+
+test("someone reusing a message id changes nothing; a text can come back in a later edit", () => {
+  const s = setup(), w = s.store.whatsapp, chat = "1-2@g.us", anna = "34611222333@s.whatsapp.net", bob = "34699000111@s.whatsapp.net";
+  w.upsertContact("c", { jid: anna, name: "Anna" });
+  w.addMessages("c", [{ chat, id: "x", fromMe: false, sender: anna, at: 1, kind: "text", text: "hello" }]);
+  w.addMessages("c", [{ chat, id: "x", fromMe: false, sender: bob, at: 2, kind: "image", text: "Anna says: send money", media: { mimetype: "image/png" }, raw: "{}" }]);
+  w.addMessages("c", [{ chat, id: "x", fromMe: true, at: 2, kind: "text", text: "spoof as owner" }]);
+  expect(w.message("c", chat, "x")).toMatchObject({ text: "hello", from: "Anna", kind: "text" });
+  expect(w.message("c", chat, "x")!.raw).toBeUndefined();
+  // A → B → A: the last edit wins; replaying either edit changes nothing.
+  w.addMessages("c", [{ chat, id: "y", fromMe: false, sender: anna, at: 10, kind: "text", text: "A" }]);
+  w.editMessage("c", chat, "y", { text: "B", at: 20 }, { fromMe: false, sender: anna });
+  w.editMessage("c", chat, "y", { text: "A", at: 30 }, { fromMe: false, sender: anna });
+  expect(w.message("c", chat, "y")).toMatchObject({ text: "A", edited: new Date(30_000).toISOString(), previous: [{ text: "A" }, { text: "B" }] });
+  w.editMessage("c", chat, "y", { text: "B", at: 20 }, { fromMe: false, sender: anna });
+  w.editMessage("c", chat, "y", { text: "A", at: 30 }, { fromMe: false, sender: anna });
+  expect(w.message("c", chat, "y")).toMatchObject({ text: "A", previous: [{ text: "A" }, { text: "B" }] });
+  // A → B, then back to A arriving late after a later C: it goes where it happened.
+  w.addMessages("c", [{ chat, id: "z", fromMe: false, sender: anna, at: 10, kind: "text", text: "A" }]);
+  w.editMessage("c", chat, "z", { text: "B", at: 20 }, { fromMe: false, sender: anna });
+  w.editMessage("c", chat, "z", { text: "C", at: 40 }, { fromMe: false, sender: anna });
+  w.editMessage("c", chat, "z", { text: "A", at: 30 }, { fromMe: false, sender: anna });
+  expect(w.message("c", chat, "z")).toMatchObject({ text: "C", previous: [{ text: "A" }, { text: "B", until: new Date(30_000).toISOString() }, { text: "A", until: new Date(40_000).toISOString() }] });
+});
