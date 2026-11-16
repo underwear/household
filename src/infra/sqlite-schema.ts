@@ -426,6 +426,32 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
     INSERT INTO inbox_event_search(inbox_event_search,rowid,title,text,metadata) VALUES('delete',old.id,old.title,old.text,old.metadata);
     DELETE FROM inbox_event_pets WHERE event=old.id;
   END;`,
+  // WhatsApp connections: each one's linked-device keys (\`auth\`, named by the connection's current pairing) and
+  // what Household has seen of the account, kept so bots can read chats WhatsApp gives no API to fetch again.
+  `CREATE TABLE whatsapp_auth (auth TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (auth, key));
+  CREATE TABLE whatsapp_chats (connection TEXT NOT NULL, jid TEXT NOT NULL, name TEXT, last INTEGER, PRIMARY KEY (connection, jid));
+  CREATE TABLE whatsapp_contacts (connection TEXT NOT NULL, jid TEXT NOT NULL, name TEXT, notify TEXT, phone TEXT, PRIMARY KEY (connection, jid));
+  CREATE INDEX whatsapp_contacts_phone ON whatsapp_contacts(connection, phone);
+  CREATE TABLE whatsapp_messages (
+    connection TEXT NOT NULL, chat TEXT NOT NULL, id TEXT NOT NULL, sender TEXT, from_me INTEGER NOT NULL,
+    at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, quoted TEXT, media TEXT, raw TEXT,
+    edited INTEGER, deleted INTEGER, deleted_by TEXT, versions TEXT, placeholder INTEGER,
+    PRIMARY KEY (connection, chat, id));
+  CREATE INDEX whatsapp_messages_at ON whatsapp_messages(connection, chat, at);
+  CREATE INDEX whatsapp_messages_recent ON whatsapp_messages(connection, at);
+  CREATE TABLE whatsapp_files (connection TEXT NOT NULL, chat TEXT NOT NULL, id TEXT NOT NULL, bytes BLOB NOT NULL, PRIMARY KEY (connection, chat, id));
+  -- Search finds a message by its current text and by every earlier version (versions: JSON, indexed as its texts).
+  CREATE VIRTUAL TABLE whatsapp_message_search USING fts5(text,versions,content='whatsapp_messages',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
+  CREATE TRIGGER whatsapp_message_insert AFTER INSERT ON whatsapp_messages BEGIN
+    INSERT INTO whatsapp_message_search(rowid,text,versions) VALUES(new.rowid,new.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(new.versions,'[]'))));
+  END;
+  CREATE TRIGGER whatsapp_message_update AFTER UPDATE OF text, versions ON whatsapp_messages BEGIN
+    INSERT INTO whatsapp_message_search(whatsapp_message_search,rowid,text,versions) VALUES('delete',old.rowid,old.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(old.versions,'[]'))));
+    INSERT INTO whatsapp_message_search(rowid,text,versions) VALUES(new.rowid,new.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(new.versions,'[]'))));
+  END;
+  CREATE TRIGGER whatsapp_message_delete AFTER DELETE ON whatsapp_messages BEGIN
+    INSERT INTO whatsapp_message_search(whatsapp_message_search,rowid,text,versions) VALUES('delete',old.rowid,old.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(old.versions,'[]'))));
+  END;`,
 ];
 
 /** The schema version this code migrates databases to; a database with a newer one is not opened. */
