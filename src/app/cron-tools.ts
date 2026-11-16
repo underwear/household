@@ -1,12 +1,14 @@
 import type { McpTool } from "../infra/mcp-server";
 import type { PetIdentity } from "../infra/agent-api";
 import type { Crons } from "./crons";
+import { CRON_BODY_MAX, CRON_NAME_MAX } from "../core/cron";
 
 export function cronTools(crons: Crons): McpTool<PetIdentity>[] {
   const fields = {
     name: {
       type: "string",
-      description: "Short task title, at most 200 characters",
+      description: `Short task title, at most ${CRON_NAME_MAX} characters`,
+      maxLength: CRON_NAME_MAX,
     },
     at: {
       type: "string",
@@ -21,7 +23,8 @@ export function cronTools(crons: Crons): McpTool<PetIdentity>[] {
     body: {
       type: "string",
       description:
-        "Instructions to your future self, in prose, at most 32000 characters. Sent to your current session when due; no shell commands are executed by the scheduler.",
+        `Instructions to your future self, in prose, at most ${CRON_BODY_MAX} characters: what to do and whom to tell. It arrives in your session as a household-task block when due; no shell commands are executed by the scheduler. Keep long material (lists, drafts, data) in a file or a memory note and name it here.`,
+      maxLength: CRON_BODY_MAX,
     },
   };
   const id = {

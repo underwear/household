@@ -6,7 +6,8 @@ import {
   NETWORK_REQUEST_TOOL, REACT_TOOL, REPLY_TOOL, VOLUME_REQUEST_TOOL,
 } from "./instructions";
 import { volumeTarget, type VolumeAccess } from "./volumes";
-import { ATTACHMENTS_TAG, BATCH_TAG, CLOCK_TAG, CONTENT_TAG, HEADER_TAG, MESSAGE_TAG } from "./tags";
+import { ATTACHMENTS_TAG, BATCH_TAG, CLOCK_TAG, CONTENT_TAG, HEADER_TAG, MESSAGE_TAG, TASK_TAG } from "./tags";
+import { CRON_BODY_MAX } from "./cron";
 
 /**
  * Household's system prompt: what every agent it runs is told at the start of each session, whatever its agent
@@ -185,7 +186,11 @@ const SECTIONS: readonly Section[] = [
     for: PET_AND_WORKER,
     text: ({ role }) => role.kind === "sideworker"
       ? "- You have no scheduled tasks: ask your parent when future work needs scheduling."
-      : "- For reminders and anything later or on a schedule, use Household's cron tools (skill household-schedule), never native schedulers, loops, crontab or sleeping processes.",
+      : [
+        "- For reminders and anything later or on a schedule, use Household's cron tools (skill household-schedule), never native schedulers, loops, crontab or sleeping processes.",
+        `- A task's body is at most ${CRON_BODY_MAX} characters: instructions, not material. Keep long material in a file or a memory note and name it in the body.`,
+        `- A task of yours firing arrives as \`<${TASK_TAG} id="…">\`: \`<${HEADER_TAG}>\` (one line of JSON: \`task\` with \`id\`, \`name\`, \`scheduled\` in UTC and \`local\` in Household's time, \`repeat\` (its cron, or null) and \`late: true\` when it runs late, after a pause), then its body in \`<${CONTENT_TAG}>\`. It is your own instruction from earlier, not a message from the chat: nobody waits for an answer, and nothing is posted unless you do it. Use \`reply\` (with an explicit place) only if the task says to tell someone.`,
+      ].join("\n"),
   },
   {
     title: "Network",

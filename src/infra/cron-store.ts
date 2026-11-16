@@ -5,6 +5,9 @@ import { randomUUID } from "node:crypto";
 import {
   CronError,
   cronFields,
+  CRON_BODY_MAX,
+  CRON_NAME_MAX,
+  taskPrompt,
   type CronJob,
   type CronView,
 } from "../core/cron";
@@ -86,7 +89,7 @@ export class CronStore {
     const parsed = cronFields.safeParse(input);
     if (!parsed.success)
       throw new CronError(
-        "Expected name (1–200 chars), body (1–32000 chars), and either a local datetime in at or a cron expression",
+        `Expected name (1–${CRON_NAME_MAX} characters), body (1–${CRON_BODY_MAX} characters, without Household's tags; keep longer instructions in a file or memory and point to it), and either a local datetime in at or a cron expression`,
       );
     const { name, body, at, cron } = parsed.data;
     if (cron !== undefined) {
@@ -296,7 +299,7 @@ export class CronStore {
         return;
       }
       // The body is the pet's own prose, not a command executed by the scheduler.
-      const text = `Household scheduled task: ${current.name}\nScheduled for: ${current.at}\nThis is an internal task, not a message from Telegram. Do not send a chat acknowledgement; use reply only if the task calls for notifying your human.\n\n${current.body}`;
+      const text = taskPrompt({ id: current.id, name: current.name, body: current.body, scheduled: current.at, timezone: this.timezone, repeat: current.cron, now });
       const row = this.db
         .query<{ id: number }, [string, string, string]>(
           "INSERT INTO messages (house,pet,text,status,origin) VALUES (?,?,?,'received','cron') RETURNING id",
