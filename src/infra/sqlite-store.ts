@@ -2,6 +2,7 @@ import { InboxEventStore } from "./inbox-event-store";
 import { MemoryStore } from "./memory-store";
 import type { AgentEvent } from "../core/agent-events";
 import { CronStore } from "./cron-store";
+import { WhatsAppStore } from "./whatsapp/store";
 import { Database } from "bun:sqlite";
 import type { Attachment } from "../core/attachment";
 import type { External, MessageRef, SenderRef } from "../core/channel";
@@ -156,6 +157,7 @@ export class SqliteStore implements MessageStore, KeyValueStore, ChatRecords, Ch
   readonly crons: CronStore;
   readonly memory: MemoryStore;
   readonly inboxEvents: InboxEventStore;
+  readonly whatsapp: WhatsAppStore;
 
   constructor(path: string) {
     this.db = new Database(path, { create: true, strict: true });
@@ -164,6 +166,7 @@ export class SqliteStore implements MessageStore, KeyValueStore, ChatRecords, Ch
     this.crons = new CronStore(this.db);
     this.memory = new MemoryStore(this.db);
     this.inboxEvents = new InboxEventStore(this.db);
+    this.whatsapp = new WhatsAppStore(this.db);
   }
 
   cronEvent(ids: number[], event: AgentEvent) { this.crons.event(ids,event); }

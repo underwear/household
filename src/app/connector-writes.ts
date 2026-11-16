@@ -8,8 +8,9 @@ import { GOOGLE_OPERATIONS } from "../infra/google/operations";
 import { SLACK_OPERATIONS } from "../infra/slack/operations";
 import { MICROSOFT_OPERATIONS } from "../infra/microsoft/operations";
 import { MAIL_OPERATIONS } from "../infra/mail/operations";
+import { WHATSAPP_OPERATIONS } from "../infra/whatsapp/operations";
 
-export type ConnectorProvider = "google" | "slack" | "microsoft" | "mail";
+export type ConnectorProvider = "google" | "slack" | "microsoft" | "mail" | "whatsapp";
 export interface ConnectorWriteView {
   id: string; provider: ConnectorProvider; connection: string; account: string; operation: string;
   params: unknown; state: "pending" | "executing" | "succeeded" | "denied" | "cancelled" | "unknown";
@@ -24,7 +25,7 @@ const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(va
 const view = ({ house, pet, key, fingerprint, result, ...rest }: Write): ConnectorWriteView => structuredClone(rest);
 
 export function connectorWriteCard(write: ConnectorWriteView, now = Date.now()): OwnerCard<"pending" | "approved" | "denied"> {
-  const registry: Record<string, { description: string }> = { google: GOOGLE_OPERATIONS, slack: SLACK_OPERATIONS, microsoft: MICROSOFT_OPERATIONS, mail: MAIL_OPERATIONS }[write.provider];
+  const registry: Record<string, { description: string }> = { google: GOOGLE_OPERATIONS, slack: SLACK_OPERATIONS, microsoft: MICROSOFT_OPERATIONS, mail: MAIL_OPERATIONS, whatsapp: WHATSAPP_OPERATIONS }[write.provider];
   const action = registry[write.operation]?.description.split(/\.\s/)[0] ?? write.operation;
   const label = (key: string) => {
     const words = key.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ");
@@ -36,7 +37,7 @@ export function connectorWriteCard(write: ConnectorWriteView, now = Date.now()):
   }).join("\n\n");
   const remaining = Date.parse(write.expiresAt) - now;
   const expiry = remaining <= 0 ? "Expired" : remaining < 60_000 ? "Expires in less than 1 min" : `Expires in ${Math.ceil(remaining / 60_000)} min`;
-  const text = cardText({ title: `Approve ${html(write.provider === "mail" ? "mailbox" : write.provider === "microsoft" ? "Microsoft To Do" : write.provider === "google" ? "Google" : "Slack")} change`, facts: [`Account: ${html(write.account)}`, `Action: ${html(action)}`] })
+  const text = cardText({ title: `Approve ${html(write.provider === "mail" ? "mailbox" : write.provider === "microsoft" ? "Microsoft To Do" : write.provider === "google" ? "Google" : write.provider === "whatsapp" ? "WhatsApp" : "Slack")} change`, facts: [`Account: ${html(write.account)}`, `Action: ${html(action)}`] })
     + `\n\n${details}\n\nApprove applies exactly this change. Deny changes nothing.\n\n${expiry}`;
   return { text, format: "html", start: "pending", view: state => state === "pending" ? { choices: [["Approve change"], ["Deny"]], text } : { outcome: state === "approved" ? "Approved for submission" : "Change denied" }, press: (state, index) => state !== "pending" ? state : index === 0 ? "approved" : index === 1 ? "denied" : state, cancelledText: () => "This approval request is closed. Nothing further can be approved with these buttons." };
 }

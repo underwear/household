@@ -8,6 +8,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CalendarDays, Files, Mail } from "lucide-react";
 import { api, type GoogleConnectionView, type GoogleConnectorsView, type GoogleService, type SlackConnectionView, type WorkspaceView } from "../api";
 import { SlackSetup, slackAccessWords, useSlackConnections } from "./slack-connectors";
+import { WhatsAppSettings, WhatsAppSetup, whatsappAccessWords, whatsappLinkWords, useWhatsAppConnections } from "./whatsapp-connectors";
+import type { WhatsAppConnectionView } from "../api";
 import { workspacePath, redirect } from "../router";
 import { Dialog, useDialog } from "./dialog";
 import { ChoiceList, FormGroup, SwitchList } from "./fields";
@@ -15,7 +17,7 @@ import { Cell, List, ListRow, Page, Section } from "./layout";
 import { relative } from "./bot-crons";
 
 /** What can be connected: the first step of Add connector, and an account's mark and name in the list. */
-export const CONNECTOR_TYPES = [{ id: "mail", label: "Email", description: "Any mailbox over IMAP and SMTP: read, organize and send with your OK.", mark: "@" }, { id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }] as const;
+export const CONNECTOR_TYPES = [{ id: "mail", label: "Email", description: "Any mailbox over IMAP and SMTP: read, organize and send with your OK.", mark: "@" }, { id: "google", label: "Google", description: "Gmail, Drive and Calendar.", mark: "G" }, { id: "slack", label: "Slack", description: "Search and read conversations, as you.", mark: "S" }, { id: "microsoft", label: "Microsoft To Do", description: "Lists, tasks and checklists.", mark: "M" }, { id: "whatsapp", label: "WhatsApp", description: "Read chats and send messages, as a linked device. Pair with a QR code.", mark: "W" }] as const;
 type ConnectorType = (typeof CONNECTOR_TYPES)[number]["id"];
 /** A Google account's services: what the owner picks to share (and what bots may do with each), and their names. */
 const SERVICES = [
@@ -55,8 +57,9 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
   const slack = useSlackConnections(house.name);
   const microsoft = useMicrosoftConnections(house.name);
   const mail = useMailConnections(house.name);
-  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView; microsoft?: MicrosoftConnectionView; mail?: MailConnectionView }>();
-  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView } | { microsoft: MicrosoftConnectionView } | { mail: MailConnectionView }>();
+  const whatsapp = useWhatsAppConnections(house.name);
+  const [setup, setSetup] = useState<{ type?: ConnectorType; existing?: GoogleConnectionView; slack?: SlackConnectionView; microsoft?: MicrosoftConnectionView; mail?: MailConnectionView; whatsapp?: WhatsAppConnectionView }>();
+  const [access, setAccess] = useState<{ google: GoogleConnectionView } | { slack: SlackConnectionView } | { microsoft: MicrosoftConnectionView } | { mail: MailConnectionView } | { whatsapp: WhatsAppConnectionView }>();
   const dialog = useDialog();
   const refresh = async () => {
     try {
@@ -75,7 +78,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     }
   }, [house.name]);
   const connections = view?.connections ?? [];
-  const loaded = view !== undefined && slack.connections !== undefined && microsoft.connections !== undefined && mail.connections !== undefined;
+  const loaded = view !== undefined && slack.connections !== undefined && microsoft.connections !== undefined && mail.connections !== undefined && (whatsapp.connections !== undefined || !!whatsapp.error);
   const disconnect = (c: GoogleConnectionView) =>
     dialog.open({
       title: `Disconnect ${c.email}?`,
@@ -121,9 +124,15 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
     confirmLabel: "Disconnect", danger: true,
     onConfirm: async () => { await api.disconnectMail(house.name, c.id); await mail.refresh(); notify(`${c.email} disconnected`); },
   });
+  const disconnectWhatsApp = (c: WhatsAppConnectionView) => dialog.open({
+    title: `Disconnect ${c.name}?`,
+    body: "Its bots lose access right away. Household unlinks itself from the phone and deletes its keys and the chats and messages it kept. What bots already read stays in their history and backups.",
+    confirmLabel: "Disconnect", danger: true,
+    onConfirm: async () => { await api.disconnectWhatsApp(house.name, c.id); await whatsapp.refresh(); notify(`WhatsApp ${c.name} disconnected`); },
+  });
   const botTitle = (name: string) => house.pets.find((p) => p.name === name)?.title ?? name;
   const waiting = (c: MailConnectionView) => (mail.sends ?? []).filter((s) => s.connection === c.id && s.state === "pending").length;
-  const failed = [mail.error && { what: "Mail", message: mail.error, retry: mail.refresh },microsoft.error && { what: "Microsoft", message: microsoft.error, retry: microsoft.refresh }, error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
+  const failed = [mail.error && { what: "Mail", message: mail.error, retry: mail.refresh },microsoft.error && { what: "Microsoft", message: microsoft.error, retry: microsoft.refresh }, error && { what: "Google", message: error, retry: refresh }, slack.error && { what: "Slack", message: slack.error, retry: slack.refresh }, whatsapp.error && { what: "WhatsApp", message: whatsapp.error, retry: whatsapp.refresh }].filter(Boolean) as { what: string; message: string; retry: () => Promise<void> }[];
   return (
     <Page
       title="Connectors"
@@ -148,7 +157,7 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
             </button>
           </p>
         ))}
-        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add an email, Google, Slack or Microsoft To Do account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
+        <List columns="minmax(0, 1fr) minmax(0, 180px) auto" empty={loaded ? "Nothing connected yet. Add an email, Google, Slack, Microsoft To Do or WhatsApp account and choose which bots may use it." : failed.length ? undefined : "Loading…"}>
           {(mail.connections ?? []).map((c) => (
             <ConnectionRow key={c.id} house={house} type="mail" title={<span className="strong connector-email">{c.email}</span>}
               sub={`${c.title} · ${mailAccessWords(c)}`} connection={{ ...c, needsReconnect: false }} notices={mailNotices(mail.sends ?? [], c.id, botTitle)}
@@ -185,12 +194,23 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
               onDisconnect={() => disconnectSlack(c)}
             />
           ))}
+          {(whatsapp.connections ?? []).map(c => (
+            <ConnectionRow key={c.id} house={house} type="whatsapp" title={<span className="strong ellipsis">{c.name} <span className="muted">· {c.phone}</span></span>}
+              sub={`WhatsApp · ${whatsappAccessWords(c)} · ${c.chats} chats, ${c.messages} messages`} connection={c}
+              state={{ text: whatsappLinkWords(c), tone: c.needsReconnect ? "danger" : c.link === "online" ? "idle" : "wait" }}
+              access="Settings" onAccess={() => setAccess({ whatsapp: c })} edit="Pair again" onEdit={() => setSetup({ type: "whatsapp", whatsapp: c })} onDisconnect={() => disconnectWhatsApp(c)} />
+          ))}
         </List>
       </Section>
       {setup?.type === "mail" && <MailSetup key={setup.mail?.id ?? "new"} house={house.name} existing={setup.mail} options={sharable(house)} waiting={setup.mail ? waiting(setup.mail) : 0}
         back={setup.mail ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
         saved={async () => { await mail.refresh(); notify(setup.mail ? "Mail settings saved" : "Mail connected"); }} />}
-      {setup && setup.type !== "mail" && setup.type !== "slack" && setup.type !== "microsoft" && <ConnectorSetup onMail={() => setSetup({ type: "mail" })} onMicrosoft={() => setSetup({ type: "microsoft" })} onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
+      {setup?.type === "whatsapp" && <WhatsAppSetup key={setup.whatsapp?.id ?? "new"} house={house.name} existing={setup.whatsapp} options={sharable(house)}
+        back={setup.whatsapp ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
+        saved={async () => { await whatsapp.refresh(); notify(setup.whatsapp ? "WhatsApp paired again" : "WhatsApp connected"); }} />}
+      {access && "whatsapp" in access && <WhatsAppSettings key={access.whatsapp.id} house={house.name} connection={access.whatsapp} options={sharable(house)} onClose={() => setAccess(undefined)}
+        saved={async () => { await whatsapp.refresh(); notify("WhatsApp settings saved"); }} />}
+      {setup && setup.type !== "mail" && setup.type !== "slack" && setup.type !== "microsoft" && setup.type !== "whatsapp" && <ConnectorSetup onWhatsApp={() => setSetup({ type: "whatsapp" })} onMail={() => setSetup({ type: "mail" })} onMicrosoft={() => setSetup({ type: "microsoft" })} onSlack={() => setSetup({ type: "slack" })} house={house} ready={!!view?.ready} existing={setup.existing} onClose={() => setSetup(undefined)} />}
       {setup?.type === "microsoft" && <MicrosoftSetup key={setup.microsoft?.id ?? "new"} house={house.name} ready={!!microsoft.ready} existing={setup.microsoft}
         options={sharable(house)} back={setup.microsoft ? undefined : () => setSetup({})} onClose={() => setSetup(undefined)}
         saved={async () => { await microsoft.refresh(); notify("Microsoft To Do connected"); }} />}
@@ -253,17 +273,19 @@ export function WorkspaceConnectors({ house, notify }: { house: WorkspaceView; n
  * One connected account: its mark, name, what it gives and which bots have it, anything that needs the owner (an email
  * waiting in a chat); its state; Bot access, Reconnect (or Settings), Disconnect.
  */
-function ConnectionRow({ house, type, title, sub, connection: c, notices = [], onAccess, edit = "Reconnect", onEdit, onDisconnect }: {
+function ConnectionRow({ house, type, title, sub, connection: c, notices = [], state, access = "Bot access", onAccess, edit = "Reconnect", onEdit, onDisconnect }: {
   house: WorkspaceView; type: ConnectorType; title: ReactNode; sub: string;
   connection: { pets: string[]; needsReconnect: boolean; connectedAt: string }; notices?: MailNotice[];
-  onAccess: () => void; edit?: string; onEdit: () => void; onDisconnect: () => void;
+  /** How the account is doing, when it is more than connected or not. */
+  state?: { text: string; tone: string };
+  access?: string; onAccess: () => void; edit?: string; onEdit: () => void; onDisconnect: () => void;
 }) {
   const pets = new Map(house.pets.map((pet) => [pet.name, pet]));
   return (
     <ListRow
       actions={
         <>
-          <button className="text-btn plain" onClick={onAccess}>Bot access</button>
+          <button className="text-btn plain" onClick={onAccess}>{access}</button>
           <button className={c.needsReconnect ? "btn small" : "text-btn plain"} onClick={onEdit}>{edit}</button>
           <button className="text-btn" onClick={onDisconnect}>Disconnect</button>
         </>
@@ -299,8 +321,8 @@ function ConnectionRow({ house, type, title, sub, connection: c, notices = [], o
       </Cell>
       <Cell lines>
         <span className="bot-state">
-          <span className={`dot ${c.needsReconnect ? "danger" : "idle"}`} />
-          {c.needsReconnect ? "Reconnect required" : "Connected"}
+          <span className={`dot ${state?.tone ?? (c.needsReconnect ? "danger" : "idle")}`} />
+          {state?.text ?? (c.needsReconnect ? "Reconnect required" : "Connected")}
         </span>
         <span className="faint" title={new Date(c.connectedAt).toLocaleString()}>
           connected {relative(c.connectedAt) === "now" ? "just now" : relative(c.connectedAt)}
@@ -317,7 +339,7 @@ const sharable = (house: WorkspaceView) => house.pets.filter((p) => !p.sideworke
  * Add connector, in two steps: what to connect, then the provider's form (services and bots), which leaves for its
  * sign-in page. Reconnecting an account starts at the form, with that account's choices.
  */
-function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft, onMail }: { onMail: () => void; onMicrosoft: () => void; /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
+function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft, onMail, onWhatsApp }: { onWhatsApp: () => void; onMail: () => void; onMicrosoft: () => void; /** Slack chosen: its own steps take over. */ onSlack: () => void; house: WorkspaceView; ready: boolean; existing?: GoogleConnectionView; onClose: () => void }) {
   const [step, setStep] = useState(existing ? 1 : 0);
   const [type, setType] = useState<ConnectorType>("google");
   const [services, setServices] = useState<GoogleService[]>(existing?.services ?? ["gmail", "drive", "calendar"]);
@@ -337,6 +359,7 @@ function ConnectorSetup({ house, ready, existing, onClose, onSlack, onMicrosoft,
             if (type === "mail") { onMail(); return "stay"; }
             if (type === "slack") { onSlack(); return "stay"; }
             if (type === "microsoft") { onMicrosoft(); return "stay"; }
+            if (type === "whatsapp") { onWhatsApp(); return "stay"; }
             setStep(1);
             return "stay";
           }

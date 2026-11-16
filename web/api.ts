@@ -3,6 +3,8 @@ import type { MailConnectionInput, MailConnectionView, MailConnectorsView } from
 export type { MailConnectionInput, MailConnectionView, MailConnectorsView, MailSendView, MailEndpoint, MailSendPolicy } from "../src/core/mail-connectors";
 import type { MicrosoftConnectionView, MicrosoftConnectorsView, MicrosoftAuthorizationView, MicrosoftPollView } from "../src/core/microsoft-connectors";
 export type { MicrosoftConnectionView, MicrosoftConnectorsView, MicrosoftAuthorizationView, MicrosoftPollView };
+import type { WhatsAppConnectionView, WhatsAppConnectorsView, WhatsAppPairingView, WhatsAppPollView } from "../src/core/whatsapp-connectors";
+export type { WhatsAppConnectionView, WhatsAppConnectorsView, WhatsAppPairingView, WhatsAppPollView };
 import type { SlackConnectionView, SlackConnectorsView } from "../src/core/slack-connectors";
 export type { SlackConnectionView, SlackConnectorsView };
 import type { GoogleConnectorsView, GoogleConnectionView, GoogleService } from "../src/core/google-connectors";
@@ -223,6 +225,12 @@ export const api = {
   cancelMicrosoft: (house: string, id: string) => call<{ ok: boolean }>("POST", `${housePath(house)}/connectors/microsoft/cancel`, { id }),
   shareMicrosoft: (house: string, id: string, pets: string[], writePolicy?: ConnectorWritePolicy) => call<MicrosoftConnectionView>("PATCH", `${housePath(house)}/connectors/microsoft/${encodeURIComponent(id)}`, { pets, writePolicy }),
   disconnectMicrosoft: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/microsoft/${encodeURIComponent(id)}`),
+  whatsappConnections: (house: string) => call<WhatsAppConnectorsView>("GET", `${housePath(house)}/connectors/whatsapp`),
+  pairWhatsApp: (house: string, input: { name?: string; pets: string[]; writePolicy: ConnectorWritePolicy; phone?: string; connection?: string }) => call<WhatsAppPairingView>("POST", `${housePath(house)}/connectors/whatsapp/pair`, input),
+  pollWhatsApp: (house: string, id: string) => call<WhatsAppPollView>("POST", `${housePath(house)}/connectors/whatsapp/poll`, { id }),
+  cancelWhatsApp: (house: string, id: string) => call<{ ok: boolean }>("POST", `${housePath(house)}/connectors/whatsapp/cancel`, { id }),
+  saveWhatsApp: (house: string, id: string, input: { name?: string; pets: string[]; writePolicy: ConnectorWritePolicy }) => call<WhatsAppConnectionView>("PATCH", `${housePath(house)}/connectors/whatsapp/${encodeURIComponent(id)}`, input),
+  disconnectWhatsApp: (house: string, id: string) => call<{ ok: boolean }>("DELETE", `${housePath(house)}/connectors/whatsapp/${encodeURIComponent(id)}`),
   googleConnections: (house: string) => call<GoogleConnectorsView>("GET", `${housePath(house)}/connectors/google`),
   connectGoogle: (house: string, services: GoogleService[], pets: string[], write: boolean, writePolicy?: ConnectorWritePolicy) => call<{ url: string }>("POST", `${housePath(house)}/connectors/google/connect`, { services, pets, write, writePolicy }),
   shareGoogle: (house: string, id: string, pets: string[], writePolicy?: ConnectorWritePolicy) => call<GoogleConnectionView>("PATCH", `${housePath(house)}/connectors/google/${encodeURIComponent(id)}`, { pets, writePolicy }),
