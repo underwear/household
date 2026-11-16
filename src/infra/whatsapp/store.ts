@@ -31,18 +31,23 @@ export interface WhatsAppMessageView {
 export interface WhatsAppAuthor { fromMe: boolean; sender?: string }
 export type WhatsAppChange = { text: string; at: number } | { deleted: number };
 
-interface MessageRow { chat: string; id: string; sender: string | null; from_me: number; at: number; kind: WhatsAppKind; text: string; quoted: string | null; media: string | null; raw?: string | null; chat_name: string | null; sender_name: string | null; edited: number | null; deleted: number | null; deleted_by: string | null; deleted_by_name?: string | null; versions: string | null; placeholder: number | null }
+interface MessageRow { chat: string; id: string; sender: string | null; from_me: number; at: number; kind: WhatsAppKind; text: string; quoted: string | null; media: string | null; raw?: string | null; chat_name: string | null; sender_name: string | null; edited: number | null; deleted: number | null; deleted_by: string | null; deleted_by_name?: string | null; versions: string | null; placeholder: number | null; kept_file: number }
 interface Stored { text: string; sender: string | null; from_me: number; edited: number | null; deleted: number | null; deleted_by: string | null; versions: string | null; placeholder: number | null; raw: string | null; kind: WhatsAppKind }
 type Version = { text: string | null; until: number };
+const MEDIA_KINDS = new Set<WhatsAppKind>(["image", "video", "audio", "document", "sticker"]);
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
 const versionsOf = (value: string | null): Version[] => value ? JSON.parse(value) : [];
 /** What happened to a message, in words, so a reader (a bot) can't mistake its last text for what was first said, or miss that it was withdrawn. */
 function note(r: MessageRow) {
   const parts: string[] = [];
   const versions = versionsOf(r.versions);
-  if (r.placeholder) parts.push("Household has not seen this message itself, only what happened to it");
+  if (r.placeholder) parts.push("Household has not seen this message itself, only what happened to it: text and from may be empty or unknown");
   if (versions.length) parts.push(`Edited ${versions.length === 1 ? "once" : `${versions.length} times`} by its author: text is the last version, previous the earlier ones, oldest first${versions[0]?.text === null ? " (the original text was not seen by Household: null)" : ""}`);
-  if (r.deleted) parts.push(`${parts.length ? "then d" : "D"}eleted for everyone ${r.deleted_by ? `by ${r.deleted_by === "me" ? "the owner" : r.deleted_by_name ?? r.deleted_by.split("@")[0]}, a group admin, not its author,` : "by its author"} at ${iso(r.deleted)}: people in the chat no longer see it; Household kept ${r.kind === "text" ? "its text" : "its text and file"}`);
+  if (r.deleted) {
+    const by = r.deleted_by ? `by ${r.deleted_by === "me" ? "the owner" : r.deleted_by_name ?? r.deleted_by.split("@")[0]}, not its author (WhatsApp lets group admins do that; Household can't confirm the deleter is one),` : r.placeholder ? "" : "by its author";
+    const kept = r.placeholder ? "Household never had its content" : MEDIA_KINDS.has(r.kind) ? (r.kept_file ? "Household kept its text and file" : "Household kept its text; its file was not saved and may be gone from WhatsApp") : "Household kept its text";
+    parts.push(`${parts.length ? "then d" : "D"}eleted for everyone ${by} at ${iso(r.deleted)}: people in the chat no longer see it; ${kept}`.replace("  ", " "));
+  }
   return `${parts.join("; ")}.`;
 }
 /** Words of a query as an FTS5 prefix match: punctuation never reaches the query language. */
@@ -94,7 +99,8 @@ export class WhatsAppStore {
    * an earlier version arriving again changes nothing. A placeholder (an edit or deletion heard of first) gets its
    * message: the original text, its time and file, and edits only if their sender was the message's author.
    */
-  addMessages(connection: string, messages: WhatsAppMessage[]) {
+  addMessages(connection: string, messages: WhatsAppMessage[]): { chat: string; id: string; fetch: string }[] {
+    const fetches: { chat: string; id: string; fetch: string }[] = [];
     const insert = this.db.query(`INSERT INTO whatsapp_messages(connection,chat,id,sender,from_me,at,kind,text,quoted,media,raw) VALUES(?,?,?,?,?,?,?,?,?,?,?)`);
     this.db.transaction(() => {
       for (const m of messages) {
@@ -105,10 +111,13 @@ export class WhatsAppStore {
           let versions = versionsOf(row.versions), text = m.text, edited = row.edited;
           if (versions.length && author) { versions = versions.map((v, i) => i === 0 && v.text === null ? { ...v, text: m.text } : v); text = row.text; }
           else { versions = []; edited = null; }
-          // A deletion by the author needs no «by»; one by someone else stays marked.
-          const by = row.deleted_by && row.deleted_by !== (m.fromMe ? "me" : m.sender) ? row.deleted_by : null;
-          this.db.run(`UPDATE whatsapp_messages SET sender=?, from_me=?, at=?, kind=?, text=?, quoted=?, media=?, raw=?, edited=?, versions=?, deleted_by=?, placeholder=NULL WHERE connection=? AND chat=? AND id=?`,
-            [m.sender ?? null, m.fromMe ? 1 : 0, m.at, m.kind, text, m.quoted ?? null, media, m.raw ?? null, edited, versions.length ? JSON.stringify(versions) : null, by, connection, m.chat, m.id]);
+          // A deletion by the author needs no «by»; one by someone else stays marked (outside groups, it is dropped).
+          const deleter = row.deleted_by, isAuthor = deleter === (m.fromMe ? "me" : m.sender);
+          const deleted = row.deleted && (isAuthor || m.chat.endsWith("@g.us")) ? row.deleted : null;
+          const by = deleted && !isAuthor ? deleter : null;
+          if (deleted && m.raw) fetches.push({ chat: m.chat, id: m.id, fetch: m.raw });
+          this.db.run(`UPDATE whatsapp_messages SET sender=?, from_me=?, at=?, kind=?, text=?, quoted=?, media=?, raw=?, edited=?, versions=?, deleted=?, deleted_by=?, placeholder=NULL WHERE connection=? AND chat=? AND id=?`,
+            [m.sender ?? null, m.fromMe ? 1 : 0, m.at, m.kind, text, m.quoted ?? null, media, m.raw ?? null, edited, versions.length ? JSON.stringify(versions) : null, deleted, by, connection, m.chat, m.id]);
         } else {
           const versions = versionsOf(row.versions);
           if (m.text && m.text !== row.text && !versions.some(v => v.text === m.text)) {
@@ -120,6 +129,7 @@ export class WhatsAppStore {
         this.upsertChat(connection, m.chat, { last: m.at });
       }
     })();
+    return fetches;
   }
   /**
    * An edit keeps every text it replaces (\`versions\`), and only the message's author can edit it. A deletion for
@@ -135,8 +145,10 @@ export class WhatsAppStore {
       const row = this.stored(connection, chat, id);
       if ("deleted" in change) {
         if (!row) {
-          this.db.run(`INSERT INTO whatsapp_messages(connection,chat,id,sender,from_me,at,kind,text,deleted,placeholder) VALUES(?,?,?,?,?,?,'other','',?,1)`,
-            [connection, chat, id, by.sender ?? null, by.fromMe ? 1 : 0, change.deleted, change.deleted]);
+          // Its author is not known yet: the deleter is kept, and compared when the message comes.
+          this.db.run(`INSERT INTO whatsapp_messages(connection,chat,id,sender,from_me,at,kind,text,deleted,deleted_by,placeholder) VALUES(?,?,?,NULL,0,?,'other','',?,?,1)`,
+            [connection, chat, id, change.deleted, change.deleted, who]);
+          this.upsertChat(connection, chat, { last: change.deleted });
           return {};
         }
         if (row.deleted) return {};
@@ -149,12 +161,23 @@ export class WhatsAppStore {
       if (!row) {
         this.db.run(`INSERT INTO whatsapp_messages(connection,chat,id,sender,from_me,at,kind,text,edited,versions,placeholder) VALUES(?,?,?,?,?,?,'text',?,?,?,1)`,
           [connection, chat, id, by.sender ?? null, by.fromMe ? 1 : 0, change.at, change.text, change.at, JSON.stringify([{ text: null, until: change.at }])]);
+        this.upsertChat(connection, chat, { last: change.at });
         return {};
       }
       const author = by.fromMe ? !!row.from_me : !row.from_me && row.sender === by.sender;
-      if (!author || row.deleted) return {};
+      // WhatsApp edits nothing after a deletion; an edit made before it may still arrive late.
+      if (!author || (row.deleted && change.at >= row.deleted)) return {};
       const versions = versionsOf(row.versions);
-      if ((row.edited && change.at < row.edited) || change.text === row.text || versions.some(v => v.text === change.text)) return {};
+      if (change.text === row.text || versions.some(v => v.text === change.text)) return {};
+      if (row.edited && change.at < row.edited) {
+        // An edit arriving after a later one: it goes where it happened. The version it replaced lasted until
+        // this edit; its own text lasted until the next one.
+        const i = versions.findIndex(v => v.until > change.at);
+        if (i < 0) return {};
+        const next = [...versions.slice(0, i), { text: versions[i]!.text, until: change.at }, { text: change.text, until: versions[i]!.until }, ...versions.slice(i + 1)];
+        this.db.run("UPDATE whatsapp_messages SET versions=? WHERE connection=? AND chat=? AND id=?", [JSON.stringify(next), connection, chat, id]);
+        return {};
+      }
       this.db.run("UPDATE whatsapp_messages SET text=?, edited=?, versions=? WHERE connection=? AND chat=? AND id=?", [change.text, change.at, JSON.stringify([...versions, { text: row.text, until: change.at }]), connection, chat, id]);
       return {};
     })();
@@ -162,6 +185,9 @@ export class WhatsAppStore {
   /** A file kept in Household itself: a deleted message's, saved before WhatsApp lets it go. */
   saveFile(connection: string, chat: string, id: string, bytes: Uint8Array) {
     this.db.run("INSERT OR REPLACE INTO whatsapp_files(connection,chat,id,bytes) VALUES(?,?,?,?)", [connection, chat, id, bytes]);
+  }
+  fileBytes(connection: string) {
+    return this.db.query<{ n: number | null }, [string]>("SELECT sum(length(bytes)) AS n FROM whatsapp_files WHERE connection=?").get(connection)?.n ?? 0;
   }
   file(connection: string, chat: string, id: string): Uint8Array | undefined {
     const row = this.db.query<{ bytes: Uint8Array }, [string, string, string]>("SELECT bytes FROM whatsapp_files WHERE connection=? AND chat=? AND id=?").get(connection, chat, id);
@@ -199,9 +225,9 @@ export class WhatsAppStore {
   }
 
   chats(connection: string, input: { query?: string; limit: number; before?: number }): WhatsAppChatSummary[] {
-    const rows = this.db.query<{ jid: string; name: string | null; last: number | null; text: string | null; from_me: number | null; sender_name: string | null; kind: WhatsAppKind | null; edited: number | null; deleted: number | null }, any[]>(`
+    const rows = this.db.query<{ jid: string; name: string | null; last: number | null; text: string | null; from_me: number | null; sender_name: string | null; sender: string | null; kind: WhatsAppKind | null; edited: number | null; deleted: number | null }, any[]>(`
       SELECT c.jid, ${NAME("c.jid", "c")} AS name, c.last,
-        m.text, m.from_me, m.kind, m.edited, m.deleted, ${NAME("m.sender", "m")} AS sender_name
+        m.text, m.from_me, m.sender, m.kind, m.edited, m.deleted, ${NAME("m.sender", "m")} AS sender_name
       FROM whatsapp_chats c
       LEFT JOIN whatsapp_messages m ON m.rowid = (SELECT rowid FROM whatsapp_messages WHERE connection=c.connection AND chat=c.jid ORDER BY at DESC LIMIT 1)
       WHERE c.connection=? AND c.jid NOT LIKE '%@broadcast' AND c.jid NOT LIKE '%@newsletter' AND (? IS NULL OR coalesce(c.last,0) < ?)
@@ -212,7 +238,7 @@ export class WhatsAppStore {
         jid: r.jid, name: r.name ?? r.jid.split("@")[0]!, group: r.jid.endsWith("@g.us"),
         ...(r.last ? { last: iso(r.last) } : {}),
         ...(r.text !== null && r.text !== undefined ? {
-          lastText: r.text.slice(0, 160), lastFrom: r.from_me ? "me" : r.sender_name ?? undefined, ...(r.kind && r.kind !== "text" ? { lastKind: r.kind } : {}),
+          lastText: r.text.slice(0, 160), lastFrom: r.from_me ? "me" : r.sender_name ?? r.sender?.split("@")[0], ...(r.kind && r.kind !== "text" ? { lastKind: r.kind } : {}),
           ...(r.edited ? { lastEdited: true as const } : {}), ...(r.deleted ? { lastDeleted: true as const } : {}),
         } : {}),
       }));
@@ -232,7 +258,8 @@ export class WhatsAppStore {
   }
   private select(where: string) {
     return `SELECT m.chat, m.id, m.sender, m.from_me, m.at, m.kind, m.text, m.quoted, m.media, m.edited, m.deleted, m.deleted_by, m.versions, m.placeholder,
-      ${NAME("m.chat", "m")} AS chat_name, ${NAME("coalesce(m.sender, m.chat)", "m")} AS sender_name, ${NAME("m.deleted_by", "m")} AS deleted_by_name
+      ${NAME("m.chat", "m")} AS chat_name, ${NAME("coalesce(m.sender, m.chat)", "m")} AS sender_name, ${NAME("m.deleted_by", "m")} AS deleted_by_name,
+      EXISTS(SELECT 1 FROM whatsapp_files f WHERE f.connection=m.connection AND f.chat=m.chat AND f.id=m.id) AS kept_file
       FROM whatsapp_messages m WHERE ${where}`;
   }
   /** A chat's messages before `before` (seconds), oldest first. */

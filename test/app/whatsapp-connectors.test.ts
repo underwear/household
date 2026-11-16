@@ -4,7 +4,7 @@ import { ConnectorWrites, connectorWriteCard, type ConnectorWriteApproval, type 
 import { WhatsAppConnectors } from "../../src/app/whatsapp-connectors";
 import { whatsappConnectorTools } from "../../src/app/whatsapp-connector-tools";
 import { whatsappConnectorRoutes } from "../../src/app/whatsapp-connector-routes";
-import { convert, type WhatsAppClient, type WhatsAppClientOptions } from "../../src/infra/whatsapp/client";
+import { convert, mediaSource, type WhatsAppClient, type WhatsAppClientOptions } from "../../src/infra/whatsapp/client";
 import { SqliteStore } from "../../src/infra/sqlite-store";
 import type { House } from "../../src/core/household";
 
@@ -303,9 +303,27 @@ test("edits and deletions heard of before their message, replays, admins, and mi
   w.addMessages("c", [{ chat, id: "g", fromMe: false, sender: anna, at: 50, kind: "video", text: "", media: { mimetype: "video/mp4" }, raw: "{\"v\":1}" }]);
   expect(w.editMessage("c", chat, "g", { deleted: 60 }, { fromMe: false, sender: bob })).toEqual({ fetch: "{\"v\":1}" });
   expect(one("g")).toMatchObject({ deleted: new Date(60_000).toISOString(), deletedBy: "Bob" });
-  expect(one("g").note).toContain("by Bob, a group admin, not its author");
+  expect(one("g").note).toContain("by Bob, not its author (WhatsApp lets group admins do that");
+  expect(one("g").note).toContain("its file was not saved");
   w.saveFile("c", chat, "g", new Uint8Array([7]));
   expect(w.file("c", chat, "g")).toEqual(new Uint8Array([7]));
+  expect(one("g").note).toContain("Household kept its text and file");
+  expect(w.fileBytes("c")).toBe(1);
+  // A deletion heard of first says so; by an admin, it stays marked when the message comes, and asks for its file.
+  w.editMessage("c", chat, "k", { deleted: 90 }, { fromMe: false, sender: bob });
+  expect(one("k").note).toContain("Household never had its content");
+  expect(w.chats("c", { limit: 10 }).some(c => c.jid === chat)).toBe(true);
+  expect(w.addMessages("c", [{ chat, id: "k", fromMe: false, sender: anna, at: 85, kind: "image", text: "pic", raw: "{\"k\":1}" }])).toEqual([{ chat, id: "k", fetch: "{\"k\":1}" }]);
+  expect(one("k")).toMatchObject({ text: "pic", deleted: new Date(90_000).toISOString(), deletedBy: "Bob" });
+  // An edit arriving after a later one goes where it happened.
+  w.addMessages("c", [{ chat, id: "o", fromMe: false, sender: anna, at: 100, kind: "text", text: "o1" }]);
+  w.editMessage("c", chat, "o", { text: "o3", at: 130 }, { fromMe: false, sender: anna });
+  w.editMessage("c", chat, "o", { text: "o2", at: 110 }, { fromMe: false, sender: anna });
+  expect(one("o")).toMatchObject({ text: "o3", previous: [{ text: "o1", until: new Date(110_000).toISOString() }, { text: "o2", until: new Date(130_000).toISOString() }] });
+  // An edit made before a deletion may still arrive after it.
+  w.editMessage("c", chat, "o", { deleted: 140 }, { fromMe: false, sender: anna });
+  w.editMessage("c", chat, "o", { text: "o4", at: 135 }, { fromMe: false, sender: anna });
+  expect(one("o")).toMatchObject({ text: "o4", deleted: new Date(140_000).toISOString() });
   // In a direct chat only the author can delete.
   w.addMessages("c", [{ chat: anna, id: "h", fromMe: false, sender: anna, at: 70, kind: "text", text: "dm" }]);
   w.editMessage("c", anna, "h", { deleted: 80 }, { fromMe: true });
@@ -316,7 +334,7 @@ test("edits and deletions heard of before their message, replays, admins, and mi
   w.addMessages("c", [{ chat: anna, id: "h", fromMe: false, sender: anna, at: 70, kind: "text", text: "dm" }]);
   expect(w.message("c", anna, "h")!.text).toBe("dm, changed");
   // The chat list tells a deleted last message apart.
-  expect(w.chats("c", { limit: 10 }).find(c => c.jid === chat)).toMatchObject({ lastDeleted: true, lastKind: "video" });
+  expect(w.chats("c", { limit: 10 }).find(c => c.jid === chat)).toMatchObject({ lastDeleted: true, lastEdited: true, lastText: "o4", lastFrom: "34611222333" });
 });
 
 test("taking messages as Baileys emits them keeps the original an edit replaces", async () => {
@@ -336,4 +354,12 @@ test("taking messages as Baileys emits them keeps the original an edit replaces"
   expect(heard[0]).toContain("second");
   expect(seen[0]).toMatchObject({ message: { text: "first" } });
   expect(seen[1]).toMatchObject({ edit: { id: "A", change: { text: "second", at: 20 } } });
+});
+
+test("files come only from WhatsApp's media host, never from a URL the sender wrote", () => {
+  const msg = (image: Record<string, unknown>) => ({ key: { remoteJid: "1@s.whatsapp.net", id: "m" }, message: { imageMessage: { mediaKey: new Uint8Array([1]), ...image } } }) as any;
+  expect(mediaSource(msg({ directPath: "/v/t62/abc.enc?ccb=11", url: "http://127.0.0.1/admin" }))).toMatchObject({ type: "image", media: { directPath: "/v/t62/abc.enc?ccb=11" } });
+  expect(() => mediaSource(msg({ url: "http://127.0.0.1/admin" }))).toThrow("no file");
+  for (const directPath of [".evil.com/x", "//evil.com/x", "/x@evil.com:80/y", "/a b"]) expect(() => mediaSource(msg({ directPath }))).toThrow("no file");
+  expect(() => mediaSource(msg({ directPath: "/ok", fileLength: 1e9 }))).toThrow("too large");
 });

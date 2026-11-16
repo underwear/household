@@ -1,5 +1,5 @@
 import makeWASocket, {
-  Browsers, BufferJSON, DisconnectReason, downloadMediaMessage, getContentType, initAuthCreds, isJidGroup, isLidUser, isPnUser,
+  Browsers, BufferJSON, DisconnectReason, downloadContentFromMessage, getContentType, initAuthCreds, isJidGroup, isLidUser, isPnUser,
   jidNormalizedUser, makeCacheableSignalKeyStore, normalizeMessageContent, proto, toNumber,
   type AuthenticationCreds, type AuthenticationState, type SignalDataTypeMap, type WAMessage, type WASocket,
 } from "baileys";
@@ -81,6 +81,11 @@ const KINDS: Record<string, WhatsAppKind> = {
   documentMessage: "document", stickerMessage: "sticker", locationMessage: "location", liveLocationMessage: "location",
   contactMessage: "contact", contactsArrayMessage: "contact", pollCreationMessage: "poll", pollCreationMessageV2: "poll", pollCreationMessageV3: "poll",
 };
+/** WhatsApp's media host: files come only from there. */
+const MEDIA_HOST = "mmg.whatsapp.net";
+const FILE_MAX = 64 * 1024 * 1024;
+/** Room for the files of deleted messages Household keeps, per connection. */
+const KEPT_FILES_MAX = 2 * 1024 * 1024 * 1024;
 const MEDIA = new Set<WhatsAppKind>(["image", "video", "audio", "document", "sticker"]);
 
 /** A message as Household keeps it, or what it changes: an edit, a deletion. Reactions and protocol noise are skipped. */
@@ -127,6 +132,17 @@ export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { 
     ...(media ? { media, raw: JSON.stringify(m, BufferJSON.replacer) } : {}),
   } };
 }
+/**
+ * Where a message's file is: its key and its path on WhatsApp's media host. The sender writes the message, so its
+ * \`url\` is never used, and a path that could leave the host is refused.
+ */
+export function mediaSource(message: WAMessage) {
+  const content = normalizeMessageContent(message.message), kind = getContentType(content);
+  const media = kind ? (content as any)[kind] : undefined;
+  if (!media?.mediaKey || typeof media.directPath !== "string" || !/^\/[\w\-./%?=&]+$/.test(media.directPath) || media.directPath.startsWith("//")) throw new Error("This message has no file WhatsApp can serve");
+  if (toNumber(media.fileLength) > FILE_MAX) throw new Error("This file is too large");
+  return { media: media as { mediaKey: Uint8Array; directPath: string }, type: kind!.replace("Message", "") as any };
+}
 const contact = (c: { id: string; lid?: string; phoneNumber?: string; name?: string; notify?: string; verifiedName?: string }): WhatsAppContact | undefined => {
   const jid = pn(c.id, c.phoneNumber);
   if (!jid || isJidGroup(jid)) return;
@@ -160,15 +176,43 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
     queue = queue.then(async () => { if (!ended) await work(); }).catch(error => log?.(`whatsapp: ${(error as Error).message}`));
     return queue;
   };
-  /** A deleted message's file, fetched while WhatsApp may still have it. */
-  const keepFile = async (chat: string, id: string, raw: string) => {
+  let fetching = 0;
+  /**
+   * A deleted message's file, fetched while WhatsApp may still have it: outside the save queue (a slow download
+   * never holds messages back), two at a time, within the store's room for kept files.
+   */
+  const keepFile = (chat: string, id: string, raw: string) => {
+    if (ended || fetching >= 2 || store.fileBytes(connection()) > KEPT_FILES_MAX) { log?.("whatsapp: a deleted message's file was not kept (busy or out of room)"); return; }
+    fetching++;
+    const owner = connection();
+    void download(raw).then(bytes => { if (!ended && owner === connection()) store.saveFile(owner, chat, id, bytes); })
+      .catch(error => log?.(`whatsapp: a deleted message's file could not be kept: ${(error as Error).message}`))
+      .finally(() => { fetching--; });
+  };
+  /**
+   * A message's file, only from WhatsApp's own media host (never a URL the sender put in the message), within a
+   * size cap and a time limit; WhatsApp is asked once to upload it again when its copy expired.
+   */
+  const download = async (raw: string, reuploaded = false): Promise<Uint8Array> => {
+    const message = JSON.parse(raw, BufferJSON.reviver) as WAMessage;
+    const { media, type } = mediaSource(message);
     try {
-      const message = JSON.parse(raw, BufferJSON.reviver) as WAMessage;
-      const size = toNumber((normalizeMessageContent(message.message) as any)?.[getContentType(normalizeMessageContent(message.message)) ?? ""]?.fileLength);
-      if (size > 64 * 1024 * 1024) return;
-      const bytes = await downloadMediaMessage(message, "buffer", {}, { logger, reuploadRequest: sock.updateMediaMessage });
-      store.saveFile(connection(), chat, id, new Uint8Array(bytes));
-    } catch (error) { log?.(`whatsapp: a deleted message's file could not be kept: ${(error as Error).message}`); }
+      const stream = await downloadContentFromMessage({ mediaKey: media.mediaKey, directPath: media.directPath, url: undefined as unknown as string }, type,
+        { host: MEDIA_HOST, options: { signal: AbortSignal.timeout(120_000) } as RequestInit });
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      for await (const chunk of stream as AsyncIterable<Uint8Array>) {
+        size += chunk.length;
+        if (size > FILE_MAX) { (stream as any).destroy?.(); throw new Error("This file is too large"); }
+        chunks.push(chunk);
+      }
+      return new Uint8Array(Buffer.concat(chunks));
+    } catch (error) {
+      const status = (error as any)?.status ?? (error as any)?.output?.statusCode;
+      if (reuploaded || ![404, 410].includes(status)) throw error;
+      const fresh = await sock.updateMediaMessage(message);
+      return download(JSON.stringify(fresh, BufferJSON.replacer), true);
+    }
   };
   /**
    * Messages as WhatsApp delivered them, converted at once (before Baileys' event buffer can fold an edit or a
@@ -185,11 +229,13 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
         if (!item) continue;
         if ("edit" in item) {
           const e = item.edit, chat = (await number(e.chat))!, sender = await number(e.by.sender);
+          if (ended) return;
           const { fetch } = store.editMessage(connection(), chat, e.id, e.change, { fromMe: e.by.fromMe, ...(sender ? { sender } : {}) });
-          if (fetch) await keepFile(chat, e.id, fetch);
+          if (fetch) keepFile(chat, e.id, fetch);
         } else {
           const m = item.message, chat = (await number(m.chat))!, sender = await number(m.sender);
-          store.addMessages(connection(), [{ ...m, chat, ...(sender ? { sender } : {}) }]);
+          if (ended) return;
+          for (const f of store.addMessages(connection(), [{ ...m, chat, ...(sender ? { sender } : {}) }])) keepFile(f.chat, f.id, f.fetch);
         }
       }
     });
@@ -283,11 +329,7 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
       const [found] = (await ready().onWhatsApp(phone)) ?? [];
       return found?.exists ? jidNormalizedUser(found.jid) : undefined;
     },
-    download: async raw => {
-      const s = ready();
-      const message = JSON.parse(raw, BufferJSON.reviver) as WAMessage;
-      return new Uint8Array(await downloadMediaMessage(message, "buffer", {}, { logger, reuploadRequest: s.updateMediaMessage }));
-    },
+    download: async raw => { ready(); return download(raw); },
     logout: async () => { const s = sock; ended = true; clearTimeout(timer); await s.logout().catch(() => {}); s.end(undefined); },
     end: () => { ended = true; clearTimeout(timer); sock?.end(undefined); },
   };
