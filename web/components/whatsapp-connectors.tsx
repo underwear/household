@@ -10,7 +10,9 @@ export const whatsappLinkWords = (c: WhatsAppConnectionView) => c.needsReconnect
 export function useWhatsAppConnections(house: string) {
   const [view, setView] = useState<WhatsAppConnectorsView>();
   const [error, setError] = useState("");
-  const refresh = async () => { try { setView(await api.whatsappConnections(house)); setError(""); } catch (e) { setError((e as Error).message); } };
+  const shown = useRef(house); shown.current = house;
+  // A late answer for a workspace no longer shown is dropped.
+  const refresh = async () => { const asked = house; try { const v = await api.whatsappConnections(asked); if (shown.current === asked) { setView(v); setError(""); } } catch (e) { if (shown.current === asked) setError((e as Error).message); } };
   useEffect(() => { setView(undefined); void refresh(); }, [house]);
   // A device connecting, or history still syncing after a pairing, changes the list on its own.
   useEffect(() => {
@@ -59,12 +61,17 @@ export function WhatsAppSetup({ house, existing, options, onClose, saved, back }
   useEffect(() => () => { const id = current.current; current.current = undefined; if (id) void api.cancelWhatsApp(house, id).catch(() => {}); }, [house]);
   useEffect(() => {
     if (!pairing) return;
-    let stopped = false, timer: ReturnType<typeof setTimeout>;
+    let stopped = false, failures = 0, timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       if (stopped) return;
       let result: WhatsAppPollView;
-      try { result = await api.pollWhatsApp(house, pairing); }
-      catch (e) { if (!stopped) { current.current = undefined; setError((e as Error).message); } return; }
+      // A blip (the host restarting a request, a dropped connection) gets a few more tries before the dialog gives up.
+      try { result = await api.pollWhatsApp(house, pairing); failures = 0; }
+      catch (e) {
+        if (stopped) return;
+        if (++failures < 4 && !/expired|another dashboard/.test((e as Error).message)) { timer = setTimeout(() => void poll(), 3000); return; }
+        current.current = undefined; setError((e as Error).message); return;
+      }
       if (stopped) return;
       setState(result);
       if (result.status === "connected") {

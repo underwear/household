@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import QRCode from "qrcode";
 import { connectorCallers, type ConnectorWritePolicy } from "../core/connector-write-policy";
 import type { House } from "../core/household";
@@ -72,7 +72,8 @@ export class WhatsAppConnectors {
     const beforeCallers = new Map(this.read().map(c => [c.id, connectorCallers(this.houses, c.house, c.pets)]));
     this.houses = structuredClone(houses);
     const saved = this.read(), kept = saved.filter(c => houses.some(h => h.name === c.house));
-    for (const c of saved) if (!kept.includes(c)) { this.abort(c.id); this.stopLink(c.id); }
+    // A workspace removed takes its accounts along: unlinked from the phone, keys and kept chats deleted.
+    for (const c of saved) if (!kept.includes(c)) { this.abort(c.id); void this.forget(c); }
     for (const c of kept) {
       const pets = c.pets.filter(name => houses.find(h => h.name === c.house)?.pets.some(p => p.name === name && !p.scout && !p.sideworker));
       if (pets.length !== c.pets.length) this.abort(c.id);
@@ -109,6 +110,13 @@ export class WhatsAppConnectors {
     this.update(id, item => { if (item.auth === link.auth) { item.needsReconnect = true; this.data.authClear(item.auth); } });
     this.abort(id);
     this.log?.(`whatsapp: a connection was unlinked by WhatsApp and needs pairing again`);
+  }
+  private async forget(c: Connection) {
+    const link = this.links.get(c.id);
+    this.links.delete(c.id);
+    if (link) await Promise.race([link.client.logout(), new Promise(resolve => setTimeout(resolve, 5_000))]).catch(() => {});
+    link?.client.end();
+    this.data.authClear(c.auth); this.data.clear(c.id);
   }
   private stopLink(id: string) { this.links.get(id)?.client.end(); this.links.delete(id); }
   private update(id: string, change: (c: Connection) => void) {
@@ -151,6 +159,7 @@ export class WhatsAppConnectors {
         open: me => { if (p.connected) live.open(me); else if (this.pairings.get(id) === p) this.paired(id, p, me); },
         status: status => { link.status = status; },
         loggedOut: () => { if (p.connected) live.loggedOut(); else if (this.pairings.get(id) === p) { p.error = "WhatsApp refused this pairing. Start again."; link.client.end(); } },
+        codeExpired: () => { if (!p.connected) { p.codeAsked = false; delete p.code; } },
       },
     });
     return { id, expiresAt: new Date(p.expires).toISOString() };
@@ -161,15 +170,18 @@ export class WhatsAppConnectors {
     const target = items.find(c => c.house === p.house && (p.target ? c.id === p.target : c.phone === me.phone));
     if (p.target && (!target || target.phone !== me.phone)) {
       p.error = target ? `That phone is +${me.phone}, but this connection is +${target.phone}. Scan with the right phone.` : "This connection was removed.";
-      void p.link.client.logout(); this.data.authClear(p.link.auth); this.data.clear(p.link.connection);
+      // The connection paired again keeps everything; only this stray device goes.
+      void p.link.client.logout(); this.data.authClear(p.link.auth);
+      if (!p.target) this.data.clear(p.link.connection);
       return;
     }
     if (target) {
       // Its history stays; what this pairing already saw moves to it.
-      if (p.link.connection !== target.id) { this.data.clear(p.link.connection); p.link.connection = target.id; }
+      if (p.link.connection !== target.id) { this.data.moveConnection(p.link.connection, target.id); p.link.connection = target.id; }
       this.abort(target.id);
+      // The device it replaces is unlinked from the phone, not left behind as a ghost.
       const old = this.links.get(target.id);
-      if (old) { old.client.end(); this.links.delete(target.id); }
+      if (old) { this.links.delete(target.id); if (old.auth !== p.link.auth) void old.client.logout().catch(() => {}).finally(() => old.client.end()); else old.client.end(); }
       if (target.auth !== p.link.auth) this.data.authClear(target.auth);
     }
     const c: Connection = {
@@ -205,7 +217,9 @@ export class WhatsAppConnectors {
     if (!p) return;
     this.pairings.delete(id); clearTimeout(p.timer);
     if (p.connected) return;
-    p.link.client.end();
+    // The phone may have just linked it: unlink, best effort, rather than leave a device behind.
+    const client = p.link.client;
+    void Promise.race([client.logout(), new Promise(resolve => setTimeout(resolve, 5_000))]).catch(() => {}).finally(() => client.end());
     this.data.authClear(p.link.auth);
     if (!p.target) this.data.clear(p.link.connection);
   }
@@ -227,11 +241,7 @@ export class WhatsAppConnectors {
     if (!c) throw new HouseholdError("Connection not found");
     this.abort(id);
     this.write(items.filter(i => i !== c));
-    const link = this.links.get(id);
-    this.links.delete(id);
-    if (link) await Promise.race([link.client.logout(), new Promise(resolve => setTimeout(resolve, 5_000))]).catch(() => {});
-    link?.client.end();
-    this.data.authClear(c.auth); this.data.clear(c.id);
+    await this.forget(c);
   }
 
   private parent(caller: PetIdentity) {
@@ -266,9 +276,8 @@ export class WhatsAppConnectors {
   private ref(c: Connection, chat: string, id: string): WhatsAppMessageRef {
     const m = this.data.message(c.id, chat, id);
     if (!m) throw new HouseholdError("Message not found in this chat; read the chat first");
-    return { chat, id, fromMe: m.fromMe, ...(m.fromMe ? {} : { sender: this.senderJid(c, chat, id) }), text: m.text };
+    return { chat, id, fromMe: m.fromMe, ...(!m.fromMe && m.senderJid ? { sender: m.senderJid } : {}), text: m.text };
   }
-  private senderJid(_c: Connection, chat: string, _id: string) { return chat.endsWith("@g.us") ? undefined : chat; }
 
   async request(caller: PetIdentity, id: string, operation: string, input: unknown, signal?: AbortSignal, clientRequestId?: string) {
     const { name, spec, params } = whatsappOperation(operation, input), write = spec.write === true;
@@ -298,6 +307,7 @@ export class WhatsAppConnectors {
         const m = this.data.message(c.id, params.chat, params.messageId);
         if (!m) throw new HouseholdError("Message not found in this chat; read the chat first");
         if (!m.raw) throw new HouseholdError("This message has no file");
+        if ((m.media?.size ?? 0) > FILE_MAX) throw new HouseholdError(`This file is too large to save (over ${FILE_MAX / 1024 / 1024} MB)`);
         let bytes: Uint8Array;
         try { bytes = await this.live(c).download(m.raw); }
         catch (error) { if (error instanceof HouseholdError) throw error; throw new HouseholdError("WhatsApp could not deliver this file; it may have expired on the sender's phone"); }
@@ -307,29 +317,38 @@ export class WhatsAppConnectors {
         return result({ path, kind: m.kind, size: bytes.length, ...(m.media?.mimetype ? { mimetype: m.media.mimetype } : {}) });
       }
     }
-    // A change: as the owner, to someone; what the owner sees on a card is who it goes to, by name.
+    // A change: as the owner, to someone. The card names who it goes to, always with the number or JID beside a
+    // name, since a name may be one the other side chose for themselves.
     const to = name === "messages.react" ? params.chat : params.to;
-    const label = (jid: string) => { const known = this.data.name(c.id, jid); const number = jid.endsWith("@s.whatsapp.net") ? `+${jid.split("@")[0]}` : undefined; return known ? `${known}${number ? ` (${number})` : ""}` : number ?? jid; };
-    const digits = phoneDigits(to);
-    const review = {
-      to: digits ? `+${digits}` : label(to),
-      ...(name === "messages.send" ? { text: params.text, ...(params.replyTo ? { replyTo: this.data.message(c.id, to, params.replyTo)?.text.slice(0, 200) ?? params.replyTo } : {}) } : {}),
+    const digits = phoneDigits(to), lookup = digits ? `${digits}@s.whatsapp.net` : to;
+    const label = (jid: string) => {
+      const known = this.data.name(c.id, jid);
+      const address = jid.endsWith("@s.whatsapp.net") ? `+${jid.split("@")[0]}` : jid.endsWith("@g.us") ? `group ${jid}` : jid;
+      return known ? `${known} (${address})` : address;
+    };
+    if (name === "messages.send" && params.replyTo && !this.data.message(c.id, lookup, params.replyTo)) throw new HouseholdError("The message to reply to is not in this chat; read the chat first. Nothing was sent.");
+    const review: Record<string, unknown> = {
+      to: label(lookup),
+      ...(name === "messages.send" ? { text: params.text, ...(params.replyTo ? { replyTo: this.data.message(c.id, lookup, params.replyTo)!.text.slice(0, 200) } : {}) } : {}),
       ...(name === "files.send" ? { file: params.path, ...(params.caption ? { caption: params.caption } : {}) } : {}),
-      ...(name === "messages.react" ? { emoji: params.emoji || "(remove reaction)", message: this.data.message(c.id, to, params.messageId)?.text.slice(0, 200) ?? params.messageId } : {}),
+      ...(name === "messages.react" ? { emoji: params.emoji || "(remove reaction)", message: this.data.message(c.id, lookup, params.messageId)?.text.slice(0, 200) ?? params.messageId } : {}),
     };
     if (!this.active.has(id)) this.active.set(id, new AbortController());
     const controller = this.active.get(id)!;
+    /** A file is read once, before the owner sees the card: what is approved is exactly what is sent. */
+    let file: { bytes: Uint8Array; name: string; mimetype: string } | undefined;
+    const snapshot = async () => {
+      if (!this.files) throw new HouseholdError("File transfer is unavailable");
+      const bytes = await this.files.read(caller, params.path, FILE_MAX);
+      const fileName = String(params.path).split(/[/\\]/).pop() || "file";
+      file = { bytes, name: fileName, mimetype: Bun.file(fileName).type.split(";")[0] || "application/octet-stream" };
+      return { ...review, file: `${fileName} (${file.mimetype}, ${bytes.length} bytes, sha256 ${createHash("sha256").update(bytes).digest("hex").slice(0, 16)}…)` };
+    };
     const execute = async (s?: AbortSignal) => {
       const current = this.allowed(caller, id, true), client = this.live(current);
       controller.signal.throwIfAborted(); s?.throwIfAborted();
       const chat = await this.chat(current, to, true);
-      let file: { bytes: Uint8Array; name: string; mimetype: string } | undefined;
-      if (name === "files.send") {
-        if (!this.files) throw new HouseholdError("File transfer is unavailable");
-        const bytes = await this.files.read(caller, params.path, FILE_MAX);
-        const fileName = String(params.path).split(/[/\\]/).pop() || "file";
-        file = { bytes, name: fileName, mimetype: Bun.file(fileName).type.split(";")[0] || "application/octet-stream" };
-      }
+      if (name === "files.send" && !file) await snapshot();
       controller.signal.throwIfAborted(); s?.throwIfAborted();
       try {
         if (name === "messages.send") return result({ sent: true, chat, ...(await client.sendText(chat, params.text, params.replyTo ? this.ref(current, chat, params.replyTo) : undefined)) });
@@ -343,7 +362,7 @@ export class WhatsAppConnectors {
     };
     if (c.writePolicy === "approval" || (clientRequestId !== undefined && this.writes)) {
       if (!this.writes) throw new HouseholdError("Connector approval service is unavailable; nothing changed");
-      return this.writes.run({ caller, provider: "whatsapp", connection: id, account: c.name ?? c.account ?? `+${c.phone}`, operation, requireApproval: c.writePolicy === "approval", params, review, clientRequestId, signal: AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]), validate: () => { this.allowed(caller, id, true); }, execute });
+      return this.writes.run({ caller, provider: "whatsapp", connection: id, account: c.name ?? c.account ?? `+${c.phone}`, operation, requireApproval: c.writePolicy === "approval", params, review, ...(name === "files.send" ? { prepare: snapshot } : {}), clientRequestId, signal: AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]), validate: () => { this.allowed(caller, id, true); }, execute });
     }
     return execute(signal);
   }

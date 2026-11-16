@@ -66,8 +66,32 @@ export class WhatsAppStore {
       }
     })();
   }
-  editMessage(connection: string, chat: string, id: string, text: string) {
-    this.db.run("UPDATE whatsapp_messages SET text=? WHERE connection=? AND chat=? AND id=?", [text, connection, chat, id]);
+  /** An edit or deletion changes only a message of its own author: no one rewrites what someone else said. */
+  editMessage(connection: string, chat: string, id: string, text: string, by: { fromMe: boolean; sender?: string }) {
+    if (by.fromMe) this.db.run("UPDATE whatsapp_messages SET text=? WHERE connection=? AND chat=? AND id=? AND from_me=1", [text, connection, chat, id]);
+    else if (by.sender) this.db.run("UPDATE whatsapp_messages SET text=? WHERE connection=? AND chat=? AND id=? AND from_me=0 AND sender=?", [text, connection, chat, id, by.sender]);
+  }
+  /** WhatsApp told which number a LID is: what was kept under the LID moves to the number. */
+  mergeJid(connection: string, from: string, to: string) {
+    if (from === to) return;
+    this.db.transaction(() => {
+      this.db.run("UPDATE OR IGNORE whatsapp_messages SET chat=? WHERE connection=? AND chat=?", [to, connection, from]);
+      this.db.run("DELETE FROM whatsapp_messages WHERE connection=? AND chat=?", [connection, from]);
+      this.db.run("UPDATE whatsapp_messages SET sender=? WHERE connection=? AND sender=?", [to, connection, from]);
+      const chat = this.db.query<{ name: string | null; last: number | null }, [string, string]>("SELECT name, last FROM whatsapp_chats WHERE connection=? AND jid=?").get(connection, from);
+      if (chat) { this.upsertChat(connection, to, { ...(chat.name ? { name: chat.name } : {}), ...(chat.last ? { last: chat.last } : {}) }); this.db.run("DELETE FROM whatsapp_chats WHERE connection=? AND jid=?", [connection, from]); }
+      const person = this.db.query<{ name: string | null; notify: string | null }, [string, string]>("SELECT name, notify FROM whatsapp_contacts WHERE connection=? AND jid=?").get(connection, from);
+      if (person) { this.upsertContact(connection, { jid: to, phone: to, ...(person.name ? { name: person.name } : {}), ...(person.notify ? { notify: person.notify } : {}) }); this.db.run("DELETE FROM whatsapp_contacts WHERE connection=? AND jid=?", [connection, from]); }
+    })();
+  }
+  /** A pairing found to be an account already connected: what it saw joins that account's history. */
+  moveConnection(from: string, to: string) {
+    this.db.transaction(() => {
+      for (const table of ["whatsapp_messages", "whatsapp_chats", "whatsapp_contacts"]) {
+        this.db.run(`UPDATE OR IGNORE ${table} SET connection=? WHERE connection=?`, [to, from]);
+        this.db.run(`DELETE FROM ${table} WHERE connection=?`, [from]);
+      }
+    })();
   }
   clear(connection: string) {
     this.db.transaction(() => {
@@ -119,9 +143,10 @@ export class WhatsAppStore {
     return this.db.query<MessageRow, any[]>(`${this.select("m.connection=? AND (? IS NULL OR m.chat=?) AND m.rowid IN (SELECT rowid FROM whatsapp_message_search WHERE whatsapp_message_search MATCH ?)")} ORDER BY m.at DESC LIMIT ?`)
       .all(connection, input.chat ?? null, input.chat ?? null, match, input.limit).map(r => this.view(r));
   }
-  message(connection: string, chat: string, id: string): (WhatsAppMessageView & { raw?: string }) | undefined {
+  /** One message, with what a reply, a reaction or a download needs: its sender's JID and, for media, the whole message. */
+  message(connection: string, chat: string, id: string): (WhatsAppMessageView & { raw?: string; senderJid?: string }) | undefined {
     const row = this.db.query<MessageRow, any[]>(`${this.select("m.connection=? AND m.chat=? AND m.id=?").replace("m.media,", "m.media, m.raw,")}`).get(connection, chat, id);
-    return row ? { ...this.view(row), ...(row.raw ? { raw: row.raw } : {}) } : undefined;
+    return row ? { ...this.view(row), ...(row.raw ? { raw: row.raw } : {}), ...(row.sender ? { senderJid: row.sender } : {}) } : undefined;
   }
   /** SQLite folds case for ASCII only; names are matched here, in any script. */
   contacts(connection: string, input: { query: string; limit: number }) {

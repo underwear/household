@@ -431,6 +431,7 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
   `CREATE TABLE whatsapp_auth (auth TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (auth, key));
   CREATE TABLE whatsapp_chats (connection TEXT NOT NULL, jid TEXT NOT NULL, name TEXT, last INTEGER, PRIMARY KEY (connection, jid));
   CREATE TABLE whatsapp_contacts (connection TEXT NOT NULL, jid TEXT NOT NULL, name TEXT, notify TEXT, phone TEXT, PRIMARY KEY (connection, jid));
+  CREATE INDEX whatsapp_contacts_phone ON whatsapp_contacts(connection, phone);
   CREATE TABLE whatsapp_messages (
     connection TEXT NOT NULL, chat TEXT NOT NULL, id TEXT NOT NULL, sender TEXT, from_me INTEGER NOT NULL,
     at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, quoted TEXT, media TEXT, raw TEXT,

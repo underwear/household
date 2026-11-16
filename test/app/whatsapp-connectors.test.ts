@@ -10,7 +10,7 @@ import type { House } from "../../src/core/household";
 
 const caller = { house: "home", pet: "alice" };
 const ME = { jid: "34600111222@s.whatsapp.net", phone: "34600111222", name: "Igor" };
-interface Fake { options: WhatsAppClientOptions; sent: { chat: string; text?: string; file?: string; emoji?: string; quoted?: string }[]; ended: boolean; loggedOut: boolean; codes: string[] }
+interface Fake { options: WhatsAppClientOptions; sent: { chat: string; text?: string; file?: string; emoji?: string; quoted?: string; sender?: string }[]; ended: boolean; loggedOut: boolean; codes: string[] }
 function setup(approval?: ConnectorWriteApproval) {
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const store = new SqliteStore(":memory:");
@@ -24,7 +24,7 @@ function setup(approval?: ConnectorWriteApproval) {
       requestPairingCode: async phone => { fake.codes.push(phone); return "ABCD1234"; },
       sendText: async (chat, text, quoted) => { fake.sent.push({ chat, text, ...(quoted ? { quoted: quoted.id } : {}) }); return { id: `sent-${fake.sent.length}` }; },
       sendFile: async (chat, file) => { fake.sent.push({ chat, file: `${file.name}:${file.mimetype}` }); return { id: "file-1" }; },
-      react: async (chat, target, emoji) => { fake.sent.push({ chat, emoji, quoted: target.id }); },
+      react: async (chat, target, emoji) => { fake.sent.push({ chat, emoji, quoted: target.id, ...(target.sender ? { sender: target.sender } : {}) }); },
       resolve: async phone => phone.startsWith("0") ? undefined : `${phone}@s.whatsapp.net`,
       download: async () => new Uint8Array([1, 2, 3]),
       logout: async () => { fake.loggedOut = true; },
@@ -90,7 +90,8 @@ test("a cancelled pairing ends its device and forgets what it saw", async () => 
   s.store.whatsapp.authSet(client.options.auth, [["creds", "{}"]]);
   s.store.whatsapp.addMessages(client.options.connection(), [{ chat: "1@s.whatsapp.net", id: "a", fromMe: false, at: 1, kind: "text", text: "hi" }]);
   s.service.cancel("home", p.id, "session");
-  expect(client.ended).toBe(true);
+  await new Promise(r => setTimeout(r, 0));
+  expect(client.loggedOut && client.ended).toBe(true);
   expect(s.store.whatsapp.authGet(client.options.auth, "creds")).toBeUndefined();
   expect(s.store.whatsapp.counts(client.options.connection()).messages).toBe(0);
   expect(s.service.list("home").connections).toHaveLength(0);
@@ -109,7 +110,7 @@ test("pairing the same number again keeps the connection and its history", async
   s.clients.at(-1)!.options.events.open({ jid: "1@s.whatsapp.net", phone: "1" });
   expect(await s.service.poll("home", p.id, "session")).toMatchObject({ status: "failed", error: expect.stringContaining("+1") });
   expect(s.clients.at(-1)!.loggedOut).toBe(true);
-  expect(s.service.list("home").connections[0]!.phone).toBe("+34600111222");
+  expect(s.service.list("home").connections[0]).toMatchObject({ phone: "+34600111222", messages: 1 });
 });
 
 test("WhatsApp unlinking the device marks it for pairing again and cuts bots off", async () => {
@@ -168,6 +169,8 @@ test("read only refuses sends; Ask me first shows who it goes to and sends only 
   expect(result).toMatchObject({ data: { sent: true, id: "sent-1" } });
   expect(client.sent).toEqual([{ chat: "34611222333@s.whatsapp.net", text: "Куплю", quoted: "m1" }]);
   expect(cards[0]!.params).toEqual({ to: "Мама (+34611222333)", text: "Куплю", replyTo: "Купи молоко" });
+  await expect(s.service.request(caller, id, "messages.send", { to: "34611222333@s.whatsapp.net", text: "x", replyTo: "nope" }, undefined, "r0")).rejects.toThrow("Nothing was sent");
+  expect(cards).toHaveLength(1);
   const card = connectorWriteCard(cards[0]!);
   expect(card.text).toContain("Approve WhatsApp change");
   expect(card.text).toContain("Send a text message as the owner");
@@ -177,7 +180,12 @@ test("read only refuses sends; Ask me first shows who it goes to and sends only 
   // Full access sends at once; a number is resolved with WhatsApp first.
   s.service.setAccess("home", id, { pets: ["alice"], writePolicy: "auto", name: "Renamed" });
   await s.service.request(caller, id, "files.send", { to: "+34 699 000 111", path: "outbox/plan.pdf" });
-  expect(client.sent.at(-1)).toEqual({ chat: "34699000111@s.whatsapp.net", file: "plan.pdf:application/pdf" });
+  s.service.setAccess("home", id, { pets: ["alice"], writePolicy: "approval" });
+  answer = "approved";
+  await s.service.request(caller, id, "files.send", { to: "123-456@g.us", path: "outbox/photo.jpg" }, undefined, "f1");
+  expect(cards.at(-1)!.params).toEqual({ to: "group 123-456@g.us", file: expect.stringMatching(/^photo\.jpg \(image\/jpeg, 1 bytes, sha256 [0-9a-f]{16}…\)$/) });
+  s.service.setAccess("home", id, { pets: ["alice"], writePolicy: "auto" });
+  expect(client.sent.slice(-2)).toEqual([{ chat: "34699000111@s.whatsapp.net", file: "plan.pdf:application/pdf" }, { chat: "123-456@g.us", file: "photo.jpg:image/jpeg" }]);
   await expect(s.service.request(caller, id, "messages.send", { to: "+0123456", text: "x" })).rejects.toThrow("not on WhatsApp");
   expect(s.service.list("home").connections[0]!.name).toBe("Renamed");
 });
@@ -218,8 +226,34 @@ test("convert keeps text, media, replies and edits, and skips what bots can't us
   expect(image).toMatchObject({ message: { chat: "34633@s.whatsapp.net", kind: "image", text: "look", media: { mimetype: "image/jpeg", size: 2048 } } });
   expect((image as any).message.raw).toContain("imageMessage");
   const edit = convert({ key: key({}), message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.MESSAGE_EDIT, key: { id: "OLD" }, editedMessage: { conversation: "fixed" } } } } as any);
-  expect(edit).toEqual({ edit: { chat: "34611222333@s.whatsapp.net", id: "OLD", text: "fixed" } });
+  expect(edit).toEqual({ edit: { chat: "34611222333@s.whatsapp.net", id: "OLD", text: "fixed", by: { fromMe: false, sender: "34611222333@s.whatsapp.net" } } });
   expect(convert({ key: key({}), message: { protocolMessage: { type: proto.Message.ProtocolMessage.Type.REVOKE, key: { id: "OLD" } } } } as any)).toMatchObject({ edit: { text: "[deleted]" } });
   expect(convert({ key: key({}), message: { reactionMessage: { text: "👍" } } } as any)).toBeUndefined();
   expect(convert({ key: key({ remoteJid: "status@broadcast" }), message: { conversation: "story" } } as any)).toBeUndefined();
+});
+
+test("only a message's own author can edit or delete it, and LIDs fold into numbers", () => {
+  const s = setup(), w = s.store.whatsapp, chat = "1-2@g.us";
+  w.addMessages("c", [{ chat, id: "a", fromMe: false, sender: "34611222333@s.whatsapp.net", at: 1, kind: "text", text: "mine" }, { chat, id: "b", fromMe: true, at: 2, kind: "text", text: "owner's" }]);
+  w.editMessage("c", chat, "a", "forged", { fromMe: false, sender: "34699000111@s.whatsapp.net" });
+  w.editMessage("c", chat, "b", "forged", { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  w.editMessage("c", chat, "a", "edited", { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  expect(w.messages("c", chat, { limit: 10 }).map(m => m.text)).toEqual(["edited", "owner's"]);
+  w.addMessages("c", [{ chat: "77@lid", id: "x", fromMe: false, sender: "77@lid", at: 3, kind: "text", text: "via lid" }]);
+  w.upsertContact("c", { jid: "77@lid", notify: "Anna" });
+  w.mergeJid("c", "77@lid", "34622000000@s.whatsapp.net");
+  expect(w.messages("c", "34622000000@s.whatsapp.net", { limit: 10 })).toEqual([expect.objectContaining({ id: "x", from: "Anna", chatName: "Anna" })]);
+  expect(w.chats("c", { limit: 10 }).map(c => c.jid)).not.toContain("77@lid");
+});
+
+test("group replies quote the right sender; a removed workspace unlinks and forgets its accounts", async () => {
+  const s = setup();
+  const { id, client } = await s.connect({ writePolicy: "auto" });
+  s.store.whatsapp.addMessages(id, [{ chat: "1-2@g.us", id: "g", fromMe: false, sender: "34611222333@s.whatsapp.net", at: 1, kind: "text", text: "who?" }]);
+  await s.service.request(caller, id, "messages.react", { chat: "1-2@g.us", messageId: "g", emoji: "👍" });
+  expect(client.sent).toEqual([{ chat: "1-2@g.us", emoji: "👍", quoted: "g", sender: "34611222333@s.whatsapp.net" }]);
+  s.service.setHouses([{ ...s.house, name: "other" }]);
+  await new Promise(r => setTimeout(r, 0));
+  expect(client.loggedOut).toBe(true);
+  expect(s.store.whatsapp.counts(id).messages).toBe(0);
 });

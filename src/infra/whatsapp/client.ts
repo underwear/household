@@ -13,8 +13,10 @@ export interface WhatsAppClientEvents {
   qr(qr: string): void;
   open(me: WhatsAppIdentity): void;
   status(status: WhatsAppStatus): void;
-  /** WhatsApp ended this linked device (unlinked on the phone, or replaced): its keys are dead. */
+  /** WhatsApp ended this linked device (unlinked on the phone): its keys are dead. */
   loggedOut(): void;
+  /** The pairing code asked for is void (the socket closed before the phone used it): ask again on the next QR. */
+  codeExpired?(): void;
 }
 export interface WhatsAppClientOptions { auth: string; /** The connection what it sees belongs to: known once pairing ends. */ connection: () => string; store: WhatsAppStore; events: WhatsAppClientEvents; log?: (text: string) => void }
 /** One linked device of one WhatsApp account, kept connected until `end`. */
@@ -81,7 +83,9 @@ const KINDS: Record<string, WhatsAppKind> = {
 const MEDIA = new Set<WhatsAppKind>(["image", "video", "audio", "document", "sticker"]);
 
 /** A message as Household keeps it, or what it changes: an edit, a deletion. Reactions and protocol noise are skipped. */
-export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { chat: string; id: string; text: string } } | undefined {
+/** Who an edit or deletion comes from: it may change only that author's own message. */
+export interface WhatsAppAuthor { fromMe: boolean; sender?: string }
+export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { chat: string; id: string; text: string; by: WhatsAppAuthor } } | undefined {
   const key = m.key as WAMessage["key"] & { remoteJidAlt?: string; participantAlt?: string };
   const chat = pn(key.remoteJid, key.remoteJidAlt);
   if (!chat || !key.id || chat === "status@broadcast" || chat.endsWith("@newsletter")) return;
@@ -90,12 +94,16 @@ export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { 
   const type = getContentType(content);
   if (!type) return;
   const protocol = content.protocolMessage;
+  const fromMe = !!key.fromMe;
+  const sender = fromMe ? undefined : isJidGroup(chat) ? pn(key.participant, key.participantAlt) : chat;
   if (type === "protocolMessage" && protocol?.key?.id) {
-    if (protocol.type === proto.Message.ProtocolMessage.Type.REVOKE) return { edit: { chat, id: protocol.key.id, text: "[deleted]" } };
+    const by = { fromMe, ...(sender ? { sender } : {}) };
+    if (!fromMe && !sender) return;
+    if (protocol.type === proto.Message.ProtocolMessage.Type.REVOKE) return { edit: { chat, id: protocol.key.id, text: "[deleted]", by } };
     if (protocol.type === proto.Message.ProtocolMessage.Type.MESSAGE_EDIT) {
       const edited = normalizeMessageContent(protocol.editedMessage);
       const text = edited?.conversation ?? edited?.extendedTextMessage?.text ?? edited?.imageMessage?.caption ?? edited?.videoMessage?.caption;
-      if (text) return { edit: { chat, id: protocol.key.id, text } };
+      if (text) return { edit: { chat, id: protocol.key.id, text, by } };
     }
     return;
   }
@@ -112,8 +120,6 @@ export function convert(m: WAMessage): { message: WhatsAppMessage } | { edit: { 
     ...(inner?.mimetype ? { mimetype: inner.mimetype } : {}), ...(inner?.fileName ? { fileName: inner.fileName } : {}),
     ...(inner?.fileLength ? { size: toNumber(inner.fileLength) } : {}), ...(inner?.seconds ? { seconds: inner.seconds } : {}),
   } : undefined;
-  const fromMe = !!key.fromMe;
-  const sender = fromMe ? undefined : isJidGroup(chat) ? pn(key.participant, key.participantAlt) : chat;
   return { message: {
     chat, id: key.id, fromMe, at: toNumber(m.messageTimestamp) || Math.floor(Date.now() / 1000), kind, text,
     ...(sender ? { sender } : {}), ...(inner?.contextInfo?.stanzaId ? { quoted: inner.contextInfo.stanzaId } : {}),
@@ -134,18 +140,30 @@ const contact = (c: { id: string; lid?: string; phoneNumber?: string; name?: str
 export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, events, log }) => {
   const { state, saveCreds } = authState(store, auth);
   const logger = silent(log);
-  let sock: WASocket, ended = false, failures = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  let sock: WASocket, ended = false, failures = 0, timer: ReturnType<typeof setTimeout> | undefined, codeAsked = false, opened = false;
+  /** A LID the event named without its number: the number WhatsApp mapped it to, if known, so a person stays one chat. */
+  const alt = async (jid: string | null | undefined, given: string | null | undefined) => {
+    if (given || !jid || !isLidUser(jid)) return given ?? undefined;
+    return (await sock.signalRepository.lidMapping.getPNForLID(jid).catch(() => null)) ?? undefined;
+  };
+  let queue = Promise.resolve();
+  /** Saved in order, one batch after the other. */
   const save = (messages: WAMessage[]) => {
-    const fresh: WhatsAppMessage[] = [];
-    for (const m of messages) {
-      try {
-        const result = convert(m);
-        if (!result) continue;
-        if ("edit" in result) store.editMessage(connection(), result.edit.chat, result.edit.id, result.edit.text);
-        else fresh.push(result.message);
-      } catch (error) { log?.(`whatsapp: a message was skipped: ${(error as Error).message}`); }
-    }
-    if (fresh.length) store.addMessages(connection(), fresh);
+    queue = queue.then(async () => {
+      const fresh: WhatsAppMessage[] = [];
+      for (const m of messages) {
+        try {
+          const key = m.key as WAMessage["key"] & { remoteJidAlt?: string; participantAlt?: string };
+          const remoteJidAlt = await alt(key.remoteJid, key.remoteJidAlt), participantAlt = await alt(key.participant, key.participantAlt);
+          const result = convert({ ...m, key: { ...key, ...(remoteJidAlt ? { remoteJidAlt } : {}), ...(participantAlt ? { participantAlt } : {}) } } as WAMessage);
+          if (!result) continue;
+          if ("edit" in result) store.editMessage(connection(), result.edit.chat, result.edit.id, result.edit.text, result.edit.by);
+          else fresh.push(result.message);
+        } catch (error) { log?.(`whatsapp: a message was skipped: ${(error as Error).message}`); }
+      }
+      if (fresh.length) store.addMessages(connection(), fresh);
+    }).catch(error => log?.(`whatsapp: messages were not saved: ${(error as Error).message}`));
+    return queue;
   };
   const contacts = (list: any[]) => { for (const c of list) { const v = c?.id ? contact(c) : undefined; if (v) store.upsertContact(connection(), v); } };
   const chats = (list: any[]) => {
@@ -171,11 +189,14 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
     sock.ev.on("chats.update", c => chats(c as any[]));
     sock.ev.on("contacts.upsert", p => contacts(p));
     sock.ev.on("contacts.update", p => contacts(p as any[]));
+    sock.ev.on("lid-mapping.update", ({ lid, pn: number }) => {
+      if (lid && number) queue = queue.then(() => store.mergeJid(connection(), jidNormalizedUser(lid), jidNormalizedUser(number))).catch(() => {});
+    });
     sock.ev.on("connection.update", update => {
       if (current !== sock || ended) return;
       if (update.qr) events.qr(update.qr);
       if (update.connection === "open") {
-        failures = 0;
+        failures = 0; opened = true;
         const me = state.creds.me;
         if (me?.id) {
           const jid = jidNormalizedUser(me.id);
@@ -188,12 +209,18 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
       }
       if (update.connection === "close") {
         const code = (update.lastDisconnect?.error as any)?.output?.statusCode;
-        if (code === DisconnectReason.loggedOut || code === DisconnectReason.connectionReplaced || code === DisconnectReason.badSession) {
-          ended = true; events.status("offline"); events.loggedOut(); return;
-        }
+        // Only WhatsApp saying so ends the device; everything else (a conflict, a stream error) keeps the keys and retries.
+        if (code === DisconnectReason.loggedOut) { ended = true; events.status("offline"); events.loggedOut(); return; }
+        if (code === DisconnectReason.connectionReplaced) log?.("whatsapp: another session took over this linked device (a restored backup still running?); retrying later");
         events.status("offline");
+        // A pairing code binds the socket it was asked on: once that closes, the next one has to register afresh.
+        if (codeAsked && !opened && code !== DisconnectReason.restartRequired) {
+          codeAsked = false;
+          delete (state.creds as Partial<AuthenticationCreds>).me;
+          events.codeExpired?.();
+        }
         // A new pairing asks for one restart; anything else backs off up to five minutes.
-        const delay = code === DisconnectReason.restartRequired ? 0 : Math.min(300_000, 2_000 * 2 ** Math.min(failures++, 8));
+        const delay = code === DisconnectReason.restartRequired ? 0 : code === DisconnectReason.connectionReplaced ? 300_000 : Math.min(300_000, 2_000 * 2 ** Math.min(failures++, 8));
         timer = setTimeout(connect, delay);
       }
     });
@@ -201,9 +228,9 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
   connect();
   const ready = () => { if (ended) throw new Error("This WhatsApp connection is closed"); return sock; };
   const quotedMessage = (q: WhatsAppMessageRef): WAMessage => ({ key: { remoteJid: q.chat, id: q.id, fromMe: q.fromMe, ...(q.sender && isJidGroup(q.chat) ? { participant: q.sender } : {}) }, message: { conversation: q.text ?? "" } });
-  const sent = (m: WAMessage | undefined) => { if (!m?.key.id) throw new Error("WhatsApp did not confirm the message"); save([m]); return { id: m.key.id }; };
+  const sent = (m: WAMessage | undefined) => { if (!m?.key.id) throw new Error("WhatsApp did not confirm the message"); void save([m]); return { id: m.key.id }; };
   return {
-    requestPairingCode: phone => ready().requestPairingCode(phone),
+    requestPairingCode: phone => { codeAsked = true; return ready().requestPairingCode(phone); },
     sendText: async (chat, text, quoted) => sent(await ready().sendMessage(chat, { text }, quoted ? { quoted: quotedMessage(quoted) } : undefined)),
     sendFile: async (chat, file, caption) => {
       const kind = file.mimetype.startsWith("image/") && !file.mimetype.includes("svg") ? "image" : file.mimetype.startsWith("video/") ? "video" : file.mimetype.startsWith("audio/") ? "audio" : "document";
