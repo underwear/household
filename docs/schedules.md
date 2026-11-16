@@ -28,6 +28,7 @@ The two combine: an inbox on **Silent** collects events without waking the bot, 
 ## Good to know
 
 - **One time zone** for the whole Household, under **Household → Settings → Time zone**. Bots get it with every message, so "tomorrow at 9" means 9:00 there.
+- **Short instructions.** A task's name is at most 100 characters and its instructions at most 4000, without Household's tags. Keep long material (lists, drafts, data) in a file or a memory note and name it in the instructions. A task saved before this limit still runs, its instructions cut at 4000; to change its time, shorten them too.
 - **Missed runs happen once, late.** If Household was down at the time, the task runs once when it is back.
 - **Failed runs are not retried.** A repeating task waits for its next time.
 - **Lost completion signals do not block the inbox forever.** After a minute without agent events, Household checks whether the agent is idle. If it is, an unfinished run is marked failed with an accounting error and queued work continues. The task may already have run; it is not replayed.

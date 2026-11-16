@@ -14,6 +14,8 @@ export const SCOUTS_TAG = "household-scouts";
 export const CLOCK_TAG = "household-clock";
 export const CONTENT_TAG = "household-content";
 export const ATTACHMENTS_TAG = "household-attachments";
+/** A scheduled task of the pet's own, firing: its header and its body, like a message. */
+export const TASK_TAG = "household-task";
 
 /**
  * A block: the opening tag (with Household's own attributes: ids, counts), the lines inside, the closing tag,
@@ -32,7 +34,7 @@ export const tagFreeJson = (value: unknown) => JSON.stringify(value).replace(/</
 
 /** Opening angle brackets and what passes for them after NFKD (not `«`: Russian quotes are ordinary text). */
 const OPENERS = "<‹❬❮≪˂ᐸ〈⟨";
-const OURS = [BATCH_TAG, MESSAGE_TAG, HEADER_TAG, CONTENT_TAG, ATTACHMENTS_TAG, CLOCK_TAG, MEMORY_TAG, SCOUTS_TAG, INTERNAL_TAG].map((tag) => tag.replace(/^household-/, "")).join("|");
+const OURS = [BATCH_TAG, MESSAGE_TAG, HEADER_TAG, CONTENT_TAG, ATTACHMENTS_TAG, CLOCK_TAG, MEMORY_TAG, SCOUTS_TAG, INTERNAL_TAG, TASK_TAG].map((tag) => tag.replace(/^household-/, "")).join("|");
 /**
  * An opening bracket, maybe `/`, `household`, at most 3 characters that are no letter or digit (any dash, `_`,
  * `.`, `:`, `/`, spaces), one of our names. Only ours, and only after a bracket: `household-size > 3` is text.

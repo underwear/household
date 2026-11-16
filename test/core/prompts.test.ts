@@ -76,3 +76,12 @@ test("shared folders: a pet hears which are mounted where and how, and how to as
   expect(shared).toContain("ask it when you need another");
   expect(shared).not.toContain("volume_request");
 });
+
+test("a pet's prompt: how its own tasks arrive, that nobody waits for an answer, and the body's limit", () => {
+  const text = systemPrompt({ role: pet, features: none });
+  expect(text).toContain('arrives as `<household-task id="…">`');
+  expect(text).toContain("nobody waits for an answer");
+  expect(text).toContain("A task's body is at most 4000 characters");
+  const sideworker = systemPrompt({ role: worker, features: none });
+  expect(sideworker).not.toContain("household-task");
+});
