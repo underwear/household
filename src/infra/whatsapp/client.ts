@@ -255,7 +255,9 @@ export const baileysClient: WhatsAppClientFactory = ({ auth, connection, store, 
     if (ended) return;
     events.status("connecting");
     sock = makeWASocket({
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) }, logger, browser: Browsers.macOS("Desktop"),
+      // Desktop + full history advertises WEB/DARWIN, which WhatsApp closes with 428 before issuing a QR.
+      // Chrome advertises WEB_BROWSER and keeps full-history sync without the rejected desktop identity.
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) }, logger, browser: Browsers.macOS("Chrome"),
       syncFullHistory: true, markOnlineOnConnect: false, printQRInTerminal: false, getMessage: async () => undefined,
     } as any);
     const current = sock;
