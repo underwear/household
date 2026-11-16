@@ -2,6 +2,7 @@ import type { McpTool } from "../infra/mcp-server";
 import type { PetIdentity } from "../infra/agent-api";
 import type { Crons } from "./crons";
 import { CRON_BODY_MAX, CRON_NAME_MAX } from "../core/cron";
+import { tagFreeJson } from "../core/tags";
 
 export function cronTools(crons: Crons): McpTool<PetIdentity>[] {
   const fields = {
@@ -47,7 +48,7 @@ export function cronTools(crons: Crons): McpTool<PetIdentity>[] {
       },
       async call({ house, pet }) {
         const view = crons.list(house, pet);
-        return JSON.stringify({
+        return tagFreeJson({
           timezone: view.timezone,
           jobs: view.jobs.map(({ body, ...job }) => job),
           runs: view.runs
@@ -70,7 +71,7 @@ export function cronTools(crons: Crons): McpTool<PetIdentity>[] {
         additionalProperties: false,
       },
       async call({ house, pet }, args) {
-        return JSON.stringify(crons.get(house, pet, String(args.id)));
+        return tagFreeJson(crons.get(house, pet, String(args.id))); // `<` escaped: a body saved before tags were refused can't pose as ours
       },
     },
     {

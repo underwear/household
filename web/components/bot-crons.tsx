@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { CRON_BODY_MAX, CRON_NAME_MAX } from "../../src/core/cron";
 import { CalendarClock, Repeat } from "lucide-react";
 import { api, type CronJob, type CronView } from "../api";
 import { Dialog, useDialog } from "./dialog";
@@ -285,7 +286,7 @@ function TaskDialog({ house, pet, job, timezone, onClose, saved }: { house: stri
         },
         children: (
           <>
-            <TextField label="Name" value={name} onChange={setName} maxLength={200} placeholder="Morning digest" />
+            <TextField label="Name" value={name} onChange={setName} maxLength={CRON_NAME_MAX} placeholder="Morning digest" />
             <div className="field">
               <span className="field-label">When</span>
               <div className="segmented wide" role="group" aria-label="When">
@@ -316,7 +317,7 @@ function TaskDialog({ house, pet, job, timezone, onClose, saved }: { house: stri
               </Field>
             )}
             <Field id={bodyId} label="Instructions" hint="Sent to the bot as your message.">
-              <textarea id={bodyId} className="control task-instructions" rows={6} maxLength={32000} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Summarise yesterday’s merged PRs and post the digest to the team thread." />
+              <textarea id={bodyId} className="control task-instructions" rows={6} maxLength={CRON_BODY_MAX} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Summarise yesterday’s merged PRs and post the digest to the team thread." />
             </Field>
           </>
         ),

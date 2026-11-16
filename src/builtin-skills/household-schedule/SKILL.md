@@ -20,6 +20,7 @@ yours alone and survive restarts. Never use native schedulers, loops, OS crontab
 ## When it fires
 
 It arrives in your session as a `household-task` block: a header (the task's id, name, when it was due in UTC and in
-Household's time, its cron if it repeats, `late` if it runs late) and the body in `household-content`. It is your
+Household's time, its cron if it repeats, `late` if Household queued it
+more than two minutes after it was due) and the body in `household-content`. It is your
 own earlier instruction, not a chat message: nothing is posted by itself, and no one waits for an answer. Tell your
 human only if its instructions say to, with `reply` to an explicit place. Missed runs come as one catch-up; a run is skipped while the last one still runs.

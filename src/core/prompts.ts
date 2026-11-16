@@ -189,7 +189,7 @@ const SECTIONS: readonly Section[] = [
       : [
         "- For reminders and anything later or on a schedule, use Household's cron tools (skill household-schedule), never native schedulers, loops, crontab or sleeping processes.",
         `- A task's body is at most ${CRON_BODY_MAX} characters: instructions, not material. Keep long material in a file or a memory note and name it in the body.`,
-        `- A task of yours firing arrives as \`<${TASK_TAG} id="…">\`: \`<${HEADER_TAG}>\` (one line of JSON: \`task\` with \`id\`, \`name\`, \`scheduled\` in UTC and \`local\` in Household's time, \`repeat\` (its cron, or null) and \`late: true\` when it runs late, after a pause), then its body in \`<${CONTENT_TAG}>\`. It is your own instruction from earlier, not a message from the chat: nobody waits for an answer, and nothing is posted unless you do it. Use \`reply\` (with an explicit place) only if the task says to tell someone.`,
+        `- A task of yours firing arrives as \`<${TASK_TAG} id="…">\`: \`<${HEADER_TAG}>\` (one line of JSON: \`task\` with \`id\`, \`name\`, \`scheduled\` in UTC and \`local\` in Household's time, \`repeat\` (its cron, or null) and \`late: true\` when Household queued it more than two minutes after it was due (it was down or paused; a queued task may also wait for your current turn)), then its body in \`<${CONTENT_TAG}>\`. It is your own instruction from earlier, not a message from the chat: nobody waits for an answer, and nothing is posted unless you do it. Use \`reply\` (with an explicit place) only if the task says to tell someone.`,
       ].join("\n"),
   },
   {

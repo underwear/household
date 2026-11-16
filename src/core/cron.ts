@@ -8,9 +8,10 @@ import { block, carriesHouseholdTag, CONTENT_TAG, HEADER_TAG, TASK_TAG, tagFreeJ
 export const CRON_NAME_MAX = 100;
 export const CRON_BODY_MAX = 4000;
 const noTags = (value: string) => !carriesHouseholdTag(value);
+const NO_TAGS = "must not contain Household's tags";
 export const cronFields = z.strictObject({
-  name: z.string().trim().min(1).max(CRON_NAME_MAX).refine(noTags),
-  body: z.string().trim().min(1).max(CRON_BODY_MAX).refine(noTags),
+  name: z.string().trim().min(1).max(CRON_NAME_MAX).refine(noTags, NO_TAGS),
+  body: z.string().trim().min(1).max(CRON_BODY_MAX).refine(noTags, NO_TAGS),
   at: z
     .string()
     .regex(
@@ -77,14 +78,18 @@ export interface TaskPrompt { id: string; name: string; body: string; scheduled:
  * limit (a task saved before there was one) is cut, saying where the rest is; one carrying our tags (saved
  * before they were refused) is withheld whole, since no defusing catches every disguise the guard does.
  */
+/** The first `max` characters, never ending in half an emoji (a lone high surrogate). */
+const cut = (text: string, max: number) => text.slice(0, max).replace(/[\uD800-\uDBFF]$/, "");
+
 export function taskPrompt({ id, name, body, scheduled, timezone, repeat, now }: TaskPrompt): string {
   const local = new Intl.DateTimeFormat("sv-SE", { timeZone: timezone, dateStyle: "short", timeStyle: "short" }).format(Date.parse(scheduled));
   const late = now - Date.parse(scheduled) > 120_000;
   const text = carriesHouseholdTag(body)
     ? "[withheld: this task's body carries Household's tags; read it with cron_get and rewrite it without them with cron_update]"
     : body.length > CRON_BODY_MAX
-      ? `${body.slice(0, CRON_BODY_MAX)}\n[cut: ${body.length - CRON_BODY_MAX} more characters; read the whole task with cron_get and shorten it with cron_update]`
+      ? `${cut(body, CRON_BODY_MAX)}\n[cut: ${body.length - CRON_BODY_MAX} more characters; read the whole task with cron_get and shorten it with cron_update]`
       : body;
-  const header = { event: { kind: "scheduled" }, task: { id, name: name.slice(0, CRON_NAME_MAX), scheduled, local, repeat, ...(late ? { late: true } : {}) } };
+  const title = carriesHouseholdTag(name) ? "[withheld: the name carries Household's tags]" : cut(name, CRON_NAME_MAX);
+  const header = { event: { kind: "scheduled" }, task: { id, name: title, scheduled, local, repeat, ...(late ? { late: true } : {}) } };
   return block(TASK_TAG, [block(HEADER_TAG, [tagFreeJson(header)]), block(CONTENT_TAG, [text])], { id });
 }
