@@ -20,10 +20,19 @@ export interface WhatsAppMessageView {
   edited?: string; previous?: WhatsAppVersion[];
   /** When its author deleted it for everyone; Household keeps what it had, as the owner chose. */
   deleted?: string;
+  /** In words, for a reader: edited how many times, deleted when. */
+  note?: string;
 }
 
 interface MessageRow { chat: string; id: string; sender: string | null; from_me: number; at: number; kind: WhatsAppKind; text: string; quoted: string | null; media: string | null; raw?: string | null; chat_name: string | null; sender_name: string | null; edited: number | null; deleted: number | null; versions: string | null }
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
+/** What happened to a message, so a reader (a bot) can't mistake its last text for what was first said, or miss that it was withdrawn. */
+function note(r: { versions: string | null; deleted: number | null }) {
+  const edits = r.versions ? (JSON.parse(r.versions) as unknown[]).length : 0;
+  const edited = edits ? `Edited ${edits === 1 ? "once" : `${edits} times`} by its author: text is the last version, previous the earlier ones, oldest first` : "";
+  const deleted = r.deleted ? `${edited ? "; then d" : "D"}eleted for everyone by its author at ${iso(r.deleted)}: the other side no longer sees it; Household kept it` : "";
+  return `${edited}${deleted}.`;
+}
 /** Words of a query as an FTS5 prefix match: punctuation never reaches the query language. */
 export const searchTerms = (query: string) => (query.match(/[\p{L}\p{N}_]+/gu) ?? []).map(t => `"${t}"*`).join(" AND ");
 
@@ -90,7 +99,7 @@ export class WhatsAppStore {
         return;
       }
       if (change.text === row.text) return;
-      const versions = [...(row.versions ? JSON.parse(row.versions) as { text: string; until: number }[] : []), { text: row.text, until: change.at }].slice(-20);
+      const versions = [...(row.versions ? JSON.parse(row.versions) as { text: string; until: number }[] : []), { text: row.text, until: change.at }];
       this.db.run(`UPDATE whatsapp_messages SET text=?, edited=?, versions=? WHERE connection=? AND chat=? AND id=? AND ${author}`, [change.text, change.at, JSON.stringify(versions), ...args]);
     })();
   }
@@ -146,6 +155,7 @@ export class WhatsAppStore {
       ...(r.edited ? { edited: iso(r.edited) } : {}),
       ...(r.versions ? { previous: (JSON.parse(r.versions) as { text: string; until: number }[]).map(v => ({ text: v.text, until: iso(v.until) })) } : {}),
       ...(r.deleted ? { deleted: iso(r.deleted) } : {}),
+      ...(r.versions || r.deleted ? { note: note(r) } : {}),
     };
   }
   private select(where: string) {

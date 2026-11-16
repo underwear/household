@@ -439,16 +439,17 @@ const MIGRATIONS: (string | ((db: Database) => void))[] = [
     PRIMARY KEY (connection, chat, id));
   CREATE INDEX whatsapp_messages_at ON whatsapp_messages(connection, chat, at);
   CREATE INDEX whatsapp_messages_recent ON whatsapp_messages(connection, at);
-  CREATE VIRTUAL TABLE whatsapp_message_search USING fts5(text,content='whatsapp_messages',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
+  -- Search finds a message by its current text and by every earlier version (versions: JSON, indexed as its texts).
+  CREATE VIRTUAL TABLE whatsapp_message_search USING fts5(text,versions,content='whatsapp_messages',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
   CREATE TRIGGER whatsapp_message_insert AFTER INSERT ON whatsapp_messages BEGIN
-    INSERT INTO whatsapp_message_search(rowid,text) VALUES(new.rowid,new.text);
+    INSERT INTO whatsapp_message_search(rowid,text,versions) VALUES(new.rowid,new.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(new.versions,'[]'))));
   END;
-  CREATE TRIGGER whatsapp_message_update AFTER UPDATE OF text ON whatsapp_messages BEGIN
-    INSERT INTO whatsapp_message_search(whatsapp_message_search,rowid,text) VALUES('delete',old.rowid,old.text);
-    INSERT INTO whatsapp_message_search(rowid,text) VALUES(new.rowid,new.text);
+  CREATE TRIGGER whatsapp_message_update AFTER UPDATE OF text, versions ON whatsapp_messages BEGIN
+    INSERT INTO whatsapp_message_search(whatsapp_message_search,rowid,text,versions) VALUES('delete',old.rowid,old.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(old.versions,'[]'))));
+    INSERT INTO whatsapp_message_search(rowid,text,versions) VALUES(new.rowid,new.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(new.versions,'[]'))));
   END;
   CREATE TRIGGER whatsapp_message_delete AFTER DELETE ON whatsapp_messages BEGIN
-    INSERT INTO whatsapp_message_search(whatsapp_message_search,rowid,text) VALUES('delete',old.rowid,old.text);
+    INSERT INTO whatsapp_message_search(whatsapp_message_search,rowid,text,versions) VALUES('delete',old.rowid,old.text,(SELECT group_concat(value->>'text', ' ') FROM json_each(coalesce(old.versions,'[]'))));
   END;`,
 ];
 

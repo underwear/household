@@ -246,6 +246,15 @@ test("only a message's own author can edit or delete it, and LIDs fold into numb
   expect(a).toMatchObject({ text: "edited twice", edited: new Date(20_000).toISOString(), previous: [{ text: "mine", until: new Date(10_000).toISOString() }, { text: "edited", until: new Date(20_000).toISOString() }] });
   expect(b).toMatchObject({ text: "owner's", deleted: new Date(30_000).toISOString() });
   expect(w.search("c", { query: "owner", limit: 5 }).map(m => m.id)).toEqual(["b"]);
+  // Edited several times, then deleted: everything stays, and a reader is told so.
+  w.editMessage("c", chat, "a", { deleted: 40 }, { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  w.editMessage("c", chat, "a", { text: "too late", at: 50 }, { fromMe: false, sender: "34611222333@s.whatsapp.net" });
+  const [gone] = w.messages("c", chat, { limit: 10 });
+  expect(gone).toMatchObject({ text: "edited twice", deleted: new Date(40_000).toISOString(), previous: [{ text: "mine" }, { text: "edited" }] });
+  expect(gone!.note).toBe(`Edited 2 times by its author: text is the last version, previous the earlier ones, oldest first; then deleted for everyone by its author at ${new Date(40_000).toISOString()}: the other side no longer sees it; Household kept it.`);
+  expect(b!.note).toStartWith("Deleted for everyone");
+  expect(w.search("c", { query: "mine", limit: 5 }).map(m => m.id)).toEqual(["a"]);
+  expect(w.search("c", { query: "twice", limit: 5 }).map(m => m.id)).toEqual(["a"]);
   w.addMessages("c", [{ chat: "77@lid", id: "x", fromMe: false, sender: "77@lid", at: 3, kind: "text", text: "via lid" }]);
   w.upsertContact("c", { jid: "77@lid", notify: "Anna" });
   w.mergeJid("c", "77@lid", "34622000000@s.whatsapp.net");
