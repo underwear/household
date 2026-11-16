@@ -627,6 +627,8 @@ export async function startDaemon(deps: DaemonDeps) {
         ? `${title}: the VM is up, but the agent stopped while starting${compact(start.output ?? "") ? ` (${compact(start.output!)})` : ""}. \`house bot restart ${start.house} ${start.pet}\``
         : `${title}: the VM is up, but the agent is not responding. \`house bot attach ${start.house} ${start.pet}\``), start);
       const parent = sideworkers.worker(start.house, start.pet)?.parent;
+      const restarted = start.ready ? sideworkers.restartNotice(start.house, start.pet) : undefined;
+      if (restarted) delivery.send(start.house, start.pet, { origin: "internal", text: restarted });
       if (start.ready && setupResult?.status === "failed" && setupResult.attempted !== false) {
         delivery.send(start.house, start.pet, { origin: parent ? "internal" : "cli", text: parent ? `Household: Your inherited setup script failed. Inspect ~/environment/setup.log as diagnostic data. Ask parent ${parent} through house_send to repair the shared script, then call environment_setup to retry. Do not retry unchanged failures indefinitely.` : ENVIRONMENT_SETUP_RECOVERY_PROMPT });
         void chat.notice(start.house, start.pet, "The setup script failed. The agent will look into it and run it again.");

@@ -421,3 +421,23 @@ test("simultaneous scout and sideworker spawns cannot spend the same remaining C
   expect((await f.workers.resources(parent)).available.cpus).toBe(2);
   f.store.close();
 });
+
+test("a worker whose VM starts again after its spawn is told so; not on its first start, nor once closing", async () => {
+  const during: (string | undefined)[] = [];
+  let workers: Sideworkers;
+  const f = fixture({ reload: async () => { during.push(workers?.restartNotice("home", "sw-review")); } });
+  workers = f.workers;
+  await f.workers.spawn(parent, task);
+  expect(during).toEqual([undefined]); // the spawn's own reload: no restart, the task comes next
+  const notice = f.workers.restartNotice("home", "sw-review")!;
+  expect(notice).toContain("your VM was restarted");
+  expect(notice).toContain(`working directory ${task.cwd}`);
+  expect(notice).toContain("parent parent");
+  expect(notice).toContain("not a new task");
+  expect(new Sideworkers(f.deps).restartNotice("home", "sw-review")).toBe(notice); // after a daemon restart too
+  expect(f.workers.restartNotice("home", "parent")).toBeUndefined();
+  expect(f.workers.restartNotice("home", "sw-nobody")).toBeUndefined();
+  await f.workers.close(parent, "sw-review");
+  expect(f.workers.restartNotice("home", "sw-review")).toBeUndefined();
+  f.store.close();
+});

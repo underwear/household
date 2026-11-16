@@ -90,6 +90,8 @@ export class Sideworkers {
   private records: SideworkerRecord[];
   private readonly usedNames: Set<string>;
   private readonly closedNotices = new Map<string, () => Promise<void>>();
+  /** Workers being spawned: their first start is no restart, and their task is still to come. */
+  private readonly spawning = new Set<string>();
   private queue: Promise<unknown> = Promise.resolve();
   private timer?: ReturnType<typeof setInterval>;
   private ticking = false;
@@ -107,6 +109,16 @@ export class Sideworkers {
     return workspaceBudget(house, [...this.allocations(house.name), ...this.deps.otherAllocations?.(house.name) ?? []]);
   }
   worker(house: string, name: string) { return this.records.find(item => item.house === house && item.name === name); }
+  /**
+   * What a worker is told when its VM started again after its spawn (a Household update or restart, a changed
+   * launch): its session may be new, so it hears what happened and decides itself whether to go on. Nothing for a
+   * worker still being spawned or closing, or for a bot that is no worker.
+   */
+  restartNotice(house: string, name: string): string | undefined {
+    const worker = this.worker(house, name);
+    if (!worker || worker.closing || this.spawning.has(`${house}/${name}`)) return undefined;
+    return `Household: your VM was restarted (a Household update, a restart or a changed launch). Your agent session may be a new one, without your earlier conversation. Your home, your working directory ${worker.cwd} with its uncommitted changes, and your Docker data are as they were; running processes are not. Your task came from your parent ${worker.parent}: decide yourself whether to pick it up where it stopped, and tell your parent or your human if it matters. This is a notice, not a new task.`;
+  }
   memoryOwner(house: string, pet: string) { return this.worker(house, pet)?.parent ?? pet; }
   private save() { this.deps.store.set(STATE_KEY, JSON.stringify(this.records)); this.deps.store.set(`${STATE_KEY}.used-names`, JSON.stringify([...this.usedNames])); }
   private serial<T>(job: () => Promise<T>): Promise<T> {
@@ -209,6 +221,7 @@ export class Sideworkers {
       // Check and publish synchronously: scouts see this allocation before any VM work starts.
       assertWorkspaceCapacity(latest, [...this.allocations(caller.house), ...this.deps.otherAllocations?.(caller.house) ?? []], resources);
       this.records.push(record); this.save();
+      this.spawning.add(`${caller.house}/${name}`);
       try {
         await this.deps.reload();
         await this.deps.ensurePlace?.(caller.house, name);
@@ -226,6 +239,8 @@ export class Sideworkers {
           throw new Error(`${(error as Error).message}. Cleanup is pending for ${name}; retry sideworker_close.`);
         }
         throw error;
+      } finally {
+        this.spawning.delete(`${caller.house}/${name}`);
       }
       this.deps.log(`sideworker ${caller.house}/${name} spawned by ${caller.pet} in ${cwd}${worktree ? ` (worktree on ${worktree.branch} from ${worktree.base})` : ""}`);
       const announcement = await this.deps.announce?.(structuredClone(record)).catch(() => undefined);
