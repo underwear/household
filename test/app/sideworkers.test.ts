@@ -528,3 +528,41 @@ test("a reused name whose start fails keeps the earlier worker's thread; another
   await expect(f.workers.spawn({ house: "home", pet: "other" }, task)).rejects.toThrow("used by parent's sideworker");
   f.store.close();
 });
+
+test("a name from before Household kept who used it is not handed over, to any bot", async () => {
+  const f = fixture();
+  f.store.set("sideworkers.v1.used-names", JSON.stringify(["home/sw-review"])); // state written by an older Household
+  const workers = new Sideworkers(f.deps);
+  await expect(workers.spawn(parent, task)).rejects.toThrow("whose bot is not known");
+  expect(workers.list("home")).toEqual([]);
+  f.store.close();
+});
+
+test("a scout spawned while a reused name's old session is reset cannot spend the same remaining CPU", async () => {
+  const { Scouts } = await import("../../src/app/scouts");
+  let scoutSpawn: Promise<unknown> | undefined;
+  let scouts: InstanceType<typeof Scouts> | undefined;
+  // The scout asks exactly while the reused worker's old session is being reset.
+  const f = fixture({ resetSession: async () => { scoutSpawn = scouts!.spawn(parent, { scout: "helper", task: "Check", cpus: 2, memoryMiB: 1024 }); await scoutSpawn.catch(() => {}); } });
+  const house = f.config.houses[0]!;
+  house.resources = { cpus: 6, memoryMiB: 8192 };
+  house.features = { scouts: true, sideworkers: true };
+  house.scoutAgent = { agent: "codex-app-server", key: "openai" };
+  house.scouts = [{ name: "helper", description: "QA", instructions: "", capabilities: [] }];
+  await spawned(f, parent, { ...task, cpus: 2, memoryMiB: 1024 });
+  await f.workers.close(parent, task.name);
+  scouts = new Scouts({
+    store: f.store, configured: f.deps.configured, otherAllocations: name => f.workers.allocations(name),
+    choose: async () => "yes", prepare: async run => ({ definition: run.scout, parent: run.parent, homePath: "/tmp/test", instructions: "", network: { kind: "allowlist", allow: [] } }),
+    launch: async () => {}, ready: async () => true, remove: async () => {}, closedNotice: () => async () => {}, notice: async () => {}, send: () => {}, secret: async () => {}, log: () => {},
+  });
+  f.deps.otherAllocations = name => scouts!.allocations(name);
+  const free = (await f.workers.resources(parent)).available.cpus;
+  const worker = await Promise.allSettled([f.workers.spawn(parent, { ...task, cpus: free, memoryMiB: 1024 })]);
+  const results = [worker[0]!, ...(await Promise.allSettled([scoutSpawn!]))];
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1); // one of them, never both
+  expect((await f.workers.resources(parent)).available.cpus).toBe(free - (results[0]!.status === "fulfilled" ? free : 2));
+  await scouts.stop();
+  await f.workers.started("home", task.name);
+  f.store.close();
+});

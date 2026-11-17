@@ -240,10 +240,13 @@ export class Sideworkers {
       if (this.spawning.has(key)) throw new Error(`Sideworker ${name} is still starting: Household tells you when it is up and has its task. Do not spawn it again.`);
       if (house.pets.some(pet => pet.name === name) || this.worker(caller.house, name)) throw new Error("This worker name is in use by a running sideworker or a bot; close it first or choose another name");
       // A name used before is fine for the bot that used it: its kept home gets a new session; its worktree and branch
-      // are taken up again. Another bot's former worker home is not handed over.
+      // are taken up again. Another bot's former worker home is never handed over, nor one whose bot is not known
+      // (used before Household kept who used it).
       const reused = this.usedNames.has(key);
       const formerParent = this.usedBy[key];
-      if (reused && formerParent !== undefined && formerParent !== caller.pet) throw new Error(`The name ${name} was used by ${formerParent}'s sideworker; choose another name`);
+      if (reused && formerParent !== caller.pet) throw new Error(formerParent === undefined
+        ? `The name ${name} was used by an earlier sideworker whose bot is not known; choose another name`
+        : `The name ${name} was used by ${formerParent}'s sideworker; choose another name`);
       // In a repository, by default, the worker gets its own checkout: its files, builds and bind-mounted data do not
       // meet its parent's (two VMs writing one database directory corrupt it). Outside one, it shares the directory.
       const worktree = input.worktree === false ? undefined : await this.deps.makeWorktree?.(caller.house, caller.pet, resolved, name);
@@ -253,11 +256,11 @@ export class Sideworkers {
       }
       const cwd = worktreeCwd ?? resolved;
       const record: SideworkerRecord = { channel: originChannel, originPlace: destination?.origin ?? petPlaceKey(caller.pet, originChannel), placement: input.placement ?? "thread", ...(destination ? { place: input.placement === "same" ? destination.publicOrigin : petPlaceKey(name, parsePlaceKey(destination.publicOrigin)!.channel) } : {}), house: caller.house, name, parent: caller.pet, parentHome, ...(input.profile === undefined ? {} : { profile: input.profile }), launch, cwd, ...(worktree ? { worktree: { branch: worktree.branch, base: worktree.base } } : {}), createdAt: this.now(), ...resources };
+      if (reused) await this.deps.resetSession?.(caller.house, name, launch.agent);
       const latest = (await this.deps.configured()).houses.find(h => h.name === caller.house);
       if (!latest) throw new Error("Workspace was removed");
-      // Check and publish synchronously: scouts see this allocation before any VM work starts.
+      // Check and publish synchronously, with no await between: scouts see this allocation before any VM work starts.
       assertWorkspaceCapacity(latest, [...this.allocations(caller.house), ...this.deps.otherAllocations?.(caller.house) ?? []], resources);
-      if (reused) await this.deps.resetSession?.(caller.house, name, launch.agent);
       this.usedNames.add(key); this.usedBy[key] = caller.pet;
       record.starting = { task: input.task, ...(reused ? { reused: true } : {}) };
       this.records.push(record); this.save();
