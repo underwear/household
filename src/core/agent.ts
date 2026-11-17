@@ -53,7 +53,7 @@ export interface AllowanceReader {
  * knows nothing of Docker or the daemon. Core owns the shape; each adapter (src/agent-adapters/<name>/) fills it in,
  * so a new agent needs no change here.
  */
-/** A dialog drawn on the agent's screen: what it asks and the options, each chosen with its `key` (a digit). */
+/** A dialog drawn on the agent's screen: what it asks and the options, each identified by its adapter's `key`. */
 export interface ScreenDialog {
   question: string;
   options: { key: string; label: string; description?: string }[];
@@ -145,8 +145,8 @@ export interface AgentAdapter {
   dialogVisible(exec: Exec): Promise<boolean | undefined>;
   /**
    * A dialog no hook brought (one only seen on screen), read off the screen so its person can answer it from the
-   * chat: its question and its numbered options. `read` is undefined when no such dialog is drawn or it cannot be
-   * read; `choose` presses the option's key, only while that same dialog is still drawn (false otherwise).
+   * chat: its question and options. `read` is undefined when no such dialog is drawn or it cannot be
+   * read; `choose` selects the option only while that same dialog is still drawn (false otherwise).
    */
   readonly screenDialog?: {
     read(exec: Exec): Promise<ScreenDialog | undefined>;

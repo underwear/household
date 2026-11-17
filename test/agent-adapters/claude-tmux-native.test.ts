@@ -209,6 +209,44 @@ test.skipIf(process.env.E2E_CLAUDE_TMUX !== "1")("native Claude 2.1.323 + tmux: 
       expect(system.split(instructions)).toHaveLength(2);
     }
 
+    // A sideworker has a fresh HOME but works inside its parent's linked checkout.
+    // Trusting only cwd starts Claude, then blocks at the project-permissions
+    // backstop: the permission settings require trust at Git's main checkout.
+    await run(["tmux", "kill-server"]);
+    const repository = "/home/agent/work/repos/trust-fixture", checkout = `${repository}/.worktrees/worker`, cwd = checkout;
+    await run(["git", "init", "-q", repository]);
+    await run(["git", "-C", repository, "-c", "user.name=QA", "-c", "user.email=qa@example.test", "commit", "--allow-empty", "-qm", "fixture"]);
+    await run(["git", "-C", repository, "worktree", "add", "-qb", "worker", checkout]);
+    await run(["mkdir", "-p", `${checkout}/.claude`, cwd]);
+    await run(["sh", "-c", `cat > '${checkout}/.claude/settings.json'`], JSON.stringify({ permissions: { allow: ["Bash(echo *)"] } }));
+    await docker(["exec", "-u", "root", name, "install", "-d", "-o", "agent", "-g", "agent", "/home/worker"]);
+    await docker(["exec", "-d", name, "env", "HOME=/home/worker", `HOUSEHOLD_WORKSPACE=${cwd}`, "household-entrypoint"]);
+    await until(async () => (await claudeCodeTmux.isReady(exec)).ready, "sideworker worktree with project permissions");
+    const trusted = JSON.parse(await run(["cat", "/home/worker/.claude.json"]));
+    expect(trusted.projects[repository].hasTrustDialogAccepted).toBe(true);
+    expect(trusted.projects[cwd].hasTrustDialogAccepted).toBe(true);
+    expect((await claudeCodeTmux.send(exec, "sideworker startup verified", () => true)).status).toBe("sent");
+    await done("sideworker startup verified");
+
+    // If persisted trust is missing, the native unnumbered confirmation is
+    // answerable through the adapter. No terminal input is sent by read().
+    const untrust = async () => {
+      await run(["tmux", "kill-server"]);
+      await run(["sh", "-c", `jq 'del(.projects["${repository}"])' /home/worker/.claude.json > /tmp/untrusted.json && mv /tmp/untrusted.json /home/worker/.claude.json`]);
+      await docker(["exec", "-d", name, "env", "HOME=/home/worker", "tmux", "new-session", "-d", "-s", "main", "-x", "160", "-y", "48", "-c", cwd,
+        "claude --model sonnet --permission-mode manual --settings /etc/household/claude-settings.json --strict-mcp-config --mcp-config /etc/household/mcp.json"]);
+      await until(async () => !!await claudeCodeTmux.screenDialog!.read(exec), "unnumbered trust confirmation");
+      return (await claudeCodeTmux.screenDialog!.read(exec))!;
+    };
+    const decline = await untrust();
+    expect(await claudeCodeTmux.screenDialog!.choose(exec, decline, "decline")).toBe(true);
+    await until(async () => (await claudeCodeTmux.isReady(exec)).ready, "decline project permissions");
+    expect(JSON.parse(await run(["cat", "/home/worker/.claude.json"])).projects[repository]?.hasTrustDialogAccepted).not.toBe(true);
+    const accept = await untrust();
+    expect(await claudeCodeTmux.screenDialog!.choose(exec, accept, "trust")).toBe(true);
+    await until(async () => (await claudeCodeTmux.isReady(exec)).ready, "accept project permissions");
+    expect(JSON.parse(await run(["cat", "/home/worker/.claude.json"])).projects[repository].hasTrustDialogAccepted).toBe(true);
+
   } finally {
     const fs = await import("node:fs/promises");
     await fs.mkdir("/tmp/household-qa-native-artifacts", { recursive: true });

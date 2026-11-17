@@ -3,7 +3,8 @@ import { DIALOG_LIMITS } from "../../core/dialog";
 
 // Claude Code's own dialogs as drawn at the bottom of its screen (permission prompts no hook brought, the plan
 // prompt, …): a rule, what it is about, a question, then numbered options, the chosen one marked `❯`, and a
-// footer (`Esc to cancel · …`). Pressing an option's digit chooses it.
+// footer (`Esc to cancel · …`). Pressing an option's digit chooses it. The startup
+// workspace-trust confirmation has no digits and needs arrow navigation instead.
 
 const RULE = /^\s*[─━╌]{8,}\s*$/;
 const OPTION = /^\s*(?:❯\s*)?(\d)\.\s+(\S.*?)\s*$/;
@@ -13,8 +14,37 @@ const TYPE_IN = /tell claude what to change|type something|type here/i;
 
 const cut = (value: string, max: number) => (value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`);
 
-/** The dialog at the bottom of a plain (no colours) screen, if one with numbered options is drawn there. */
+function workspaceTrustOf(plain: string): { dialog: ScreenDialog; selected: string } | undefined {
+  const lines = plain.trimEnd().split("\n");
+  const top = lines.findLastIndex(line => RULE.test(line));
+  if (top < 0) return;
+  const body = lines.slice(top + 1).filter(line => line.trim()).map(line => line.trim());
+  if (body[0] !== "Accessing workspace:" || !body[1]?.startsWith("/")
+    || !body.some(line => line.startsWith("Quick safety check: Is this a project you created or one you trust?"))
+    || body.at(-1) !== "Enter to confirm · Esc to cancel") return;
+  const options = body.slice(-3, -1);
+  const no = /^(?:❯\s*)?(No, (?:exit|continue without these permissions))$/.exec(options[0] ?? "");
+  const yes = /^(?:❯\s*)?(Yes, I trust this folder)$/.exec(options[1] ?? "");
+  if (!no || !yes || options.filter(line => line.startsWith("❯")).length !== 1) return;
+  const question = body.slice(0, -3).join("\n");
+  return {
+    selected: options[0]!.startsWith("❯") ? "decline" : "trust",
+    dialog: { question: cut(question, DIALOG_LIMITS.text), options: [{ key: "decline", label: no[1]! }, { key: "trust", label: yes[1]! }],
+      drawn: body.map(line => line.replace(/^❯\s*/, "")).join("\n") },
+  };
+}
+
+/** Only the known workspace-trust menu uses navigation; these are never caller-supplied terminal keys. */
+export function workspaceTrustKeys(plain: string, key: string): string[] | undefined {
+  const trust = workspaceTrustOf(plain);
+  if (!trust || !trust.dialog.options.some(option => option.key === key)) return;
+  return [...(trust.selected === key ? [] : [key === "trust" ? "Down" : "Up"]), "Enter"];
+}
+
+/** The dialog at the bottom of a plain (no colours) screen, if its options can be answered safely. */
 export function screenDialogOf(plain: string): ScreenDialog | undefined {
+  const trust = workspaceTrustOf(plain);
+  if (trust) return trust.dialog;
   const lines = plain.replace(/\s+$/, "").split("\n");
   // The options: the last run of numbered lines (an option's own second line may sit between two of them).
   let last = -1;
