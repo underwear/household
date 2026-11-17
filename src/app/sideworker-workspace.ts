@@ -5,7 +5,7 @@ export interface SideworkerWorktree {
   /** The worker's directory: the same place in the worktree as the one asked for in the repository. */
   cwd: string;
   branch: string;
-  /** The commit the branch starts from (the parent's HEAD, short). */
+  /** The commit the worker starts from (short): the parent's HEAD, or where its branch was left when the name is used again. */
   base: string;
 }
 
@@ -18,7 +18,8 @@ const NOT_GIT_MARK = "household-not-git";
  * Makes the worktree, run in the parent's VM as its user (`$1` the directory asked for, `$2` the worker's name):
  * git runs there, never on the host, so the repository's hooks and filters only ever run inside a VM. The worktree
  * goes under the repository's `.worktrees/` (kept out of `git status` through `info/exclude`) on `sideworker/<name>`
- * from HEAD. Prints git's own words when it fails.
+ * from HEAD; a name used before takes up its worktree, or its branch, where the earlier worker left them. Prints
+ * git's own words when it fails.
  */
 export const WORKTREE_SCRIPT = String.raw`
 set -eu
@@ -30,11 +31,17 @@ if ! git -C "$top" rev-parse --verify --quiet HEAD >/dev/null; then echo "the re
 common=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 mkdir -p "$common/info"
 grep -qxF '/.worktrees/' "$common/info/exclude" 2>/dev/null || printf '/.worktrees/\n' >> "$common/info/exclude"
-git -C "$top" worktree add --quiet -b "sideworker/$name" "$top/.worktrees/$name" HEAD
+# A name used before: its worktree is taken up again as it was left, or its branch checked out anew.
+if [ -e "$top/.worktrees/$name/.git" ] && [ "$(git -C "$top/.worktrees/$name" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "sideworker/$name" ]; then :
+elif git -C "$top" rev-parse --verify --quiet "refs/heads/sideworker/$name" >/dev/null; then
+  # -f: only this path's own entry may be left from a folder deleted by hand; other worktrees are never touched.
+  git -C "$top" worktree add --quiet -f "$top/.worktrees/$name" "sideworker/$name"
+else git -C "$top" worktree add --quiet -b "sideworker/$name" "$top/.worktrees/$name" HEAD
+fi
 # Git does not track empty directories; an existing untracked cwd still needs a place in the new checkout.
 mkdir -p "$top/.worktrees/$name/$prefix"
 dir=$(cd "$top/.worktrees/$name/$prefix" && pwd)
-printf '${DONE}\t%s\t%s\n' "$dir" "$(git -C "$top" rev-parse --short HEAD)"
+printf '${DONE}\t%s\t%s\n' "$dir" "$(git -C "$top/.worktrees/$name" rev-parse --short HEAD)"
 `;
 
 /**

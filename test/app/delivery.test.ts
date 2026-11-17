@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import type { AgentAdapter, SendResult } from "../../src/core/agent";
+import type { AgentAdapter, ScreenDialog, SendResult } from "../../src/core/agent";
 import type { AgentEvent } from "../../src/core/agent-events";
 import type { MessageRef } from "../../src/core/channel";
 import type { Header } from "../../src/core/header";
@@ -1745,5 +1745,100 @@ test("a screen-only dialog discovered while sending an idle pet's scheduled prom
     visible = false; // the transient screen went away; no turn ran, so no Stop will ever come
     await waitFor(() => s.sent.length === 1);
     expect(s.sent[0]!.text).toContain("daily digest");
+  } finally { s.delivery.stop(); }
+});
+
+test("a dialog only seen on screen is read off it and put to the person; their choice is pressed while it is still drawn", async () => {
+  let visible = true;
+  const drawn: ScreenDialog = { question: "Bash command\ndate > now.txt\nDo you want to proceed?", options: [{ key: "1", label: "1. Yes" }, { key: "2", label: "2. No" }] };
+  const pressed: string[] = [];
+  const s = setup({ visible: async () => visible, answer: () => ({ kind: "answers", answers: [{ chosen: ["1. Yes"] }] }) });
+  (s.pet.agent as { screenDialog?: AgentAdapter["screenDialog"] }).screenDialog = {
+    read: async () => (visible ? drawn : undefined),
+    choose: async (_exec, dialog, key) => { pressed.push(key); visible = false; return dialog === drawn; },
+  };
+  try {
+    await s.post({ kind: "dialog-opened", dialog: "unknown", summary: "Claude needs your permission" });
+    await waitFor(() => pressed.length === 1);
+    expect(s.asked).toEqual([{ kind: "questions", questions: [{ text: drawn.question, options: [{ label: "1. Yes" }, { label: "2. No" }], multiSelect: false }] }]);
+    expect(pressed).toEqual(["1"]);
+    // Household reads it to put it to the person: the chat is not told to go to the terminal.
+    expect(s.updates.filter(update => update.kind === "dialog" && update.dialog === "unknown")).toEqual([{ kind: "dialog", house: "work", pet: "sibling", dialog: "unknown", screen: true }]);
+    await waitFor(() => s.updates.some(update => update.kind === "dialog" && update.dialog === undefined));
+    expect(s.has("dialog on screen answered from the chat (1)")).toBe(1);
+  } finally { s.delivery.stop(); }
+});
+
+test("a screen-only dialog that cannot be read stays in the terminal, and the person is told so", async () => {
+  const s = setup({ visible: async () => true });
+  (s.pet.agent as { screenDialog?: AgentAdapter["screenDialog"] }).screenDialog = { read: async () => undefined, choose: async () => true };
+  (s.delivery as unknown as { timing: { screenDialogReadsMs: number[] } }).timing.screenDialogReadsMs = [0, 1];
+  try {
+    await s.post({ kind: "dialog-opened", dialog: "unknown", summary: "Claude needs your permission" });
+    await waitFor(() => s.updates.some(update => update.kind === "dialog" && update.dialog === "unknown" && !update.screen));
+    expect(s.asked).toEqual([]);
+    expect(s.has("could not be read; it stays in the terminal")).toBe(1);
+  } finally { s.delivery.stop(); }
+});
+
+/** An agent with a screen-only dialog Household can read (`drawn`), and the keys pressed into it. */
+function screenSetup(answer: (signal?: AbortSignal) => Promise<DialogAnswer | undefined> | DialogAnswer | undefined) {
+  const state = { visible: true, pressed: [] as string[] };
+  const drawn: ScreenDialog = { question: "Do you want to proceed?", options: [{ key: "1", label: "1. Yes" }, { key: "2", label: "2. No" }] };
+  const s = setup({ visible: async () => state.visible, answer });
+  (s.pet.agent as { screenDialog?: AgentAdapter["screenDialog"] }).screenDialog = {
+    read: async () => (state.visible ? drawn : undefined),
+    choose: async (_exec, _dialog, key) => { state.pressed.push(key); state.visible = false; return true; },
+  };
+  const unknown = () => s.post({ kind: "dialog-opened", dialog: "unknown", summary: "Claude needs your permission" });
+  const notices = () => s.updates.filter(update => update.kind === "dialog" && update.dialog === "unknown" && !update.screen).length;
+  return { s, state, unknown, notices };
+}
+
+test("the owner's stop on a screen-only dialog's card withdraws the card and interrupts the agent", async () => {
+  const answered = Promise.withResolvers<DialogAnswer>();
+  const { s, state, unknown } = screenSetup(() => answered.promise);
+  try {
+    await unknown();
+    await waitFor(() => s.asked.length === 1);
+    const result = await s.delivery.interrupt("work", "sibling", async () => { answered.resolve({ kind: "stopped" }); return true; });
+    expect(result).toEqual({ status: "stopped" });
+    expect(s.interrupts).toEqual(["Escape"]); // what cancels it on screen was pressed
+    expect(state.pressed).toEqual([]);
+  } finally { s.delivery.stop(); }
+});
+
+test("a screen-only dialog not answered with an option goes back to the terminal, and the owner is told", async () => {
+  const { s, state, unknown, notices } = screenSetup(() => ({ kind: "timeout", answers: [undefined] }));
+  try {
+    await unknown();
+    await waitFor(() => notices() === 1);
+    expect(state.pressed).toEqual([]);
+    expect(s.has("was not answered with an option")).toBe(1);
+  } finally { s.delivery.stop(); }
+});
+
+test("a second screen-only dialog right after an answered one is asked too", async () => {
+  const { s, state, unknown } = screenSetup(() => ({ kind: "answers", answers: [{ chosen: ["1. Yes"] }] }));
+  try {
+    await unknown();
+    await waitFor(() => state.pressed.length === 1);
+    state.visible = true; // the next one, drawn before any look at the screen
+    await unknown();
+    await waitFor(() => state.pressed.length === 2);
+    expect(s.asked).toHaveLength(2);
+  } finally { s.delivery.stop(); }
+});
+
+test("a screen-only dialog answered in the terminal while its card waits: the card goes and the queue moves", async () => {
+  let aborted = false;
+  const { s, state, unknown } = screenSetup(signal => new Promise(resolve => signal?.addEventListener("abort", () => { aborted = true; resolve(undefined); })));
+  try {
+    await unknown();
+    await waitFor(() => s.asked.length === 1);
+    state.visible = false; // someone answered it in the terminal
+    await waitFor(() => aborted);
+    await waitFor(() => s.updates.some(update => update.kind === "dialog" && update.dialog === undefined));
+    expect(state.pressed).toEqual([]);
   } finally { s.delivery.stop(); }
 });

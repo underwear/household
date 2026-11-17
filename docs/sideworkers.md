@@ -13,10 +13,10 @@ A sideworker is a second harness your bot starts for a job: a full session of a 
 
 Say you ask your bot: "The site's tests fail since the framework upgrade. Get a sideworker on it, and don't touch the snapshot files."
 
-1. **Brief.** The bot commits its work and starts a worker in the project with a written brief (what fails, what it ruled out, your rule, what done looks like), since the worker doesn't know your conversation.
+1. **Brief.** The bot commits its work and starts a worker in the project with a written brief (what fails, what it ruled out, your rule, what done looks like), since the worker doesn't know your conversation. A card in the bot's chat shows the worker starting, then links to its thread once it is up, or says why it did not start. The bot keeps answering you meanwhile.
 2. **Branch.** In a git repository the worker gets its own checkout on its own branch, so the two never edit the same files. The bot can instead share its live folder; then both edit the same files.
 3. **Review.** The worker reports in its thread; the bot reviews its branch and merges it.
-4. **Close.** The bot closes the worker: its VM goes, its branch and files stay. On Telegram its thread goes too, so the bot tells you first if anything there is worth keeping.
+4. **Close.** The bot closes the worker: its VM goes, its branch, files and thread stay. A worker started again under the same name picks up that branch and thread with a fresh session.
 
 ## What you decide
 

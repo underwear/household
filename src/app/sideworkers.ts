@@ -45,16 +45,31 @@ export interface SideworkerRecord {
   closing?: boolean;
   /** Household's notice in the parent's place that it was spawned (with a button to its thread): rewritten when it closes. */
   announcement?: PostedNotice;
+  /**
+   * Still starting: its task is not given yet (kept here so a Household restart meanwhile resumes the start).
+   * `reused`: its name was used before, so its thread may hold an earlier worker's history and is never removed.
+   */
+  starting?: { task: string; reused?: boolean };
 }
 export const SIDEWORKER_HOME = "/home/worker";
+/** The notice in its parent's place while a worker's VM starts: posted at once, rewritten when it is up or failed. */
+export function sideworkerStarting(worker: Pick<SideworkerRecord, "name" | "parent" | "cwd" | "worktree">): string {
+  return cardText({ title: `⏳ Starting sideworker ⛏️ ${html(worker.name)}…`,
+    facts: [`Started by: ${html(worker.parent)}`, `Folder: <code>${html(worker.cwd)}</code>`, ...(worker.worktree ? [`Branch: <code>${html(worker.worktree.branch)}</code>`] : [])],
+    note: "Its VM is starting; this can take a few minutes. Its task goes to it once it is ready." });
+}
+/** The same notice when the worker did not come up: why, and that nothing of it runs. */
+export function sideworkerFailed(worker: Pick<SideworkerRecord, "name">, reason: string): string {
+  return cardText({ title: `❌ Sideworker ⛏️ ${html(worker.name)} did not start`, note: html(reason) });
+}
 /** The notice in its parent's place that a worker was spawned (a button to its thread goes under it). */
 export function sideworkerSpawned(worker: Pick<SideworkerRecord, "name" | "parent" | "cwd" | "worktree">): string {
   return cardText({ title: `✅ Spawned new sideworker ⛏️ ${html(worker.name)}`,
     facts: [`Started by: ${html(worker.parent)}`, `Folder: <code>${html(worker.cwd)}</code>`, ...(worker.worktree ? [`Branch: <code>${html(worker.worktree.branch)}</code>`] : [])] });
 }
-/** The same notice once the worker is closed: its thread is gone, so is the button. */
+/** The same notice once the worker is closed: its VM is gone; its thread and shared project files stay. */
 export function sideworkerFinished(worker: Pick<SideworkerRecord, "name">): string {
-  return cardText({ title: `⏹ Sideworker ⛏️ ${html(worker.name)} finished`, note: "Its VM is removed; shared project files remain." });
+  return cardText({ title: `⏹ Sideworker ⛏️ ${html(worker.name)} finished`, note: "Its VM is removed; its thread and the shared project files remain." });
 }
 export const SIDEWORKER_IDLE_MS = 30 * 60_000;
 export const SIDEWORKER_STATE_KEY = "sideworkers.v1";
@@ -64,12 +79,19 @@ export interface SideworkerDeps {
   place?(house: string, pet: string, place?: string): { channel: string; origin: string; publicOrigin: string };
   store: KeyValueStore;
   agents: Agents;
-  /** Captured before it is removed, run after: its thread goes (or, where it cannot, a notice there says it stopped). */
-  prepareClosedNotice?(house: string, name: string): () => Promise<void>;
-  /** A spawned worker is told in its parent's place, with a way to its thread; resolves to that notice's handle. */
-  announce?(worker: SideworkerRecord): Promise<PostedNotice | undefined>;
-  /** A closed worker's spawn notice (`announce`) says it is finished, its thread button gone. */
-  finished?(worker: SideworkerRecord, notice: PostedNotice): Promise<void>;
+  /**
+   * Captured before it is removed, run after: a notice in its thread says it stopped, and the thread stays. With
+   * `remove` (a worker that never started) its thread goes instead.
+   */
+  prepareClosedNotice?(house: string, name: string, remove?: boolean): () => Promise<void>;
+  /** A worker being spawned is told in its parent's place (`text`); resolves to that notice's handle. */
+  announce?(worker: SideworkerRecord, text: string): Promise<PostedNotice | undefined>;
+  /** The address of the worker's own thread, while it runs; undefined where there is none. */
+  threadLink?(worker: SideworkerRecord): Promise<string | undefined>;
+  /** The worker's notice (`announce`) says `text` now; with `link`, a button under it opens the worker's thread. */
+  rewrite?(worker: SideworkerRecord, notice: PostedNotice, text: string, link?: string): Promise<void>;
+  /** A name used again: the home kept from its earlier worker starts a new agent session, not the old one. */
+  resetSession?(house: string, name: string, agent: string): Promise<void>;
   configured(): Promise<Household>;
   reload(): Promise<unknown>;
   resolveDirectory(house: string, pet: string, cwd: string): Promise<string | undefined>;
@@ -89,9 +111,13 @@ export interface SideworkerDeps {
 export class Sideworkers {
   private records: SideworkerRecord[];
   private readonly usedNames: Set<string>;
+  /** Which bot last used each name (`house/name`): a name goes to another bot only with a fresh home. */
+  private readonly usedBy: Record<string, string>;
   private readonly closedNotices = new Map<string, () => Promise<void>>();
   /** Workers being spawned: their first start is no restart, and their task is still to come. */
   private readonly spawning = new Set<string>();
+  /** The background start of each worker being spawned (never rejects). */
+  private readonly starts = new Map<string, Promise<void>>();
   private queue: Promise<unknown> = Promise.resolve();
   private timer?: ReturnType<typeof setInterval>;
   private ticking = false;
@@ -99,7 +125,10 @@ export class Sideworkers {
   constructor(private readonly deps: SideworkerDeps) {
     this.records = JSON.parse(deps.store.get(STATE_KEY) ?? "[]");
     this.usedNames = new Set(JSON.parse(deps.store.get(`${STATE_KEY}.used-names`) ?? "[]"));
+    this.usedBy = JSON.parse(deps.store.get(`${STATE_KEY}.used-by`) ?? "{}");
     this.now = deps.now ?? Date.now;
+    // A start a restart cut off: no restart notice for it, its start is resumed (`start`).
+    for (const worker of this.records) if (worker.starting && !worker.closing) this.spawning.add(`${worker.house}/${worker.name}`);
   }
   list(house: string): SideworkerRecord[] { return this.records.filter(item => item.house === house).map(item => structuredClone(item)); }
   allocations(house: string): ResourceAllocation[] { return this.list(house).map(w => ({ name: w.name, kind: "sideworker", cpus: w.cpus, memoryMiB: w.memoryMiB, state: w.closing ? "closing" : "allocated" })); }
@@ -120,7 +149,11 @@ export class Sideworkers {
     return `Household: your VM was restarted (a Household update, a restart or a changed launch). Your agent session may be a new one, without your earlier conversation. Your home, your working directory ${worker.cwd} with its uncommitted changes, and your Docker data are as they were; running processes are not. Your task came from your parent ${worker.parent}: decide yourself whether to pick it up where it stopped, and tell your parent or your human if it matters. This is a notice, not a new task.`;
   }
   memoryOwner(house: string, pet: string) { return this.worker(house, pet)?.parent ?? pet; }
-  private save() { this.deps.store.set(STATE_KEY, JSON.stringify(this.records)); this.deps.store.set(`${STATE_KEY}.used-names`, JSON.stringify([...this.usedNames])); }
+  private save() {
+    this.deps.store.set(STATE_KEY, JSON.stringify(this.records));
+    this.deps.store.set(`${STATE_KEY}.used-names`, JSON.stringify([...this.usedNames]));
+    this.deps.store.set(`${STATE_KEY}.used-by`, JSON.stringify(this.usedBy));
+  }
   private serial<T>(job: () => Promise<T>): Promise<T> {
     const result = this.queue.then(job);
     this.queue = result.catch(() => {});
@@ -203,10 +236,17 @@ export class Sideworkers {
       if (!resolved) throw new Error("cwd must resolve to an existing directory within the parent’s shared home; rootfs directories are not shared");
       const name = input.name ?? `sw-${randomBytes(4).toString("hex")}`;
       if (!/^sw-[a-z0-9][a-z0-9-]{0,27}$/.test(name)) throw new Error("name must start with sw- and contain lowercase letters, digits and hyphens (31 characters maximum)");
-      if (house.pets.some(pet => pet.name === name) || this.worker(caller.house, name)) throw new Error("This worker name is already in use");
-      if (this.usedNames.has(`${caller.house}/${name}`)) throw new Error("This worker name has already been used; choose a new name for a clean session");
-      this.usedNames.add(`${caller.house}/${name}`);
-      this.save();
+      const key = `${caller.house}/${name}`;
+      if (this.spawning.has(key)) throw new Error(`Sideworker ${name} is still starting: Household tells you when it is up and has its task. Do not spawn it again.`);
+      if (house.pets.some(pet => pet.name === name) || this.worker(caller.house, name)) throw new Error("This worker name is in use by a running sideworker or a bot; close it first or choose another name");
+      // A name used before is fine for the bot that used it: its kept home gets a new session; its worktree and branch
+      // are taken up again. Another bot's former worker home is never handed over, nor one whose bot is not known
+      // (used before Household kept who used it).
+      const reused = this.usedNames.has(key);
+      const formerParent = this.usedBy[key];
+      if (reused && formerParent !== caller.pet) throw new Error(formerParent === undefined
+        ? `The name ${name} was used by an earlier sideworker whose bot is not known; choose another name`
+        : `The name ${name} was used by ${formerParent}'s sideworker; choose another name`);
       // In a repository, by default, the worker gets its own checkout: its files, builds and bind-mounted data do not
       // meet its parent's (two VMs writing one database directory corrupt it). Outside one, it shares the directory.
       const worktree = input.worktree === false ? undefined : await this.deps.makeWorktree?.(caller.house, caller.pet, resolved, name);
@@ -216,56 +256,101 @@ export class Sideworkers {
       }
       const cwd = worktreeCwd ?? resolved;
       const record: SideworkerRecord = { channel: originChannel, originPlace: destination?.origin ?? petPlaceKey(caller.pet, originChannel), placement: input.placement ?? "thread", ...(destination ? { place: input.placement === "same" ? destination.publicOrigin : petPlaceKey(name, parsePlaceKey(destination.publicOrigin)!.channel) } : {}), house: caller.house, name, parent: caller.pet, parentHome, ...(input.profile === undefined ? {} : { profile: input.profile }), launch, cwd, ...(worktree ? { worktree: { branch: worktree.branch, base: worktree.base } } : {}), createdAt: this.now(), ...resources };
+      if (reused) await this.deps.resetSession?.(caller.house, name, launch.agent);
       const latest = (await this.deps.configured()).houses.find(h => h.name === caller.house);
       if (!latest) throw new Error("Workspace was removed");
-      // Check and publish synchronously: scouts see this allocation before any VM work starts.
+      // Check and publish synchronously, with no await between: scouts see this allocation before any VM work starts.
       assertWorkspaceCapacity(latest, [...this.allocations(caller.house), ...this.deps.otherAllocations?.(caller.house) ?? []], resources);
+      this.usedNames.add(key); this.usedBy[key] = caller.pet;
+      record.starting = { task: input.task, ...(reused ? { reused: true } : {}) };
       this.records.push(record); this.save();
-      this.spawning.add(`${caller.house}/${name}`);
+      // The VM comes up in the background; its parent's place hears at once that it is starting (`begin`).
+      this.resume(record, true);
+      return structuredClone(record);
+    });
+  }
+  /** Runs (or, after a restart, resumes) a worker's start in the background. */
+  private resume(record: SideworkerRecord, announce: boolean): void {
+    const key = `${record.house}/${record.name}`;
+    this.spawning.add(key);
+    const started = this.begin({ house: record.house, pet: record.parent }, record, announce);
+    this.starts.set(key, started);
+    void started.finally(() => { if (this.starts.get(key) === started) this.starts.delete(key); });
+  }
+  private async threadLink(worker: SideworkerRecord): Promise<string | undefined> {
+    return worker.placement === "same" ? undefined : this.deps.threadLink?.(structuredClone(worker)).catch(() => undefined);
+  }
+  /** Settles once the worker's background start did (up with its task, or failed and rolled back). */
+  started(house: string, name: string): Promise<void> { return this.starts.get(`${house}/${name}`) ?? Promise.resolve(); }
+  /**
+   * The worker's VM starts, its place is made and its harness gets ready; then it gets its task. Its parent is told
+   * either way (an internal notice), and so is the person, on the announcement. One that did not come up is rolled
+   * back: its VM goes, and its thread with it. Never rejects.
+   */
+  private async begin(caller: PetIdentity, record: SideworkerRecord, announce: boolean): Promise<void> {
+    const { house, name, worktree } = record;
+    const { task, reused } = record.starting!;
+    if (announce) {
+      const announcement = await this.deps.announce?.(structuredClone(record), sideworkerStarting(record)).catch(() => undefined);
+      if (announcement && this.records.includes(record)) { record.announcement = announcement; this.save(); }
+    }
+    try {
       try {
         await this.deps.reload();
-        await this.deps.ensurePlace?.(caller.house, name);
-        if (!await this.deps.ready(caller.house, name)) throw new Error("Sideworker VM started, but its harness did not become ready");
-        await this.deps.dispatch(caller, name, input.task);
+        await this.deps.ensurePlace?.(house, name);
+        if (!await this.deps.ready(house, name)) throw new Error("Sideworker VM started, but its harness did not become ready");
+        await this.deps.dispatch(caller, name, task);
+        delete record.starting; this.save();
       } catch (error) {
+        const reason = (error as Error).message;
         record.closing = true; this.save();
-        // Its thread may be there already (made on the reload): it goes with it.
-        const closed = this.deps.prepareClosedNotice?.(caller.house, name);
+        // Its thread may be there already (made on the reload): it goes with it, nothing was said in it. A name used
+        // before has its earlier worker's thread, with its history: that one stays.
+        const closed = this.deps.prepareClosedNotice?.(house, name, !reused);
+        let pending = false;
         try {
           await this.deps.reload();
           await closed?.().catch(() => {});
           this.records = this.records.filter(item => item !== record); this.save();
-        } catch {
-          throw new Error(`${(error as Error).message}. Cleanup is pending for ${name}; retry sideworker_close.`);
-        }
-        throw error;
-      } finally {
-        this.spawning.delete(`${caller.house}/${name}`);
+        } catch { pending = true; }
+        this.deps.log(`sideworker ${house}/${name} did not start: ${reason}${pending ? " (cleanup pending)" : ""}`);
+        if (record.announcement) await this.deps.rewrite?.(structuredClone(record), record.announcement, sideworkerFailed(record, reason)).catch(() => {});
+        this.deps.send(house, record.parent, `Household: sideworker ${name} did not start: ${reason}. ${pending ? `Cleanup is pending for ${name}; retry sideworker_close.` : `Nothing of it is running; you may spawn it again (the same name is fine).`} Its task was not given to it. This is an internal notice, not a message from your human.`);
+        return;
       }
-      this.deps.log(`sideworker ${caller.house}/${name} spawned by ${caller.pet} in ${cwd}${worktree ? ` (worktree on ${worktree.branch} from ${worktree.base})` : ""}`);
-      const announcement = await this.deps.announce?.(structuredClone(record)).catch(() => undefined);
-      if (announcement && this.records.includes(record)) { record.announcement = announcement; this.save(); }
-      return structuredClone(record);
-    });
+    } finally {
+      this.spawning.delete(`${house}/${name}`);
+    }
+    this.deps.log(`sideworker ${house}/${name} spawned by ${caller.pet} in ${record.cwd}${worktree ? ` (worktree on ${worktree.branch} from ${worktree.base})` : ""}`);
+    if (record.announcement && this.records.includes(record)) {
+      const link = await this.threadLink(record);
+      await this.deps.rewrite?.(structuredClone(record), record.announcement, sideworkerSpawned(record), link).catch(() => {});
+    }
+    this.deps.send(house, record.parent, `Household: sideworker ${name} is up and has your task. Coordinate with it using house_send; close it with sideworker_close when it is done. This is an internal notice, not a message from your human.`);
   }
   close(caller: PetIdentity, name: string) {
     const worker = this.worker(caller.house, name);
     if (!worker || worker.parent !== caller.pet) return Promise.reject(new Error("You may close only your own sideworkers"));
+    if (this.spawning.has(`${caller.house}/${name}`)) return Promise.reject(new Error(`Sideworker ${name} is still starting: close it once Household told you it is up or did not start`));
     return this.closeForOwner(caller.house, name);
   }
-  closeForOwner(house: string, name: string): Promise<void> {
+  async closeForOwner(house: string, name: string): Promise<void> {
+    // One still starting is closed once its start settled (it may have rolled back by itself).
+    await this.started(house, name);
     return this.serial(async () => {
       const worker = this.worker(house, name);
       if (!worker) throw new Error("Unknown sideworker");
       const noticeKey = `${house}/${name}`;
-      if (!this.closedNotices.has(noticeKey) && this.deps.prepareClosedNotice) this.closedNotices.set(noticeKey, this.deps.prepareClosedNotice(house, name));
+      if (!this.closedNotices.has(noticeKey) && this.deps.prepareClosedNotice) this.closedNotices.set(noticeKey, this.deps.prepareClosedNotice(house, name, false));
+      // Its thread stays: the button under its notice keeps opening it, so its address is taken while it runs.
+      const link = worker.announcement ? await this.threadLink(worker) : undefined;
       worker.closing = true; this.save();
       await this.deps.reload();
       this.records = this.records.filter(item => item !== worker); this.save();
       this.deps.log(`sideworker ${house}/${name} closed`);
       const notice = this.closedNotices.get(noticeKey); this.closedNotices.delete(noticeKey);
       try { await notice?.(); } catch { this.deps.log(`sideworker ${house}/${name}: final notice could not be posted`); }
-      if (worker.announcement) await this.deps.finished?.(structuredClone(worker), worker.announcement).catch(() => this.deps.log(`sideworker ${house}/${name}: its spawn notice was not updated`));
+      if (worker.announcement) await this.deps.rewrite?.(structuredClone(worker), worker.announcement, sideworkerFinished(worker), link).catch(() => this.deps.log(`sideworker ${house}/${name}: its spawn notice was not updated`));
     });
   }
   humanMessage(house: string, name: string) {
@@ -291,27 +376,30 @@ export class Sideworkers {
       this.save();
     } finally { this.ticking = false; }
   }
-  start() { this.timer = setInterval(() => { void this.tick().catch(error => this.deps.log(`sideworker idle check failed: ${(error as Error).message}`)); }, 60_000); }
+  /** Resumes the starts a restart cut off (their VMs come back with the config), then checks idle workers every minute. */
+  start() {
+    for (const worker of this.records) if (worker.starting && !worker.closing && !this.starts.has(`${worker.house}/${worker.name}`)) this.resume(worker, !worker.announcement);
+    this.timer = setInterval(() => { void this.tick().catch(error => this.deps.log(`sideworker idle check failed: ${(error as Error).message}`)); }, 60_000); }
   stop() { clearInterval(this.timer); }
 }
 
 /** Internal channel/notice handles stay on the host; tools return the public destination. */
-function publicWorker({ channel: _channel, originPlace: _origin, announcement: _notice, ...worker }: SideworkerRecord) { return worker; }
+function publicWorker({ channel: _channel, originPlace: _origin, announcement: _notice, starting: _starting, ...worker }: SideworkerRecord) { return worker; }
 
 export function sideworkerTools(workers: Sideworkers): McpTool<PetIdentity>[] {
   return [
     { name: "workspace_resources", description: "Inspect this workspace's CPU/RAM budget, permanent pet reservations, active/pending helper allocations and free capacity. These are VM maxima, not measured utilization. Choose cpus and memoryMiB for scout_spawn or sideworker_spawn within available capacity; close helpers when finished. No count limit.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, async call(caller) { return JSON.stringify(await workers.resources(caller)); } },
-    { name: "sideworker_spawn", description: "Start a sideworker in a separate VM with shared project files. Choose a workspace-approved profile from sideworker_profiles for its harness/key/model/mode, or omit profile to inherit your own settings. Settings are captured at spawn. It has its own clean session; place selects its destination, placement chooses a dedicated thread or an existing shared place. It inherits your Household memory, and no scheduled tasks. Its cwd must resolve to an existing directory inside your shared home; fresh rootfs and private harness home are separate. In a git repository it gets its own worktree by default (repository/.worktrees/<name>, branch sideworker/<name> from your HEAD; your uncommitted changes are not in it): merge its branch when it is done. Pass worktree: false to share your live directory instead; then never let both of you bind-mount the same data directory into containers. You manage it with house_send and sideworker_close. Size its VM yourself: call workspace_resources first and choose cpus and memoryMiB for the job, within the shared available budget (required).",
+    { name: "sideworker_spawn", description: "Start a sideworker in a separate VM with shared project files. Choose a workspace-approved profile from sideworker_profiles for its harness/key/model/mode, or omit profile to inherit your own settings. Settings are captured at spawn. It has its own clean session; place selects its destination, placement chooses a dedicated thread or an existing shared place. It inherits your Household memory, and no scheduled tasks. Its cwd must resolve to an existing directory inside your shared home; fresh rootfs and private harness home are separate. In a git repository it gets its own worktree by default (repository/.worktrees/<name>, branch sideworker/<name> from your HEAD, or that worktree/branch as left when the name was used before; your uncommitted changes are not in it): merge its branch when it is done. Pass worktree: false to share your live directory instead; then never let both of you bind-mount the same data directory into containers. It returns at once with status starting: its VM comes up in the background, and Household tells you when it is up and has the task (or why it did not start). A name used before may be used again: a fresh session, the same worktree and branch. You manage it with house_send and sideworker_close. Size its VM yourself: call workspace_resources first and choose cpus and memoryMiB for the job, within the shared available budget (required).",
       inputSchema: { type: "object", additionalProperties: false, required: ["cwd", "task", "cpus", "memoryMiB"], properties: { cpus: { type: "integer", minimum: 1, maximum: 1024, description: "vCPUs for its VM" }, memoryMiB: { type: "integer", minimum: 512, multipleOf: 128, description: "Memory for its VM, MiB" }, place: { type: "string", description: "Parent place.id from header or places; defaults to the current request place" }, placement: { type: "string", enum: ["same", "thread"], description: "thread (default): dedicated place; same: share the selected place" }, profile: { type: "string", description: "Optional workspace profile name from sideworker_profiles; omitted inherits your harness/key/model/mode" }, cwd: { type: "string" }, task: { type: "string", maxLength: 32000 }, name: { type: "string", description: "Optional sw-prefixed lowercase name, e.g. sw-tests" }, worktree: { type: "boolean", description: "In a git repository: its own worktree (default true) or your shared live directory (false)" } } },
       available: caller => !workers.worker(caller.house, caller.pet),
-      async call(caller, args) { return JSON.stringify(publicWorker(await workers.spawn(caller, args as Parameters<Sideworkers["spawn"]>[1]))); } },
+      async call(caller, args) { return JSON.stringify({ ...publicWorker(await workers.spawn(caller, args as Parameters<Sideworkers["spawn"]>[1])), status: "starting", note: "Its VM is starting in the background (often a few minutes). Household tells you in an internal notice when it is up and has the task, or why it did not start; your human sees its progress in a card. Do not spawn it again meanwhile." }); } },
     { name: "sideworker_profiles", description: "List workspace-approved sideworker profiles and your inherited defaults: adapter, model, effort, permission mode and credential reference name only. Pass a profile name to sideworker_spawn, or omit profile to use inherited settings.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       available: caller => !workers.worker(caller.house, caller.pet),
       async call(caller) { return JSON.stringify(await workers.profiles(caller)); } },
     { name: "sideworkers", description: "List the workspace's active or closing sideworkers, their parent bots, working directories and observed idle times.", inputSchema: { type: "object", additionalProperties: false, properties: {} },
       async call(caller) { return JSON.stringify(workers.list(caller.house).map(publicWorker)); } },
-    { name: "sideworker_close", description: "Stop and remove one of your sideworker VMs. Shared project files remain; the worker's private home is retained for inspection. Ends its session immediately, and its chat thread is deleted with all its messages (in Telegram): tell your human first what in it they may want to keep.",
+    { name: "sideworker_close", description: "Stop and remove one of your sideworker VMs. Shared project files, its worktree and branch remain; the worker's private home is retained for inspection. Ends its session immediately; its chat thread stays with its history.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: { name: { type: "string" } } },
       available: caller => !workers.worker(caller.house, caller.pet),
       async call(caller, args) { if (typeof args.name !== "string") throw new Error("name must be a string"); await workers.close(caller, args.name); return JSON.stringify({ closed: args.name }); } },

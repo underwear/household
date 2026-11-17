@@ -53,6 +53,14 @@ export interface AllowanceReader {
  * knows nothing of Docker or the daemon. Core owns the shape; each adapter (src/agent-adapters/<name>/) fills it in,
  * so a new agent needs no change here.
  */
+/** A dialog drawn on the agent's screen: what it asks and the options, each chosen with its `key` (a digit). */
+export interface ScreenDialog {
+  question: string;
+  options: { key: string; label: string; description?: string }[];
+  /** The dialog as drawn, whole, for the adapter to tell it is still the same one (the rest may be cut to fit). */
+  drawn?: string;
+}
+
 export interface AgentAdapter {
   readonly name: string;
   /** Docker build context with a Dockerfile. The image's entrypoint is the agent's main process. */
@@ -135,6 +143,15 @@ export interface AgentAdapter {
   readonly sessionFile?: string;
   /** Whether a dialog is on screen; undefined when it cannot tell. Unknown is blocked, never proof of a dialog's appearance. */
   dialogVisible(exec: Exec): Promise<boolean | undefined>;
+  /**
+   * A dialog no hook brought (one only seen on screen), read off the screen so its person can answer it from the
+   * chat: its question and its numbered options. `read` is undefined when no such dialog is drawn or it cannot be
+   * read; `choose` presses the option's key, only while that same dialog is still drawn (false otherwise).
+   */
+  readonly screenDialog?: {
+    read(exec: Exec): Promise<ScreenDialog | undefined>;
+    choose(exec: Exec, dialog: ScreenDialog, key: string): Promise<boolean>;
+  };
   /** Interactive command (with a TTY) that puts a person into the agent's session, if it has one. */
   readonly attach?: string[];
   /** Fixed read-only screen capture command; no caller-supplied arguments or terminal input. */

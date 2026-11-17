@@ -607,7 +607,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (!permission && !this.budget("dialogs", house, pet).take()) {
       this.events.error(`bot ${name}: a dialog stays in the terminal (too many dialogs)`);
       if (this.budget("terminal notices", house, pet).take()) {
-        void this.notice(house, pet, "Too many questions in a row. Answer in the terminal: `house pet attach`");
+        void this.notice(house, pet, `Too many questions in a row. ${this.terminalHint(house, pet, "Answer in the terminal: `house pet attach`")}`);
       }
       return undefined;
     }
@@ -627,6 +627,11 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (!configured?.pets.some(({ name }) => name === pet)) return undefined;
     const channels = channelsOf(configured, pet).map((config) => this.channels.headerChannel(house, config));
     return { channels, canReadTopics: (id) => { const key = this.records.channelKeyOf(house, id); return !!key && this.channels.canUseTopics(house, pet, key); }, trust: (ref) => this.channels.trust(house, ref) };
+  }
+
+  /** Where a person answers what waits in the pet's terminal: its session (`pets`), or /stop for a scout, which has none to open. */
+  private terminalHint(house: string, pet: string, pets: string): string {
+    return this.channels.spotsOf(house, pet).found?.scout ? "Send /stop here to cancel it." : pets;
   }
 
   /** A notice from Household where the pet was last written to; the log gets it when the chat cannot. Never throws. */
@@ -757,10 +762,11 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    * one that opens `linkTo`'s place, when given and its channel has such links. Never throws: a notice whose channel
    * is gone, or that cannot be edited any more, stays as it was.
    */
-  async rewrite(house: string, notice: PostedNotice, text: string, linkTo?: string): Promise<void> {
+  async rewrite(house: string, notice: PostedNotice, text: string, linkTo?: string, link?: string): Promise<void> {
     const channel = this.channels.spotAt(house, notice.place)?.channel;
     if (!channel) return;
-    const url = linkTo === undefined ? undefined : await this.placeLink(house, linkTo);
+    // `link`: an address taken while the place's pet was still there (one closed since has no place to look up).
+    const url = link ?? (linkTo === undefined ? undefined : await this.placeLink(house, linkTo));
     await channel.setChoices(notice.ref, [], undefined, { text, format: "html", ...(url ? { link: { label: OPEN_PLACE, url } } : {}) })
       .catch((error) => this.events.error(`workspace ${house}: a notice was not rewritten (${(error as Error).message})`));
   }
@@ -799,8 +805,11 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     if (update.kind === "dialog") {
       // One only the terminal can answer (seen on screen after a restart, or asked without the hook): the person is told.
       const { found } = this.channels.spotsOf(house, pet);
-      if (update.dialog === "unknown" && found && this.budget("terminal notices", house, pet).take()) {
-        void this.notice(house, pet, `${petTitle(found)} is waiting for an answer in the terminal. Send /stop here to cancel the request, or open \`house bot attach ${house} ${pet}\`. Messages are kept in the queue until this request is resolved.`);
+      // One read off the screen to be put to the person comes as a question instead.
+      if (update.dialog === "unknown" && !update.screen && found && this.budget("terminal notices", house, pet).take()) {
+        // A scout has no session to attach to from the command line: /stop is the way out.
+        const attach = found.scout ? "" : `, or open \`house bot attach ${house} ${pet}\``;
+        void this.notice(house, pet, `${petTitle(found)} is waiting for an answer in the terminal. Send /stop here to cancel the request${attach}. Messages are kept in the queue until this request is resolved.`);
       }
       return update.dialog ? this.live.dialogOpened(house, pet, update.dialog, update.input) : this.live.dialogClosed(house, pet);
     }
@@ -818,7 +827,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
       const text =
         update.why === "interrupted"
           ? `Household restarted while answering ${what}. No reply will come: write again.`
-          : `${what} not sent: the agent seems to be in a dialog. \`house pet attach\``;
+          : `${what} not sent: the agent seems to be in a dialog. ${this.terminalHint(house, pet, "`house pet attach`")}`;
       // Where the batch came from (never another channel); else where the pet was last written to.
       void this.noticeTo(house, pet, first.place === undefined ? this.currentTarget(house, pet) : this.channels.spotOfMessage(house, pet, first.place), text);
       return;

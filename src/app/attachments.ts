@@ -17,6 +17,9 @@ export const FETCH_TIMING: FetchTiming = { retriesMs: [2_000, 10_000, 30_000], a
 /** The bytes of a file a message came with, from the channel of its place; `DownloadRefused` when they never will come. */
 export type Download = (house: string, place: string | undefined, attachment: Attachment, signal: AbortSignal) => Promise<Uint8Array>;
 
+/** Where a bot's home is on the host when it is not among the pets' homes (a scout's is in its run's storage). */
+export type InboxHome = (house: string, pet: string) => { files: Pick<PetInboxFiles, "save">; volume: string } | undefined;
+
 type Log = { info(message: string): void; error(message: string): void };
 
 /**
@@ -32,6 +35,7 @@ export class AttachmentFetcher {
     /** The day's directory is the date in Household's timezone. */
     private readonly timezone: () => string,
     private readonly timing: FetchTiming = FETCH_TIMING,
+    private readonly homeOf: InboxHome = () => undefined,
   ) {}
 
   /**
@@ -59,7 +63,8 @@ export class AttachmentFetcher {
     }
     const day = new Intl.DateTimeFormat("sv-SE", { timeZone: this.timezone(), dateStyle: "short" }).format(Date.now());
     try {
-      const saved = await this.files.save(petVolume(house, pet), day, inboxFileName(id, attachment), bytes);
+      const own = this.homeOf(house, pet);
+      const saved = await (own?.files ?? this.files).save(own?.volume ?? petVolume(house, pet), day, inboxFileName(id, attachment), bytes);
       this.log.info(`${name} saved to ${saved}`);
       return { ...attachment, path: posix.join(home, saved) };
     } catch (error) {
