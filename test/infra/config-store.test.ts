@@ -495,6 +495,10 @@ test("keys: added on top (before the houses), changed, removed; one a pet names 
   await expect(config.addKey("gpt", { provider: "mistral", value: "x" })).rejects.toThrow("unknown provider 'mistral' (known: anthropic, openai)");
   await expect(config.addKey("Bad Name", { provider: "anthropic", value: "x" })).rejects.toThrow("invalid key name");
   await expect(config.addKey("spaced", { provider: "anthropic", value: "a b" })).rejects.toThrow("a key's value is printable ASCII without spaces");
+  // A long token (a JWT, a signed API token) fits, up to what a /secret in the chat may be.
+  await config.addKey("long", { provider: "anthropic", value: "t".repeat(4096) });
+  await expect(config.addKey("longer", { provider: "anthropic", value: "t".repeat(4097) })).rejects.toThrow("a key's value is longer than 4096 characters");
+  await config.removeKey("long");
   await config.updateKey("claude", { value: "sk-ant-oat01-rotated", note: null });
   await config.updatePet("work", "sibling", { key: "claude" });
   const household = await config.load();

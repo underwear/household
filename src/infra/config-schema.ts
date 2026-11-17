@@ -178,8 +178,10 @@ const telegramChat = z.unknown().transform((value, ctx): string => {
   else ctx.addIssue({ code: "custom", message: CHAT_ID });
   return z.NEVER;
 });
+/** The longest token, key or secret value the config holds: as long as a `/secret` in the chat may be (long JWTs and signed tokens). */
+export const CREDENTIAL_MAX = 4096;
 // A token or key as the config holds it: printable ASCII, no spaces (it goes into a URL or a header as it is).
-const credential = (what: string) => z.string().trim().min(1, `${what} is empty`).max(1024).regex(/^[\x21-\x7e]+$/, `${what} is printable ASCII without spaces`);
+const credential = (what: string) => z.string().trim().min(1, `${what} is empty`).max(CREDENTIAL_MAX, `${what} is longer than ${CREDENTIAL_MAX} characters`).regex(/^[\x21-\x7e]+$/, `${what} is printable ASCII without spaces`);
 
 const telegramPrivate = z.strictObject({
   kind: z.literal("telegram-private"),

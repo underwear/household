@@ -8,6 +8,7 @@ import type { PetIdentity } from "../infra/agent-api";
 import type { McpTool } from "../infra/mcp-server";
 import type { OwnerCard } from "./chat";
 import { cardText, html } from "../core/card";
+import { CREDENTIAL_MAX } from "../infra/config-schema";
 
 export type SecretDecision = "waiting" | "save" | "cancel" | "raw-warning" | "raw-confirm" | "raw-send";
 export interface SecretInput {
@@ -222,7 +223,7 @@ export class SecretRequests {
     const short = fields.length === 2;
     const request = short ? active : undefined;
     const supplied = short ? fields[1] : fields[2];
-    if (fields[0]!.toLowerCase() !== "/secret" || ![2, 4].includes(fields.length) || !supplied || supplied.length > 4096 || /[\p{Cc}\p{Cf}]/u.test(supplied)) {
+    if (fields[0]!.toLowerCase() !== "/secret" || ![2, 4].includes(fields.length) || !supplied || supplied.length > CREDENTIAL_MAX || /[\p{Cc}\p{Cf}]/u.test(supplied)) {
       await input.notice(USAGE).catch(() => {}); return true;
     }
     if (short && (!request || request.expiresAt <= this.clock.now())) {
