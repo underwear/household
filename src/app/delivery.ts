@@ -2,7 +2,7 @@ import { inboxDigest } from "../core/inbox-digest";
 import { effectivePetHome } from "../core/household";
 import { fetched } from "../core/attachment";
 import { block, CLOCK_TAG, tagFreeJson } from "../core/tags";
-import type { Exec, SendResult } from "../core/agent";
+import type { Exec, ScreenDialog, SendResult } from "../core/agent";
 import type { AgentEvent, DialogKind, TurnProgress } from "../core/agent-events";
 import type { DialogAnswer, DialogQuestion } from "../core/dialog";
 import { HouseholdError } from "../core/errors";
@@ -34,7 +34,7 @@ export type DeliveryUpdate =
   | { kind: "turn-started"; house: string; pet: string; turn?: string; messages: Message[] }
   | { kind: "progress"; house: string; pet: string; event: TurnProgress }
   | { kind: "notification"; house: string; pet: string; text: string }
-  | { kind: "dialog"; house: string; pet: string; dialog?: DialogKind; input?: string }
+  | { kind: "dialog"; house: string; pet: string; dialog?: DialogKind; input?: string; /** A screen-only dialog Household is reading off the screen to put to the person. */ screen?: true }
   | { kind: "turn-finished"; house: string; pet: string; turn?: string }
   | { kind: "turn-lost"; house: string; pet: string; why: "failed" | "session"; turn?: string };
 
@@ -267,7 +267,9 @@ export class Delivery {
     const box = this.boxes.get(key(house, pet));
     const name = `bot ${house}/${pet}`;
     if (!box) return { status: "idle" };
-    if (box.asking.length > 0 && (await answerDialogs())) {
+    // A dialog only seen on screen is not the agent's to be refused: its card goes, and the agent is interrupted.
+    const screenOnly = box.asking.length > 0 && box.asking.every(asking => asking.dialog !== undefined && asking.dialog === box.screenAsked);
+    if (box.asking.length > 0 && (await answerDialogs()) && !screenOnly) {
       box.inbox.stopped();
       this.events.info(`${name}: stopped by its person (its dialog refused with an interrupt)`);
       return { status: "stopped" };
@@ -452,6 +454,9 @@ export class Delivery {
       // Even a second dialog invalidates an in-flight terminal probe.
       this.watchDialogs(house, pet, box);
     }
+    // A dialog no hook brought: if its agent can read it off the screen, its person answers it from the chat.
+    const onScreen = opened?.dialog === "unknown" && opened === event && !!box.agent.screenDialog && !box.screenAsked;
+    if (onScreen) void this.askScreen(house, pet, box, opened);
     if (event.kind === "dialog-closed") {
       const closed = box.dialogState.closed(event);
       if (closed.length) this.watchDialogs(house, pet, box);
@@ -506,9 +511,66 @@ export class Delivery {
     if (event.kind === "turn-failed") this.recoverInbox(box);
     if (event.kind === "turn-failed") this.report({ kind: "turn-lost", house, pet, why: "failed", ...turn });
     if (event.kind === "session-started" && !event.continues) this.report({ kind: "turn-lost", house, pet, why: "session" });
-    if (event.kind === "dialog-opened") this.report({ kind: "dialog", house, pet, dialog: event.dialog, ...(event.input ? { input: event.input } : {}) });
+    if (event.kind === "dialog-opened") this.report({ kind: "dialog", house, pet, dialog: event.dialog, ...(event.input ? { input: event.input } : {}), ...(onScreen ? { screen: true as const } : {}) });
     if (event.kind === "dialog-closed") this.report({ kind: "dialog", house, pet });
     return opened;
+  }
+
+  /**
+   * A dialog only seen on screen, put to the person as a question with its options (it may be drawn a little
+   * after the agent said so). Their choice is pressed only while the same dialog is still drawn. One that cannot
+   * be read stays in the terminal, and the person is told so.
+   */
+  private async askScreen(house: string, pet: string, box: Mailbox, opened: OpenDialog): Promise<void> {
+    const screen = box.agent.screenDialog!;
+    const name = `bot ${house}/${pet}`;
+    const open = () => this.boxes.get(key(house, pet)) === box && box.dialogState.open.includes(opened);
+    box.screenAsked = opened;
+    try {
+      let read: ScreenDialog | undefined;
+      for (const wait of this.timing.screenDialogReadsMs ?? [0, 500, 1_500]) {
+        if (wait) await Bun.sleep(wait);
+        if (!open()) return;
+        read = await screen.read(this.execIn(house, pet)).catch(() => undefined);
+        if (read) break;
+      }
+      if (!open()) return;
+      if (!read) {
+        this.events.info(`${name}: a dialog on screen could not be read; it stays in the terminal`);
+        this.report({ kind: "dialog", house, pet, dialog: "unknown" });
+        return;
+      }
+      // Seen drawn: once the screen no longer shows it, the watch closes it (answered in the terminal meanwhile).
+      box.screenDialog = opened;
+      const options = read.options.map(({ label, description }) => ({ label, ...(description ? { description } : {}) }));
+      const answer = await this.ask(house, pet, box, { kind: "questions", questions: [{ text: read.question, options, multiSelect: false }] }, opened);
+      // Gone meanwhile, or stopped (`interrupt` presses what cancels it): nothing to press here.
+      if (!open() || answer?.kind === "stopped") return;
+      const first = answer?.kind === "answers" ? answer.answers[0] : undefined;
+      const chosen = first && "chosen" in first ? read.options.find(option => option.label === first.chosen[0]) : undefined;
+      if (!chosen) {
+        // Not answered with an option (no answer in time, words instead, refused): only the terminal can answer it now.
+        this.events.info(`${name}: the dialog on screen was not answered with an option; it stays in the terminal`);
+        this.report({ kind: "dialog", house, pet, dialog: "unknown" });
+        return;
+      }
+      if (!(await screen.choose(this.execIn(house, pet), read, chosen.key).catch(() => false))) {
+        this.events.info(`${name}: the dialog on screen changed before its answer came; nothing pressed`);
+        this.report({ kind: "dialog", house, pet, dialog: "unknown" });
+        return;
+      }
+      this.events.info(`${name}: dialog on screen answered from the chat (${chosen.key})`);
+      // Answered, it is gone: a next one on screen is a new dialog, asked anew; waiting messages need not wait for a look.
+      box.dialogState.remove(opened);
+      if (box.screenDialog === opened) box.screenDialog = undefined;
+      this.watchDialogs(house, pet, box);
+      if (box.dialogState.open.length === 0 && box.asking.length === 0) {
+        this.record(house, pet, box, { kind: "dialog-closed" });
+        void this.flush(house, pet);
+      }
+    } finally {
+      if (box.screenAsked === opened) box.screenAsked = undefined;
+    }
   }
 
   /**

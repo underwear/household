@@ -89,6 +89,21 @@ test("a sideworker file is stored in its own volume and exposed under its own gu
   expect(readdirSync(home)).toEqual([]);
 });
 
+test("a scout's file is stored in its run's home, which is not among the pets' homes", async () => {
+  const { api, homes, message, today, lines } = setup();
+  const run = join(realpathSync(tempDir()), "run");
+  const scoutHome = join(run, "home");
+  mkdirSync(scoutHome, { recursive: true });
+  const channel = new TelegramChannel(new TelegramBot({ name: "house work", token: TOKEN, log: { info: () => {}, error: () => {} }, apiBase: api.url, state: { get: () => undefined, set: () => {} } }), 1, "house work");
+  const fetcher = new AttachmentFetcher((_house, _place, attachment, signal) => channel.download(attachment, signal), new PetInboxFiles(homes), { info: (l) => lines.push(l), error: (l) => lines.push(`ERROR ${l}`) }, () => "UTC", TIMING,
+    (house, pet) => (house === "work" && pet === "scout-1" ? { files: new PetInboxFiles(run), volume: "home" } : undefined));
+  api.file("photo", new Uint8Array([7]), "photos/file.jpg");
+  const photo: Attachment = { kind: "photo", file: "photo" as FileRef, mime: "image/jpeg" };
+  expect(await fetcher.fetch("work", "scout-1", "/home/agent", message([photo]))).toEqual([{ ...photo, path: `/home/agent/.household/inbox/${today}/m3-photo.jpg` }]);
+  expect([...readFileSync(join(scoutHome, ".household/inbox", today, "m3-photo.jpg"))]).toEqual([7]);
+  expect(readdirSync(homes)).toEqual(["household.work.sibling.home"]);
+});
+
 test("a passing failure is tried again until the file comes; a home whose inbox is not Household's to write gets why", async () => {
   const { api, home, fetcher, message, today } = setup();
   api.file("photo", new Uint8Array([1]), "photos/file_2.jpg");

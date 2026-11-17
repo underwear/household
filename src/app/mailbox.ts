@@ -20,6 +20,8 @@ export interface DeliveryTiming {
    */
   batchMs: number;
   batchMax: number;
+  /** The waits before each look at a screen-only dialog to read it (it can be drawn after the agent says so). */
+  screenDialogReadsMs?: number[];
 }
 
 export const TIMING: DeliveryTiming = { retryMs: 3_000, watchMs: 5_000, eventsPerSecond: 20, reportMs: 10_000, batchMs: 1_200, batchMax: 25 };
@@ -58,6 +60,8 @@ export class Mailbox {
   readonly dialogState = new DialogState();
   /** The sole main dialog actually seen on screen; absence before first paint proves nothing. */
   screenDialog?: OpenDialog;
+  /** A dialog only seen on screen, read off it and put to the person (one at a time). */
+  screenAsked?: OpenDialog;
   private readonly events: TokenBucket;
   private dropped = 0;
   private report?: ReturnType<typeof setTimeout>;

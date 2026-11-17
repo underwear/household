@@ -41,7 +41,7 @@ import { houseSecrets } from "../core/secrets";
 import { PetOutboxFiles } from "../infra/pet-outbox";
 import { outboxTool } from "./outbox";
 import { HouseMessages, houseMessageTools } from "./house-messages";
-import { Sideworkers, sideworkerFinished, sideworkerSpawned, sideworkerTools } from "./sideworkers";
+import { Sideworkers, sideworkerTools } from "./sideworkers";
 import { makeWorktree } from "./sideworker-workspace";
 import { Monitoring } from "./monitoring";
 import { MetricsStore } from "../infra/metrics-store";
@@ -226,10 +226,12 @@ export async function startDaemon(deps: DaemonDeps) {
   let monitoring: Monitoring | undefined;
   const sideworkers = new Sideworkers({
     otherAllocations: house => [...scouts.allocations(house), ...pets.resourceAllocations(house)],
-    store: records, agents, place: (house, pet, place) => chat.spawnPlace(house, pet, place), prepareClosedNotice: (house, name) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", true),
-    // In its parent's place: it was spawned, with a button to its own thread; once closed, that it is finished.
-    announce: worker => chat.announce(worker.house, worker.parent, sideworkerSpawned(worker), worker.placement === "same" ? undefined : worker.name, worker.originPlace),
-    finished: (worker, notice) => chat.rewrite(worker.house, notice, sideworkerFinished(worker)),
+    store: records, agents, place: (house, pet, place) => chat.spawnPlace(house, pet, place), prepareClosedNotice: (house, name, remove) => chat.prepareSideworkerCloseNotice(house, name, "Sideworker", remove),
+    // In its parent's place: it is starting; then that it is up (with a button to its own thread), or why not; once closed, that it is finished.
+    announce: (worker, text) => chat.announce(worker.house, worker.parent, text, undefined, worker.originPlace),
+    threadLink: worker => chat.placeLink(worker.house, worker.name),
+    rewrite: (worker, notice, text, link) => chat.rewrite(worker.house, notice, text, undefined, link),
+    resetSession: async (house, name, agent) => { const adapter = agents.get(agent); if (adapter) await pets.resetSession(house, name, adapter); },
     configured: () => config.load(), reload: () => applyConfig(),
     ensurePlace: (house, pet) => chat.ensurePlace(house, pet),
     resolveDirectory: async (house, pet, cwd) => {
@@ -276,7 +278,11 @@ export async function startDaemon(deps: DaemonDeps) {
       const list = sideworkers.worker(house, pet) ? "" : scoutsBlock(appliedHousehold?.houses.find(each => each.name === house) ?? {});
       return { revision: `${notes?.revision ?? "-"}:${Bun.hash(list)}`, text: (notes?.text ?? "") + list };
     },
-    new AttachmentFetcher((house, place, attachment, signal) => chat.download(house, place, attachment, signal), inboxes, events, () => timezone),
+    new AttachmentFetcher((house, place, attachment, signal) => chat.download(house, place, attachment, signal), inboxes, events, () => timezone, undefined, (house, pet) => {
+      // A scout's home is in its run's storage, not among the pets' homes.
+      const home = placed.find(p => p.house === house && p.pet === pet)?.scout?.homePath;
+      return home ? { files: new PetInboxFiles(dirname(home)), volume: basename(home) } : undefined;
+    }),
     (house, pet, event) => redactAgentEvent(event, text => scouts.redact(house, pet, text)),
   );
   const chat = new Chat(delivery, openChannels, events, new Dialogs(events), records);

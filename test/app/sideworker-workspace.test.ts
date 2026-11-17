@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeWorktree } from "../../src/app/sideworker-workspace";
 import { tempDir } from "../helpers";
@@ -23,7 +23,31 @@ test("a worktree on its own branch, at the same place in the repository, kept ou
   expect(made?.cwd.endsWith(join("repo", ".worktrees", "sw-a", "app", "src"))).toBe(true);
   expect(readFileSync(join(made!.cwd, "a.txt"), "utf8")).toBe("a");
   expect(git(repo, "status", "--porcelain").stdout.toString()).toBe("");
-  await expect(makeWorktree(exec, repo, "sw-a")).rejects.toThrow("already exists"); // never over another's branch
+});
+
+test("a name used again takes up its worktree as it was left, or checks its branch out anew", async () => {
+  const repo = tempDir();
+  writeFileSync(join(repo, "README.md"), "committed");
+  git(repo, "init", "-q"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "first");
+  const first = await makeWorktree(exec, repo, "sw-a");
+  writeFileSync(join(first!.cwd, "work.txt"), "done"); git(first!.cwd, "add", "-A"); git(first!.cwd, "commit", "-qm", "work");
+  writeFileSync(join(first!.cwd, "draft.txt"), "uncommitted");
+  const again = await makeWorktree(exec, repo, "sw-a");
+  expect(again).toEqual({ ...first!, base: git(first!.cwd, "rev-parse", "--short", "HEAD").stdout.toString().trim() });
+  expect(readFileSync(join(again!.cwd, "draft.txt"), "utf8")).toBe("uncommitted");
+  // Its folder gone (deleted by hand, still registered), its branch stays: checked out anew, with its commits.
+  const other = join(tempDir(), "elsewhere");
+  // Another worktree whose path this VM does not see (made on the host, say): its registration is never touched.
+  git(repo, "worktree", "add", "-q", "-b", "other", other);
+  rmSync(other, { recursive: true, force: true });
+  rmSync(first!.cwd, { recursive: true, force: true });
+  const anew = await makeWorktree(exec, repo, "sw-a");
+  expect(anew?.cwd).toBe(first!.cwd);
+  expect(readFileSync(join(anew!.cwd, "work.txt"), "utf8")).toBe("done");
+  expect(git(repo, "worktree", "list").stdout.toString()).toContain(other);
+  // Removed the way the skill says, it is checked out anew too.
+  git(repo, "worktree", "remove", "--force", anew!.cwd);
+  expect((await makeWorktree(exec, repo, "sw-a"))?.cwd).toBe(first!.cwd);
 });
 
 test("outside a repository there is no worktree; a repository without a commit says so", async () => {

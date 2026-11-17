@@ -5,6 +5,7 @@ import { parseSigninMarker, SIGNIN_SCOPES } from "./signin";
 import { readAnthropicAllowance } from "./allowance";
 import { answerFor, askOf } from "./dialogs";
 import { translateHook } from "./translate";
+import { sameScreenDialog, screenDialogOf } from "./screen-dialog";
 
 /**
  * Placeholder in the shape of a `claude setup-token` OAuth token (a subscription's). Claude Code sends it as
@@ -314,6 +315,21 @@ export const claudeCodeTmux: AgentAdapter = {
   async dialogVisible(exec) {
     const shown = await screen(exec);
     return shown === undefined ? undefined : inputBox(shown) === undefined;
+  },
+  screenDialog: {
+    async read(exec) {
+      const shown = await screen(exec);
+      return shown === undefined || inputBox(shown) !== undefined ? undefined : screenDialogOf(plainScreen(shown));
+    },
+    async choose(exec, dialog, key) {
+      if (!/^\d$/.test(key) || !dialog.options.some(option => option.key === key)) return false;
+      const mode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
+      if (!mode.ok || mode.output.trim() !== "0") return false;
+      const shown = await screen(exec);
+      const now = shown === undefined || inputBox(shown) !== undefined ? undefined : screenDialogOf(plainScreen(shown));
+      if (!now || !sameScreenDialog(now, dialog)) return false;
+      return (await exec(["tmux", "send-keys", "-t", PANE, "-l", key])).ok;
+    },
   },
   attach: ["tmux", "attach-session", "-t", "main"],
   terminalSnapshot: ["tmux", "capture-pane", "-p", "-t", "=main:0.0", "-S", "-200"],

@@ -267,6 +267,13 @@ export class PetPlane {
     try { await this.progress.run("restarting VM and agent", () => this.restartVm(placed, onLeave, onStopped), placed); }
     finally { await this.progress.run("refreshing VM inventory", () => this.refreshResources()); }
   }
+  /** A home kept from an earlier VM of this name (a sideworker name used again) starts a new agent session. */
+  async resetSession(house: string, pet: string, agent: Pick<AgentAdapter, "sessionFile">): Promise<void> {
+    if (!agent.sessionFile) return;
+    if (!this.runtime.resetSession) throw new Error("runtime cannot reset this harness’s session");
+    await this.runtime.resetSession(petVolume(house, pet), agent.sessionFile);
+  }
+
   private async restartVm(placed: PlacedPet, onLeave: () => Promise<void> = async () => {}, onStopped: () => Promise<void> = async () => {}): Promise<void> {
     if (placed.enabled === false) throw new Error("bot is disabled; enable it before restarting");
     const name = petContainer(placed.house, placed.pet);

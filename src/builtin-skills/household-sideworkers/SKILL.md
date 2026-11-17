@@ -28,6 +28,10 @@ Do the work yourself when it is a few steps. Each worker reserves CPU/RAM from a
    - `worktree: false` shares your live directory. Then you both edit the same files: agree who touches what.
 3. Write `task` as a full brief: the goal, where to look, what is already ruled out, what done looks like, and how
    to report back. It does not know your conversation.
+4. The call returns at once with `status: "starting"`: the worker's VM comes up in the background, often in a few
+   minutes. Your human sees a card in your place that turns into "spawned", with a button to its thread, or says why
+   it did not start. You get an internal notice either way; only then does it have the task. Do not spawn or close
+   it meanwhile, and go on with your own work.
 
 ## A worker in another project
 
@@ -55,8 +59,9 @@ files only when you go looking; it starts from them.
 ## Finish
 
 - A worker in a worktree commits on its branch. Review the branch, merge it, then `git worktree remove` it.
-- `sideworker_close({name})` stops the worker and removes its VM. Its worktree, branch and files stay; its chat
-  thread is deleted with all its messages (Telegram), so tell your human first if something there is worth keeping.
+- `sideworker_close({name})` stops the worker and removes its VM. Its worktree, branch, files and chat thread stay.
+- A closed worker's name may be used again: the new worker starts a fresh session but takes up the same worktree and
+  branch where the last one left them, in the same thread. Choose a new name for unrelated work.
 - Household reminds you every 30 minutes of a worker that sits idle: close what you no longer need.
 
 ## Docker and shared files
