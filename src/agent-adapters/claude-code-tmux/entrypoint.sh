@@ -25,8 +25,11 @@ fi
 workspace="${HOUSEHOLD_WORKSPACE:-$HOME/work}"
 if [ -z "${HOUSEHOLD_WORKSPACE:-}" ]; then mkdir -p "$workspace"; fi
 [ -d "$workspace" ] || { echo "Working directory does not exist" >&2; exit 1; }
-# Each sideworker uses an independent HOME; trust its explicitly delegated workspace.
-jq --arg p "$workspace" ' .projects[$p].hasTrustDialogAccepted = true ' "$HOME/.claude.json" > "$HOME/.claude.json.tmp"
+# Claude stores project-settings trust at the main checkout, including when launched
+# in a linked worktree or a subdirectory. Each sideworker has its own HOME: trust
+# that delegated repository there as well as the directory used for this launch.
+projects=$(/usr/local/bin/household-claude-trust-paths "$workspace")
+jq --argjson paths "$projects" 'reduce $paths[] as $p (. ; .projects[$p].hasTrustDialogAccepted = true)' "$HOME/.claude.json" > "$HOME/.claude.json.tmp"
 mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
 set -- --strict-mcp-config
 if [ "${ENABLE_CLAUDEAI_MCP_SERVERS:-false}" = "true" ]; then set --; fi
