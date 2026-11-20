@@ -1142,3 +1142,41 @@ test("a previously failed setup is still announced as degraded without automatic
     expect(runtime.execs.some(call => call.includes("Household: environment setup failed on this boot"))).toBe(false);
   } finally { await daemon.stop(); }
 });
+
+test("a resumed sideworker holds restored follow-ups until ready and dispatches its initial task first", async () => {
+  const { config, deps } = setup();
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { agent: "claude-code-tmux", key: "claude" });
+  await connect(config, "work");
+  const sent: string[] = [];
+  const sentWhileStarting: boolean[] = [];
+  const adapter = deps.agents.get("claude-code-tmux")!;
+  const replacement: typeof adapter = {
+    ...adapter,
+    dialogVisible: async () => false,
+    isReady: async () => ({ ready: true }),
+    async send(_exec, text, canSubmit) {
+      if (!canSubmit()) return { status: "refused", reason: "startup blocked" };
+      if (text.includes("INITIAL_TASK_RACE") || text.includes("FOLLOWUP_RACE")) {
+        sent.push(text);
+        sentWhileStarting.push(!!JSON.parse(deps.records.get("sideworkers.v1")!)[0]?.starting);
+      }
+      return { status: "sent" };
+    },
+  };
+  deps.agents = new Map([...deps.agents, [adapter.name, replacement]]);
+  deps.records.set("sideworkers.v1", JSON.stringify([{
+    house: "work", name: "sw-one", parent: "sibling", cwd: "/home/agent", createdAt: 1,
+    cpus: 1, memoryMiB: 1024, starting: { task: "INITIAL_TASK_RACE", reused: true },
+  }]));
+  deps.messages.add("work", "sw-one", { origin: "internal", text: "FOLLOWUP_RACE" });
+  const daemon = await startDaemon(deps);
+  try {
+    await waitFor(() => sent.length === 2);
+    expect(sent[0]).toContain("INITIAL_TASK_RACE");
+    expect(sent[1]).toContain("FOLLOWUP_RACE");
+    expect(sentWhileStarting).toEqual([false, false]);
+    expect(JSON.parse(deps.records.get("sideworkers.v1")!)[0]).toMatchObject({ name: "sw-one" });
+    expect(JSON.parse(deps.records.get("sideworkers.v1")!)[0].starting).toBeUndefined();
+  } finally { await daemon.stop(); }
+});

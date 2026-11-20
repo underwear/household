@@ -4,7 +4,7 @@ import { writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tempDir } from "../helpers";
 import { expect, test } from "bun:test";
-import { Sideworkers, SIDEWORKER_IDLE_MS, sideworkerTools, type SideworkerDeps } from "../../src/app/sideworkers";
+import { sideworkerTaskRef, Sideworkers, SIDEWORKER_IDLE_MS, sideworkerTools, type SideworkerDeps } from "../../src/app/sideworkers";
 import type { Household } from "../../src/core/household";
 import { SqliteStore } from "../../src/infra/sqlite-store";
 import { PetMemory } from "../../src/app/memory";
@@ -565,4 +565,39 @@ test("a scout spawned while a reused name's old session is reset cannot spend th
   await scouts.stop();
   await f.workers.started("home", task.name);
   f.store.close();
+});
+
+
+test("startup keeps its delivery gate until the task is durable, then releases it", async () => {
+  const dispatch = Promise.withResolvers<void>();
+  let taskRef: unknown;
+  const released: string[] = [];
+  const f = fixture({
+    dispatch: async (_caller, _name, _task, ref) => { taskRef = ref; await dispatch.promise; },
+    releaseDelivery: (house, name) => {
+      expect(f.workers.worker(house, name)?.starting).toBeUndefined();
+      released.push(name);
+    },
+  });
+  try {
+    await f.workers.spawn(parent, task);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const worker = f.workers.worker("home", task.name)!;
+    expect(worker.starting).toBeDefined();
+    expect(taskRef).toBe(sideworkerTaskRef(worker));
+    expect(released).toEqual([]);
+    dispatch.resolve();
+    await f.workers.started("home", task.name);
+    expect(released).toEqual([task.name]);
+  } finally { f.store.close(); }
+});
+
+test("failed startup reports retained messages and never releases delivery", async () => {
+  let released = false;
+  const f = fixture({ ready: async () => false, pendingMessages: () => 4, releaseDelivery: () => { released = true; } });
+  try {
+    await spawned(f, parent, task);
+    expect(released).toBe(false);
+    expect(f.sent).toEqual([{ house: "home", pet: "parent", text: expect.stringContaining("4 queued message(s) remain undelivered and are kept for the next spawn with the same name") }]);
+  } finally { f.store.close(); }
 });

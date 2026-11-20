@@ -42,7 +42,7 @@ import { houseSecrets } from "../core/secrets";
 import { PetOutboxFiles } from "../infra/pet-outbox";
 import { outboxTool } from "./outbox";
 import { HouseMessages, houseMessageTools } from "./house-messages";
-import { Sideworkers, sideworkerTools } from "./sideworkers";
+import { sideworkerTaskRef, Sideworkers, sideworkerTools } from "./sideworkers";
 import { makeWorktree } from "./sideworker-workspace";
 import { Monitoring } from "./monitoring";
 import { MetricsStore } from "../infra/metrics-store";
@@ -249,7 +249,9 @@ export async function startDaemon(deps: DaemonDeps) {
       const current = placed.find(item => item.house === house && item.pet === pet);
       return !!current && (await current.agent.isReady(pets.exec(house, pet), current.mode)).ready;
     },
-    dispatch: (caller, to, task) => houseMessages.send(caller, to, task),
+    dispatch: (caller, to, task, ref) => houseMessages.send(caller, to, task, ref),
+    releaseDelivery: (house, pet) => delivery.retry(house, pet),
+    pendingMessages: (house, pet) => messages.unfinished(house, pet).filter(message => message.status === "received").length,
     isIdle: async (house, pet) => {
       const current = placed.find(item => item.house === house && item.pet === pet && item.enabled !== false);
       return current?.agent.isIdle ? current.agent.isIdle(pets.exec(house, pet)) : false;
@@ -285,6 +287,10 @@ export async function startDaemon(deps: DaemonDeps) {
       return home ? { files: new PetInboxFiles(dirname(home)), volume: basename(home) } : undefined;
     }),
     (house, pet, event) => redactAgentEvent(event, text => scouts.redact(house, pet, text)),
+    (house, pet) => {
+      const worker = sideworkers.worker(house, pet);
+      return { blocked: !!(worker?.starting || worker?.closing), ...(worker ? { firstRef: sideworkerTaskRef(worker) } : {}) };
+    },
   );
   const chat = new Chat(delivery, openChannels, events, new Dialogs(events), records);
   const houseMessages = new HouseMessages(house => {

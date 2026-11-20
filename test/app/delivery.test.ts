@@ -40,6 +40,7 @@ const contentsIn = (prompt: string) => [...prompt.matchAll(/<household-content>\
 function setup(
   options: {
     nativeClaude?: boolean;
+    deliveryPolicy?: (house: string, pet: string) => { blocked: boolean; firstRef?: MessageRef };
     memory?: () => {revision: number | string; text: string};
     sanitizeEvent?: (house: string, pet: string, event: AgentEvent) => AgentEvent;
     sends?: (SendResult | Promise<SendResult>)[];
@@ -92,7 +93,7 @@ function setup(
     return options.answer?.(signal);
   };
   const clock = fakeClock();
-  const delivery = new Delivery(log, () => async () => ({ ok: true, output: "" }), store, (update) => updates.push(update), ask, timing, clock, undefined, options.memory, options.attachments, options.sanitizeEvent);
+  const delivery = new Delivery(log, () => async () => ({ ok: true, output: "" }), store, (update) => updates.push(update), ask, timing, clock, undefined, options.memory, options.attachments, options.sanitizeEvent, options.deliveryPolicy);
   const pet = { house: "work", pet: "sibling", agent, model: "m", key: "k", keyUse: { kind: "test", env: {}, wire: [] } };
   delivery.setPets([pet]);
   const post = (event: AgentEvent) => delivery.onPayload("work", "sibling", event);
@@ -1789,14 +1790,20 @@ test("closing a mailbox aborts its pending permissions and rejects late approval
 
 test("a second dialog invalidates an older terminal probe even while the first was already open", async () => {
   const probe = Promise.withResolvers<boolean>();
-  const { delivery, post, sent, send } = setup({ visible: () => probe.promise });
+  const probing = Promise.withResolvers<void>();
+  let looks = 0;
+  const { delivery, post, sent, send } = setup({ visible: () => {
+    if (looks++ > 0) return Promise.resolve(true); // the second dialog is still open
+    probing.resolve();
+    return probe.promise;
+  } });
   try {
     await post({ kind: "dialog-opened", dialog: "permission", summary: "first", input: "first" });
-    await Bun.sleep(20); // watch started but has not returned
+    await probing.promise; // the old observation is in flight
     await post({ kind: "dialog-opened", dialog: "permission", summary: "second", input: "second" });
     send("queued");
     probe.resolve(false);
-    // Let the old probe complete; a fresh probe is scheduled separately.
+    // Let the stale observation complete; any fresh probe still sees the second dialog.
     await Bun.sleep(1);
     expect(sent).toHaveLength(0);
   } finally { delivery.stop(); }
@@ -1931,4 +1938,50 @@ test("a screen-only dialog answered in the terminal while its card waits: the ca
     await waitFor(() => s.updates.some(update => update.kind === "dialog" && update.dialog === undefined));
     expect(state.pressed).toEqual([]);
   } finally { s.delivery.stop(); }
+});
+
+
+test("startup holds delivery through hooks and reloads, then sends the task before follow-ups", async () => {
+  let blocked = true;
+  const ref = "startup-task" as MessageRef;
+  const f = setup({ deliveryPolicy: () => ({ blocked, firstRef: ref }) });
+  try {
+    f.send("follow-up");
+    await f.post({ kind: "session-started" });
+    f.delivery.resume("work", "sibling");
+    f.delivery.setPets([f.pet]);
+    expect(f.sent).toHaveLength(0);
+    f.delivery.send("work", "sibling", { origin: "internal", text: "initial task", ref });
+    expect(f.sent).toHaveLength(0);
+    blocked = false;
+    f.delivery.retry("work", "sibling");
+    await waitFor(() => f.sent.length === 2);
+    expect(f.sent[0]!.text).toContain("initial task");
+    expect(f.sent[1]!.text).toContain("follow-up");
+  } finally { f.delivery.stop(); f.store.close(); }
+});
+
+test("failed startup keeps follow-ups durable; restored startup task stays first and is not duplicated", async () => {
+  const store = new SqliteStore(":memory:");
+  const ref = "startup-task" as MessageRef;
+  const first = setup({ store, deliveryPolicy: () => ({ blocked: true, firstRef: ref }) });
+  first.send("kept follow-up");
+  first.delivery.setPets([]); // failed start removes its VM/mailbox
+  expect(store.unfinished("work", "sibling")[0]!.status).toBe("received");
+  first.delivery.stop();
+  let blocked = true;
+  const second = setup({ store, deliveryPolicy: () => ({ blocked, firstRef: ref }) });
+  second.delivery.send("work", "sibling", { origin: "internal", text: "initial task", ref });
+  second.delivery.stop(); // daemon restart after dispatch, before releasing startup
+  const third = setup({ store, deliveryPolicy: () => ({ blocked, firstRef: ref }) });
+  try {
+    third.delivery.send("work", "sibling", { origin: "internal", text: "initial task", ref });
+    expect(third.sent).toHaveLength(0);
+    expect(store.unfinished("work", "sibling")).toHaveLength(2);
+    blocked = false;
+    third.delivery.retry("work", "sibling");
+    await waitFor(() => third.sent.length === 2);
+    expect(third.sent[0]!.text).toContain("initial task");
+    expect(third.sent[1]!.text).toContain("kept follow-up");
+  } finally { third.delivery.stop(); store.close(); }
 });

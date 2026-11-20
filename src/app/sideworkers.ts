@@ -1,4 +1,5 @@
 import { assertWorkspaceCapacity, workspaceBudget, workspaceResourcesSchema, type ResourceAllocation } from "../core/resources";
+import type { MessageRef } from "../core/channel";
 import { channelKey, parsePlaceKey, petPlaceKey } from "../core/channels";
 import { houseFeatures } from "../core/house-features";
 import { agentOf, type Agents } from "./agents";
@@ -51,6 +52,10 @@ export interface SideworkerRecord {
    */
   starting?: { task: string; reused?: boolean };
 }
+/** Stable across daemon restarts: the task is queued once and precedes startup follow-ups. */
+export const sideworkerTaskRef = (worker: Pick<SideworkerRecord, "name" | "createdAt">) =>
+  `sideworker-task:${worker.name}:${worker.createdAt}` as MessageRef;
+
 export const SIDEWORKER_HOME = "/home/worker";
 /** The notice in its parent's place while a worker's VM starts: posted at once, rewritten when it is up or failed. */
 export function sideworkerStarting(worker: Pick<SideworkerRecord, "name" | "parent" | "cwd" | "worktree">): string {
@@ -100,7 +105,9 @@ export interface SideworkerDeps {
   ready(house: string, pet: string): Promise<boolean>;
   /** Confirm the worker's destination exists before handing it any task. */
   ensurePlace?(house: string, pet: string): Promise<void>;
-  dispatch(caller: PetIdentity, to: string, task: string): Promise<unknown>;
+  dispatch(caller: PetIdentity, to: string, task: string, ref?: MessageRef): Promise<unknown>;
+  releaseDelivery?(house: string, pet: string): void;
+  pendingMessages?(house: string, pet: string): number;
   isIdle(house: string, pet: string): Promise<boolean>;
   send(house: string, pet: string, text: string): void;
   log(message: string): void;
@@ -299,11 +306,14 @@ export class Sideworkers {
         await this.deps.reload();
         await this.deps.ensurePlace?.(house, name);
         if (!await this.deps.ready(house, name)) throw new Error("Sideworker VM started, but its harness did not become ready");
-        await this.deps.dispatch(caller, name, task);
+        await this.deps.dispatch(caller, name, task, sideworkerTaskRef(record));
         delete record.starting; this.save();
+        this.deps.releaseDelivery?.(house, name);
       } catch (error) {
         const reason = (error as Error).message;
         record.closing = true; this.save();
+        const queued = this.deps.pendingMessages?.(house, name) ?? 0;
+        const queueNotice = queued ? ` ${queued} queued message(s) remain undelivered and are kept for the next spawn with the same name.` : "";
         // Its thread may be there already (made on the reload): it goes with it, nothing was said in it. A name used
         // before has its earlier worker's thread, with its history: that one stays.
         const closed = this.deps.prepareClosedNotice?.(house, name, !reused);
@@ -315,7 +325,7 @@ export class Sideworkers {
         } catch { pending = true; }
         this.deps.log(`sideworker ${house}/${name} did not start: ${reason}${pending ? " (cleanup pending)" : ""}`);
         if (record.announcement) await this.deps.rewrite?.(structuredClone(record), record.announcement, sideworkerFailed(record, reason)).catch(() => {});
-        this.deps.send(house, record.parent, `Household: sideworker ${name} did not start: ${reason}. ${pending ? `Cleanup is pending for ${name}; retry sideworker_close.` : `Nothing of it is running; you may spawn it again (the same name is fine).`} Its task was not given to it. This is an internal notice, not a message from your human.`);
+        this.deps.send(house, record.parent, `Household: sideworker ${name} did not start: ${reason}. ${pending ? `Cleanup is pending for ${name}; retry sideworker_close.` : `Nothing of it is running; you may spawn it again (the same name is fine).`} Its task was not given to it.${queueNotice} This is an internal notice, not a message from your human.`);
         return;
       }
     } finally {

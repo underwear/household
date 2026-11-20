@@ -1,3 +1,4 @@
+import type { MessageRef } from "../core/channel";
 import type { PetIdentity } from "../infra/agent-api";
 import type { McpTool } from "../infra/mcp-server";
 import { tagFreeJson } from "../core/tags";
@@ -15,7 +16,7 @@ export class HouseMessages {
     return members;
   }
 
-  async send(caller: PetIdentity, to: unknown, text: unknown) {
+  async send(caller: PetIdentity, to: unknown, text: unknown, ref?: MessageRef) {
     if (typeof to !== "string" || !to) throw new Error("to must name a bot or sideworker in your workspace");
     if (typeof text !== "string" || !text.trim() || text.length > 32_000) throw new Error("text must contain 1–32000 characters");
     const members = this.list(caller);
@@ -25,6 +26,7 @@ export class HouseMessages {
     if (target.enabled === false) throw new Error("Recipient is disabled");
     const result = this.delivery.send(caller.house, to, {
       origin: "internal",
+      ...(ref ? { ref } : {}),
       text: `Household internal message. The sender is another agent, not your human. Reply with house_send if needed; do not post to Telegram unless asked.\n${tagFreeJson({ from: caller.pet, to, text })}`,
     });
     // Posting is observational: the durable message is already queued. A failed mirror must not invite a duplicate send.

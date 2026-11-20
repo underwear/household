@@ -93,6 +93,8 @@ export class Delivery {
     private readonly attachments?: Pick<AttachmentFetcher, "fetch">,
     /** Presentation/log filtering must never rewrite protocol payloads or inbox correlation. */
     private readonly sanitizeEvent?: (house: string, pet: string, event: AgentEvent) => AgentEvent,
+    /** Startup blocks only delivery: hooks and permission dialogs must keep working. */
+    private readonly deliveryPolicy?: (house: string, pet: string) => { blocked: boolean; firstRef?: Message["ref"] },
   ) {}
 
   /**
@@ -308,6 +310,9 @@ export class Delivery {
     this.suspended.delete(key(house, pet));
     void this.flush(house, pet);
   }
+
+  /** Reconsider queued messages after a startup policy changes, without changing suspension state. */
+  retry(house: string, pet: string): void { void this.flush(house, pet); }
 
   /** A pet's container was (re)started: whatever it had been given is lost with its session, a turn too. */
   restarted(house: string, pet: string): void {
@@ -687,13 +692,15 @@ export class Delivery {
    */
   private async flush(house: string, pet: string): Promise<void> {
     const box = this.boxes.get(key(house, pet));
-    if (!box || box.flushing || this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet))) return;
+    if (!box || box.flushing || this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet)) || this.deliveryPolicy?.(house, pet).blocked) return;
+    const firstRef = this.deliveryPolicy?.(house, pet).firstRef;
+    if (firstRef) box.inbox.prioritize(firstRef);
     box.flushing = true;
     box.retry.cancel();
     const name = `bot ${house}/${pet}`;
     try {
       for (let next = box.inbox.next(this.timing.batchMax); next.messages.length > 0; next = box.inbox.next(this.timing.batchMax)) {
-        if (this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet))) return;
+        if (this.suspended.has(key(house, pet)) || this.restarting.has(key(house, pet)) || this.deliveryPolicy?.(house, pet).blocked) return;
         if (next.messages[0]?.origin === "cron" && box.awaiting.some(message => message.origin === "cron")) return;
         if (next.messages[0]?.origin === "inbox" && box.awaiting.some(message => message.origin === "inbox")) { box.inbox.markInboxCatchup(); return; }
         // A fresh mailbox cannot know whether the surviving VM is still working. Probe before
@@ -733,7 +740,7 @@ export class Delivery {
           const sessionEpoch = box.sessionEpoch;
           const needsIdle = scheduled.length > 0 || messages.some(m => m.origin === "inbox");
           const active = () => this.boxes.get(key(house, pet)) === box && box.agent === agent && box.sessionEpoch === sessionEpoch &&
-            !this.suspended.has(key(house, pet)) && !this.restarting.has(key(house, pet));
+            !this.suspended.has(key(house, pet)) && !this.restarting.has(key(house, pet)) && !this.deliveryPolicy?.(house, pet).blocked;
           const canWait = () => active() && box.inbox.activity !== "dialog";
           result = await agent.send(this.execIn(house, pet), typed.text, () => canWait() && (!needsIdle || box.inbox.activity === "idle"), needsIdle ? {
             canWait,

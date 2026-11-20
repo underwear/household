@@ -70,6 +70,12 @@ export class PetInbox {
     if (catchup && message.origin === "inbox") this.catchup.add(message.id);
   }
 
+  /** Put a still-queued startup task before messages received while its session was starting. */
+  prioritize(ref: Message["ref"]): void {
+    const index = this.waiting.findIndex(message => message.ref === ref);
+    if (index > 0) this.waiting.unshift(...this.waiting.splice(index, 1));
+  }
+
   /** Pending external events accumulated while delivery was unavailable. */
   markInboxCatchup(): void {
     for (const message of this.waiting) if (message.origin === "inbox") this.catchup.add(message.id);
