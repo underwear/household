@@ -184,6 +184,7 @@ export interface StatusReport {
   petStatusUnavailable?: true;
   /** Present when these are the last successful statuses rather than a fresh runtime response. */
   petStatusAgeMs?: number;
+  problems?: import("./pet-plane").PetPreparationProblem[];
   /** None until the start gets to it. */
   web?: WebStatus;
 }
@@ -475,6 +476,7 @@ export async function startDaemon(deps: DaemonDeps) {
       pets: shown ?? placed.map(({ house, pet, agent }) => ({ house, pet, agent: agent.name, container: petContainer(house, pet), state: "unknown" })),
       web: webStatus(), ...(operations.length ? { operations } : {}), ...(!shown ? { petStatusUnavailable: true as const } : {}),
       ...(cached ? { petStatusAgeMs: Math.max(0, Date.now() - cached.at) } : {}),
+      ...(pets.preparationProblems.length ? { problems: pets.preparationProblems } : {}),
     };
   };
 
@@ -695,14 +697,23 @@ export async function startDaemon(deps: DaemonDeps) {
           return problem === undefined ? [] : [`workspace ${house.name}, channel ${channelName(knownChannelKinds(), channel)}: ${problem}`];
         }),
       );
-      const { started, removed } = await pets.reconcile(wanted, announceStopped);
+      const { started, removed, blocked = [] } = await pets.reconcile(wanted, announceStopped);
+      const blockedPets = new Set(blocked.map(pet => `${pet.house}/${pet.pet}`));
+      for (const problem of blocked) {
+        await delivery.suspend(problem.house, problem.pet);
+        const text = `bot ${problem.house}/${problem.pet}: ${problem.message}`;
+        warnings.push(text);
+        events.error(text);
+        void chat.notice(problem.house, problem.pet, text).catch(() => {});
+      }
       for (const pet of started) delivery.restarted(pet.house, pet.pet); // before anything reaches the new session
       for (const name of removed) events.info(`removed ${name}: no longer in the config (its home volume stays)`);
-      await pets.progress.run("checking existing agent dialogs", () => delivery.adopt(wanted.filter((pet) => pet.enabled !== false && !started.includes(pet))));
-      const recovering = wanted.filter((pet) => pet.enabled !== false && !started.includes(pet) && delivery.isSuspended(pet.house, pet.pet));
+      await pets.progress.run("checking existing agent dialogs", () => delivery.adopt(wanted.filter((pet) => pet.enabled !== false && !started.includes(pet) && !blockedPets.has(`${pet.house}/${pet.pet}`))));
+      const recovering = wanted.filter((pet) => pet.enabled !== false && !started.includes(pet) && !blockedPets.has(`${pet.house}/${pet.pet}`) && delivery.isSuspended(pet.house, pet.pet));
       const ready = [...await announceStarted(started), ...await pets.awaitReady(recovering)];
       for (const pet of wanted) {
         if (pet.enabled === false) continue;
+        if (blockedPets.has(`${pet.house}/${pet.pet}`)) continue;
         if (!delivery.isSuspended(pet.house, pet.pet) || ready.some((start) => start.house === pet.house && start.pet === pet.pet && start.ready)) delivery.resume(pet.house, pet.pet);
       }
       houseInboxes.setHouses(houses);

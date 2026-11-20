@@ -108,10 +108,39 @@ export async function folderPresent(path: string): Promise<boolean> {
  * was shared (its path resolves to itself: no part of it was swapped for a link since), and nothing of Household's or
  * microsandbox's own (`unsafe` otherwise).
  */
-export async function mountable(path: string, protectedDirs: readonly string[]): Promise<"ok" | "missing" | "unsafe"> {
-  if (!(await folderPresent(path))) return "missing";
-  const real = await realpath(path).catch(() => undefined);
+export type MountState = "ok" | "missing" | "unsafe" | "unavailable";
+type MountCheck = (path: string, protectedDirs: readonly string[]) => Promise<MountState>;
+const pendingMountChecks = new WeakMap<MountCheck, Map<string, Promise<MountState>>>();
+
+async function checkMount(path: string, protectedDirs: readonly string[]): Promise<MountState> {
+  let found;
+  try { found = await stat(path); }
+  catch (error) {
+    return ["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "") ? "missing" : "unavailable";
+  }
+  if (!found.isDirectory()) return "missing";
+  const real = await realpath(path);
   if (real !== path) return "unsafe";
   for (const folder of await Promise.all(protectedDirs.map(resolved))) if (inside(real, folder) || inside(folder, real)) return "unsafe";
   return "ok";
+}
+
+/** macOS may await a privacy dialog inside stat/realpath. Bound this read-only check and reuse a pending probe. */
+export async function mountable(path: string, protectedDirs: readonly string[], options: { timeoutMs?: number; check?: MountCheck } = {}): Promise<MountState> {
+  const check = options.check ?? checkMount;
+  let pending = pendingMountChecks.get(check);
+  if (!pending) { pending = new Map(); pendingMountChecks.set(check, pending); }
+  const key = JSON.stringify([path, protectedDirs]);
+  let probe = pending.get(key);
+  if (!probe) {
+    const checks = pending;
+    probe = Promise.resolve().then(() => check(path, protectedDirs)).catch(() => "unavailable" as const);
+    checks.set(key, probe);
+    const current = probe;
+    void probe.finally(() => { if (checks.get(key) === current) checks.delete(key); });
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([probe, new Promise<MountState>(resolve => { timer = setTimeout(() => resolve("unavailable"), options.timeoutMs ?? 5000); })]);
+  } finally { clearTimeout(timer); }
 }

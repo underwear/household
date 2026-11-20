@@ -6,6 +6,7 @@ import type { AgentAdapter } from "../../src/core/agent";
 import type { PlacedPet } from "../../src/app/agents";
 import { PetPlane, petChange } from "../../src/app/pet-plane";
 import { FakeRuntime } from "./fake-runtime";
+import { mountable, type MountState } from "../../src/infra/volume-folders";
 
 const agent: AgentAdapter = {
   name: "fake-agent",
@@ -41,6 +42,57 @@ function setup(timeoutMs = 50) {
   runtime.output = () => "READY";
   return { runtime, plane: new PetPlane(runtime, "/state/tls/ca.crt", "me", timeoutMs, TRANSPORT) };
 }
+
+test("a folder awaiting macOS permission stops only its bot, keeps its disks, and needs a fresh reconcile after late approval", async () => {
+  const runtime = new FakeRuntime();
+  runtime.output = () => "READY";
+  let waiting = false;
+  let finish!: (value: MountState) => void;
+  const check = async () => waiting ? await new Promise<MountState>(resolve => { finish = resolve; }) : "ok" as const;
+  const plane = new PetPlane(runtime, "/ca.crt", "me", 50, TRANSPORT, undefined, undefined,
+    (path, protectedDirs) => mountable(path, protectedDirs, { timeoutMs: 20, check }));
+  const first = { ...pets[0]!, volumes: [{ name: "cloud", path: "/fixture/cloud", access: "read" as const }] };
+  await plane.reconcile([first]);
+  const original = runtime.containers.get("household.work.sibling");
+  waiting = true;
+  // A changed mount access mode makes the old VM need a new identity.
+  const changed = { ...first, volumes: [{ ...first.volumes[0]!, access: "write" as const }] };
+  const before = runtime.calls.length;
+  const result = await plane.reconcile([changed, pets[1]!]);
+  expect(result.started).toEqual([pets[1]!]);
+  expect(result.blocked).toEqual([{ house: "work", pet: "sibling", message: expect.stringContaining("'cloud'") }]);
+  expect(runtime.containers.get("household.work.sibling")).toBe(original);
+  expect(original!.state).toBe("stopped");
+  expect(runtime.calls.slice(before)).toContain("stop household.work.sibling");
+  expect(runtime.calls.slice(before)).not.toContain("rm household.work.sibling");
+  expect(runtime.specs.at(-1)!.name).toBe("household.work.chair");
+  finish("ok"); // A late filesystem result cannot mutate a VM after the caller's deadline.
+  await Bun.sleep(0);
+  expect(runtime.containers.get("household.work.sibling")).toBe(original);
+  waiting = false;
+  expect((await plane.reconcile([changed, pets[1]!])).started).toEqual([changed]);
+  expect(plane.preparationProblems).toEqual([]);
+});
+
+test("a pending folder check cannot leave revoked write access or a removed mount running", async () => {
+  for (const revoke of ["write", "mount"] as const) {
+    const runtime = new FakeRuntime();
+    let available = true;
+    const plane = new PetPlane(runtime, "/ca.crt", "me", 50, TRANSPORT, undefined, undefined,
+      async path => path === "/fixture/cloud" && !available ? "unavailable" : "ok");
+    const cloud = { name: "cloud", path: "/fixture/cloud", access: "write" as const };
+    const privateFolder = { name: "private", path: "/fixture/private", access: "write" as const };
+    const first = { ...pets[0]!, volumes: [cloud, privateFolder] };
+    await plane.reconcile([first]);
+    available = false;
+    const changed = { ...first, volumes: revoke === "write" ? [{ ...cloud, access: "read" as const }, privateFolder] : [cloud] };
+    const result = await plane.reconcile([changed, pets[1]!]);
+    expect(result.blocked).toHaveLength(1);
+    expect(runtime.containers.get("household.work.sibling")!.state).toBe("stopped");
+    expect(runtime.specs).toHaveLength(2); // The old spec and the other bot, never a replacement missing its shares.
+    expect(runtime.disks.has("household.work.sibling.docker")).toBe(true);
+  }
+});
 
 test("a live agent does not hide an unfinished VM launch or the bot blocking the next launch", async () => {
   const { runtime, plane } = setup();

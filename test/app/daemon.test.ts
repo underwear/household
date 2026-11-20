@@ -17,6 +17,7 @@ import type { HostNetworkPlane } from "../../src/app/host-network-plane";
 import { FakeRuntime } from "./fake-runtime";
 import { channelKey } from "../../src/core/channels";
 import type { House } from "../../src/core/household";
+import { mountable } from "../../src/infra/volume-folders";
 
 const replyFormatJson = JSON.stringify(telegramPrivate.replyFormat).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 
@@ -28,7 +29,7 @@ const BOT = "777:token-of-a-bot-for-the-daemon-tests";
 const planes = new Map<string, HostNetworkPlane>();
 const policyOf = (paths: ReturnType<typeof resolvePaths>) => planes.get(paths.stateDir)!.policy;
 
-function setup() {
+function setup(checkMount?: typeof mountable) {
   const paths = resolvePaths({ HOUSEHOLD_CONFIG_DIR: tempDir(), HOUSEHOLD_STATE_DIR: tempDir() });
   writeFileSync(paths.configFile, `daemon:\n  agentPort: 0 # any free port: never the real daemon's\n  webPort: 0\nkeys:\n  claude: {provider: anthropic, value: ${KEY}}\n`);
   const config = new ConfigStore(paths.configFile);
@@ -39,7 +40,7 @@ function setup() {
   /** Channels opened, by house (its first), and by house, key and bot (the same while those stay, as the real opener does). */
   const channels = new Map<string, FakeChannel>();
   const known = new Map<string, FakeChannel>();
-  const services = testServices(paths, runtime);
+  const services = testServices(paths, runtime, 50, checkMount);
   const network = () => {
     const plane = services.network();
     planes.set(paths.stateDir, plane);
@@ -228,7 +229,7 @@ test("while starting, status answers and reloads wait for the startup to finish"
   runtime.gate = new Promise((resolve) => (finishBuild = resolve)); // the pet's image build
   const starting = startDaemon(deps);
   await waitFor(() => runtime.calls.some((call) => call.startsWith("build ")));
-  expect(await status(paths.socket)).toMatchObject({ state: "starting", operations: [{ house: "work", pet: "sibling", phase: "preparing image and mounts", elapsedMs: expect.any(Number) }] });
+  expect(await status(paths.socket)).toMatchObject({ state: "starting", operations: expect.arrayContaining([{ house: "work", pet: "sibling", phase: "preparing agent image", elapsedMs: expect.any(Number) }]) });
   await config.createHouse("home");
   const reload = callControl<StatusReport>(paths.socket, "/reload");
   finishBuild();
@@ -236,6 +237,47 @@ test("while starting, status answers and reloads wait for the startup to finish"
   const daemon = await starting;
   expect((await status(paths.socket))!.operations).toBeUndefined();
   await daemon.stop();
+});
+
+test("a blocked iCloud folder does not hold daemon readiness or another bot's scheduled work", async () => {
+  let available = false;
+  let approve!: () => void;
+  const permission = new Promise<"ok">(resolve => { approve = () => resolve("ok"); });
+  const check = () => available ? Promise.resolve("ok" as const) : permission;
+  const { paths, config, runtime, deps, channels } = setup((path, protectedDirs) => mountable(path, protectedDirs, {
+    timeoutMs: 20, check,
+  }));
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { key: "claude" });
+  await config.addPet("work", "helper", { key: "claude" });
+  await config.putVolume("work", "cloud", { path: "/fixture/cloud", access: "read", bots: ["sibling"] }, { create: true });
+  await config.setTimezone("UTC");
+  await connect(config, "work");
+  deps.messages.crons.create("work", "sibling", {
+    name: "Held until permission", body: "Held scheduled task", at: new Date(Date.now() + 100).toISOString().slice(0, -1),
+  }, Date.now());
+  runtime.output = () => READY;
+  const daemon = await startDaemon({ ...deps, crons: deps.messages.crons });
+  try {
+    const report = (await status(paths.socket))!;
+    expect(report.state).toBe("running");
+    expect(report.problems).toEqual([{ house: "work", pet: "sibling", message: expect.stringContaining("'cloud'") }]);
+    expect(runtime.specs.map(spec => spec.name)).toEqual(["household.work.helper"]);
+    expect(channels.get("work")!.calls.some(call => call.includes("iCloud Drive permission"))).toBe(true);
+    const created = await callMcp(paths, "helper", { method: "tools/call", params: { name: "cron_create", arguments: {
+      name: "Other bot still works", body: "Scheduled despite pending permission", at: new Date(Date.now() + 100).toISOString().slice(0, -1),
+    } } });
+    expect(created.result.isError).toBeUndefined();
+    await waitFor(() => runtime.execs.some(command => command.includes("load-buffer") && command.includes("Scheduled despite pending permission")), 4000);
+    expect(deps.messages.crons.view("work", "sibling").runs).toHaveLength(0);
+    available = true;
+    approve();
+    await Bun.sleep(0);
+    await callControl(paths.socket, "/reload");
+    expect((await status(paths.socket))!.problems).toBeUndefined();
+    await waitFor(() => runtime.execs.some(command => command.includes("load-buffer") && command.includes("Held scheduled task")), 4000);
+    expect(deps.messages.crons.view("work", "sibling").runs).toHaveLength(1);
+  } finally { await daemon.stop(); }
 });
 
 test("status exposes the pending startup phase when the runtime inventory is stuck and coalesces probes", async () => {

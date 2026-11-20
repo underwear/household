@@ -225,8 +225,8 @@ export interface VolumeView {
   target: string;
   /** Whether the folder can be mounted now: not when it is gone (an unplugged disk) or no longer the plain folder that was shared. */
   present: boolean;
-  /** Why it is not mounted: `missing`, or `unsafe` (its path is a link now, or leads into Household's own data); null when it can be. */
-  problem: "missing" | "unsafe" | null;
+  /** `unavailable`: the access check timed out or was denied. `unsafe`: a link or Household's own data. */
+  problem: "missing" | "unsafe" | "unavailable" | null;
 }
 
 /** A bot's home: Household's own, shown so the owner sees what is where; never edited here. */
