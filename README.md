@@ -19,7 +19,7 @@ and lets you talk to it from the messenger you already use.
 
 <br>
 
-<img src=".github/assets/hero.svg" width="760" alt="The Ops bot's Telegram thread: Grafana fires at 3 am, the bot frees the disk, restarts the API and reports in the morning">
+<img src=".github/assets/bots.png" width="760" alt="Household web admin: the Bots page with Sibly (Claude Code) and devops (Codex) running">
 
 </div>
 
