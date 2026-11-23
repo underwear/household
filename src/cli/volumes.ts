@@ -62,7 +62,7 @@ export async function runVolumes(paths: Paths, config: ConfigStore, notify: () =
     const view = await call<VolumesView>(paths, "GET", `/api/houses/${enc(house!)}/volumes`);
     const volumes = view?.volumes ?? (findHouse(await config.load(), house!) ?? (() => { throw new HouseholdError(`unknown workspace '${house}'`); })()).volumes?.map((v) => ({ ...v, target: `/volumes/${v.name}`, present: true, note: v.note ?? null })) ?? [];
     if (volumes.length === 0) say("no shared folders");
-    for (const v of volumes) say(`volume ${v.name}  ${v.path} → ${v.target}  ${v.access === "write" ? "read-write" : "read-only"}  bots: ${v.bots.join(", ") || "-"}${v.present ? "" : "problem" in v && v.problem === "unsafe" ? "  ! not mounted: no longer the folder that was shared" : "  ! folder missing: not mounted"}${v.note ? `  (${v.note})` : ""}`);
+    for (const v of volumes) say(`volume ${v.name}  ${v.path} → ${v.target}  ${v.access === "write" ? "read-write" : "read-only"}  bots: ${v.bots.join(", ") || "-"}${v.present ? "" : "problem" in v && v.problem === "unsafe" ? "  ! not mounted: no longer the folder that was shared" : "problem" in v && v.problem === "unavailable" ? "  ! access check unavailable: check macOS folder permission or folder availability, then reload Household" : "  ! folder missing: not mounted"}${v.note ? `  (${v.note})` : ""}`);
     for (const home of view?.homes ?? []) say(`home ${home.bot}${home.parent ? ` (sideworker of ${home.parent})` : ""}  ${home.hostPath} → ${home.guestPath}${home.sharedWith.length ? `  also in: ${home.sharedWith.map((s) => `${s.bot} at ${s.at}`).join(", ")}` : ""}`);
     return true;
   }
