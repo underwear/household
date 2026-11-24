@@ -119,12 +119,17 @@ function setup(approval?: ConnectorWriteApproval) {
   const house: House = { name: "home", pets: [{ name: "alice" }, { name: "bob" }, { name: "worker", sideworker: { parent: "alice", cwd: "/" } }, { name: "scout", scout: {} as any }], network: { kind: "allowlist", allow: [] }, people: { owners: [] }, channels: [] };
   const store = new SqliteStore(":memory:");
   const writes = new ConnectorWrites(store, approval);
-  const service = new GoogleConnectors(store, { id: "client-id", secret: "client-secret" }, fetcher, () => now, writes);
+  const outbox = new Map<string, Uint8Array>(), inbox = new Map<string, Uint8Array>();
+  const files = {
+    read: async (_caller: unknown, path: string, max: number) => { const bytes = outbox.get(path); if (!bytes) throw new Error("no such file"); if (bytes.length > max) throw new Error("file too large"); return bytes; },
+    save: async (_caller: unknown, name: string, bytes: Uint8Array) => { const path = `.household/inbox/2026-11-24/${name}`; inbox.set(path, bytes); return path; },
+  };
+  const service = new GoogleConnectors(store, { id: "client-id", secret: "client-secret" }, fetcher, () => now, writes, files);
   service.setHouses([house, { ...house, name: "other" }]);
   const begin = (write = false) => new URL(service.begin("home", { services: ["gmail", "drive", "calendar"], pets: ["alice"], write }, origin, "session").url);
   const callback = (start: URL) => new URL(`${start.searchParams.get("redirect_uri")}?code=code&state=${start.searchParams.get("state")}`);
   const connect = async (write = false) => { await service.finish(callback(begin(write)), "session"); return service.list("home").connections.at(-1)!.id; };
-  return { writes, service, house, calls, begin, callback, connect, store, identity: (id: string, address: string) => { subject = id; email = address; }, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
+  return { outbox, inbox, writes, service, house, calls, begin, callback, connect, store, identity: (id: string, address: string) => { subject = id; email = address; }, advance: () => { now += 3600_000; }, refreshes: () => refreshCount, api: (f: GoogleFetch) => { api = f; }, token: (f: GoogleFetch) => { token = f; } };
 }
 
 test("OAuth uses PKCE, state, exact loopback callback and selected scopes; rejects wrong session and replay", async () => {
@@ -317,4 +322,72 @@ test("Drive uploads go multipart to the fixed upload path; trash and event delet
   expect((await s.service.request(caller, id, "calendar.events.delete", { id: "e1" })).data).toEqual({ done: true });
   expect(s.calls.at(-1)!.init!.method).toBe("DELETE");
   expect(new URL(s.calls.at(-1)!.url).searchParams.get("sendUpdates")).toBe("none");
+});
+
+test("Drive uploads a binary file from the outbox through a resumable session, snapshotted for approval", async () => {
+  let answer!: (v: "approved") => void, card: any;
+  const s = setup({ ask: async (_c, write) => { card = write; return new Promise(r => { answer = r; }); } }), id = await s.connect(true);
+  s.service.setPets("home", id, ["alice"], "approval");
+  const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x00, 0xff, 0x0a]);
+  s.outbox.set("scans/naturgy.pdf", pdf);
+  s.api(async (url, init) => init?.method === "POST"
+    ? new Response(null, { status: 200, headers: { location: "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=abc" } })
+    : Response.json({ id: "f9", name: "2025-01-20 Naturgy.pdf", mimeType: "application/pdf" }));
+  const count = s.calls.length;
+  const pending = s.service.request(caller, id, "drive.files.upload", { path: "scans/naturgy.pdf", name: "2025-01-20 Naturgy.pdf", parents: ["folder1"] }, undefined, "up-1");
+  while (!answer) await Bun.sleep(1);
+  expect(s.calls).toHaveLength(count);
+  expect(card.params).toMatchObject({ name: "2025-01-20 Naturgy.pdf", contentType: "application/pdf", size: 8 });
+  expect(card.params.sha256).toHaveLength(64);
+  s.outbox.set("scans/naturgy.pdf", new Uint8Array([1, 2, 3])); // changed after the card: the approved bytes still go
+  answer("approved");
+  expect((await pending).data).toMatchObject({ id: "f9" });
+  const [start, put] = s.calls.slice(count);
+  expect(new URL(start!.url).pathname).toBe("/upload/drive/v3/files");
+  expect(new URL(start!.url).searchParams.get("uploadType")).toBe("resumable");
+  expect(JSON.parse(String(start!.init!.body))).toEqual({ name: "2025-01-20 Naturgy.pdf", parents: ["folder1"] });
+  expect((start!.init!.headers as Record<string, string>)["x-upload-content-length"]).toBe("8");
+  expect(put!.init!.method).toBe("PUT");
+  expect(new URL(put!.url).searchParams.get("upload_id")).toBe("abc");
+  expect([...new Uint8Array(put!.init!.body as Uint8Array)]).toEqual([...pdf]);
+  expect((put!.init!.headers as Record<string, string>)["content-type"]).toBe("application/pdf");
+});
+
+test("Drive upload never sends the token to a session elsewhere, and refuses unreadable or unsafe paths", async () => {
+  const s = setup(), id = await s.connect(true);
+  s.outbox.set("a.jpg", new Uint8Array([1]));
+  s.api(async () => new Response(null, { headers: { location: "https://evil.test/upload/drive/v3/files?upload_id=x" } }));
+  const count = s.calls.length;
+  await expect(s.service.request(caller, id, "drive.files.upload", { path: "a.jpg" })).rejects.toThrow("outcome is unknown");
+  expect(s.calls.slice(count).map(c => new URL(c.url).host)).toEqual(["www.googleapis.com"]);
+  await expect(s.service.request(caller, id, "drive.files.upload", { path: "missing.pdf" })).rejects.toThrow("Could not read");
+  for (const path of ["../etc/passwd", "a/../b", "/abs", ""]) expect(() => googleRequest("drive.files.upload", { path })).toThrow();
+  const readOnly = setup(); const ro = await readOnly.connect();
+  await expect(readOnly.service.request(caller, ro, "drive.files.upload", { path: "a.jpg" })).rejects.toThrow("read only");
+});
+
+test("Drive download saves stored files as is and exports Google Docs, into the inbox", async () => {
+  const s = setup(), id = await s.connect();
+  const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]);
+  s.api(async url => {
+    const u = new URL(url);
+    if (u.pathname === "/drive/v3/files/scan1" && !u.searchParams.has("alt")) return Response.json({ id: "scan1", name: "Счёт/газ.pdf", mimeType: "application/pdf", size: "6" });
+    if (u.pathname === "/drive/v3/files/scan1") return new Response(bytes);
+    if (u.pathname === "/drive/v3/files/doc1") return Response.json({ id: "doc1", name: "Реестр", mimeType: "application/vnd.google-apps.document" });
+    if (u.pathname === "/drive/v3/files/doc1/export") return new Response(new Uint8Array([7, 7]));
+    if (u.pathname === "/drive/v3/files/dir") return Response.json({ id: "dir", name: "Docs", mimeType: "application/vnd.google-apps.folder" });
+    if (u.pathname === "/drive/v3/files/big") return Response.json({ id: "big", name: "big.zip", mimeType: "application/zip", size: String(60 * 1024 * 1024) });
+    return new Response(null, { status: 404 });
+  });
+  const stored = await s.service.request(caller, id, "drive.files.download", { id: "scan1" });
+  expect(stored.data).toEqual({ id: "scan1", name: "Счёт_газ.pdf", mimeType: "application/pdf", size: 6, path: ".household/inbox/2026-11-24/Счёт_газ.pdf" });
+  expect([...s.inbox.get(stored.data.path)!]).toEqual([...bytes]);
+  expect(new URL(s.calls.at(-1)!.url).searchParams.get("alt")).toBe("media");
+  const doc = await s.service.request(caller, id, "drive.files.download", { id: "doc1" });
+  expect(doc.data).toMatchObject({ name: "Реестр.pdf", mimeType: "application/pdf", size: 2 });
+  expect(new URL(s.calls.at(-1)!.url).searchParams.get("mimeType")).toBe("application/pdf");
+  await expect(s.service.request(caller, id, "drive.files.download", { id: "dir" })).rejects.toThrow("folder");
+  await expect(s.service.request(caller, id, "drive.files.download", { id: "scan1", exportMimeType: "application/pdf" })).rejects.toThrow("exportMimeType");
+  await expect(s.service.request(caller, id, "drive.files.download", { id: "big" })).rejects.toThrow("50 MiB");
+  expect(s.service.catalog(caller).map(o => o.name)).toContain("drive.files.download");
 });

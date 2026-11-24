@@ -12,19 +12,24 @@ export class GoogleHttpError extends Error {
 }
 export type GoogleFetch = (url: string | URL, init?: RequestInit) => Promise<Response>;
 export const MAX_GOOGLE_BYTES = 256 * 1024;
-export async function boundedText(response: Response, max = MAX_GOOGLE_BYTES): Promise<string> {
+/** Whole files between Drive and a pet's home: uploads, downloads and exports. */
+export const MAX_DRIVE_FILE_BYTES = 50 * 1024 * 1024;
+export async function boundedBytes(response: Response, max: number, tooLarge = "Google response too large; narrow the search or request fewer results"): Promise<Uint8Array> {
   const reader = response.body?.getReader();
-  if (!reader) return "";
+  if (!reader) return new Uint8Array();
   const chunks: Uint8Array[] = []; let length = 0;
   try {
     while (true) {
       const { value, done } = await reader.read(); if (done) break;
       length += value.length;
-      if (length > max) throw new Error("Google response too large; narrow the search or request fewer results");
+      if (length > max) throw new Error(tooLarge);
       chunks.push(value);
     }
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-  return Buffer.concat(chunks).toString("utf8");
+  return new Uint8Array(Buffer.concat(chunks));
+}
+export async function boundedText(response: Response, max = MAX_GOOGLE_BYTES): Promise<string> {
+  return Buffer.from(await boundedBytes(response, max)).toString("utf8");
 }
 export async function googleJson(fetcher: GoogleFetch, url: string | URL, init: RequestInit = {}) {
   const response = await fetcher(url, { ...init, redirect: "error", signal: init.signal ?? AbortSignal.timeout(30_000) });

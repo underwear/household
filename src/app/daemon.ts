@@ -419,7 +419,10 @@ export async function startDaemon(deps: DaemonDeps) {
   const mailRoutes = mailConnectorRoutes(mailConnectors);
   const microsoftConnectors = new MicrosoftConnectors(records, undefined, undefined, undefined, connectorWrites);
   const microsoftRoutes = microsoftConnectorRoutes(microsoftConnectors);
-  const googleConnectors = new GoogleConnectors(records, undefined, undefined, undefined, connectorWrites);
+  const googleConnectors = new GoogleConnectors(records, undefined, undefined, undefined, connectorWrites, {
+    read: (caller, path, max) => mailOutboxFiles.read(petVolume(caller.house, caller.pet), path, max),
+    save: (caller, name, bytes) => mailInboxFiles.save(petVolume(caller.house, caller.pet), new Date().toISOString().slice(0, 10), name, bytes),
+  });
   const slackInboxFiles = new PetInboxFiles(homesDirectory(paths));
   const slackOutboxFiles = new PetOutboxFiles(homesDirectory(paths));
   const slackConnectors = new SlackConnectors(records, undefined, undefined, undefined, {
