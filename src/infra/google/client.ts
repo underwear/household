@@ -26,7 +26,7 @@ export async function boundedBytes(response: Response, max: number, tooLarge = "
       chunks.push(value);
     }
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-  return new Uint8Array(Buffer.concat(chunks));
+  return Buffer.concat(chunks);
 }
 export async function boundedText(response: Response, max = MAX_GOOGLE_BYTES): Promise<string> {
   return Buffer.from(await boundedBytes(response, max)).toString("utf8");

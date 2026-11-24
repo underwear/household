@@ -29,6 +29,27 @@ const MEDIA_TYPES: Record<string, string> = {
   mp3: "audio/mpeg", m4a: "audio/mp4", ogg: "audio/ogg", mp4: "video/mp4", mov: "video/quicktime",
 };
 const mediaTypeOf = (name: string) => MEDIA_TYPES[/\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?? ""] ?? "application/octet-stream";
+/** What each Google Workspace type exports as (Drive's export formats, of those Household offers). */
+const EXPORTABLE: Record<string, (keyof typeof DRIVE_EXPORTS)[]> = {
+  document: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
+  spreadsheet: ["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv"],
+  presentation: ["application/pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/plain"],
+  drawing: ["application/pdf", "image/png"],
+};
+/**
+ * A Drive name as the inbox takes it: no slashes, control characters or leading dots, at most 200 UTF-8 bytes cut
+ * between characters, and its extension (an export's, added when missing) kept.
+ */
+export function inboxName(original: string, extension?: string) {
+  let name = original.replace(/[/\\\x00-\x1f]/g, "_").replace(/^\.+/, "").trim() || "drive-file";
+  if (extension && !name.toLowerCase().endsWith(`.${extension}`)) name = `${name}.${extension}`;
+  const dot = name.lastIndexOf(".");
+  const suffix = dot > 0 && name.length - dot <= 16 ? name.slice(dot) : "";
+  let stem = name.slice(0, name.length - suffix.length);
+  // The inbox adds «-N» to a taken name: leave room for it.
+  while (Buffer.byteLength(stem + suffix) > 190) stem = [...stem].slice(0, -1).join("");
+  return (stem || "drive-file") + suffix;
+}
 const nonce = () => randomBytes(32).toString("base64url");
 const scopesFor = (services: GoogleService[], write: boolean) => ["openid", "email", ...services.flatMap(s => [...GOOGLE_SCOPES[s], ...(write ? GOOGLE_WRITE_SCOPES[s] : [])])];
 
@@ -203,19 +224,20 @@ export class GoogleConnectors {
     const budgetKey = `${caller.house}/${caller.pet}`;
     if (!this.budgets.has(budgetKey)) this.budgets.set(budgetKey, new TokenBucket(1, 10));
     if (!this.budgets.get(budgetKey)!.take()) throw new HouseholdError("Too many Google requests; retry shortly");
-    // An upload is snapshotted now: the owner approves, and Drive receives, exactly these bytes.
-    let file: { bytes: Uint8Array; contentType: string } | undefined, reviewed: unknown = review;
-    if (spec.file === "upload") {
+    // An upload is snapshotted once, after a retry of the same request has had its answer: the owner approves, and
+    // Drive receives, exactly these bytes, and a retry never needs the file again.
+    let file: { bytes: Uint8Array; contentType: string } | undefined;
+    const snapshot = async () => {
       const p = review as { path: string; name?: string; contentType?: string; parents?: string[]; description?: string };
       let bytes: Uint8Array;
       try { bytes = await this.files!.read(caller, p.path, MAX_DRIVE_FILE_BYTES); } catch (error) {
-        throw new HouseholdError(`Could not read ~/.household/outbox/${p.path} (${error instanceof Error ? error.message : "unreadable"}); files up to 50 MiB can be uploaded`);
+        throw new HouseholdError(`Could not read ~/.household/outbox/${p.path} (${error instanceof Error ? error.message : "unreadable"}); files up to 50 MiB can be uploaded. Nothing was uploaded.`);
       }
       const name = p.name ?? basename(p.path), contentType = p.contentType ?? mediaTypeOf(name);
       file = { bytes, contentType };
       init.body = JSON.stringify(Object.fromEntries(Object.entries({ name, parents: p.parents, description: p.description }).filter(([, v]) => v !== undefined)));
-      reviewed = { ...p, name, contentType, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
-    }
+      return { ...p, name, contentType, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
+    };
     if (!this.active.has(id)) this.active.set(id, new AbortController());
     const controller = this.active.get(id)!;
     const execute = async (signal?: AbortSignal) => {
@@ -239,7 +261,9 @@ export class GoogleConnectors {
         if (!write) this.allowed(caller, id, spec.service);
         if (download) {
           const { bytes, ...meta } = download;
-          data = { ...meta, path: await this.files!.save(caller, meta.name, bytes) };
+          let path: string;
+          try { path = await this.files!.save(caller, meta.name, bytes); } catch { throw new HouseholdError("The file was downloaded but could not be saved into your inbox; retry shortly"); }
+          data = { ...meta, path };
         }
         return { trust: "external", data };
       } catch (error) {
@@ -254,7 +278,7 @@ export class GoogleConnectors {
       const requireApproval = connectorWritePolicy(c.writePolicy, !!c.writable?.length) === "approval";
       // A draft ID is mutable. Review its contents, then supply that exact MIME in the send request.
       // Preparation runs after deduplication so a retry of a sent/deleted draft still returns its result.
-      const prepare = requireApproval && operation === "gmail.drafts.send" ? async (preparationSignal: AbortSignal) => {
+      const prepare = spec.file === "upload" ? snapshot : requireApproval && operation === "gmail.drafts.send" ? async (preparationSignal: AbortSignal) => {
         const access = await this.access(this.allowed(caller, id, "gmail", true));
         this.allowed(caller, id, "gmail", true);
         const draftId = (review as { id: string }).id;
@@ -267,8 +291,9 @@ export class GoogleConnectors {
         init.body = JSON.stringify({ id: draftId, message: { raw: raw.message.raw, ...(raw.message.threadId ? { threadId: raw.message.threadId } : {}) } });
         return { id: draftId, message: decodeMail(full.message) };
       } : undefined;
-      return this.writes.run({ caller, provider: "google", connection: id, account: c.email, operation, requireApproval, params: reviewed, prepare, clientRequestId, signal: AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]), validate: () => { this.allowed(caller, id, spec.service, true); }, execute });
+      return this.writes.run({ caller, provider: "google", connection: id, account: c.email, operation, requireApproval, params: review, prepare, clientRequestId, signal: AbortSignal.any([controller.signal, ...(signal ? [signal] : [])]), validate: () => { this.allowed(caller, id, spec.service, true); }, execute });
     }
+    if (spec.file === "upload") await snapshot();
     return execute(signal);
   }
   /** Drive's resumable upload: open a session with the metadata, then send the bytes to it. Works for any size. */
@@ -277,9 +302,9 @@ export class GoogleConnectors {
     await start.body?.cancel();
     if (!start.ok) throw new GoogleHttpError(start.status);
     // The session must stay on the upload endpoint asked for: a token never goes anywhere a response points.
-    const session = new URL(start.headers.get("location") ?? "about:blank");
-    if (session.protocol !== "https:" || session.host !== url.host || session.pathname !== url.pathname || session.username || session.password) throw new Error("unexpected upload session");
-    const response = await call(session, { method: "PUT", body: new Uint8Array(file.bytes), headers: { "content-type": file.contentType } });
+    const session = URL.parse(start.headers.get("location") ?? "");
+    if (!session || session.protocol !== "https:" || session.host !== url.host || session.pathname !== url.pathname || session.username || session.password) throw new HouseholdError("Google did not open a usable upload session; nothing was uploaded. Retry shortly.");
+    const response = await call(session, { method: "PUT", body: file.bytes as Uint8Array<ArrayBuffer>, headers: { "content-type": file.contentType } });
     if (!response.ok) { await response.body?.cancel(); throw new GoogleHttpError(response.status); }
     return JSON.parse(await boundedText(response));
   }
@@ -291,6 +316,9 @@ export class GoogleConnectors {
     if (typeof meta.name !== "string" || typeof meta.mimeType !== "string") throw new Error("invalid Drive metadata");
     if (meta.mimeType === "application/vnd.google-apps.folder") throw new HouseholdError("A folder cannot be downloaded; list its files with drive.files.list, q: '<folder id>' in parents");
     const workspace = meta.mimeType.startsWith("application/vnd.google-apps.");
+    const formats = workspace ? EXPORTABLE[meta.mimeType.slice("application/vnd.google-apps.".length)] : undefined;
+    if (workspace && !formats) throw new HouseholdError(`This Drive item (${meta.mimeType}) cannot be downloaded or exported`);
+    if (formats && params.exportMimeType && !formats.includes(params.exportMimeType)) throw new HouseholdError(`This file exports as ${formats.join(", ")}; not as ${params.exportMimeType}`);
     if (!workspace && params.exportMimeType) throw new HouseholdError("exportMimeType is only for Google Docs, Sheets, Slides and Drawings; omit it to download this file as is");
     if (!workspace && Number(meta.size) > MAX_DRIVE_FILE_BYTES) throw new HouseholdError("This Drive file exceeds 50 MiB, the download limit");
     const exportType = workspace ? params.exportMimeType ?? "application/pdf" : undefined;
@@ -298,11 +326,14 @@ export class GoogleConnectors {
     if (exportType) { target.pathname += "/export"; target.searchParams.set("mimeType", exportType); }
     else { target.searchParams.set("alt", "media"); target.searchParams.set("supportsAllDrives", "true"); }
     const response = await call(target);
-    if (!response.ok) { await response.body?.cancel(); throw new GoogleHttpError(response.status); }
+    if (!response.ok) {
+      await response.body?.cancel();
+      if (exportType && response.status === 403) throw new HouseholdError("Google refused to export this file (403); exports are limited to 10 MB. Open it in Drive and download it from there.");
+      throw new GoogleHttpError(response.status);
+    }
     const bytes = await boundedBytes(response, MAX_DRIVE_FILE_BYTES, "Google response too large: this Drive file exceeds 50 MiB, the download limit");
     const extension = exportType ? DRIVE_EXPORTS[exportType] : undefined;
-    let name = meta.name.replace(/[/\\\x00-\x1f]/g, "_").slice(0, 180) || "drive-file";
-    if (extension && !name.toLowerCase().endsWith(`.${extension}`)) name = `${name}.${extension}`;
+    const name = inboxName(meta.name, extension);
     return { id: typeof meta.id === "string" ? meta.id : params.id, name, mimeType: exportType ?? meta.mimeType, size: bytes.length, bytes };
   }
   stop() { for (const id of this.active.keys()) this.abort(id); this.pending.clear(); }

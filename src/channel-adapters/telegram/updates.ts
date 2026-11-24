@@ -320,14 +320,16 @@ interface TextEntity { type: string; offset: number; length: number; url?: strin
  * `text` with the address of each link hidden behind words written after them, «label (url)» as a rich message's
  * links read: the address lives only in the entity, and a forwarded list of products is nothing without it.
  */
+/** An address as people write it, without scheme or trailing slash: «ozon.ru» is the link https://ozon.ru/. */
+const bare = (address: string) => address.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/\/+$/, "").toLowerCase();
 export function withLinks(text: string, entities: TextEntity[] | undefined): string {
-  const links = (entities ?? [])
+  const links = (Array.isArray(entities) ? entities : [])
     .filter((e): e is TextEntity & { url: string } => e?.type === "text_link" && typeof e.url === "string" && !!e.url && Number.isInteger(e.offset) && Number.isInteger(e.length) && e.offset >= 0 && e.length > 0 && e.offset + e.length <= text.length)
     .sort((a, b) => b.offset + b.length - (a.offset + a.length));
   let result = text;
   for (const link of links) {
     const end = link.offset + link.length;
-    if (text.slice(link.offset, end).trim() === link.url) continue;
+    if (bare(text.slice(link.offset, end)) === bare(link.url)) continue;
     result = `${result.slice(0, end)} (${link.url})${result.slice(end)}`;
   }
   return result;

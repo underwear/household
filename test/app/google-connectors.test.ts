@@ -1,6 +1,6 @@
 import { ConnectorWrites, type ConnectorWriteApproval } from "../../src/app/connector-writes";
 import { expect, test } from "bun:test";
-import { GoogleConnectors } from "../../src/app/google-connectors";
+import { GoogleConnectors, inboxName } from "../../src/app/google-connectors";
 import { googleConnectorTools } from "../../src/app/google-connector-tools";
 import { googleConnectorRoutes } from "../../src/app/google-connector-routes";
 import { GOOGLE_SCOPES, GOOGLE_WRITE_SCOPES } from "../../src/core/google-connectors";
@@ -351,6 +351,10 @@ test("Drive uploads a binary file from the outbox through a resumable session, s
   expect(new URL(put!.url).searchParams.get("upload_id")).toBe("abc");
   expect([...new Uint8Array(put!.init!.body as Uint8Array)]).toEqual([...pdf]);
   expect((put!.init!.headers as Record<string, string>)["content-type"]).toBe("application/pdf");
+  // The bot cleaned its outbox and asks again with the same id: the stored answer, no new read or upload.
+  s.outbox.clear(); const after = s.calls.length;
+  expect((await s.service.request(caller, id, "drive.files.upload", { path: "scans/naturgy.pdf", name: "2025-01-20 Naturgy.pdf", parents: ["folder1"] }, undefined, "up-1")).data).toMatchObject({ id: "f9" });
+  expect(s.calls).toHaveLength(after);
 });
 
 test("Drive upload never sends the token to a session elsewhere, and refuses unreadable or unsafe paths", async () => {
@@ -358,7 +362,7 @@ test("Drive upload never sends the token to a session elsewhere, and refuses unr
   s.outbox.set("a.jpg", new Uint8Array([1]));
   s.api(async () => new Response(null, { headers: { location: "https://evil.test/upload/drive/v3/files?upload_id=x" } }));
   const count = s.calls.length;
-  await expect(s.service.request(caller, id, "drive.files.upload", { path: "a.jpg" })).rejects.toThrow("outcome is unknown");
+  await expect(s.service.request(caller, id, "drive.files.upload", { path: "a.jpg" })).rejects.toThrow("nothing was uploaded");
   expect(s.calls.slice(count).map(c => new URL(c.url).host)).toEqual(["www.googleapis.com"]);
   await expect(s.service.request(caller, id, "drive.files.upload", { path: "missing.pdf" })).rejects.toThrow("Could not read");
   for (const path of ["../etc/passwd", "a/../b", "/abs", ""]) expect(() => googleRequest("drive.files.upload", { path })).toThrow();
@@ -375,6 +379,7 @@ test("Drive download saves stored files as is and exports Google Docs, into the 
     if (u.pathname === "/drive/v3/files/scan1") return new Response(bytes);
     if (u.pathname === "/drive/v3/files/doc1") return Response.json({ id: "doc1", name: "Реестр", mimeType: "application/vnd.google-apps.document" });
     if (u.pathname === "/drive/v3/files/doc1/export") return new Response(new Uint8Array([7, 7]));
+    if (u.pathname === "/drive/v3/files/form") return Response.json({ id: "form", name: "Poll", mimeType: "application/vnd.google-apps.form" });
     if (u.pathname === "/drive/v3/files/dir") return Response.json({ id: "dir", name: "Docs", mimeType: "application/vnd.google-apps.folder" });
     if (u.pathname === "/drive/v3/files/big") return Response.json({ id: "big", name: "big.zip", mimeType: "application/zip", size: String(60 * 1024 * 1024) });
     return new Response(null, { status: 404 });
@@ -389,5 +394,19 @@ test("Drive download saves stored files as is and exports Google Docs, into the 
   await expect(s.service.request(caller, id, "drive.files.download", { id: "dir" })).rejects.toThrow("folder");
   await expect(s.service.request(caller, id, "drive.files.download", { id: "scan1", exportMimeType: "application/pdf" })).rejects.toThrow("exportMimeType");
   await expect(s.service.request(caller, id, "drive.files.download", { id: "big" })).rejects.toThrow("50 MiB");
+  await expect(s.service.request(caller, id, "drive.files.download", { id: "doc1", exportMimeType: "text/csv" })).rejects.toThrow("exports as");
+  await expect(s.service.request(caller, id, "drive.files.download", { id: "form" })).rejects.toThrow("cannot be downloaded");
   expect(s.service.catalog(caller).map(o => o.name)).toContain("drive.files.download");
+});
+
+test("Drive names fit the inbox: no leading dots or slashes, cut by bytes between characters, extension kept", () => {
+  expect(inboxName(".env")).toBe("env");
+  expect(inboxName("a/b\\c")).toBe("a_b_c");
+  expect(inboxName("Реестр", "pdf")).toBe("Реестр.pdf");
+  expect(inboxName("x.PDF", "pdf")).toBe("x.PDF");
+  const long = inboxName(`${"Счёт за газ 🔥 ".repeat(20)}.pdf`);
+  expect(Buffer.byteLength(long)).toBeLessThanOrEqual(190);
+  expect(long).toEndWith(".pdf");
+  expect(long).not.toContain("\uFFFD");
+  expect([...long].every(ch => ch.codePointAt(0)! < 0xd800 || ch.codePointAt(0)! > 0xdfff)).toBe(true);
 });
