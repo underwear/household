@@ -967,7 +967,7 @@ test("background Claude tool hooks between a scheduled paste and Enter do not st
   pet.agent.send = (_, text, canSubmit) => claudeCodeTmux.send(async (command, stdin) => {
     const action = command[1];
     if (action === "display-message") return { ok: true, output: "0" };
-    if (action === "capture-pane") return { ok: true, output: ready(draft ? "[Pasted text]" : "") };
+    if (action === "capture-pane") return { ok: true, output: ready(draft.includes("\n") ? `[Pasted text #40 +${draft.split("\n").length - 1} lines]` : draft) };
     if (action === "load-buffer") buffer = stdin!;
     if (action === "paste-buffer") {
       draft = buffer;
@@ -1006,6 +1006,94 @@ test("background Claude tool hooks between a scheduled paste and Enter do not st
     await waitFor(() => updates.some(update => update.kind === "delivered" && update.messages.some(message => message.text === "are you there?")));
     expect(submitted[2]).toBe("are you there?");
     expect(pasted).toEqual(submitted); // Every paste submitted once; no leftover blocks later messages.
+  } finally { delivery.stop(); store.close(); }
+});
+
+test("a native task notification between scheduled paste and Enter waits for idle and submits the same draft once", async () => {
+  for (const raceAt of ["paste", "before Enter", "lost Stop", "compaction", "late hook", "owner Enter"] as const) {
+    const { delivery, pet, store, send, updates, clock } = setup({ nativeClaude: true });
+    const hook = (hook_event_name: string, fields: Record<string, unknown>) => delivery.onPayload("work", "sibling", { hook_event_name, ...fields });
+    const pasted: string[] = [], submitted: string[] = [];
+    let buffer = "", draft = "", busy = false, raced = false;
+    const race = async () => {
+      raced = busy = true;
+      if (raceAt !== "late hook") await hook("UserPromptSubmit", { prompt: "<task-notification>Background agent finished</task-notification>", prompt_id: "native-result" });
+    };
+    pet.agent.send = (_, text, canSubmit, canWait) => claudeCodeTmux.send(async (command, stdin) => {
+      const action = command[1];
+      if (action === "display-message") {
+        if (draft && !raced && raceAt === "before Enter") await race();
+        return { ok: true, output: "0" };
+      }
+      if (action === "capture-pane") return { ok: true, output: `Transcript quotes esc to interrupt\n──────────────────────────────\n❯ ${draft.includes("\n") ? `[Pasted text #40 +${draft.split("\n").length - 1} lines]` : draft}\n──────────────────────────────${busy ? "\nesc to interrupt" : ""}` };
+      if (action === "load-buffer") buffer = stdin!;
+      if (action === "paste-buffer") {
+        draft = buffer;
+        pasted.push(draft);
+        if (!raced && raceAt !== "before Enter") await race();
+      }
+      if (action === "send-keys") {
+        expect(command.at(-1)).toBe("Enter");
+        expect(busy).toBe(false);
+        submitted.push(draft);
+        draft = "";
+        await hook("UserPromptSubmit", { prompt: submitted.at(-1), prompt_id: `submitted-${submitted.length}` });
+      }
+      return { ok: true, output: "" };
+    }, text, canSubmit, canWait);
+    const now = Date.now();
+    const runs = () => store.crons.view("work", "sibling").runs;
+    try {
+      const job = store.crons.create("work", "sibling", { name: "mail-watch", body: "check mail", at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+      delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+      await waitFor(() => raced);
+      send("are you there?");
+      await Bun.sleep(450); // The original implementation fails the cron after its 300 ms paste delay.
+      expect(submitted).toEqual([]);
+      expect(pasted).toHaveLength(1);
+      expect(runs()[0]!.status).toBe("dispatching");
+      if (raceAt === "compaction") await hook("SessionStart", { source: "compact" });
+      busy = false;
+      if (raceAt === "lost Stop") clock.tick(60_000);
+      else if (raceAt === "owner Enter") {
+        submitted.push(draft);
+        draft = "";
+        await hook("UserPromptSubmit", { prompt: submitted[0], prompt_id: "submitted-1" });
+      } else await hook("Stop", { last_assistant_message: "Background result processed", prompt_id: "native-result" });
+      await waitFor(() => submitted.length === 2);
+      expect(pasted).toEqual(submitted);
+      expect(submitted[1]).toBe("are you there?");
+      expect(runs()[0]!.status).toBe("delivered");
+      expect(updates.some(update => update.kind === "failed")).toBe(false);
+      await hook("Stop", { last_assistant_message: "Mail checked", prompt_id: "submitted-1" });
+      expect(runs()[0]!.status).toBe("answered");
+      expect(draft).toBe("");
+    } finally { delivery.stop(); store.close(); }
+  }
+}, 15_000);
+
+test("suspending a bot cancels a scheduled paste waiting for a native turn without pressing Enter", async () => {
+  const { delivery, pet, store } = setup({ nativeClaude: true });
+  let pasted = false, entered = false;
+  pet.agent.send = (_, text, canSubmit, canWait) => claudeCodeTmux.send(async command => {
+    if (command.includes("display-message")) return { ok: true, output: "0" };
+    if (command.includes("capture-pane")) return { ok: true, output: `──────────────────────────────\n❯ ${pasted ? text : ""}\n──────────────────────────────` };
+    if (command.includes("paste-buffer")) {
+      pasted = true;
+      await delivery.onPayload("work", "sibling", { hook_event_name: "UserPromptSubmit", prompt: "<task-notification>done</task-notification>", prompt_id: "native" });
+    }
+    if (command.includes("send-keys")) entered = true;
+    return { ok: true, output: "" };
+  }, text, canSubmit, canWait);
+  try {
+    const now = Date.now();
+    const job = store.crons.create("work", "sibling", { name: "mail-watch", body: "check mail", at: new Date(now + 1).toISOString().slice(0, -1) }, now);
+    delivery.acceptScheduled("work", "sibling", store.crons.fire(job, now + 1)!);
+    await waitFor(() => pasted);
+    await Bun.sleep(350);
+    await delivery.suspend("work", "sibling");
+    expect(entered).toBe(false);
+    expect(delivery.isSuspended("work", "sibling")).toBe(true);
   } finally { delivery.stop(); store.close(); }
 });
 
@@ -1140,6 +1228,7 @@ test("cron recovery retries unknown idle without a queued successor and discards
 });
 
 test("wrapped cron acceptance and Stop arriving during submission are not overwritten by the send result", async () => {
+  for (const outcome of [{ status: "sent" }, { status: "stuck", reason: "owner already submitted the draft" }] satisfies SendResult[]) {
   let finishSend!: (result: SendResult) => void;
   const { delivery, sent, store, post, clock } = setup({ sends: [new Promise(resolve => { finishSend = resolve; })] });
   const now = Date.now();
@@ -1150,7 +1239,7 @@ test("wrapped cron acceptance and Stop arriving during submission are not overwr
     await waitFor(() => sent.length === 1);
     await post({ kind: "prompt-accepted", text: `<pasted_content id='quick'>${sent[0]!.text}</pasted_content id='quick'>`, turn: "quick" });
     await post({ kind: "turn-finished", text: "done", turn: "quick" });
-    finishSend({ status: "sent" });
+    finishSend(outcome);
     await Bun.sleep(0);
     clock.tick(60_000);
     await Bun.sleep(0);
@@ -1159,6 +1248,7 @@ test("wrapped cron acceptance and Stop arriving during submission are not overwr
     expect(run().finished).not.toBeNull();
     expect(sent).toHaveLength(1);
   } finally { delivery.stop(); store.close(); }
+  }
 });
 
 test("a crash during scheduled submission is not replayed after restart", async()=>{

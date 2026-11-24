@@ -1,4 +1,4 @@
-import type { AgentAdapter, Exec, KeyUse, SendResult } from "../../core/agent";
+import type { AgentAdapter, Exec, KeyUse, SendResult, SubmissionWait } from "../../core/agent";
 import type { Provider } from "../../core/keys";
 import { HOME } from "./actions";
 import { parseSigninMarker, SIGNIN_SCOPES } from "./signin";
@@ -110,13 +110,19 @@ function ghostInput(raw: string): boolean {
 
 /** claude's status line while it works on a turn. */
 const WORKING = "esc to interrupt";
+/** Only the footer describes the current turn; the transcript and draft may quote the same words. */
+function working(screen: string): boolean {
+  const plain = plainScreen(screen);
+  const box = INPUT_BOX.exec(plain);
+  return box !== null && plain.slice(box.index + box[0].length).includes(WORKING);
+}
 /** After Escape, claude shows it waits for input within this many looks, this far apart. */
 const STOP_LOOKS = 10;
 const STOP_LOOK_MS = 300;
 
 /** Waiting for input: no turn going on, and its input box on screen (no dialog); undefined when it is not. */
 function idleBox(screen: string | undefined): string | undefined {
-  return screen === undefined || plainScreen(screen).includes(WORKING) ? undefined : inputBox(screen);
+  return screen === undefined || working(screen) ? undefined : inputBox(screen);
 }
 
 /**
@@ -157,7 +163,7 @@ async function screen(exec: Exec): Promise<string | undefined> {
  * an empty input box, so it never joins someone's typing or an earlier message left unsent, and presses Enter
  * only if the box is still there and the caller agrees: a dialog opening meanwhile would take the Enter.
  */
-async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promise<SendResult> {
+async function paste(exec: Exec, text: string, canSubmit: () => boolean, wait?: SubmissionWait): Promise<SendResult> {
   const mode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
   if (!mode.ok || mode.output.trim() !== "0") return { status: "refused", reason: "the terminal is in copy mode or unavailable" };
   const before = await screen(exec);
@@ -165,7 +171,7 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promis
   const box = inputBox(before);
   if (box === undefined) return { status: "refused", reason: "a dialog is on screen", blockedBy: "dialog" };
   if (box !== "") return { status: "refused", reason: "the input box is not empty" };
-  if (!canSubmit()) return { status: "refused", reason: "a dialog opened" };
+  if (!canSubmit()) return { status: "refused", reason: "submission is no longer allowed" };
   if (!(await exec(["tmux", "load-buffer", "-b", "household", "-"], typeable(text))).ok) {
     return { status: "refused", reason: "load-buffer failed" };
   }
@@ -173,14 +179,61 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean): Promis
     return { status: "stuck", reason: "paste-buffer failed" };
   }
   await Bun.sleep(300); // let the TUI take the paste before Enter
-  const after = await screen(exec);
-  if (after === undefined || inputBox(after) === undefined || !canSubmit()) {
-    return { status: "stuck", reason: "the input box was gone after the paste (a dialog?), so no Enter" };
+  if (wait?.accepted()) return { status: "sent" };
+  const initial = await screen(exec);
+  if (initial === undefined) return { status: "stuck", reason: "cannot read the session after the paste; no Enter" };
+  let after: string = initial;
+  const draft = inputBox(after);
+  if (draft === undefined) return { status: "stuck", reason: "the input box was gone after the paste (a dialog?), so no Enter" };
+  const marker = /^\[Pasted text #\d+(?: \+(\d+) lines)?\]$/.exec(draft);
+  const expected = typeable(text);
+  // Claude indents continuation rows by two spaces and may wrap within a word or consume a space at
+  // a word boundary. Preserve whitespace inside each row; only row boundaries may represent a soft wrap.
+  const rows = draft.split("\n").map((row, i) => (i > 0 && row.startsWith("  ") ? row.slice(2) : row).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const literal = new RegExp(`^${rows.join("(?:\\n|[ \\t]*)")}$`, "u").test(expected.trim());
+  if (wait && !literal && !(marker && Number(marker[1] ?? 0) === expected.split("\n").length - 1)) {
+    return { status: "stuck", reason: "the input does not match the pasted message; no Enter" };
   }
-  const afterMode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
-  if (!afterMode.ok || afterMode.output.trim() !== "0" || !canSubmit()) return { status: "stuck", reason: "the terminal changed after the paste, so no Enter" };
-  const enter = await exec(["tmux", "send-keys", "-t", PANE, "Enter"]);
-  return enter.ok ? { status: "sent" } : { status: "stuck", reason: "send-keys failed after the paste" };
+  for (;;) {
+    // A native background-task result can start a main turn between paste and Enter. Keep this send in
+    // flight until it ends: returning stuck would strand the draft, and retrying send would paste twice.
+    if (wait?.accepted()) return { status: "sent" };
+    if (!canSubmit() || (wait && working(after))) {
+      if (!wait?.canWait()) return { status: "stuck", reason: "submission was blocked after the paste; no Enter" };
+      if (!draft) return { status: "stuck", reason: "cannot identify the pasted draft while waiting; no Enter" };
+      await Bun.sleep(100);
+      if (wait.accepted()) return { status: "sent" };
+      const current = await screen(exec);
+      if (current === undefined) return { status: "stuck", reason: "cannot read the session while waiting to submit; no Enter" };
+      if (inputBox(current) !== draft) return { status: "stuck", reason: "the pasted draft changed while waiting to submit; no Enter" };
+      after = current;
+      if (!working(after)) {
+        let changed = false;
+        await wait.recoverIdle(async () => {
+          const fresh = await screen(exec);
+          changed = fresh === undefined || inputBox(fresh) !== draft;
+          if (!changed) after = fresh!;
+          return !changed && !working(after);
+        });
+        if (wait.accepted()) return { status: "sent" };
+        if (changed) return { status: "stuck", reason: "the pasted draft changed while recovering idle; no Enter" };
+      }
+      continue;
+    }
+    const afterMode = await exec(["tmux", "display-message", "-p", "-t", PANE, "#{pane_in_mode}"]);
+    if (!afterMode.ok || afterMode.output.trim() !== "0") return { status: "stuck", reason: "the terminal changed after the paste, so no Enter" };
+    if (wait) {
+      if (wait.accepted()) return { status: "sent" };
+      const latest = await screen(exec);
+      if (wait.accepted()) return { status: "sent" };
+      if (latest === undefined || inputBox(latest) !== draft) return { status: "stuck", reason: "the pasted draft changed before submission; no Enter" };
+      after = latest;
+      if (working(after)) continue;
+    }
+    if (!canSubmit()) continue;
+    const enter = await exec(["tmux", "send-keys", "-t", PANE, "Enter"]);
+    return enter.ok ? { status: "sent" } : { status: "stuck", reason: "send-keys failed after the paste" };
+  }
 }
 
 /** What claude is told about its own tools, after Household's instructions: its person reads each Bash call's description as what it is busy with. */

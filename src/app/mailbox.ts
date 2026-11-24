@@ -41,7 +41,10 @@ export class Mailbox {
   /** Being typed into the agent right now: an edit can no longer change them. */
   sending: Message[] = [];
   /** Batches typed (or being typed), oldest first, as their text, until the agent says it took them. */
-  typed: { text: string; messages: Message[] }[] = [];
+  typed: { text: string; messages: Message[]; accepted?: boolean }[] = [];
+  /** Physical session identity, preserved across compaction. */
+  sessionEpoch = 0;
+  lastEventAt = 0;
   /** When a message last arrived (the clock's time; never, for one from before a restart): a batch waits for quiet. */
   private lastQueued = -Infinity;
   readonly retry: Backoff;

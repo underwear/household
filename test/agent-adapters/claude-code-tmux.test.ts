@@ -177,10 +177,14 @@ test("hook payloads from a real session become agent-neutral events", async () =
 /** An Exec that records commands; capture-pane shows the next of `screens` (the last one stays). */
 function fakeExec(screens: string[], failing = "") {
   const calls: string[] = [];
+  let buffer = "", pasted = false;
   const exec: Exec = async (command, stdin) => {
     calls.push(`${command.join(" ")}${stdin === undefined ? "" : ` < ${stdin}`}`);
     const ok = !failing || !command.includes(failing);
-    const output = command.includes("capture-pane") ? (screens.length > 1 ? screens.shift()! : screens[0]!) : command.includes("display-message") ? "0" : "";
+    if (command.includes("load-buffer")) buffer = stdin!;
+    if (command.includes("paste-buffer")) pasted = true;
+    let output = command.includes("capture-pane") ? (screens.length > 1 ? screens.shift()! : screens[0]!) : command.includes("display-message") ? "0" : "";
+    if (command.includes("capture-pane") && pasted && output === READY) output = READY.replace("❯\n", `❯ ${buffer.replace(/\n/g, "\n  ")}\n`);
     return { ok, output };
   };
   return { exec, calls };
@@ -233,6 +237,64 @@ test("a dialog that opens during the paste gets no Enter, and the message is rep
   const pasted = () => told.calls.some((call) => call.includes("paste-buffer"));
   expect(await claudeCodeTmux.send(told.exec, "x", () => !pasted())).toMatchObject({ status: "stuck" });
   expect(told.calls.some((call) => call.includes("send-keys"))).toBe(false);
+});
+
+test("waiting to submit preserves changed drafts, dialogs and copy mode, and stops when cancelled", async () => {
+  const draft = READY.replace("❯\n", "❯ [Pasted text #40 +11 lines]\n");
+  for (const change of ["draft", "dialog", "copy mode", "cancelled"] as const) {
+    let captures = 0;
+    const fake = fakeExec([READY, draft, change === "draft" ? draft.replace("+11", "+12") : change === "dialog" ? screen("ask") : draft]);
+    const exec: Exec = async (args, stdin) => {
+      if (args.includes("capture-pane")) captures++;
+      if (args.includes("display-message") && captures >= 3 && change === "copy mode") return { ok: true, output: "1" };
+      return fake.exec(args, stdin);
+    };
+    const result = await claudeCodeTmux.send(exec, Array(12).fill("scheduled task").join("\n"), () => captures < 2 || (captures >= 3 && change !== "cancelled"), {
+      canWait: () => captures < 3 || change !== "cancelled", accepted: () => false, recoverIdle: async () => {},
+    });
+    expect(result.status).toBe("stuck");
+    expect(fake.calls.filter(call => call.includes("paste-buffer"))).toHaveLength(1);
+    expect(fake.calls.some(call => call.includes("send-keys"))).toBe(false);
+    if (change === "cancelled") expect(result).toMatchObject({ reason: "submission was blocked after the paste; no Enter" });
+  }
+});
+
+test("a replacement draft in the paste delay is never submitted as Household's message", async () => {
+  for (const [expected, replacement] of [["scheduled task", "my personal draft"], ["rm -rf", "rm-rf"], ["first\n  indented", "first\n  indented"]]) {
+    // The last displayed continuation lacks the original code indentation (only the UI's two spaces remain).
+    const fake = fakeExec([READY, READY.replace("❯\n", `❯ ${replacement}\n`)]);
+    expect(await claudeCodeTmux.send(fake.exec, expected!, yes, { canWait: yes, accepted: () => false, recoverIdle: async () => {} })).toMatchObject({ status: "stuck", reason: "the input does not match the pasted message; no Enter" });
+    expect(fake.calls.some(call => call.includes("send-keys"))).toBe(false);
+  }
+});
+
+test("idle recovery never submits a replacement draft when Stop arrives during its fresh probe", async () => {
+  const draft = READY.replace("❯\n", "❯ task\n");
+  const fake = fakeExec([READY, draft, draft, READY.replace("❯\n", "❯ owner replacement\n")]);
+  let allowed = true, pasted = false;
+  const exec: Exec = async (args, stdin) => {
+    const result = await fake.exec(args, stdin);
+    if (args.includes("paste-buffer")) { pasted = true; allowed = false; }
+    return result;
+  };
+  const result = await claudeCodeTmux.send(exec, "task", () => allowed, {
+    canWait: () => pasted, accepted: () => false,
+    recoverIdle: async probe => { allowed = true; await probe(); },
+  });
+  expect(result.status).toBe("stuck");
+  expect(fake.calls.some(call => call.includes("send-keys"))).toBe(false);
+});
+
+test("scheduled paste ownership accepts Claude's continuation indentation, word wrapping and single-line paste marker", async () => {
+  for (const [text, drawn] of [
+    ["first line\nsecond line", "first line\n  second line"],
+    ["longwordlongword", "longword\n  longword"],
+    ["large single line", "[Pasted text #40]"],
+    ["first\nsecond", "[Pasted text #40 +1 lines]"],
+  ]) {
+    const fake = fakeExec([READY, READY.replace("❯\n", `❯ ${drawn}\n`)]);
+    expect(await claudeCodeTmux.send(fake.exec, text!, yes, { canWait: yes, accepted: () => false, recoverIdle: async () => {} })).toEqual({ status: "sent" });
+  }
 });
 
 test("the input box is the dialog marker on real screens; past prompts and menu lines are not the box", async () => {
@@ -567,6 +629,7 @@ test("scheduled readiness distinguishes busy Claude from its editable input box"
     expect(await claudeCodeTmux.isIdle!(async () => ({ ok: true, output }))).toBe(idle);
   }
   expect(await claudeCodeTmux.isIdle!(async () => ({ ok: false, output: READY }))).toBe(false);
+  expect(await claudeCodeTmux.isIdle!(async () => ({ ok: true, output: "Transcript quotes esc to interrupt\n" + READY }))).toBe(true);
 });
 
 

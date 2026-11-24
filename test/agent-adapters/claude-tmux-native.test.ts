@@ -58,6 +58,22 @@ test.skipIf(process.env.E2E_CLAUDE_TMUX !== "1")("native Claude 2.1.323 + tmux: 
     expect(await claudeCodeTmux.send(exec, multiline, () => true)).toEqual({ status: "sent" });
     await until(() => accepted(multiline), "literal multiline prompt");
     await done(multiline);
+    // Scheduled delivery may retain this same draft while another native turn finishes. Exercise actual
+    // Claude rendering, including continuation indents, word wrapping and collapsed single-line pastes.
+    for (const text of ["scheduled first line\nsecond line", "scheduled wrap " + "longword".repeat(30), "scheduled large " + "x".repeat(2_000)]) {
+      let pastedAt = 0;
+      const delayedExec: Exec = async (args, stdin) => {
+        const result = await exec(args, stdin);
+        if (args.includes("paste-buffer")) pastedAt = Date.now();
+        return result;
+      };
+      expect(await claudeCodeTmux.send(delayedExec, text, () => !pastedAt || Date.now() - pastedAt >= 600, {
+        canWait: () => true, accepted: () => false, recoverIdle: async () => {},
+      })).toEqual({ status: "sent" });
+      await until(() => accepted(text), "scheduled draft accepted once");
+      expect((await hooks()).filter(h => h.hook_event_name === "UserPromptSubmit" && h.prompt === text)).toHaveLength(1);
+      await done(text);
+    }
     const quotedDialog = 'Explain "Do you trust the files in this folder" and "Bypass Permissions mode"';
     expect((await claudeCodeTmux.send(exec, quotedDialog, () => true)).status).toBe("sent");
     await done(quotedDialog);
