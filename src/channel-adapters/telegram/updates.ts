@@ -42,6 +42,8 @@ export interface TelegramMessage {
   is_topic_message?: boolean;
   edit_date?: number;
   text?: string;
+  /** Formatting of `text`; a link hidden behind words (`text_link`) has its address only here. */
+  entities?: TextEntity[];
   /** Incoming block tree, not the outgoing InputRichMessage markdown. */
   rich_message?: unknown;
   forward_origin?: ForwardOrigin;
@@ -50,6 +52,7 @@ export interface TelegramMessage {
   forum_topic_created?: { name?: string };
   forum_topic_edited?: { name?: string };
   caption?: string;
+  caption_entities?: TextEntity[];
   /** The same for every message of an album (each of its files comes as a message of its own). */
   media_group_id?: string;
   photo?: (TelegramFile & { width: number; height: number })[];
@@ -312,6 +315,24 @@ function quotedOf(message: TelegramMessage): number | undefined {
  * forward is `relayed`; a reply names what it quotes (`replyTo`). A file comes with its caption as the text
  * (`attachments`); a place or a contact as text.
  */
+interface TextEntity { type: string; offset: number; length: number; url?: string }
+/**
+ * `text` with the address of each link hidden behind words written after them, «label (url)» as a rich message's
+ * links read: the address lives only in the entity, and a forwarded list of products is nothing without it.
+ */
+export function withLinks(text: string, entities: TextEntity[] | undefined): string {
+  const links = (entities ?? [])
+    .filter((e): e is TextEntity & { url: string } => e?.type === "text_link" && typeof e.url === "string" && !!e.url && Number.isInteger(e.offset) && Number.isInteger(e.length) && e.offset >= 0 && e.length > 0 && e.offset + e.length <= text.length)
+    .sort((a, b) => b.offset + b.length - (a.offset + a.length));
+  let result = text;
+  for (const link of links) {
+    const end = link.offset + link.length;
+    if (text.slice(link.offset, end).trim() === link.url) continue;
+    result = `${result.slice(0, end)} (${link.url})${result.slice(end)}`;
+  }
+  return result;
+}
+
 export function inboundMessage(update: Update, context: ChatContext): Parsed {
   if (update.callback_query) return choiceOf(update.callback_query, context);
   if (update.message_reaction) return reactionOf(update.update_id, update.message_reaction, context);
@@ -341,12 +362,12 @@ export function inboundMessage(update: Update, context: ChatContext): Parsed {
       ...(message.forward_origin ? { forward: forwardOf(message.forward_origin) } : {}),
     }),
   };
-  const written = message.text ?? richMessageText(message.rich_message);
+  const written = message.text === undefined ? richMessageText(message.rich_message) : withLinks(message.text, message.entities);
   if (written?.trim() === "/start") return { skipped: "/start" };
   const attachment = attachmentOf(message);
   // A file's caption is its message's text.
   // An unreadable rich tree must not turn into an empty file caption and lose its content.
-  const text = written ?? (message.rich_message === undefined ? (attachment ? (message.caption ?? "") : placeOrContact(message)) : undefined);
+  const text = written ?? (message.rich_message === undefined ? (attachment ? withLinks(message.caption ?? "", message.caption_entities) : placeOrContact(message)) : undefined);
   if (text !== undefined) {
     const quoted = quotedOf(message);
     return {

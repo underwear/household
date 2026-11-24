@@ -420,6 +420,29 @@ test("edits (each version its own ref), forwards, non-text content, the bot's ow
   ]);
 });
 
+test("links hidden behind words keep their address, in forwarded text and in captions", async () => {
+  const { api, received, open, listen } = setup();
+  // Offsets are UTF-16, as Telegram counts them: «🎧» is two units.
+  const text = "нужно купить:\n1) 🎧 вот эти проводные\n2) вот эту веб камеру\nи https://ozon.ru";
+  const at = (part: string) => ({ offset: text.indexOf(part), length: part.length });
+  const entities = [
+    { type: "bold", offset: 0, length: 5 },
+    { type: "text_link", ...at("вот эти"), url: "https://www.ozon.ru/product/a-1/" },
+    { type: "text_link", ...at("вот эту веб камеру"), url: "https://www.ozon.ru/product/b-2/" },
+    { type: "url", ...at("https://ozon.ru") },
+    { type: "text_link", ...at("https://ozon.ru"), url: "https://ozon.ru" },
+    { type: "text_link", offset: 500, length: 3, url: "https://out.of/range" },
+  ];
+  api.push({ message: fromOwner({ text, entities, forward_origin: { type: "hidden_user", date: 7, sender_user_name: "Дед" } }, 1) });
+  api.push({ message: fromOwner({ document: { file_id: "doc" }, caption: "счёт тут", caption_entities: [{ type: "text_link", offset: 5, length: 3, url: "https://drive.test/f" }] }, 2) });
+  listen(open());
+  await waitFor(() => received.length === 2);
+  expect(received.map(m => (m as { text: string }).text)).toEqual([
+    "нужно купить:\n1) 🎧 вот эти (https://www.ozon.ru/product/a-1/) проводные\n2) вот эту веб камеру (https://www.ozon.ru/product/b-2/)\nи https://ozon.ru",
+    "счёт тут (https://drive.test/f)",
+  ]);
+});
+
 test("incoming rich blocks preserve lists, nested text, edits, forwards, replies and files", async () => {
   const { api, received, open, listen } = setup();
   const rich_message = { blocks: [
