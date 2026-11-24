@@ -61,6 +61,15 @@ export interface ScreenDialog {
   drawn?: string;
 }
 
+/** Recovery of a scheduled draft already pasted, but not submitted, while another native turn runs. */
+export interface SubmissionWait {
+  canWait(): boolean;
+  /** Exact prompt acceptance is sufficient even if the owner submitted it in the terminal. */
+  accepted(): boolean;
+  /** Reconcile lost busy hooks only after quiet and a fresh, unchanged native-idle observation. */
+  recoverIdle(probe: () => Promise<boolean>): Promise<void>;
+}
+
 export interface AgentAdapter {
   readonly name: string;
   /** Docker build context with a Dockerfile. The image's entrypoint is the agent's main process. */
@@ -130,9 +139,11 @@ export interface AgentAdapter {
   /**
    * Types `text` into the agent as a message from its person. Refuses when it can see that input would land
    * somewhere else, e.g. in an open dialog. `canSubmit` is asked again right before the text is submitted, so
-   * the caller can stop it when it learned of a dialog in the meantime.
+   * the caller can stop it when it learned of a dialog in the meantime. `wait` optionally lets the adapter
+   * keep its own pasted draft while a temporary busy turn ends, without pasting it again. It must become false
+   * when the session is replaced, suspended or blocked by a dialog.
    */
-  send(exec: Exec, text: string, canSubmit: () => boolean): Promise<SendResult>;
+  send(exec: Exec, text: string, canSubmit: () => boolean, wait?: SubmissionWait): Promise<SendResult>;
   /**
    * Stops what the agent is doing (its turn), as a person would in its session, once, and sees that it did:
    * `stopped` (it waits for input; `leftover`: text it left in its input), `idle` (it was doing nothing: nothing
