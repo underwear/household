@@ -630,6 +630,7 @@ test("scheduled readiness distinguishes busy Claude from its editable input box"
   }
   expect(await claudeCodeTmux.isIdle!(async () => ({ ok: false, output: READY }))).toBe(false);
   expect(await claudeCodeTmux.isIdle!(async () => ({ ok: true, output: "Transcript quotes esc to interrupt\n" + READY }))).toBe(true);
+  expect(await claudeCodeTmux.isIdle!(async () => ({ ok: true, output: READY + "\npaste again to expand" }))).toBe(false);
 });
 
 

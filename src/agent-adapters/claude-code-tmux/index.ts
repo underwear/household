@@ -111,11 +111,16 @@ function ghostInput(raw: string): boolean {
 /** claude's status line while it works on a turn. */
 const WORKING = "esc to interrupt";
 /** Only the footer describes the current turn; the transcript and draft may quote the same words. */
-function working(screen: string): boolean {
+function footer(screen: string): string {
   const plain = plainScreen(screen);
   const box = INPUT_BOX.exec(plain);
-  return box !== null && plain.slice(box.index + box[0].length).includes(WORKING);
+  return box === null ? "" : plain.slice(box.index + box[0].length);
 }
+const working = (screen: string) => footer(screen).includes(WORKING);
+// This temporary hint replaces the status footer even during a running turn. It cannot prove idle,
+// but it is not proof of a working turn either (interrupt must not press Escape solely for this hint).
+const idleUncertain = (screen: string) => footer(screen).includes("paste again to expand");
+const nativeIdle = (screen: string) => !working(screen) && !idleUncertain(screen);
 /** After Escape, claude shows it waits for input within this many looks, this far apart. */
 const STOP_LOOKS = 10;
 const STOP_LOOK_MS = 300;
@@ -198,7 +203,7 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean, wait?: 
     // A native background-task result can start a main turn between paste and Enter. Keep this send in
     // flight until it ends: returning stuck would strand the draft, and retrying send would paste twice.
     if (wait?.accepted()) return { status: "sent" };
-    if (!canSubmit() || (wait && working(after))) {
+    if (!canSubmit() || (wait && !nativeIdle(after))) {
       if (!wait?.canWait()) return { status: "stuck", reason: "submission was blocked after the paste; no Enter" };
       if (!draft) return { status: "stuck", reason: "cannot identify the pasted draft while waiting; no Enter" };
       await Bun.sleep(100);
@@ -207,13 +212,13 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean, wait?: 
       if (current === undefined) return { status: "stuck", reason: "cannot read the session while waiting to submit; no Enter" };
       if (inputBox(current) !== draft) return { status: "stuck", reason: "the pasted draft changed while waiting to submit; no Enter" };
       after = current;
-      if (!working(after)) {
+      if (nativeIdle(after)) {
         let changed = false;
         await wait.recoverIdle(async () => {
           const fresh = await screen(exec);
           changed = fresh === undefined || inputBox(fresh) !== draft;
           if (!changed) after = fresh!;
-          return !changed && !working(after);
+          return !changed && nativeIdle(after);
         });
         if (wait.accepted()) return { status: "sent" };
         if (changed) return { status: "stuck", reason: "the pasted draft changed while recovering idle; no Enter" };
@@ -228,7 +233,7 @@ async function paste(exec: Exec, text: string, canSubmit: () => boolean, wait?: 
       if (wait.accepted()) return { status: "sent" };
       if (latest === undefined || inputBox(latest) !== draft) return { status: "stuck", reason: "the pasted draft changed before submission; no Enter" };
       after = latest;
-      if (working(after)) continue;
+      if (!nativeIdle(after)) continue;
     }
     if (!canSubmit()) continue;
     const enter = await exec(["tmux", "send-keys", "-t", PANE, "Enter"]);
@@ -362,7 +367,7 @@ export const claudeCodeTmux: AgentAdapter = {
   },
   translate: translateHook,
   dialogs: { ask: askOf, answer: answerFor },
-  async isIdle(exec) { return idleBox(await screen(exec)) === ""; },
+  async isIdle(exec) { const captured = await screen(exec); return captured !== undefined && !idleUncertain(captured) && idleBox(captured) === ""; },
   send: paste,
   interrupt,
   async dialogVisible(exec) {
