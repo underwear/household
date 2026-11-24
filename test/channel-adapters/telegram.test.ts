@@ -436,11 +436,13 @@ test("links hidden behind words keep their address, in forwarded text and in cap
   ];
   api.push({ message: fromOwner({ text, entities, forward_origin: { type: "hidden_user", date: 7, sender_user_name: "Дед" } }, 1) });
   api.push({ message: fromOwner({ document: { file_id: "doc" }, caption: "счёт тут", caption_entities: [{ type: "text_link", offset: 5, length: 3, url: "https://drive.test/f" }] }, 2) });
+  api.push({ message: fromOwner({ text: "спроси у Деда", entities: [{ type: "text_mention", offset: 9, length: 4, user: { id: 4242, first_name: "Дед" } }] }, 3) });
   listen(open());
-  await waitFor(() => received.length === 2);
+  await waitFor(() => received.length === 3);
   expect(received.map(m => (m as { text: string }).text)).toEqual([
     "нужно купить:\n1) 🎧 вот эти (https://www.ozon.ru/product/a-1/) проводные\n2) вот эту веб камеру (https://www.ozon.ru/product/b-2/)\nи https://ozon.ru или Ozon.ru",
     "счёт тут (https://drive.test/f)",
+    "спроси у Деда (tg://user?id=4242)",
   ]);
 });
 

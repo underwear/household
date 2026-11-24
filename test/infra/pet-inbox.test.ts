@@ -43,9 +43,14 @@ test("a file is saved privately in its day's directory, atomically, never over a
   expect(lstatSync(day).mode & 0o777).toBe(0o700);
 });
 
-test("names and days that could leave the inbox are refused; so is a home that is not there", async () => {
-  const { files } = setup();
-  for (const name of ["../escape.txt", ".hidden", "a/b.txt", ""]) await expect(files.save(VOLUME, "2026-11-06", name, bytes("x"))).rejects.toThrow("Invalid file name");
+test("any name is made storable inside the day's directory; days that could leave the inbox are refused, so is a home that is not there", async () => {
+  const { home, files } = setup();
+  const saved = [];
+  for (const name of ["../escape.txt", ".hidden", "a/b.txt", "", `${"Счёт за газ 🔥 ".repeat(20)}.pdf`]) saved.push(await files.save(VOLUME, "2026-11-06", name, bytes("x")));
+  expect(saved.slice(0, 4)).toEqual([".household/inbox/2026-11-06/_escape.txt", ".household/inbox/2026-11-06/hidden", ".household/inbox/2026-11-06/a_b.txt", ".household/inbox/2026-11-06/file"]);
+  expect(saved[4]).toEndWith(".pdf");
+  for (const path of saved) expect(readFileSync(join(home, path), "utf8")).toBe("x");
+  expect(readdirSync(join(home, ".household/inbox/2026-11-06"))).toHaveLength(5);
   await expect(files.save(VOLUME, "../..", "a.txt", bytes("x"))).rejects.toThrow("Invalid day");
   await expect(files.save("../other", "2026-11-06", "a.txt", bytes("x"))).rejects.toThrow("invalid Household home name");
   await expect(files.save("household.work.gone.home", "2026-11-06", "a.txt", bytes("x"))).rejects.toThrow("unsafe or unavailable inbox path");

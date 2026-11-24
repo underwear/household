@@ -315,7 +315,7 @@ function quotedOf(message: TelegramMessage): number | undefined {
  * forward is `relayed`; a reply names what it quotes (`replyTo`). A file comes with its caption as the text
  * (`attachments`); a place or a contact as text.
  */
-interface TextEntity { type: string; offset: number; length: number; url?: string }
+interface TextEntity { type: string; offset: number; length: number; url?: string; user?: { id?: number } }
 /**
  * `text` with the address of each link hidden behind words written after them, «label (url)» as a rich message's
  * links read: the address lives only in the entity, and a forwarded list of products is nothing without it.
@@ -323,7 +323,9 @@ interface TextEntity { type: string; offset: number; length: number; url?: strin
 /** An address as people write it, without scheme or trailing slash: «ozon.ru» is the link https://ozon.ru/. */
 const bare = (address: string) => address.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/\/+$/, "").toLowerCase();
 export function withLinks(text: string, entities: TextEntity[] | undefined): string {
+  // A person mentioned without a username is known only by Telegram's id: a link to them says who.
   const links = (Array.isArray(entities) ? entities : [])
+    .map(e => e?.type === "text_mention" && Number.isSafeInteger(e.user?.id) ? { ...e, type: "text_link", url: `tg://user?id=${e.user!.id}` } : e)
     .filter((e): e is TextEntity & { url: string } => e?.type === "text_link" && typeof e.url === "string" && !!e.url && Number.isInteger(e.offset) && Number.isInteger(e.length) && e.offset >= 0 && e.length > 0 && e.offset + e.length <= text.length)
     .sort((a, b) => b.offset + b.length - (a.offset + a.length));
   let result = text;

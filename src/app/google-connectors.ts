@@ -10,6 +10,7 @@ import type { KeyValueStore } from "../infra/sqlite-store";
 import { boundedBytes, boundedText, googleClient, googleJson, GoogleHttpError, MAX_DRIVE_FILE_BYTES, type GoogleFetch } from "../infra/google/client";
 import { decodeMail, DRIVE_EXPORTS, googleRequest, operationCatalog } from "../infra/google/operations";
 import { TokenBucket } from "./token-bucket";
+import { storableName } from "../infra/pet-inbox";
 
 const KEY = "house.connectors.google.v1";
 interface Connection extends GoogleConnectionView { house: string; subject: string; accessToken: string; refreshToken: string; expiresAt: number }
@@ -19,7 +20,9 @@ export interface GoogleFiles {
   read(caller: PetIdentity, path: string, maxBytes: number): Promise<Uint8Array>;
   save(caller: PetIdentity, name: string, bytes: Uint8Array): Promise<string>;
 }
-type Call = (target: URL, init?: RequestInit) => Promise<Response>;
+/** A Google request with the caller's token; `timeoutMs` bounds it alone (a file's bytes get longer than its metadata). */
+type Call = (target: URL, init?: RequestInit, timeoutMs?: number) => Promise<Response>;
+const TRANSFER_MS = 300_000;
 const MEDIA_TYPES: Record<string, string> = {
   pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", heic: "image/heic", tif: "image/tiff", tiff: "image/tiff",
   txt: "text/plain", md: "text/markdown", csv: "text/csv", html: "text/html", json: "application/json", xml: "application/xml",
@@ -36,19 +39,10 @@ const EXPORTABLE: Record<string, (keyof typeof DRIVE_EXPORTS)[]> = {
   presentation: ["application/pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/plain"],
   drawing: ["application/pdf", "image/png"],
 };
-/**
- * A Drive name as the inbox takes it: no slashes, control characters or leading dots, at most 200 UTF-8 bytes cut
- * between characters, and its extension (an export's, added when missing) kept.
- */
+/** A Drive name as saved: an export's extension added when missing, then made storable. */
 export function inboxName(original: string, extension?: string) {
-  let name = original.replace(/[/\\\x00-\x1f]/g, "_").replace(/^\.+/, "").trim() || "drive-file";
-  if (extension && !name.toLowerCase().endsWith(`.${extension}`)) name = `${name}.${extension}`;
-  const dot = name.lastIndexOf(".");
-  const suffix = dot > 0 && name.length - dot <= 16 ? name.slice(dot) : "";
-  let stem = name.slice(0, name.length - suffix.length);
-  // The inbox adds «-N» to a taken name: leave room for it.
-  while (Buffer.byteLength(stem + suffix) > 190) stem = [...stem].slice(0, -1).join("");
-  return (stem || "drive-file") + suffix;
+  const name = original.trim() || "drive-file";
+  return storableName(extension && !name.toLowerCase().endsWith(`.${extension}`) ? `${name}.${extension}` : name);
 }
 const nonce = () => randomBytes(32).toString("base64url");
 const scopesFor = (services: GoogleService[], write: boolean) => ["openid", "email", ...services.flatMap(s => [...GOOGLE_SCOPES[s], ...(write ? GOOGLE_WRITE_SCOPES[s] : [])])];
@@ -245,8 +239,7 @@ export class GoogleConnectors {
         const access = await this.access(this.allowed(caller, id, spec.service, write));
         this.allowed(caller, id, spec.service, write);
         controller.signal.throwIfAborted(); signal?.throwIfAborted();
-        const limit = AbortSignal.any([controller.signal, AbortSignal.timeout(spec.file ? 300_000 : 30_000), ...(signal ? [signal] : [])]);
-        const call: Call = (target, request = {}) => this.fetcher(target, { ...request, headers: { ...request.headers as Record<string, string>, authorization: `Bearer ${access}` }, redirect: "error", signal: limit });
+        const call: Call = (target, request = {}, timeoutMs = 30_000) => this.fetcher(target, { ...request, headers: { ...request.headers as Record<string, string>, authorization: `Bearer ${access}` }, redirect: "error", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]) });
         let data: any, download: Awaited<ReturnType<GoogleConnectors["download"]>> | undefined;
         if (spec.file === "upload") data = await this.upload(call, url, String(init.body), file!);
         else if (spec.file === "download") download = await this.download(call, url, review as { id: string; exportMimeType?: keyof typeof DRIVE_EXPORTS });
@@ -304,7 +297,7 @@ export class GoogleConnectors {
     // The session must stay on the upload endpoint asked for: a token never goes anywhere a response points.
     const session = URL.parse(start.headers.get("location") ?? "");
     if (!session || session.protocol !== "https:" || session.host !== url.host || session.pathname !== url.pathname || session.username || session.password) throw new HouseholdError("Google did not open a usable upload session; nothing was uploaded. Retry shortly.");
-    const response = await call(session, { method: "PUT", body: file.bytes as Uint8Array<ArrayBuffer>, headers: { "content-type": file.contentType } });
+    const response = await call(session, { method: "PUT", body: file.bytes as Uint8Array<ArrayBuffer>, headers: { "content-type": file.contentType } }, TRANSFER_MS);
     if (!response.ok) { await response.body?.cancel(); throw new GoogleHttpError(response.status); }
     return JSON.parse(await boundedText(response));
   }
@@ -325,7 +318,7 @@ export class GoogleConnectors {
     const target = new URL(url); target.search = "";
     if (exportType) { target.pathname += "/export"; target.searchParams.set("mimeType", exportType); }
     else { target.searchParams.set("alt", "media"); target.searchParams.set("supportsAllDrives", "true"); }
-    const response = await call(target);
+    const response = await call(target, {}, TRANSFER_MS);
     if (!response.ok) {
       await response.body?.cancel();
       if (exportType && response.status === 403) throw new HouseholdError("Google refused to export this file (403); exports are limited to 10 MB. Open it in Drive and download it from there.");

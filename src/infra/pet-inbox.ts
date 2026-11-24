@@ -3,6 +3,20 @@ import { join } from "node:path";
 import { runCommand } from "./process";
 import helper from "./pet-inbox-files.py" with { type: "text" };
 
+/**
+ * Any name as the inbox stores it: no slashes, control characters or leading dots, at most 190 UTF-8 bytes (room
+ * for the «-N» a taken name gets) cut between characters, its extension kept. Senders and accounts name files
+ * freely; a file must never be lost after its download because of its name.
+ */
+export function storableName(original: string): string {
+  const name = original.replace(/[/\\\x00-\x1f\x7f]/g, "_").replace(/^[.\s]+/, "").trim() || "file";
+  const dot = name.lastIndexOf(".");
+  const suffix = dot > 0 && name.length - dot <= 16 ? name.slice(dot) : "";
+  const stem = [...name.slice(0, name.length - suffix.length)];
+  while (stem.length && Buffer.byteLength(stem.join("") + suffix) > 190) stem.pop();
+  return (stem.join("") || "file") + suffix;
+}
+
 const validVolume = (name: string) => /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,200}$/.test(name);
 
 /**
@@ -20,7 +34,7 @@ export class PetInboxFiles {
   async save(volume: string, day: string, name: string, bytes: Uint8Array): Promise<string> {
     if (!validVolume(volume)) throw new Error("invalid Household home name");
     const home = join(await realpath(this.homes), volume);
-    return (await this.call({ op: "save", home, day, name }, bytes)).path as string;
+    return (await this.call({ op: "save", home, day, name: storableName(name) }, bytes)).path as string;
   }
 
   /** Every home's inbox loses its files older than `before`, and its empty day directories; resolves to how many files went. */
