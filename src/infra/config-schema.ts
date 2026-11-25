@@ -13,7 +13,7 @@ import { HouseholdError } from "../core/errors";
 import type { Household, Owner } from "../core/household";
 import { PROVIDERS } from "../core/keys";
 import { DEFAULT_SECRET_HEADER, envProblem, secretHost } from "../core/secrets";
-import { scoutProblems, blueprintCapabilities } from "../core/scouts";
+import { scoutProblems, scoutNetwork, blueprintCapabilities } from "../core/scouts";
 import { NAME_PATTERN, PET_NAME_HINT, PET_NAME_PATTERN } from "../core/names";
 import { allowEntryError, parseAllowEntry, parseEndpoint } from "../core/network-policy";
 import { nestingIn, volumeFieldsSchema, volumePathProblem } from "../core/volumes";
@@ -287,6 +287,8 @@ export const scoutDefinitionSchema = z.strictObject({
   }).optional(),
   agent: scoutAgentSchema.optional(),
   resources: z.strictObject({ cpus: petCpuSchema.optional(), memoryMiB: petMemorySchema.optional() }).optional(),
+  /** Bots that run it without asking; the house checks they are its bots and that the scout's network is closed. */
+  routine: z.array(petName).max(64).refine(names => new Set(names).size === names.length, "A bot is listed twice").optional(),
 });
 export const scoutDefinitionsSchema = z.array(scoutDefinitionSchema).superRefine((scouts, ctx) => {
   if (new Set(scouts.map(scout => scout.name)).size !== scouts.length) ctx.addIssue({ code: "custom", message: "Scout names must be unique within a workspace" });
@@ -415,6 +417,10 @@ export function parseHousehold(raw: unknown, source: string): Household {
       for (const name of scout.capabilities) if (house.capabilities?.find(capability => capability.name === name)?.owner) problems.push(`scout '${house.name}/${scout.name}': '${name}' is another blueprint's own capability`);
       for (const problem of scoutProblems({ capabilities: blueprintCapabilities(scout, house.capabilities ?? []) }, house.capabilities ?? [], secret => (house.secrets ?? []).find(item => item.name === secret)?.env))
         problems.push(`scout '${house.name}/${scout.name}': ${problem}`);
+      // Routine skips the owner's Run and Pass: only for a scout that reaches listed hosts alone, so a bot's errand cannot carry its data anywhere.
+      for (const bot of scout.routine ?? []) if (!house.pets.some(pet => pet.name === bot)) problems.push(`scout '${house.name}/${scout.name}' is routine for unknown bot '${bot}'`);
+      if (scout.routine?.length && scoutNetwork({ capabilities: blueprintCapabilities(scout, house.capabilities ?? []), workspace: scout.workspace }, house.capabilities ?? []).open)
+        problems.push(`scout '${house.name}/${scout.name}' reaches the open internet, so it cannot be routine: limit its network to listed hosts first, or remove its routine bots`);
     }
   }
   for (const house of household.houses) {

@@ -145,3 +145,55 @@ test("a pet gets the house's scouts like skills, as a block of JSON lines: name,
   expect(JSON.parse(scoutsBlock({ features: { scouts: true } }).split("\n")[1]!)).toMatchObject({ count: 0 });
   expect(scoutsBlock({ features: { scouts: false }, scouts })).toBe("");
 });
+
+test("routine: only for bots of the workspace, only on a closed network; saving one that is open fails; a removed bot loses it", async () => {
+  const path = join(await tempDir(), "household.yaml");
+  await Bun.write(path, "houses:\n  work:\n    network: { allow: [] }\n    pets:\n      sibling:\n      helper:\n    capabilities:\n      - { name: meter, network: { any: false, allow: [meter.example.com] } }\n      - { name: browser }\n    scouts:\n      - { name: reader, description: Meter reading, capabilities: [meter], routine: [sibling, helper] }\n");
+  const store = new ConfigStore(path);
+  expect((await store.load()).houses[0]!.scouts![0]!.routine).toEqual(["sibling", "helper"]);
+  expect(() => definition({ routine: ["sibling", "sibling"] })).toThrow("listed twice");
+  const reader = (await store.load()).houses[0]!.scouts![0]!;
+  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["browser"] })).rejects.toThrow("reaches the open internet, so it cannot be routine");
+  await expect(store.updateScout("work", "reader", { ...reader, routine: ["ghost"] })).rejects.toThrow("routine for unknown bot 'ghost'");
+  await expect(store.addScout("work", definition({ name: "open", routine: ["sibling"] }))).rejects.toThrow("cannot be routine");
+  await expect(store.updateCapability("work", "meter", { ...capabilityDefinitionSchema.parse({ name: "meter" }) })).rejects.toThrow("cannot be routine"); // opening its only limit
+  await store.updateScout("work", "reader", { ...reader, capabilities: ["meter", "browser"] }); // a tool on top keeps it closed
+  await store.removePet("work", "helper");
+  expect((await store.load()).houses[0]!.scouts![0]!.routine).toEqual(["sibling"]);
+});
+
+test("the scouts block says which scouts are routine for this pet, and only while their network is closed", () => {
+  const meter = capability({ name: "meter", network: { any: false, allow: ["meter.example.com"] } });
+  const scouts = [definition({ name: "reader", capabilities: ["meter"], routine: ["sibling"] }), definition({ name: "general", routine: ["sibling"] })];
+  const lines = (pet?: string) => scoutsBlock({ features: { scouts: true }, scouts, capabilities: [meter] }, pet).trim().split("\n").slice(2, -1).map(line => JSON.parse(line));
+  expect(lines("sibling").map(line => line.routine)).toEqual([true, undefined]); // general is open: strict for everyone
+  expect(lines("other").map(line => line.routine)).toEqual([undefined, undefined]);
+  expect(lines().map(line => line.routine)).toEqual([undefined, undefined]);
+});
+
+test("a limit that lists * (any public host) is no limit: open, and never routine; *.example.com stays closed", async () => {
+  for (const host of ["*", "*:*", "*:8443"]) {
+    const wild = capability({ name: "wild", network: { any: false, allow: [host] } });
+    expect(scoutNetwork({ capabilities: ["wild"] }, [wild])).toMatchObject({ open: true, limitedBy: ["wild"] });
+    expect(scoutsBlock({ features: { scouts: true }, scouts: [definition({ capabilities: ["wild"], routine: ["sibling"] })], capabilities: [wild] }, "sibling")).toContain('"network":"open internet"');
+    expect(scoutsBlock({ features: { scouts: true }, scouts: [definition({ capabilities: ["wild"], routine: ["sibling"] })], capabilities: [wild] }, "sibling")).not.toContain('"routine"');
+  }
+  const sub = capability({ name: "sub", network: { any: false, allow: ["*.example.com"] } });
+  expect(scoutNetwork({ capabilities: ["sub"] }, [sub])).toMatchObject({ open: false, allow: [{ host: "*.example.com", port: 443 }] });
+  const path = join(await tempDir(), "household.yaml");
+  await Bun.write(path, "houses:\n  work:\n    network: { allow: [] }\n    pets:\n      sibling:\n    capabilities:\n      - { name: wild, network: { any: false, allow: ['*'] } }\n      - { name: sub, network: { any: false, allow: ['*.example.com'] } }\n    scouts:\n      - { name: reader, description: Meter reading, capabilities: [sub], routine: [sibling] }\n");
+  const store = new ConfigStore(path);
+  const reader = (await store.load()).houses[0]!.scouts![0]!;
+  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["wild"] })).rejects.toThrow("cannot be routine");
+  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["sub", "wild"] })).rejects.toThrow("cannot be routine");
+});
+
+test("a routine scout limited only by its own capability is deleted with it, in one edit", async () => {
+  const path = join(await tempDir(), "household.yaml");
+  await Bun.write(path, "houses:\n  work:\n    network: { allow: [] }\n    pets:\n      sibling:\n    capabilities:\n      - { name: reader, owner: reader, network: { any: false, allow: [meter.example.com] } }\n    scouts:\n      - { name: reader, description: Meter reading, routine: [sibling] }\n");
+  const store = new ConfigStore(path);
+  await store.removeScout("work", "reader");
+  const house = (await store.load()).houses[0]!;
+  expect(house.scouts ?? []).toEqual([]);
+  expect(house.capabilities ?? []).toEqual([]);
+});

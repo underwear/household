@@ -94,9 +94,13 @@ export class Capabilities {
   }
   async remove(house: string, name: string) {
     await this.config.removeCapability(house, name);
+    this.forget(house, name);
+    await this.applied();
+  }
+  /** Its history and drafts go, once it is gone from the config (a scout's own one goes with its scout: `removeScout`). */
+  forget(house: string, name: string) {
     this.store.delete(historyKey(house, name));
     this.discardFor(house, name);
-    await this.applied();
   }
 
   drafts(house: string): CapabilityDraft[] { return JSON.parse(this.store.get(draftsKey(house)) ?? "[]"); }

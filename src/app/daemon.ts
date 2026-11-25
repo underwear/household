@@ -275,7 +275,7 @@ export async function startDaemon(deps: DaemonDeps) {
       if (scouts.isScout({house,pet})) return {revision:0,text:""};
       const notes = memory?.context(house,pet);
       // Only pets call scouts: a sideworker gets its memory without them.
-      const list = sideworkers.worker(house, pet) ? "" : scoutsBlock(appliedHousehold?.houses.find(each => each.name === house) ?? {});
+      const list = sideworkers.worker(house, pet) ? "" : scoutsBlock(appliedHousehold?.houses.find(each => each.name === house) ?? {}, pet);
       return { revision: `${notes?.revision ?? "-"}:${Bun.hash(list)}`, text: (notes?.text ?? "") + list };
     },
     new AttachmentFetcher((house, place, attachment, signal) => chat.download(house, place, attachment, signal), inboxes, events, () => timezone, undefined, (house, pet) => {
@@ -306,8 +306,9 @@ export async function startDaemon(deps: DaemonDeps) {
     prepare: async (run,values)=>{
       const current=await config.load();
       const material=await scoutStorage.prepare(run.house,run.id,run.definition,{capabilities:run.capabilities,values,ownedSecrets:current.houses.find(house => house.name === run.house)?.secrets ?? [],sharedSkills:await new HouseSkills(houseSkillsRoot(paths.stateDir)).ensure(run.house)});
+      // No capability limits it: any host, any port. A limit's own `*` stays as written (its port too).
       const network=scoutNetwork(run.definition,run.capabilities);
-      return {...material,capabilities:run.capabilities.map(capability=>capability.name),definition:run.scout,parent:run.parent,network:{kind:"allowlist",allow:[...network.allow,...(network.open?[{host:"*",port:"*" as const,reach:"public" as const}]:[])]},instructions:run.definition.instructions};
+      return {...material,capabilities:run.capabilities.map(capability=>capability.name),definition:run.scout,parent:run.parent,network:{kind:"allowlist",allow:[...network.allow,...(!network.limitedBy.length?[{host:"*",port:"*" as const,reach:"public" as const}]:[])]},instructions:run.definition.instructions};
     },
     launch: ()=>applyConfig(),
     ready: async run=>{const p=placed.find(p=>p.house===run.house&&p.pet===run.id);return !!p&&(await p.agent.isReady(pets.exec(run.house,run.id),p.mode)).ready;},
@@ -322,6 +323,8 @@ export async function startDaemon(deps: DaemonDeps) {
     },
     send: (house,pet,text)=>{delivery.send(house,pet,{origin:"internal",text});},
     rewrite: (run,notice,text,link)=>chat.rewrite(run.house,notice,scouts.redact(run.house,run.id,text),link && run.placement !== "same" ? run.id : undefined),
+    // A routine run's start, where its launch card would be: in its pet's place.
+    announce: (run,text)=>chat.announce(run.house,run.parent,scouts.redact(run.house,run.id,text),undefined,run.originPlace),
     // An ended run is no pet of the config any more: its thread is found as its pet's.
     canRemoveThread: run=>{
       const origin=run.channel??parsePlaceKey(run.announcement?.place)?.channel;

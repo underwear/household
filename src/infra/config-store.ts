@@ -321,10 +321,16 @@ export class ConfigStore {
     });
   }
 
+  /**
+   * Removes a scout and its own capability, in one edit: apart, either half is a config that does not hold (a routine
+   * scout without its own limit is open; an own capability without its scout belongs to no one).
+   */
   async removeScout(house: string, name: string): Promise<Household> {
     return this.edit((doc, household) => {
-      const index = knownHouse(household, house).scouts?.findIndex(scout => scout.name === name) ?? -1;
+      const found = knownHouse(household, house), index = found.scouts?.findIndex(scout => scout.name === name) ?? -1;
       if (index < 0) throw new NotFoundError(`unknown scout '${house}/${name}'`);
+      const own = found.capabilities?.findIndex(capability => capability.owner === name) ?? -1;
+      if (own >= 0) doc.deleteIn(["houses", house, "capabilities", own]);
       doc.deleteIn(["houses", house, "scouts", index]);
       // Keep any secret restriction: deleting a scout must never expose its keys to pets.
     });
@@ -492,6 +498,8 @@ export class ConfigStore {
       });
       // Its volumes stay for their other bots (or none): the folders are the owner's, not the bot's.
       for (const volume of knownHouse(household, house).volumes ?? []) if (volume.bots.includes(pet)) removeItems(doc, ["houses", house, "volumes", volume.name, "bots"], (item) => item === pet);
+      // Its routine trust goes with it: a bot made later under its name starts strict.
+      (knownHouse(household, house).scouts ?? []).forEach((scout, index) => { if (scout.routine?.includes(pet)) removeItems(doc, ["houses", house, "scouts", index, "routine"], (item) => item === pet); });
       doc.deleteIn(["houses", house, "pets", pet]);
     });
   }

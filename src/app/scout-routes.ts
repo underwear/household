@@ -208,10 +208,11 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
         }
         if (request.method === "DELETE") {
           if (runs().some(r => r.blueprint === name && !ended(r.status))) return json({ error: "Stop this scout's running jobs before deleting it" }, 409);
-          // Its own capability goes with it (history, skills, test); its keys stay, kept for no one.
+          // Its own capability goes with it, in the same config edit (then its history, skills, test); its keys stay, kept for no one.
           const own = capabilities.find(c => c.owner === name);
-          if (own) { await deps.capabilities.remove(houseName, own.name); await deps.storage.removeCapability(houseName, own.name); deps.tests?.forget(houseName, own.name); }
-          await deps.config.removeScout(houseName, name); await deps.apply(); return json({ ok: true });
+          await deps.config.removeScout(houseName, name);
+          if (own) { deps.capabilities.forget(houseName, own.name); await deps.storage.removeCapability(houseName, own.name); deps.tests?.forget(houseName, own.name); }
+          await deps.apply(); return json({ ok: true });
         }
       }
       // The owner starts it themself: no Run card.

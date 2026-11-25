@@ -1,4 +1,4 @@
-import { formatAllowEntry, type AllowEntry } from "./network-policy";
+import { formatAllowEntry, isWholeInternet, type AllowEntry } from "./network-policy";
 import { houseFeatures, type HouseFeatures } from "./house-features";
 import { block, SCOUTS_TAG, tagFreeJson } from "./tags";
 
@@ -39,6 +39,11 @@ export interface ScoutDefinition {
   agent?: ScoutAgent;
   /** Its own CPU or memory instead of the house's (each left out: the house's). */
   resources?: Partial<ScoutResources>;
+  /**
+   * Bots of its workspace that run it with no Run card and message it with no Pass: the owner's standing trust for
+   * low-stakes errands. Only while it reaches listed hosts alone (`routineFor`); never part of a run's definition.
+   */
+  routine?: string[];
 }
 /** A run has no time limit: like a sideworker, it runs until it finishes or its pet (or the owner) stops it. */
 export interface ScoutResources { cpus: number; memoryMiB: number }
@@ -49,7 +54,7 @@ export interface ScoutLimits { maxScouts?: number; cpus: number; memoryMiB: numb
 export const DEFAULT_SCOUT_LIMITS: ScoutLimits = { cpus: 2, memoryMiB: 2048 };
 export const scoutLimits = (house: { scoutLimits?: Partial<ScoutLimits> }): ScoutLimits => ({ cpus: house.scoutLimits?.cpus ?? DEFAULT_SCOUT_LIMITS.cpus, memoryMiB: house.scoutLimits?.memoryMiB ?? DEFAULT_SCOUT_LIMITS.memoryMiB });
 /** What one run is: a scout's definition with its agent and resources as of the call. */
-export type ScoutRunDefinition = Omit<ScoutDefinition, "agent" | "resources"> & ScoutAgent & { resources: ScoutResources };
+export type ScoutRunDefinition = Omit<ScoutDefinition, "agent" | "resources" | "routine"> & ScoutAgent & { resources: ScoutResources };
 /** The agent and resources a scout runs on: its own where it sets them, else the house's. */
 export function scoutRuntime(house: { scoutAgent?: ScoutAgent; scoutLimits?: Partial<ScoutLimits> }, blueprint?: Pick<ScoutDefinition, "agent" | "resources">): { agent?: ScoutAgent; resources: ScoutResources } {
   const limits = scoutLimits(house);
@@ -74,8 +79,12 @@ export function workspaceHost(workspace: ScoutDefinition["workspace"]): AllowEnt
   catch { return undefined; }
 }
 
-/** What a scout's network is, from its capabilities: open unless one limits it, then only the union of their hosts. */
+/**
+ * What a scout's network is, from its capabilities: open unless one limits it, then only the union of their hosts.
+ * A limit that lists `*` (any public host, on some port or all) is no limit to where data can go: open too.
+ */
 export interface ScoutNetwork {
+  /** It can reach any public host: no capability limits it, or one lists `*`. Everything that weighs its risk asks this. */
   open: boolean;
   allow: AllowEntry[];
   /** The capabilities that limit it (none: open). */
@@ -87,7 +96,16 @@ export function scoutNetwork(scout: Pick<ScoutDefinition, "capabilities" | "work
   const repo = workspaceHost(scout.workspace);
   const allow = [...limiting.flatMap(capability => capability.network.allow), ...(repo ? [repo] : [])];
   const unique = [...new Map(allow.map(entry => [`${entry.host}:${entry.port}`, entry])).values()];
-  return { open: limiting.length === 0, allow: limiting.length === 0 ? (repo ? [repo] : []) : unique, limitedBy: limiting.map(capability => capability.name) };
+  // `allow` stays what the VM's proxy gets (a `*:443` keeps its port); `open` says what that means for its data.
+  return { open: limiting.length === 0 || unique.some(isWholeInternet), allow: limiting.length === 0 ? (repo ? [repo] : []) : unique, limitedBy: limiting.map(capability => capability.name) };
+}
+
+/**
+ * Whether `pet` runs this scout as routine (no Run card, no Pass on its messages): the owner listed it, and the scout
+ * reaches only listed hosts. An open network (a capability edited since) makes every run strict again.
+ */
+export function routineFor(scout: Pick<ScoutDefinition, "name" | "capabilities" | "workspace" | "routine">, capabilities: readonly CapabilityDefinition[], pet: string): boolean {
+  return !!scout.routine?.includes(pet) && !scoutNetwork({ capabilities: blueprintCapabilities(scout, capabilities), workspace: scout.workspace }, capabilities).open;
 }
 
 /**
@@ -132,11 +150,12 @@ export const SCOUT_CATALOG_DESCRIPTION = 300;
  * by and the network it reaches (can it get to the site?); not what it is made of, never its keys. Household sends it
  * at the start of a session, after compaction and when it changes (with the next message), as a block of JSON lines:
  * descriptions are the owner's text, and JSON keeps any tag in them from passing for ours. Empty while scouts are off.
+ * `pet`: whose list it is; a scout routine for that pet says so.
  */
-export function scoutsBlock(house: { features?: Partial<HouseFeatures>; scouts?: readonly Pick<ScoutDefinition, "name" | "title" | "emoji" | "description" | "capabilities" | "workspace">[]; capabilities?: readonly CapabilityDefinition[] }): string {
+export function scoutsBlock(house: { features?: Partial<HouseFeatures>; scouts?: readonly Pick<ScoutDefinition, "name" | "title" | "emoji" | "description" | "capabilities" | "workspace" | "routine">[]; capabilities?: readonly CapabilityDefinition[] }, pet?: string): string {
   if (!houseFeatures(house).scouts) return "";
   const short = (text: string) => { const one = text.replace(/\s+/g, " ").trim(); return one.length > SCOUT_CATALOG_DESCRIPTION ? `${one.slice(0, SCOUT_CATALOG_DESCRIPTION - 1).trimEnd()}…` : one; };
-  const note = "The house's scouts now, from Household: specialists for one task each (skill household-scouts). Call one by name with scout_spawn({scout, task}) when its description and network fit the task; prefer the narrowest that fits. A scout limited to some hosts reaches nothing else unless your human allows more for that run. Every run waits for your human's Run. If none fits, tell your human what scout you need. This replaces any older scouts list; the scouts tool has the same.";
-  const lines = (house.scouts ?? []).map(scout => tagFreeJson({ name: scout.name, title: `${scout.emoji ? `${scout.emoji} ` : ""}${scout.title ?? scout.name}`, description: short(scout.description), network: scoutNetworkWords(scout, house.capabilities ?? []) }));
+  const note = "The house's scouts now, from Household: specialists for one task each (skill household-scouts). Call one by name with scout_spawn({scout, task}) when its description and network fit the task; prefer the narrowest that fits. A scout limited to some hosts reaches nothing else unless your human allows more for that run. Every run waits for your human's Run, except one marked routine: true, which your human set to start for you without asking (pass it no secrets). If none fits, tell your human what scout you need. This replaces any older scouts list; the scouts tool has the same.";
+  const lines = (house.scouts ?? []).map(scout => tagFreeJson({ name: scout.name, title: `${scout.emoji ? `${scout.emoji} ` : ""}${scout.title ?? scout.name}`, description: short(scout.description), network: scoutNetworkWords(scout, house.capabilities ?? []), ...(pet !== undefined && routineFor(scout, house.capabilities ?? [], pet) ? { routine: true } : {}) }));
   return block(SCOUTS_TAG, [tagFreeJson({ note, count: lines.length }), ...lines]) + "\n";
 }

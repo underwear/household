@@ -183,3 +183,17 @@ test("scout runs: the owner starts one, reads it, its VM's logs and screen while
   expect(gone.status).toBe(409); // its VM is deleted
   expect((await gone.json()).error).toContain("has ended");
 });
+
+test("a routine scout whose own capability is its only limit can be deleted", async () => {
+  const f = await fixture(); await f.config.addPet("work", "sibling"); await f.create();
+  await f.call("POST", "scouts/breaker/own");
+  await f.call("PUT", "capabilities/breaker", { name: "breaker", install: "", network: { any: false, allow: ["meter.example.com"] } });
+  expect((await f.call("PATCH", "scouts/breaker", { routine: ["sibling"] }))!.status).toBe(200);
+  await f.capabilities.save("work", { name: "breaker", description: "", install: "v2", network: { any: false, allow: [{ host: "meter.example.com", port: 443 }] }, keys: [], owner: "breaker" });
+  expect(f.capabilities.history("work", "breaker")).toHaveLength(3);
+  expect((await f.call("DELETE", "scouts/breaker"))!.status).toBe(200);
+  const house = (await f.config.load()).houses[0]!;
+  expect(house.scouts ?? []).toEqual([]);
+  expect(house.capabilities ?? []).toEqual([]);
+  expect(f.capabilities.history("work", "breaker")).toEqual([]); // its history goes with it
+});
