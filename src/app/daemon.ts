@@ -590,7 +590,7 @@ export async function startDaemon(deps: DaemonDeps) {
     notify: (house, pet, text) => { delivery.send(house, pet, { origin: "internal", text }); },
     log: text => events.info(text),
   });
-  const scoutSecretRequests = new ScoutSecretRequests(scouts,(c,text)=>chat.notice(c.house,c.pet,text));
+  const scoutSecretRequests = new ScoutSecretRequests(scouts,async(c,text)=>{if(!await chat.liveNotice(c.house,c.pet,text))throw new Error("The scout's thread is not available yet");});
   chat.setSecretRequests({handle:async input=>await scoutSecretRequests.handle(input)||await secretRequests.handle(input)});
   const previewGateway = new PreviewGateway();
   const previews = new Previews({
@@ -863,7 +863,7 @@ export async function startDaemon(deps: DaemonDeps) {
     const initial = await enqueue(async () => {
       const loaded = await config.load();
       const port = loaded.daemon.agentPort ?? DEFAULT_AGENT_PORT;
-      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...connectorWriteTools(connectorWrites, caller => [...googleConnectors.accounts(caller).map(c => ({ provider: "google" as const, id: c.id })), ...microsoftConnectors.accounts(caller).map(c => ({ provider: "microsoft" as const, id: c.id })), ...slackConnectors.accounts(caller).map(c => ({ provider: "slack" as const, id: c.id })), ...mailConnectors.accounts(caller).map(c => ({ provider: "mail" as const, id: c.id })), ...(whatsappConnectors?.accounts(caller) ?? []).map(c => ({ provider: "whatsapp" as const, id: c.id }))]), ...mailConnectorTools(mailConnectors), ...(whatsappConnectors ? whatsappConnectorTools(whatsappConnectors) : []), ...microsoftConnectorTools(microsoftConnectors), ...slackConnectorTools(slackConnectors), ...googleConnectorTools(googleConnectors), ...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.houses.find(item=>item.name===house)?.secrets?.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, { ...volumeRequestTool(volumeRequests), available: c => !scouts.isScout(c) && !sideworkers.worker(c.house, c.pet) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
+      agentApi = serveAgentApi({ port, secret, handle: agentRoutes(delivery, chat, histories, {list:(h,p)=>networkRequests.list(h,p),request:async(h,p,d,r,port,signal)=>{scouts.accessFact(h,p,d,"pending");const result=await networkRequests.request(h,p,d,r,port,signal);scouts.accessFact(h,p,d,result.status);return result;}}, environment, crons, memory, [...connectorWriteTools(connectorWrites, caller => [...googleConnectors.accounts(caller).map(c => ({ provider: "google" as const, id: c.id })), ...microsoftConnectors.accounts(caller).map(c => ({ provider: "microsoft" as const, id: c.id })), ...slackConnectors.accounts(caller).map(c => ({ provider: "slack" as const, id: c.id })), ...mailConnectors.accounts(caller).map(c => ({ provider: "mail" as const, id: c.id })), ...(whatsappConnectors?.accounts(caller) ?? []).map(c => ({ provider: "whatsapp" as const, id: c.id }))]), ...mailConnectorTools(mailConnectors), ...(whatsappConnectors ? whatsappConnectorTools(whatsappConnectors) : []), ...microsoftConnectorTools(microsoftConnectors), ...slackConnectorTools(slackConnectors), ...googleConnectorTools(googleConnectors), ...inboxTools(deps.inboxEvents, houseInboxes, c => !!appliedHousehold?.houses.some(h => h.name === c.house && h.pets.some(p => p.name === c.pet && !p.scout && !p.sideworker))), scoutSecretRequests.tool(c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...capabilityTools(capabilities,(house,secret)=>appliedHousehold?.houses.find(item=>item.name===house)?.secrets?.find(item=>item.name===secret)?.env,c=>!scouts.isScout(c)&&!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))),...scoutTools(scouts,c=>!!appliedHousehold?.houses.some(h=>h.name===c.house&&houseFeatures(h).scouts&&h.pets.some(p=>p.name===c.pet&&!p.scout&&!p.sideworker))), ...previewTools(previews), { ...secretRequestTool(secretRequests), available: c => !scouts.isScout(c) }, { ...volumeRequestTool(volumeRequests), available: c => !scouts.isScout(c) && !sideworkers.worker(c.house, c.pet) }, ...sideworkerTools(sideworkers), ...houseMessageTools(houseMessages), outboxTool(new PetOutboxFiles(homesDirectory(paths)), chat, events, (house,pet)=>{
         // A scout's home is in its run's storage, not among the pets' homes.
         const home=placed.find(p=>p.house===house&&p.pet===pet)?.scout?.homePath;
         return home?{files:new PetOutboxFiles(dirname(home)),volume:basename(home)}:undefined;
@@ -885,7 +885,7 @@ export async function startDaemon(deps: DaemonDeps) {
   } catch (error) {
     await monitoring?.stop();
     await networkRequests.stop();
-    await secretRequests.stop();
+    await secretRequests.stop();scoutSecretRequests.stop();
     await volumeRequests.stop();
     await previews.stop();
     subscriptionKeys.stop();
@@ -956,7 +956,7 @@ export async function startDaemon(deps: DaemonDeps) {
       stopSweeping();
       clearInterval(signinReminders);
       await networkRequests.stop();
-      await secretRequests.stop();
+      await secretRequests.stop();scoutSecretRequests.stop();
       await volumeRequests.stop();
       await previews.stop();
       const closed = control.stop();

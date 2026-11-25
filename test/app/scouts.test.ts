@@ -376,3 +376,45 @@ test("pending scouts and probes reserve the shared pool; chosen sizes override d
  await scouts.spawn(parent,{scout:'helper',task:'Fits now',cpus:2,memoryMiB:1024});
  await scouts.stop();
 });
+
+test('a message from the calling pet reaches its scout only on the owner\'s Pass',async()=>{
+  const {scouts,cards,sent}=fixture();const {id}=await scouts.spawn(parent,{scout:'helper',task:'Test'});await settle();sent.length=0;
+  expect(await scouts.send(parent,id,'use the staging site')).toEqual({status:'waiting_owner'});await settle();
+  // The card is in the calling pet's place (asked as the pet), with the text as written; nothing is delivered yet.
+  expect(cards).toHaveLength(1);expect(cards[0]!.pet).toBe('parent');expect(cards[0]!.text).toContain('wants to tell');expect(cards[0]!.text).toContain('use the staging site');
+  expect(sent).toEqual([]);expect(scouts.status(parent,id).status).toBe('waiting_owner');
+  cards[0]!.resolve('yes');await settle();
+  expect(sent).toHaveLength(1);expect(sent[0]!.pet).toBe(id);expect(sent[0]!.text).toContain('passed by your human');expect(sent[0]!.text).toContain('use the staging site');
+  // Dropped: the scout gets nothing, its pet is told.
+  sent.length=0;await scouts.send(parent,id,'DROPPED TEXT');await settle();cards[1]!.resolve('no');await settle();
+  expect(sent).toHaveLength(1);expect(sent[0]!.pet).toBe('parent');expect(sent[0]!.text).toContain('not passed');expect(sent[0]!.text).not.toContain('DROPPED TEXT');
+  // Unanswered when the run ends: nothing reaches either side about it.
+  sent.length=0;await scouts.send(parent,id,'TOO LATE');await settle();await scouts.cancel(parent,id);await settle();
+  expect(sent.some(s=>s.text.includes('TOO LATE')||s.text.includes('not passed'))).toBe(false);
+  await expect(scouts.send(parent,id,'after')).rejects.toThrow('ended');
+});
+test('no message to a scout before the owner pressed Run',async()=>{
+  const {scouts,cards}=fixture(false);const {id}=await scouts.spawn(parent,{scout:'helper',task:'Test'});await settle();
+  await expect(scouts.send(parent,id,'hi')).rejects.toThrow('not started');expect(cards).toEqual([]);
+});
+test('a secret request escalated to the owner: given on Allow, refused on Deny or silence',async()=>{
+  const given:string[]=[];
+  const {scouts,cards,sent}=fixture(true,{secret:async(_r,key,value)=>{given.push(`${key}=${value}`);}});
+  const {id}=await scouts.spawn(parent,{scout:'helper',task:'Test'});await settle();const self={house:'work',pet:id};
+  await scouts.askSecret(self,'phone');
+  expect(sent.at(-1)!.pet).toBe('parent');expect(sent.at(-1)!.text).toContain('scout_secret_escalate');
+  await expect(async()=>scouts.escalation({house:'work',pet:'other'},id,'phone')).toThrow();
+  await expect(async()=>scouts.escalation(parent,id,'card')).toThrow('No pending request');
+  expect(scouts.escalation(parent,id,'phone').key).toBe('phone');
+  const giving=scouts.ownerSecret(self,'phone','5550100');await settle();cards.at(-1)!.resolve('yes');
+  expect(await giving).toEqual({status:'given'});expect(given).toEqual(['phone=5550100']);
+  expect(scouts.status(parent,id).secret_requests).toEqual([{key:'phone',status:'given'}]);
+  expect(sent.at(-1)!.pet).toBe(id);expect(sent.at(-1)!.text).not.toContain('5550100');
+  await scouts.askSecret(self,'card');const denying=scouts.ownerSecret(self,'card','4242');await settle();cards.at(-1)!.resolve('no');
+  expect(await denying).toEqual({status:'refused'});expect(given).toHaveLength(1);
+  expect(sent.at(-1)).toEqual({pet:id,text:expect.stringContaining('refused by your human')});
+  await scouts.askSecret(self,'otp');scouts.secretUnanswered(self,'otp');
+  expect(scouts.status(parent,id).secret_requests.map(q=>q.status)).toEqual(['given','refused','refused']);
+  expect(sent.at(-1)).toEqual({pet:id,text:expect.stringContaining('not supplied')});
+  await expect(async()=>scouts.escalation(parent,id,'otp')).toThrow('No pending request');
+});

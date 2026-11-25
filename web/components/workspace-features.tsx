@@ -10,7 +10,7 @@ import { written } from "./section";
 /** What each feature does, for the owner (the harnesses get their own words), and its own page, where it has one. */
 const FEATURES: { value: keyof WorkspaceFeatures; label: string; description: string; page: WorkspaceTab; pageLabel: string }[] = [
   { value: "sideworkers", label: "Sideworkers", description: "A bot can start helper harnesses in VMs of their own. Off pauses the running ones.", page: "sideworkers", pageLabel: "Sideworker settings" },
-  { value: "scouts", label: "Scouts", description: "Bots can call specialists with their own access. You review everything they pass back.", page: "scouts", pageLabel: "Scout settings" },
+  { value: "scouts", label: "Scouts", description: "Bots can call specialists with their own access. You review everything that passes between them.", page: "scouts", pageLabel: "Scout settings" },
   { value: "preview", label: "HTTP previews", description: "A bot can show you a web app from its VM by a link, for 15 minutes, once you approve it. Off closes open links.", page: "previews", pageLabel: "Preview settings" },
 ];
 

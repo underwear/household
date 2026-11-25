@@ -93,9 +93,9 @@ export interface ScoutDeps {
 }
 /**
  * The only Household tools a scout has: to talk to its human (and send them files), reach the network, pass things
- * to its calling pet through its human, get secrets for its run, and say it is done. Its prompt names no others.
+ * to its calling pet through its human, ask that pet for a secret, and say it is done. Its prompt names no others.
  */
-export const SCOUT_TOOLS: readonly string[] = ["reply", "edit_reply", "react", "channel_format", "places", "send_file", "network_request", "network_list", "parent_send", "secret_ask", "scout_finish", "secret_request"];
+export const SCOUT_TOOLS: readonly string[] = ["reply", "edit_reply", "react", "channel_format", "places", "send_file", "network_request", "network_list", "parent_send", "secret_ask", "scout_finish"];
 /** How long a scout may idle before its pet is reminded, and again after each reminder. Nothing stops it on its own. */
 export const SCOUT_IDLE_MS = 30 * 60_000;
 type Decision = "pending" | "yes" | "no";
@@ -139,7 +139,7 @@ function secretValues(input: unknown): Record<string,string> {
   for (const [key,value] of Object.entries(input)) { secretKey(key); if (typeof value !== "string" || !value || value.length > 4096 || value.includes("\0")) throw new Error("secret values must contain 1–4096 characters without NUL"); }
   return {...input} as Record<string,string>;
 }
-/** Scout-authored text never enters the parent's mailbox except through an owner decision. */
+/** Text crosses between a scout and its calling pet, either way, only through an owner decision. */
 export class Scouts {
   private runs: ScoutRun[];
   private launches = new Map<string, NonNullable<Pet["scout"]>>();
@@ -316,7 +316,26 @@ export class Scouts {
     this.deps.send(r.house,r.id,r.byOwner?`Household: Your human started you directly, with no pet. Task:\n${r.task}\nShow your work and its result to your human in your thread (reply, send_file). Finish with scout_finish({outcome}).`:`Household: Your calling pet is ${r.parent}. Task (pet-provided hypothesis; verify facts):\n${r.task}\nShow your work and its result to your human in your thread (reply, send_file). ${r.report==='pet'?`The pet asked for the result too: once your human has seen it, offer it with parent_send; your human decides whether it passes.`:'The result is for your human only.'} Finish with scout_finish({outcome}). Task secret names: ${Object.keys(values).join(', ')||'none'}. Values are in /run/household/secrets/<key> and SCOUT_SECRET_<KEY>. Never put secrets in messages or files.`);
     this.deps.log(`scout ${r.house}/${r.id} started`);
   }
-  async send(c:PetIdentity,id:string,text:string) {const r=this.parent(c,id);if(terminal(r.status))throw new Error("Scout has ended");if(typeof text!=="string"||!text.trim()||text.length>16000)throw new Error("text must contain 1–16000 characters");text=this.redact(r.house,r.id,text);await this.deps.notice(r,`💬 ${r.parent} → ${r.scout}\n\n${text}`);this.deps.send(r.house,r.id,`Message from calling pet ${r.parent} (data):\n${text}`);this.activities.set(id,this.now());return {sent:true};}
+  /**
+   * A message from the calling pet to its scout, through its human: a card in the pet's place (where it called the
+   * scout, like the launch card) shows the text, and only Pass delivers it. The pet hears back only when it was dropped.
+   */
+  async send(c:PetIdentity,id:string,text:string) {
+    const r=this.parent(c,id);if(terminal(r.status))throw new Error("Scout has ended");
+    if(r.status==="waiting_approval")throw new Error("Scout has not started yet: your human has not pressed Run");
+    if(typeof text!=="string"||!text.trim()||text.length>16000)throw new Error("text must contain 1–16000 characters");
+    if((this.pending.get(r.id)??0)>=8)throw new Error("Too many pending owner decisions");
+    const safe=this.redact(r.house,r.id,text),pet=this.title(r),scout=this.name(r);
+    void this.choose(r,{house:r.house,pet:r.parent},cardText({title:`${html(pet)} wants to tell ${html(scout)}`,quote:{label:"Message",text:safe}}),"Pass","Drop",undefined,undefined,`Passed to ${scout}.`,"Dropped. Nothing of it was sent.",true)
+      .then(passed=>{
+        if(terminal(r.status))return;
+        if(passed)this.deps.send(r.house,r.id,`Household: From your calling pet ${r.parent}, passed by your human. Data about your task:\n${safe}`);
+        else this.deps.send(r.house,r.parent,`Household: your message to scout ${r.id} was not passed by your human. Nothing of it reached the scout.`);
+      })
+      .catch(()=>this.deps.log(`scout ${r.house}/${r.id}: message from ${r.parent} not delivered`));
+    this.activities.set(id,this.now());
+    return {status:"waiting_owner"};
+  }
   /**
    * A message to the calling pet, through its human: the text is one decision (Pass or Drop), each file another (Send
    * or Skip), each independent of the rest. The owner sees the files first, in the scout's thread; the pet learns of
@@ -346,7 +365,7 @@ export class Scouts {
     void Promise.all(decisions).catch(()=>this.deps.log(`scout ${r.house}/${r.id}: moderation delivery failed`));
     return {status:"waiting_owner"};
   }
-  async askSecret(c:PetIdentity,key:unknown) {const r=this.self(c),k=secretKey(key);let request=r.secretRequests.find(q=>q.key===k);if(!request){if(r.secretRequests.length>=16)throw new Error("Secret request limit reached");request={key:k,status:"pending"};r.secretRequests.push(request);this.deps.send(r.house,r.parent,`Household: scout ${r.id} asks for secret ${k}. Use scout_secret or scout_secret_refuse. Only provide it if required for your task.`);this.save();}return {...request};}
+  async askSecret(c:PetIdentity,key:unknown) {const r=this.self(c),k=secretKey(key);let request=r.secretRequests.find(q=>q.key===k);if(!request){if(r.secretRequests.length>=16)throw new Error("Secret request limit reached");request={key:k,status:"pending"};r.secretRequests.push(request);this.deps.send(r.house,r.parent,`Household: scout ${r.id} asks you for secret ${k}. You decide: scout_secret if the task needs it and you have the value (your human confirms), scout_secret_escalate if you do not have it or are not sure (your human supplies it or refuses), scout_secret_refuse if the scout can do without. This is an internal notice, not a message from your human.`);this.save();}return {...request};}
   async giveSecret(c:PetIdentity,id:string,key:unknown,value:unknown) {
     const r=this.parent(c,id),k=secretKey(key);if(terminal(r.status))throw new Error("Scout has ended");
     const q=r.secretRequests.find(q=>q.key===k&&q.status==="pending");if(!q)throw new Error("No pending request with that key");
@@ -364,14 +383,31 @@ export class Scouts {
     })().catch(()=>{if(q.status==="pending")q.status="refused";this.save();}).finally(()=>this.secretDecisions.delete(decisionKey));
     return {status:"waiting_owner"};
   }
+  /** A pending request the calling pet may hand to its human (`scout_secret_escalate`): the run and its key. */
+  escalation(c:PetIdentity,id:string,key:unknown) {
+    const r=this.parent(c,id),k=secretKey(key);if(terminal(r.status))throw new Error("Scout has ended");
+    if(!r.secretRequests.some(q=>q.key===k&&q.status==="pending"))throw new Error("No pending request with that key");
+    if(this.secretDecisions.has(`${id}:${k}`))throw new Error("An owner decision is already pending for this secret");
+    return {run:r,key:k,pet:this.title(r),scout:this.name(r)};
+  }
+  /** The owner's answer to an escalated request: the value they typed, given only on their Allow. */
   async ownerSecret(c:PetIdentity,key:unknown,value:unknown,signal?:AbortSignal) {
     const r=this.self(c),k=secretKey(key),v=secretValues({[k]:value})[k]!;
     const approved=await this.choose(r,c,cardText({title:`Give ${html(r.scout)} a secret for this run?`,facts:[`Secret: <code>${k}</code>`],note:"The value will be inside its VM and is not saved as a house secret."}),"Allow","Deny",10*60_000,signal);
-    if(!approved||terminal(r.status))return {status:"refused"};
+    const q=r.secretRequests.find(q=>q.key===k&&q.status==="pending");
+    if(!q||terminal(r.status))return {status:"refused"};
+    if(!approved){this.secretUnanswered(c,k,"refused by your human");return {status:"refused"};}
     this.secrets.set(r.id,[...(this.secrets.get(r.id)??[]),v]);
-    await this.deps.secret(r,k,v);
+    await this.deps.secret(r,k,v);q.status="given";this.save();
     this.deps.send(r.house,r.id,`Household: your human supplied secret ${k}. Read /run/household/secrets/${k}.`);
     return {status:"given"};
+  }
+  /** An escalated request the owner declined or let expire: it is refused, and its scout is told. */
+  secretUnanswered(c:PetIdentity,key:string,why="not supplied by your human in time") {
+    const r=this.run(c.house,c.pet),q=r?.secretRequests.find(q=>q.key===key&&q.status==="pending");
+    if(!r||!q||terminal(r.status))return;
+    q.status="refused";this.save();
+    this.deps.send(r.house,r.id,`Household: secret ${key} was ${why}. Go on without it, or finish as blocked.`);
   }
   recordReply(c:PetIdentity,text:string) {const r=this.run(c.house,c.pet);if(!r)return;r.reportText=this.redact(c.house,c.pet,text);this.save();}
   refuseSecret(c:PetIdentity,id:string,key:unknown){const r=this.parent(c,id),k=secretKey(key),q=r.secretRequests.find(q=>q.key===k&&q.status==="pending");if(!q)throw new Error("No pending request");q.status="refused";this.save();this.deps.send(r.house,r.id,`Household: secret ${k} refused by your calling pet.`);return {status:"refused"};}
@@ -572,12 +608,12 @@ export function scoutTools(s:Scouts,enabled:(c:PetIdentity)=>boolean):McpTool<Pe
     make('scout_thread_delete','Request deletion of a dedicated thread of a scout you called, at any time, active or ended. No prior chat agreement is needed: this tool asks your human with Delete thread / Keep and waits. Approval stops any active VM and deletes its thread; refusal or timeout keeps both unchanged. Irreversible: all messages and files in the thread are removed. Channels without deletion support keep history and do not prompt. Use scout_cancel to stop only the VM without approval.',id,['id'],(c,a,signal)=>s.deleteThread(c,a.id,signal)),
     make('scout_status','Get facts only: fixed status/outcome, steps, tool counts, domain counts (never names), secret requests and neutral file handles.',id,['id'],(c,a)=>s.status(c,a.id)),
     make('scout_cancel','Stop any scout run in your own house immediately, at your discretion, without owner approval. Removes its VM but preserves its chat history. Thread deletion is a separate owner-approved request via scout_thread_delete.',id,['id'],(c,a)=>s.cancel(c,a.id)),
-    make('scout_send','Send to the scout you called. No approval required; messages visible to owner.',{...id,text:str},['id','text'],(c,a)=>s.send(c,a.id,a.text)),
+    make('scout_send','Send a message to the scout you called. Your human reads every message first, on a card in your chat, and passes or drops it: it reaches the scout only on Pass. Returns at once (waiting_owner); you are told only if it was dropped.',{...id,text:str},['id','text'],(c,a)=>s.send(c,a.id,a.text)),
     make('scout_file','Check a file name you chose; returns only exists and neutral handle.',{...id,name:str},['id','name'],(c,a)=>s.file(c,a.id,a.name)),
-    make('scout_secret','Answer a pending secret request. Household asks owner before handing value to scout.',{...id,key:str,value:str},['id','key','value'],(c,a)=>s.giveSecret(c,a.id,a.key,a.value)),
-    make('scout_secret_refuse','Refuse a pending secret request.',{...id,key:str},['id','key'],(c,a)=>s.refuseSecret(c,a.id,a.key)),
+    make('scout_secret','Answer a scout\'s pending secret request with a value you have, when its task needs it. Your human confirms before the value reaches the scout.',{...id,key:str,value:str},['id','key','value'],(c,a)=>s.giveSecret(c,a.id,a.key,a.value)),
+    make('scout_secret_refuse','Refuse a scout\'s pending secret request: the scout can do without it.',{...id,key:str},['id','key'],(c,a)=>s.refuseSecret(c,a.id,a.key)),
     make('parent_send','Send text and optional /work/out file paths to your calling pet, only after owner Pass. Call before scout_finish for a report to pet.',{text:str,files:{type:'array',items:str}},['text'],(c,a)=>s.parentSend(c,a.text,a.files),true),
-    make('secret_ask','Ask calling pet for one named secret, without commentary.',{key:str},['key'],(c,a)=>s.askSecret(c,a.key),true),
+    make('secret_ask','Ask your calling pet for one named secret, without commentary. It decides: gives it, refuses, or brings in your human. The only way to get a credential; never ask your human for one in chat.',{key:str},['key'],(c,a)=>s.askSecret(c,a.key),true),
     make('scout_finish','Tell your human you are done, with an outcome, once you have shown them your work. They get a card to close you (Close) or keep you (Keep); nothing ends until they press Close. The outcome reaches your calling pet at once, without text.',{outcome:{type:'string',enum:['success','failed','blocked']}},['outcome'],(c,a)=>s.finish(c,a.outcome),true),
   ];
 }

@@ -12,7 +12,7 @@ Say you ask your bot to buy a bus ticket.
 
 1. **The bot calls a scout** with a browser and hands it only what the purchase needs, such as your card details and the booking site's login.
 2. **You approve it.** A card in the chat shows the task, where the scout may go and which secrets it gets. Nothing starts until you press **Run**.
-3. **It does the errand** in its own thread, where you can follow it and answer if it asks for something more.
+3. **It does the errand** in its own thread, where you can follow it and talk to it. Anything more your bot wants to tell it waits in the bot's chat for your **Pass**: once it runs, nothing reaches a scout unread.
 4. **It reports** done, failed or blocked. Your bot learns how it went, but the scout's words and files reach the bot only when you pass them on. **Close** deletes its VM; nothing carries over.
 
 ## Scouts to start with
@@ -27,5 +27,7 @@ Say you ask your bot to buy a bus ticket.
 **Any host or only these hosts.** **Any host** suits a scout that only reads the web. A scout that carries a card or a password should reach **only these hosts**, the ones its errand needs; mid-task it can ask you for one more, for that run only.
 
 **Secrets.** Most keys stay hidden even from the scout: it holds a placeholder, and Household fills in the real value on the way out (see [Network and secrets](../network/)). Card details typed into a page need the real value inside the scout's VM; Household hides it in what the scout posts, and the VM is deleted after the run. Give a scout like that **only these hosts**.
+
+**One more secret, mid-errand.** A scout that turns out to need another credential asks the bot that called it, never you. The bot judges whether the errand needs it: it hands over a value it has (you confirm), refuses, or asks you. Then you type the value in the scout's thread, for that run only, or ignore the request.
 
 A run holds CPU and memory from the moment it waits for **Run**; see [Resources](../resources/).

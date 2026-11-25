@@ -182,7 +182,7 @@
 <ol>
 <li><strong>The bot calls a scout</strong> with a browser and hands it only what the purchase needs, such as your card details and the booking site's login.</li>
 <li><strong>You approve it.</strong> A card in the chat shows the task, where the scout may go and which secrets it gets. Nothing starts until you press <strong>Run</strong>.</li>
-<li><strong>It does the errand</strong> in its own thread, where you can follow it and answer if it asks for something more.</li>
+<li><strong>It does the errand</strong> in its own thread, where you can follow it and talk to it. Anything more your bot wants to tell it waits in the bot's chat for your <strong>Pass</strong>: once it runs, nothing reaches a scout unread.</li>
 <li><strong>It reports</strong> done, failed or blocked. Your bot learns how it went, but the scout's words and files reach the bot only when you pass them on. <strong>Close</strong> deletes its VM; nothing carries over.</li>
 </ol>
 <h2 id="scouts-to-start-with">Scouts to start with</h2>
@@ -194,6 +194,7 @@
 <p><strong>Capabilities.</strong> A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you; nothing changes until you apply it.</p>
 <p><strong>Any host or only these hosts.</strong> <strong>Any host</strong> suits a scout that only reads the web. A scout that carries a card or a password should reach <strong>only these hosts</strong>, the ones its errand needs; mid-task it can ask you for one more, for that run only.</p>
 <p><strong>Secrets.</strong> Most keys stay hidden even from the scout: it holds a placeholder, and Household fills in the real value on the way out (see <a href="../network/">Network and secrets</a>). Card details typed into a page need the real value inside the scout's VM; Household hides it in what the scout posts, and the VM is deleted after the run. Give a scout like that <strong>only these hosts</strong>.</p>
+<p><strong>One more secret, mid-errand.</strong> A scout that turns out to need another credential asks the bot that called it, never you. The bot judges whether the errand needs it: it hands over a value it has (you confirm), refuses, or asks you. Then you type the value in the scout's thread, for that run only, or ignore the request.</p>
 <p>A run holds CPU and memory from the moment it waits for <strong>Run</strong>; see <a href="../resources/">Resources</a>.</p>
 </article>
 
