@@ -123,6 +123,67 @@ test("routine bots: --routine sets them, \"\" clears them; show, ls, runs and st
   expect(said.some((line) => line.includes("called by sibling, routine: no Run card, its messages without Pass"))).toBe(true);
 });
 
+test("scout drafts: listed, shown against the scout as it is (keys, staleness, before and after), applied only as the owner says, discarded", async () => {
+  const draft = {
+    id: "d1", scout: "meter", pet: "sibling", petTitle: "Sibling", at: Date.parse("2026-11-25T10:00:00Z"), reason: "Monthly errand on one site", change: true, wantsRoutine: true,
+    stale: true, changedSince: ["capabilities"],
+    definition: { name: "meter", title: "Meter reader", emoji: "📟", description: "Submits the reading", instructions: "Log in, submit.", capabilities: ["datadog"] },
+    own: { install: "curl -d \"$METER_PASSWORD\" https://meter.example.com", network: { any: false, allow: ["meter.example.com"] } },
+    currentOwn: { install: "apt-get install -y curl", network: { any: false, allow: ["meter.example.com"] } },
+    current: { title: "Meter", description: "Submits the reading", instructions: "Log in.", capabilities: [], routine: ["sibling"] },
+    keys: [{ env: "METER_PASSWORD", secret: "meter-pass", source: "own setup", via: "vm", keptWith: ["install"] }, { env: "DD_API_KEY", secret: "dd", source: "datadog", via: "gateway" }],
+    ownChanges: ["install"],
+    keyGate: { keys: [{ env: "METER_PASSWORD", secret: "meter-pass", source: "own setup" }], reasons: ["it would reach new hosts: api.datadoghq.eu", "its own install script changes"], choices: ["keep", "drop"] },
+    needsKeys: ["METER_USER"], network: { open: false, allow: ["meter.example.com", "api.datadoghq.eu"] }, currentNetwork: { open: false, allow: ["meter.example.com"] }, routineBlocker: null, problems: [],
+  };
+  const { paths, calls, said } = await daemon({
+    "GET /api/houses/work/scout-drafts": { body: [draft] },
+    "GET /api/houses/work/scout-drafts/d1": { body: draft },
+    "POST /api/houses/work/scout-drafts/d1/apply": () => {
+      const sent = calls.at(-1)!.body as { routine?: string[]; keys?: string } | undefined;
+      const keys = sent?.keys === "drop" ? { choice: "drop", kept: ["DD_API_KEY"], dropped: ["METER_PASSWORD"], sharedStay: ["DD_API_KEY (datadog, value in its VM)"] } : { choice: sent?.keys ?? null, kept: ["METER_PASSWORD", "DD_API_KEY"], dropped: [] };
+      return { body: { scout: "meter", routine: sent?.routine ?? [], keys } };
+    },
+    "GET /api/houses/work/scouts": { body: { scouts: [], runs: [], limits: { cpus: 2, memoryMiB: 2048 }, agent: null, drafts: [{ id: "d1" }] } },
+  });
+  await runScouts(paths, "scout", ["drafts", "work"], {});
+  expect(said.at(-1)).toBe("d1  meter (change)  by sibling  2026-11-25 10:00  network: only meter.example.com, api.datadoghq.eu  needs keys: METER_USER  asks for routine");
+  said.length = 0;
+  await runScouts(paths, "scout", ["draft", "show", "work", "d1"], {});
+  expect(said).toContain("draft d1: a change to scout meter, by sibling, 2026-11-25 10:00");
+  expect(said).toContain("why          Monthly errand on one site");
+  expect(said).toContain("stale        changed since it was drafted: capabilities (applying it undoes that: apply --force)");
+  expect(said).toContain("title        📟 Meter reader  (now Meter)");
+  expect(said).toContain("description  Submits the reading"); // unchanged: once
+  expect(said).toContain("capabilities - own setup\n             + datadog, own setup");
+  expect(said).toContain("network      - only meter.example.com\n             + only meter.example.com, api.datadoghq.eu");
+  expect(said).toContain("keys         METER_PASSWORD (own setup, value in its VM; kept, with a changed install)\n             DD_API_KEY (datadog, gateway placeholder)");
+  expect(said).toContain("at stake     METER_PASSWORD: it would reach new hosts: api.datadoghq.eu; its own install script changes\n             apply needs --keep-keys or --drop-keys (drop takes its own setup's off)");
+  expect(said).toContain("routine      asked: give it with apply --routine  (now routine for sibling; applying without --routine ends that)");
+  expect(said).toContain("# instructions (changed)\n- Log in.\n+ Log in, submit.");
+  expect(said).toContain("# own install script (changed)\n- apt-get install -y curl\n+ curl -d \"$METER_PASSWORD\" https://meter.example.com");
+  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], {});
+  expect(calls.at(-1)).toEqual({ method: "POST", path: "/api/houses/work/scout-drafts/d1/apply" }); // no body: strict, no choices made
+  expect(said.slice(-2)).toEqual(["draft d1 applied: scout 'meter' asks before every run", "keys         carries METER_PASSWORD, DD_API_KEY"]);
+  said.length = 0;
+  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { routine: "sibling", "drop-keys": true, force: true });
+  expect(calls.at(-1)).toEqual({ method: "POST", path: "/api/houses/work/scout-drafts/d1/apply", body: { routine: ["sibling"], keys: "drop", force: true } });
+  expect(said).toEqual([
+    "applying over what changed since it was drafted: capabilities",
+    "draft d1 applied: scout 'meter' runs without asking for sibling",
+    "keys         carries DD_API_KEY; taken off its own setup: METER_PASSWORD (the workspace's secrets stay)",
+    "             still carried, from shared capabilities: DD_API_KEY (datadog, value in its VM)",
+  ]);
+  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { "keep-keys": true });
+  expect(calls.at(-1)!.body).toEqual({ keys: "keep" });
+  await expect(runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { "keep-keys": true, "drop-keys": true })).rejects.toThrow("--keep-keys or --drop-keys, not both");
+  await runScouts(paths, "scout", ["draft", "discard", "work", "d1"], {});
+  expect(calls.at(-1)).toEqual({ method: "DELETE", path: "/api/houses/work/scout-drafts/d1" });
+  await runScouts(paths, "scout", ["ls", "work"], {});
+  expect(said).toContain("\n1 draft(s) from bots wait for review: house scout drafts work");
+  await expect(runScouts(paths, "scout", ["draft", "approve", "work", "d1"], {})).rejects.toThrow("usage:");
+});
+
 test("scout run --wait: the owner's run, followed until it says it is done; exit 1 unless it succeeded", async () => {
   let reads = 0;
   const { paths, calls, said } = await daemon({

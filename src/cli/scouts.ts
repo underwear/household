@@ -45,6 +45,16 @@ export const SCOUT_USAGE = `  house scout ls <workspace>         its scouts (cap
                                  routine: bots that run it without asking (no Run card, their messages without Pass);
                                  only for a scout on exact hosts; what it sends back still waits for your Pass
   house scout rm <workspace> <name>
+  house scout drafts <workspace>     scouts bots proposed (scout_draft), waiting for your review
+  house scout draft show|apply|discard <workspace> <id> [--routine bot1,bot2] [--keep-keys|--drop-keys] [--force]
+                                 show: what it would be against what it is, its network, every key it would carry;
+                                 apply: the scout and its own setup as drafted, run without asking only by the bots of
+                                 --routine (none given: every run asks, even if it did not before); a change that puts
+                                 keys in its VM at stake (new hosts, a changed install, a capability bringing one)
+                                 needs --keep-keys, or --drop-keys to take its own setup's off (the secrets stay); one
+                                 whose scout changed since it was drafted needs --force;
+                                 add missing keys after: house capability key add <workspace> <scout> …;
+                                 discard: its bot is told
   house scout own <workspace> <name> give it a setup of its own (a capability named after it): edit it with house capability set
   house scout instructions <workspace> <name>  /  house scout instructions set <workspace> <name> [<file>]
   house scout settings <workspace> [--cpus <n>] [--memory <GiB>] [--harness <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]]
@@ -70,6 +80,9 @@ export interface ScoutValues {
   network?: string;
   capabilities?: string;
   routine?: string;
+  "keep-keys"?: boolean;
+  "drop-keys"?: boolean;
+  force?: boolean;
   instructions?: string;
   repo?: string;
   branch?: string;
@@ -104,6 +117,15 @@ interface CapabilityView {
 interface RevisionView { rev: number; at: number; author: unknown; summary: string; from?: { capability: string; rev: number } }
 interface DraftView { id: string; capability: string; pet: string; at: number; definition: { description: string; install: string; network: { any: boolean; allow: string[] } }; needsKeys: string[] }
 interface ScoutAgent { agent: string; key: string; model?: string; reasoningEffort?: string; mode?: string }
+interface ScoutDraftView {
+  id: string; scout: string; pet: string; petTitle: string; at: number; reason: string; change: boolean; wantsRoutine: boolean; stale: boolean; changedSince: string[];
+  definition: { name: string; title?: string; emoji?: string; description: string; instructions: string; capabilities: string[]; routine?: string[] };
+  own: { install: string; network: { any: boolean; allow: string[] } } | null; currentOwn: { install: string; network: { any: boolean; allow: string[] } } | null;
+  current: { title?: string; description: string; instructions: string; capabilities: string[]; routine?: string[] } | null;
+  keys: { env: string | null; secret: string; source: string; via: "gateway" | "vm"; keptWith?: string[] }[]; ownChanges: string[];
+  keyGate: { keys: { env: string | null; secret: string; source: string }[]; reasons: string[]; choices: ("keep" | "drop")[] } | null;
+  needsKeys: string[]; network: { open: boolean; allow: string[] }; currentNetwork: { open: boolean; allow: string[] } | null; routineBlocker: string | null; problems: string[];
+}
 interface ScoutView {
   name: string; title?: string; emoji?: string; description: string; instructions: string; capabilities: string[];
   workspace?: { repo: string; branch?: string }; agent?: ScoutAgent; resources?: { cpus?: number; memoryMiB?: number };
@@ -389,13 +411,14 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
   const say = (text: string) => console.log(text);
 
   if (verb === "ls" && !name) {
-    const view = await api<{ scouts: ScoutView[]; runs: RunView[]; limits: Limits; agent: ScoutAgent | null }>(paths, "GET", `${house(h)}/scouts`);
+    const view = await api<{ scouts: ScoutView[]; runs: RunView[]; limits: Limits; agent: ScoutAgent | null; drafts?: { id: string }[] }>(paths, "GET", `${house(h)}/scouts`);
     return out(values, view, () => {
       if (view.scouts.length === 0) say("no scouts (turn them on: house features <workspace> scouts=on)");
       for (const s of view.scouts) {
         say(`${s.name}${s.title ? `  "${s.emoji ?? "🧭"} ${s.title}"` : ""}  capabilities: ${s.capabilities.join(", ") || "-"}${s.own ? " + own setup" : ""}  network: ${networkWords(s.network)}${s.routine?.length ? `  routine for: ${s.routine.join(", ")}` : ""}${s.problems.length ? `  ! ${s.problems.join("; ")}` : ""}`);
         say(`  ${firstLine(s.description, 110)}`);
       }
+      if (view.drafts?.length) say(`\n${view.drafts.length} draft(s) from bots wait for review: house scout drafts ${h}`);
       say(`\nsettings: shared workspace budget; default ${view.limits.cpus} vCPU, ${gib(view.limits.memoryMiB)} each; harness: ${agentWords(view.agent)}`);
       const live = view.runs.filter((r) => !ENDED.includes(r.status));
       if (live.length) say(`running: ${live.map((r) => `${r.id} (${runName(r)}, ${r.status})`).join(", ")}`);
@@ -430,6 +453,76 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       if (runs.length === 0) say("no runs");
       for (const r of runs) say(`${r.id}  ${runName(r).padEnd(14)} ${r.status.padEnd(16)} ${(r.outcome ?? "").padEnd(8)} ${time(r.startedAt)}  ${caller(r)}  ${firstLine(r.task, 60)}`);
     });
+  }
+  if (verb === "drafts" && !name) {
+    const drafts = await api<ScoutDraftView[]>(paths, "GET", `${house(h)}/scout-drafts`);
+    return out(values, drafts, () => {
+      if (drafts.length === 0) say("no drafts");
+      for (const d of drafts) say(`${d.id}  ${d.scout}${d.change ? " (change)" : " (new)"}  by ${d.pet}  ${time(new Date(d.at).toISOString())}  network: ${networkWords(d.network)}${d.needsKeys.length ? `  needs keys: ${d.needsKeys.join(", ")}` : ""}${d.wantsRoutine ? "  asks for routine" : ""}`);
+    });
+  }
+  // house scout draft show|apply|discard <house> <id>: reads as verb "draft", h the action.
+  if (verb === "draft" && name && rest.length === 1) {
+    const [action, houseName, id] = [h, name, rest[0]!];
+    const path = `${house(houseName)}/scout-drafts/${enc(id)}`;
+    if (action === "show") {
+      const d = await api<ScoutDraftView>(paths, "GET", path);
+      return out(values, d, () => {
+        const scout = d.definition, was = d.current;
+        // A change shows what it changes: the old value under the new one ("-" then "+"), whole for a script.
+        const field = (label: string, before: string | undefined, after: string) => {
+          if (before === undefined || before === after) say(`${label.padEnd(12)} ${after}`);
+          else say(`${label.padEnd(12)} - ${before}\n${"".padEnd(12)} + ${after}`);
+        };
+        const block = (label: string, before: string | undefined, after: string) => {
+          if (before === undefined) return say(`# ${label}\n${after || "(none)"}`);
+          if (before === after) return say(`# ${label} (unchanged)\n${after || "(none)"}`);
+          const marked = (sign: string, text: string) => (text ? text.replace(/\n$/, "").split("\n") : ["(none)"]).map((line) => `${sign} ${line}`);
+          say(`# ${label} (changed)\n${[...marked("-", before), ...marked("+", after)].join("\n")}`);
+        };
+        say(`draft ${d.id}: ${d.change ? "a change to" : "new"} scout ${scout.name}, by ${d.pet}, ${time(new Date(d.at).toISOString())}`);
+        say(`why          ${d.reason}`);
+        if (d.stale) say(`stale        changed since it was drafted: ${d.changedSince.join(", ")} (applying it undoes that: apply --force)`);
+        say(`title        ${scout.emoji ? `${scout.emoji} ` : ""}${scout.title ?? "-"}${was && was.title !== scout.title ? `  (now ${was.title ?? "-"})` : ""}`);
+        field("description", was?.description, scout.description);
+        const ticked = (names: string[], own: boolean) => [...names, ...(own ? ["own setup"] : [])].join(", ") || "-";
+        field("capabilities", was ? ticked(was.capabilities, !!d.currentOwn) : undefined, ticked(scout.capabilities, !!(d.own || d.currentOwn)));
+        field("network", d.currentNetwork ? networkWords(d.currentNetwork) : undefined, networkWords(d.network));
+        say(`keys         ${d.keys.map((key) => `${key.env ?? key.secret} (${key.source}, ${key.via === "vm" ? "value in its VM" : "gateway placeholder"}${key.keptWith?.length ? `; kept, with a changed ${key.keptWith.join(" and ")}` : ""})`).join("\n             ") || "none"}`);
+        const gate = d.keyGate;
+        if (gate) say(`at stake     ${gate.keys.map((key) => key.env ?? key.secret).join(", ")}: ${gate.reasons.join("; ")}\n             apply needs ${gate.choices.includes("drop") ? "--keep-keys or --drop-keys (drop takes its own setup's off)" : "--keep-keys (a shared capability's key: to leave it out, untick that capability instead)"}`);
+        if (d.needsKeys.length) say(`needs keys   ${d.needsKeys.join(", ")}`);
+        say(`routine      ${d.wantsRoutine ? `asked${d.routineBlocker ? `, not possible: ${d.routineBlocker}` : ": give it with apply --routine"}` : "not asked"}${was?.routine?.length ? `  (now routine for ${was.routine.join(", ")}; applying without --routine ends that)` : ""}`);
+        if (d.problems.length) say(`problems     ${d.problems.join("; ")}`);
+        block("instructions", was?.instructions, scout.instructions);
+        if (d.own) {
+          field("own network", d.currentOwn ? networkWords(d.currentOwn.network) : undefined, networkWords(d.own.network));
+          block("own install script", d.currentOwn?.install, d.own.install);
+        } else if (d.currentOwn) say("own setup    unchanged");
+      });
+    }
+    if (action === "apply") {
+      const routine = list(values.routine);
+      if (values["keep-keys"] && values["drop-keys"]) usage(SCOUT_USAGE, "--keep-keys or --drop-keys, not both");
+      const keys = values["keep-keys"] ? "keep" : values["drop-keys"] ? "drop" : undefined;
+      // Over changes made since it was drafted: say which, before they are undone.
+      if (values.force && !values.json) {
+        const d = await api<ScoutDraftView>(paths, "GET", path);
+        if (d.stale) say(`applying over what changed since it was drafted: ${d.changedSince.join(", ")}`);
+      }
+      const body = { ...(routine?.length ? { routine } : {}), ...(keys ? { keys } : {}), ...(values.force ? { force: true } : {}) };
+      const result = await api<{ scout: string; routine: string[]; keys: { choice: string | null; kept: string[]; dropped: string[]; sharedStay?: string[] } }>(paths, "POST", `${path}/apply`, Object.keys(body).length ? body : undefined);
+      return out(values, result, () => {
+        say(`draft ${id} applied: scout '${result.scout}' ${result.routine.length ? `runs without asking for ${result.routine.join(", ")}` : "asks before every run"}`);
+        const { kept, dropped, sharedStay } = result.keys;
+        say(`keys         ${kept.length ? `carries ${kept.join(", ")}` : "none"}${dropped.length ? `; taken off its own setup: ${dropped.join(", ")} (the workspace's secrets stay)` : ""}`);
+        if (sharedStay?.length) say(`             still carried, from shared capabilities: ${sharedStay.join(", ")}`);
+      });
+    }
+    if (action === "discard") {
+      await api(paths, "DELETE", path);
+      return out(values, { ok: true }, () => say(`draft ${id} discarded; its bot is told`));
+    }
   }
   // house instructions set <house> <name> [<file>]: reads as verb "instructions", h "set".
   if (verb === "instructions" && h === "set" && name && rest.length <= 2) {

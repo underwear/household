@@ -35,7 +35,7 @@ disabled, ask your human to enable them.
    and when they change): name, title, description and network (open internet, or only its hosts). `scouts` gives
    the same, with shared capabilities. Choose by description and network;
    prefer the narrowest one that fits (a scout with prod access over General for a prod incident). When none fits,
-   tell your human what scout you need, or draft a capability for it (`household-capabilities`). Every run waits for
+   draft one (Drafting a scout, below). Every run waits for
    your human's Run (except a routine one, item 7): they read your task, the scout's capabilities and the names of
    the secrets you pass.
 2. `scout_spawn({scout, task, secrets?, report?})`. Write the task in 5–10 lines (at most 1000 characters) with what
@@ -87,5 +87,32 @@ disabled, ask your human to enable them.
 
 Never ask your human to forward a scout's keys, try to get its credentials, or give it more personal data than the
 task needs.
+
+## Drafting a scout
+
+When no scout fits a task that will come back ("submit my meter reading every month") or that needs access you should
+not hold yourself, propose one with `scout_draft`. Your human reviews it, adds its keys and applies it; nothing exists
+until then. Household tells them in your chat, and tells you when they apply or decline it. The same name as an
+existing scout proposes a change to it, written whole.
+
+- **What goes in it.** `name`, `title`, `emoji`; `description`: when a bot should call it (you and the other bots choose
+  by it); `instructions`: how it does the task, step by step, and what it must not do; `capabilities`: shared ones from
+  `capabilities` (a browser, a downloader); `setup`: what only it needs, as in `capability_draft` (`install`, `network`,
+  `needs_keys`, see `household-capabilities`); `reason`: one or two lines for your human, why this scout and this
+  access, and the worst it could do.
+- **The least access.** Exact hosts in `setup.network` (`meter.example.com`, not `*.example.com`, not the open
+  internet) whenever the task allows, plus the hosts its install downloads from; the fewest keys. A scout reaches the
+  hosts of the capabilities that list hosts, together; one that lists none (`any: true`) adds no limit and opens
+  nothing. It is open only when none of them lists hosts, or one lists `*`.
+- **Routine.** Ask for it (`routine: true`) only for a low-stakes errand on exact hosts, one you will run often, and
+  say in `reason` what the worst outcome is. It is a request: only your human makes a scout routine, for whom they
+  choose. A scout that reaches the open internet or a wildcard host cannot be routine.
+- **Never a secret.** `needs_keys` are variable names (`METER_PASSWORD`); your human enters the values. Never put a
+  key, token, password or personal data in a draft, not even in its instructions. A key whose value is in a scout's VM
+  was given for what the scout was: a change that lets it reach new hosts, changes its install script, or adds a
+  capability with such a key, makes your human decide again whether those keys go along.
+- A newer draft of the same scout replaces the older one, yours or another bot's (that bot is told). At most ten
+  drafts wait at once, and you may save six in ten minutes: draft once, carefully. When it is applied, the scout
+  appears in your scouts list with your next message; you are told whether it is routine for you.
 
 Before spawning, call `workspace_resources` to inspect the shared CPU/RAM budget, permanent pet reservations, helper allocations and available capacity. Choose `cpus` and `memoryMiB` in `scout_spawn` for the task. Omitted sizes use the scout blueprint or workspace defaults. Scouts awaiting approval already reserve their size; resources release only after VM cleanup. There is no count limit, and scouts share capacity with sideworkers. On a capacity error, recheck the budget and choose a smaller VM or close a finished helper.

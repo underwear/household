@@ -18,6 +18,7 @@ test("a pet's prompt: its sections in order; every on feature its own section, n
   expect(text).toContain("A scout your human marked routine for you (`routine: true` in the list) starts without Run"); // and what it still needs
   expect(text).toContain("Anything it sends back still needs your human's Pass. Pass it no `secrets`");
   expect(text).toContain("Do not promise a result of your own");
+  expect(text).toContain("propose one with `scout_draft`"); // a recurring errand gets a scout of its own, set up by the human
   expect(text).not.toContain("Off in this workspace");
   const bare = systemPrompt({ role: pet, features: none });
   for (const gone of ["\nScouts\n", "\nSideworkers\n", "\nHTTP previews\n", "scout_spawn", "preview_open"]) expect(bare).not.toContain(gone);

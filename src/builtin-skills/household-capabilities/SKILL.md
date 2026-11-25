@@ -27,5 +27,8 @@ of capabilities; your human edits them in the admin, with every change kept as a
   human adds the values in the admin. Never put a key, token or password anywhere in a draft.
 - **description** — one or two sentences: what it gives a scout and which variables it uses.
 
+To propose a whole scout (its description, instructions, the capabilities it ticks and a setup of its own), use
+`scout_draft` instead (`household-scouts`, Drafting a scout).
+
 Prefer small capabilities that each do one thing (a browser; a CLI and its key) over one that does everything:
 scouts combine them, and their networks combine too.

@@ -123,6 +123,39 @@ export function routineFor(scout: Pick<ScoutDefinition, "name" | "capabilities" 
 }
 
 /**
+ * What a scout is now, as far as a bot's draft of it may write it: its own fields (without `routine`, and without its
+ * repository, harness and size, which an applied draft keeps as they are) and its own setup's install, network and keys;
+ * null for one that is not there. A draft made against one base and applied on another would quietly undo the
+ * difference. JSON, so that it compares as stored.
+ */
+export interface ScoutBase {
+  scout: Record<string, unknown> | null;
+  own: { install: string; network: { any: boolean; allow: string[] }; keys: CapabilityKey[] } | null;
+}
+export function scoutBase(house: { scouts?: readonly ScoutDefinition[]; capabilities?: readonly CapabilityDefinition[] }, name: string): ScoutBase {
+  const scout = (house.scouts ?? []).find(each => each.name === name), own = (house.capabilities ?? []).find(each => each.owner === name);
+  const kept = scout && Object.fromEntries(Object.entries(scout).filter(([field]) => !["routine", "workspace", "agent", "resources"].includes(field)));
+  return JSON.parse(JSON.stringify({
+    scout: kept ?? null,
+    own: own ? { install: own.install, network: { any: own.network.any, allow: own.network.allow.map(formatAllowEntry) }, keys: own.keys } : null,
+  }));
+}
+/** What changed from one base to another, in the owner's words; none: the same. */
+export function scoutBaseChanges(then: ScoutBase, now: ScoutBase, name: string): string[] {
+  const changes: string[] = [], same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  if (!then.scout && now.scout) changes.push(`a scout named ${name} was made since`);
+  else if (then.scout && !now.scout) changes.push(`scout ${name} was deleted`);
+  else if (then.scout && now.scout) for (const field of new Set([...Object.keys(then.scout), ...Object.keys(now.scout)])) if (!same(then.scout[field], now.scout[field])) changes.push(field);
+  if (!then.own && now.own) changes.push("own setup (added)");
+  else if (then.own && !now.own) changes.push("own setup (removed)");
+  else if (then.own && now.own) for (const field of ["install", "network", "keys"] as const) if (!same(then.own[field], now.own[field])) changes.push(`own setup's ${field}`);
+  return changes;
+}
+/** Why a draft made against an older base is not applied as it is. */
+export const staleDraftMessage = (name: string, changes: readonly string[]) =>
+  `Scout ${name} changed since it was drafted: ${changes.join(", ")}. Applying the draft would undo that; review it again, or apply it anyway with force.`;
+
+/**
  * A scout's network in words, for the pet choosing it: "open internet", or "only" its hosts (at most eight named).
  * Facts Household computes, not the owner's description; its keys are never named.
  */
@@ -169,7 +202,7 @@ export const SCOUT_CATALOG_DESCRIPTION = 300;
 export function scoutsBlock(house: { features?: Partial<HouseFeatures>; scouts?: readonly Pick<ScoutDefinition, "name" | "title" | "emoji" | "description" | "capabilities" | "workspace" | "routine">[]; capabilities?: readonly CapabilityDefinition[] }, pet?: string): string {
   if (!houseFeatures(house).scouts) return "";
   const short = (text: string) => { const one = text.replace(/\s+/g, " ").trim(); return one.length > SCOUT_CATALOG_DESCRIPTION ? `${one.slice(0, SCOUT_CATALOG_DESCRIPTION - 1).trimEnd()}…` : one; };
-  const note = "The house's scouts now, from Household: specialists for one task each (skill household-scouts). Call one by name with scout_spawn({scout, task}) when its description and network fit the task; prefer the narrowest that fits. A scout limited to some hosts reaches nothing else unless your human allows more for that run. Every run waits for your human's Run, except one marked routine: true, which your human set to start for you without asking (pass it no secrets). If none fits, tell your human what scout you need. This replaces any older scouts list; the scouts tool has the same.";
+  const note = "The house's scouts now, from Household: specialists for one task each (skill household-scouts). Call one by name with scout_spawn({scout, task}) when its description and network fit the task; prefer the narrowest that fits. A scout limited to some hosts reaches nothing else unless your human allows more for that run. Every run waits for your human's Run, except one marked routine: true, which your human set to start for you without asking (pass it no secrets). If none fits, propose one with scout_draft (your human reviews and applies it). This replaces any older scouts list; the scouts tool has the same.";
   const lines = (house.scouts ?? []).map(scout => tagFreeJson({ name: scout.name, title: `${scout.emoji ? `${scout.emoji} ` : ""}${scout.title ?? scout.name}`, description: short(scout.description), network: scoutNetworkWords(scout, house.capabilities ?? []), ...(pet !== undefined && routineFor(scout, house.capabilities ?? [], pet) ? { routine: true } : {}) }));
   return block(SCOUTS_TAG, [tagFreeJson({ note, count: lines.length }), ...lines]) + "\n";
 }

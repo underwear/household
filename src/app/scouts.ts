@@ -113,6 +113,11 @@ const since = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); if
 const GRANTED = ["temporary","permanent","permanent-pending"];
 const terminal = (s: ScoutStatus) => ["done","failed","cancelled"].includes(s);
 /**
+ * A scout's network as a card's fact (HTML): its risk class first, since a closed network keeps what it holds in and an
+ * open one lets real secrets go anywhere. Household's own computation, never a scout's or a pet's words.
+ */
+export const networkFact=(network:{open:boolean;allow:AllowEntry[]}):string=>network.open?"🌐 Network: open internet":`🔒 Network: only ${network.allow.map(entry=>`<code>${html(formatAllowEntry(entry))}</code>`).join(", ")}`;
+/**
  * The owner's card for a run. In the pet's thread: "<pet> wants to run <scout> scout", the task as the pet wrote it,
  * then what the scout can do: its capabilities and network, and only when there is something to say, keys inside its
  * VM, secrets the pet passes, a result for the pet too, its own agent. In the scout's own thread (`here`) the same,
@@ -122,8 +127,7 @@ export function launchCard(run:{pet:string;scout:string;task:string;report:"pet"
   /** What it is made of: shared capabilities by name, its own setup as such. */capabilities:{name:string;own?:boolean}[];
   network:{open:boolean;allow:AllowEntry[]};keysInVm:string[];secrets:string[];runtime?:string}):string {
   const capabilities=run.capabilities.map(capability=>capability.own?"own setup":`<code>${html(capability.name)}</code>`).join(", ")||"none";
-  // Its risk class first: a closed network keeps what it holds in; an open one lets real secrets go anywhere.
-  const network=run.network.open?"🌐 Network: open internet":`🔒 Network: only ${run.network.allow.map(entry=>`<code>${html(formatAllowEntry(entry))}</code>`).join(", ")}`;
+  const network=networkFact(run.network);
   return cardText({
     title:run.here?`${html(run.scout)} scout · called by ${html(run.pet)}`:`${html(run.pet)} wants to run ${html(run.scout)} scout`,
     quote:{label:"Task",text:run.task},
@@ -672,7 +676,7 @@ export function scoutTools(s:Scouts,enabled:(c:PetIdentity)=>boolean):McpTool<Pe
   const make=(name:string,description:string,properties:Record<string,unknown>,required:string[],call:(c:PetIdentity,a:any,signal?:AbortSignal)=>unknown,self=false):McpTool<PetIdentity>=>({name,description,inputSchema:{type:'object',additionalProperties:false,properties,required},available:c=>self?s.isScout(c):!s.isScout(c)&&enabled(c),call:async(c,a,signal)=>JSON.stringify(await call(c,a,signal))});
   const str={type:'string'},id={id:str};
   return [
-    make('scouts','List the scouts of your house (name, title, description, shared capabilities, network: open internet or only its hosts; routine: true when your human lets you run it without asking): pick the one whose description fits the task and call it with scout_spawn. Read the household-scouts skill.',{},[],c=>s.catalog(c)),
+    make('scouts','List the scouts of your house (name, title, description, shared capabilities, network: open internet or only its hosts; routine: true when your human lets you run it without asking): pick the one whose description fits the task and call it with scout_spawn; when none fits, propose one with scout_draft. Read the household-scouts skill.',{},[],c=>s.catalog(c)),
     make('scouts_running','House-generated facts about active scout runs. No scout text.',{},[],c=>s.running(c)),
     make('scout_spawn','Call a scout by name (from the scouts tool) for one task. Your human approves every run (and sees the names of secrets you pass) before it starts, except on a scout routine for you when you pass no secrets and have no other run of it going: that one starts at once (routine: true in the result), and scout_send reaches it once it runs. secrets values never appear in chat; do not put secrets in task. report defaults owner. Use workspace_resources and choose cpus/memoryMiB within the shared available budget; omitted sizes use blueprint/workspace defaults.',{cpus:{type:'integer',minimum:1,maximum:1024},memoryMiB:{type:'integer',minimum:512,multipleOf:128},scout:str,task:str,place:{type:'string',description:'Parent place.id from the request header or places; defaults to the current request place.'},placement:{type:'string',enum:['same','thread'],description:'thread (default): a dedicated place in the selected channel; same: share the selected place.'},secrets:{type:'object',additionalProperties:{type:'string'}},report:{type:'string',enum:['pet','owner']}},['scout','task'],(c,a)=>s.spawn(c,a)),
     make('scouts_ended','Your scout runs that have ended and whose thread is still in the chat: id, scout, status, outcome. For scout_thread_delete.',{},[],c=>s.ended(c)),

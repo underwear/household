@@ -41,6 +41,28 @@ export function changedFields(before: CapabilityDefinition | undefined, after: C
   return changed.length ? changed.join(", ") : "no change";
 }
 
+/** A drafted text field: `fallback` (the current value) when left out. Shared by capability and scout drafts. */
+export function draftText(value: unknown, field: string, max: number, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string" || value.length > max) throw new HouseholdError(`${field} must be text up to ${max} characters`);
+  return value;
+}
+/** A drafted network, `{any}` or `{any: false, allow}`: `current` (or any) when left out. */
+export function draftNetwork(input: unknown, current: CapabilityDefinition["network"] | undefined): CapabilityDefinition["network"] {
+  if (input === undefined) return current ?? { any: true, allow: [] };
+  const raw = input as { any?: unknown; allow?: unknown };
+  if (!raw || typeof raw !== "object" || typeof raw.any !== "boolean" || (raw.allow !== undefined && (!Array.isArray(raw.allow) || raw.allow.length > 64))) throw new HouseholdError("network: {any: boolean, allow?: [\"host\" or \"host:port\"]}");
+  const allow = ((raw.allow ?? []) as unknown[]).map(entry => { const parsed = typeof entry === "string" ? parseAllowEntry(entry) : undefined; if (!parsed) throw new HouseholdError(`network.allow: ${String(entry)} is not a host or host:port`); return parsed; });
+  if (!raw.any && allow.length === 0) throw new HouseholdError("network: name at least one host, or any: true");
+  return { any: raw.any, allow };
+}
+/** The key variables a draft says it needs: names only (a value never goes in a draft). */
+export function draftKeys(input: unknown): string[] {
+  if (input === undefined) return [];
+  if (Array.isArray(input) && input.length <= 32 && input.every(key => typeof key === "string" && /^[A-Z_][A-Z0-9_]{0,63}$/.test(key))) return [...new Set(input as string[])];
+  throw new HouseholdError("needs_keys: environment variable names only, like DD_API_KEY");
+}
+
 /**
  * A house's capabilities with their history: the definition in force lives in the config (its source of truth);
  * every change also appends a full snapshot here, so any revision can be restored (as a new one). Pets' drafts wait
@@ -68,11 +90,19 @@ export class Capabilities {
     const existing = (await this.list(house)).find(capability => capability.name === definition.name);
     if (existing) await this.config.updateCapability(house, definition.name, definition);
     else await this.config.addCapability(house, definition);
-    // Read back: the stored form (defaults filled) is what a restore brings back.
-    const saved = (await this.list(house)).find(capability => capability.name === definition.name)!;
-    const revision = this.record(house, definition.name, { author, summary: changedFields(existing, saved), definition: saved, ...(from ? { from } : {}) });
+    const revision = await this.recorded(house, definition.name, existing, author, from);
     await this.applied();
     return revision;
+  }
+  /**
+   * The revision of what the config holds for `name` now, against `before`: after `save`, or after an edit made with
+   * something else (a scout's own capability, written with its scout in one edit). Read back: the stored form
+   * (defaults filled) is what a restore brings back.
+   */
+  async recorded(house: string, name: string, before: CapabilityDefinition | undefined, author: RevisionAuthor, from?: CapabilityRevision["from"]): Promise<CapabilityRevision> {
+    const saved = (await this.list(house)).find(capability => capability.name === name);
+    if (!saved) throw new NotFoundError(`unknown capability '${name}'`);
+    return this.record(house, name, { author, summary: changedFields(before, saved), definition: saved, ...(from ? { from } : {}) });
   }
   /** A past revision's content becomes the newest revision; history is never rewritten. */
   async restore(house: string, name: string, rev: number) {
@@ -118,24 +148,12 @@ export class Capabilities {
     const current = (house.capabilities ?? []).find(capability => capability.name === input.name);
     if (current?.owner) throw new HouseholdError(`${input.name} belongs to a scout blueprint; only your human edits it`);
     if (!current && this.drafts(caller.house).filter(each => !(house.capabilities ?? []).some(c => c.name === each.capability)).length >= 10) throw new HouseholdError("Ten new capabilities already wait for your human; ask them to review those first");
-    const text = (value: unknown, field: string, max: number, fallback: string) => {
-      if (value === undefined) return fallback;
-      if (typeof value !== "string" || value.length > max) throw new HouseholdError(`${field} must be text up to ${max} characters`);
-      return value;
-    };
-    const network = input.network === undefined ? current?.network ?? { any: true, allow: [] } : (() => {
-      const raw = input.network as { any?: unknown; allow?: unknown };
-      if (!raw || typeof raw !== "object" || typeof raw.any !== "boolean" || (raw.allow !== undefined && (!Array.isArray(raw.allow) || raw.allow.length > 64))) throw new HouseholdError("network: {any: boolean, allow?: [\"host\" or \"host:port\"]}");
-      const allow = ((raw.allow ?? []) as unknown[]).map(entry => { const parsed = typeof entry === "string" ? parseAllowEntry(entry) : undefined; if (!parsed) throw new HouseholdError(`network.allow: ${String(entry)} is not a host or host:port`); return parsed; });
-      if (!raw.any && allow.length === 0) throw new HouseholdError("network: name at least one host, or any: true");
-      return { any: raw.any, allow };
-    })();
-    const needsKeys = input.needs_keys === undefined ? [] : Array.isArray(input.needs_keys) && input.needs_keys.length <= 32 && input.needs_keys.every(key => typeof key === "string" && /^[A-Z_][A-Z0-9_]{0,63}$/.test(key)) ? input.needs_keys as string[] : (() => { throw new HouseholdError("needs_keys: environment variable names only, like DD_API_KEY"); })();
+    const needsKeys = draftKeys(input.needs_keys);
     const definition: CapabilityDefinition = {
       name: input.name,
-      description: text(input.description, "description", 1000, current?.description ?? ""),
-      install: text(input.install, "install", 100_000, current?.install ?? ""),
-      network,
+      description: draftText(input.description, "description", 1000, current?.description ?? ""),
+      install: draftText(input.install, "install", 100_000, current?.install ?? ""),
+      network: draftNetwork(input.network, current?.network),
       keys: current?.keys ?? [],
     };
     const draft: CapabilityDraft = { id: crypto.randomUUID(), capability: input.name, pet: caller.pet, at: Date.now(), definition, needsKeys };
@@ -172,7 +190,7 @@ export function capabilityTools(capabilities: Capabilities, envOf: (house: strin
   return [
     {
       name: "capabilities",
-      description: "List the workspace's shared capabilities, the bricks your human builds scouts from: name, description, kind (tool: no network limit; access: a host list or keys), hosts and the environment variables of their keys (names only). You call scouts, not capabilities; this is for drafting one. Read household-capabilities before drafting.",
+      description: "List the workspace's shared capabilities, the bricks your human builds scouts from: name, description, kind (tool: no network limit; access: a host list or keys), hosts and the environment variables of their keys (names only). You call scouts, not capabilities; this is for drafting one, or a scout (scout_draft) that ticks some. Read household-capabilities before drafting.",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       available: enabled,
       async call(caller) { return JSON.stringify(await capabilities.catalog(caller, secret => envOf(caller.house, secret))); },

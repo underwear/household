@@ -326,6 +326,8 @@ async function main(argv: string[]): Promise<void> {
       network: { type: "string" },
       capabilities: { type: "string" },
       routine: { type: "string" },
+      "keep-keys": { type: "boolean" },
+      "drop-keys": { type: "boolean" },
       instructions: { type: "string" },
       repo: { type: "string" },
       branch: { type: "string" },

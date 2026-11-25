@@ -12,6 +12,7 @@ import type { Capabilities } from "./capabilities";
 import type { CapabilityTests } from "./capability-test";
 import { isPetLogSource, PET_LOG_SOURCES, type PetLogSource, type PetLogView } from "./pet-logs";
 import type { Scouts, ScoutRun } from "./scouts";
+import { AppliedNotLiveError, type ScoutDrafts } from "./scout-drafts";
 
 export interface ScoutRoutesDeps {
   config: ConfigStore;
@@ -23,6 +24,8 @@ export interface ScoutRoutesDeps {
     screen(house: string, run: string): Promise<{ text: string } | undefined>;
   };
   capabilities: Capabilities;
+  /** Scouts bots proposed (`scout_draft`), for the owner to review, apply or discard. */
+  drafts?: ScoutDrafts;
   tests?: CapabilityTests;
   apply(): Promise<unknown>;
   /** Secrets changed: the gateway takes them at once. */
@@ -38,6 +41,12 @@ const runView = (run: ScoutRun) => ({ id: run.id, scout: run.scout, ...(run.blue
 });
 async function body<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
   let raw: unknown; try { raw = await request.json(); } catch { throw new HouseholdError("The body must be JSON"); }
+  const value = schema.safeParse(raw); if (!value.success) throw new HouseholdError(z.prettifyError(value.error)); return value.data;
+}
+/** A body that may be left out (the CLI sends none when there is nothing to say): `{}` then. */
+async function optionalBody<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
+  const text = await request.text();
+  let raw: unknown = {}; if (text.trim()) try { raw = JSON.parse(text); } catch { throw new HouseholdError("The body must be JSON"); }
   const value = schema.safeParse(raw); if (!value.success) throw new HouseholdError(z.prettifyError(value.error)); return value.data;
 }
 const fileBody = z.strictObject({ path: z.string(), content: z.string().max(24 * 1024 * 1024), revision: z.string().nullable() });
@@ -68,7 +77,7 @@ function assertRoutine(scouts: readonly ScoutDefinition[], capabilities: readonl
 /** Mounted behind the existing owner authentication (and on the owner's private CLI socket). */
 export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promise<Response | undefined> {
   return async request => {
-    const url = new URL(request.url), match = /^\/api\/houses\/([^/]+)\/(scouts|scout-runs|scout-limits|scout-agent|capabilities|capability-drafts|capability-templates)(?:\/([^/]+))?(?:\/(.*))?$/.exec(url.pathname);
+    const url = new URL(request.url), match = /^\/api\/houses\/([^/]+)\/(scouts|scout-runs|scout-limits|scout-agent|scout-drafts|capabilities|capability-drafts|capability-templates)(?:\/([^/]+))?(?:\/(.*))?$/.exec(url.pathname);
     if (!match) return undefined;
     try {
       const houseName = decodeURIComponent(match[1]!), area = match[2]!, name = match[3] && decodeURIComponent(match[3]), tail = match[4] ?? "";
@@ -137,6 +146,23 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
         if (request.method !== "PUT") return json({ error: "Not found" }, 404);
         const value = await body(request, scoutAgentSchema);
         await deps.config.setScoutAgent(houseName, value); await deps.apply(); return json(value);
+      }
+      if (area === "scout-drafts") {
+        if (!deps.drafts) return json({ error: "Scout drafts are unavailable" }, 503);
+        if (!name) return request.method === "GET" ? json(await deps.drafts.views(houseName)) : json({ error: "Not found" }, 404);
+        if (!tail && request.method === "GET") return json(await deps.drafts.view(houseName, name));
+        if (tail === "apply" && request.method === "POST") {
+          // Who runs it without asking is the owner's, said here; none said, every run asks (whatever it did before).
+          // `keys`: the keys in its VM a change puts at stake (keep, or drop its own setup's); `force`: a draft its scout outran.
+          const value = await optionalBody(request, z.strictObject({ routine: z.array(z.string()).max(64).optional(), keys: z.enum(["keep", "drop"]).optional(), force: z.boolean().optional() }));
+          // The same checks as the owner's own edit of a scout (PATCH below), said for the owner; the config checks it all again.
+          return json(await deps.drafts.apply(houseName, name, value, ({ definition, capabilities: after }) => {
+            const problems = scoutProblems({ capabilities: blueprintCapabilities(definition, after) }, after, envOf); if (problems.length) throw new HouseholdError(problems.join("; "));
+            assertRoutine([definition], after); assertBots(definition);
+          }));
+        }
+        if (!tail && request.method === "DELETE") { await deps.drafts.discard(houseName, name); return json({ ok: true }); }
+        return json({ error: "Not found" }, 404);
       }
       if (area === "capability-templates") {
         if (request.method !== "GET" || name) return json({ error: "Not found" }, 404);
@@ -217,7 +243,8 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
 
       // Scouts.
       if (!name) {
-        if (request.method === "GET") return json({ scouts: (house.scouts ?? []).map(scoutView), capabilities: capabilities.filter(c => !c.owner).map(capabilityView), runs: runs().map(runView), limits: scoutLimits(house), agent: house.scoutAgent ?? null });
+        if (request.method === "GET") return json({ scouts: (house.scouts ?? []).map(scoutView), capabilities: capabilities.filter(c => !c.owner).map(capabilityView), runs: runs().map(runView), limits: scoutLimits(house), agent: house.scoutAgent ?? null,
+          drafts: (await deps.drafts?.list(houseName) ?? []).map(draft => ({ id: draft.id, scout: draft.scout, pet: draft.pet, at: draft.at })) });
         if (request.method === "POST") {
           const value = await body(request, scoutDefinitionSchema);
           if (value.capabilities.some(c => capabilities.find(each => each.name === c)?.owner)) throw new HouseholdError("A blueprint ticks shared capabilities only");
@@ -272,7 +299,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       }
       return json({ error: "Not found" }, 404);
     } catch (error) {
-      const status = error instanceof NotFoundError ? 404 : error instanceof ScoutRevisionError ? 409 : error instanceof SkillFileError ? error.status : 400;
+      const status = error instanceof NotFoundError ? 404 : error instanceof ScoutRevisionError ? 409 : error instanceof SkillFileError ? error.status : error instanceof AppliedNotLiveError ? 500 : 400;
       return json({ error: error instanceof Error ? error.message : "Scout request failed" }, status);
     }
   };

@@ -1,5 +1,5 @@
 import { houseInboxSchema, type HouseInbox } from "../core/house-inboxes";
-import type { CapabilityDefinition, ScoutAgent, ScoutDefinition, ScoutLimits } from "../core/scouts";
+import { scoutBase, scoutBaseChanges, staleDraftMessage, type CapabilityDefinition, type ScoutAgent, type ScoutBase, type ScoutDefinition, type ScoutLimits } from "../core/scouts";
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT } from "../builtin-capabilities";
 import { houseFeatureSettingsSchema, type HouseFeatures, type PreviewSettings } from "../core/house-features";
 import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget, workspaceResourcesSchema, type ResourceAllocation, type PetResources } from "../core/resources";
@@ -334,6 +334,32 @@ export class ConfigStore {
       doc.deleteIn(["houses", house, "scouts", index]);
       // Keep any secret restriction: deleting a scout must never expose its keys to pets.
     });
+  }
+
+  /**
+   * A scout and its own capability, created or replaced in one edit (a bot's draft its owner applied): written apart,
+   * the config between the two may not hold (a routine scout whose own host limit is not there yet). `own` undefined
+   * leaves its own capability as it is. `dryRun`: every check an edit makes, nothing written. `expected`: the scout as
+   * the caller last saw it (`scoutBase`); one changed since is refused here, under the config's lock, so that no edit
+   * landing in between is overwritten.
+   */
+  async putScout(house: string, definition: ScoutDefinition, own: CapabilityDefinition | undefined, { dryRun = false, expected }: { dryRun?: boolean; expected?: ScoutBase } = {}): Promise<Household> {
+    const raw = scoutDefinitionInput(definition);
+    scoutDefinitionSchema.parse(raw);
+    if (own && own.owner !== definition.name) throw new HouseholdError(`capability '${own.name}' is not the own capability of scout '${definition.name}'`);
+    const ownRaw = own && capabilityDefinitionInput(own);
+    if (ownRaw) capabilityDefinitionSchema.parse(ownRaw);
+    return this.edit((doc, household) => {
+      const found = knownHouse(household, house), index = found.scouts?.findIndex(scout => scout.name === definition.name) ?? -1;
+      const changes = expected ? scoutBaseChanges(expected, scoutBase(found, definition.name), definition.name) : [];
+      if (changes.length) throw new ScoutRevisionError(staleDraftMessage(definition.name, changes));
+      if (index < 0) append(doc, ["houses", house, "scouts"], raw);
+      else doc.setIn(["houses", house, "scouts", index], doc.createNode(raw));
+      if (!ownRaw) return;
+      const at = found.capabilities?.findIndex(capability => capability.owner === definition.name) ?? -1;
+      if (at < 0) append(doc, ["houses", house, "capabilities"], ownRaw);
+      else doc.setIn(["houses", house, "capabilities", at], doc.createNode(ownRaw));
+    }, dryRun);
   }
 
   async createHouse(name: string): Promise<Household> {
@@ -703,7 +729,8 @@ export class ConfigStore {
     return undefined;
   }
 
-  private async edit(change: (doc: Document, household: Household) => void): Promise<Household> {
+  /** `dryRun`: the edit is made and checked as any other, then not written (whether it would hold, said before it is asked for). */
+  private async edit(change: (doc: Document, household: Household) => void, dryRun = false): Promise<Household> {
     await mkdir(dirname(this.path), { recursive: true });
     const fresh = !existsSync(this.path);
     return withFileLock(this.path, async () => {
@@ -718,6 +745,7 @@ export class ConfigStore {
       if (problem) throw new HouseholdError(problem);
       const added = this.check(written).filter((problem) => !before.has(problem));
       if (added.length > 0) throw new HouseholdError(added.join("\n"));
+      if (dryRun) return written;
       const previousText = existsSync(this.path) ? await Bun.file(this.path).text() : undefined;
       await writeWhole(this.path, doc.toString());
       // A helper admitted against the old file while this one was written: the check above could not see it. Put the
