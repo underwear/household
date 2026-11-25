@@ -17,6 +17,8 @@ export interface ScoutRunView {
   outcome?: string;
   threadUrl?: string;
   report?: string;
+  /** It started without a Run card: its scout is routine for the bot that called it. */
+  routine?: boolean;
 }
 /** A scout as the admin shows it: its definition, its network as its capabilities make it, keys in its VM, problems. */
 export interface ScoutView extends ScoutDefinition {
@@ -25,6 +27,8 @@ export interface ScoutView extends ScoutDefinition {
   network: { open: boolean; allow: string[]; limitedBy: string[] };
   keysInVm: { capability: string; env: string }[];
   problems: string[];
+  /** Why its bots cannot run it without asking (open network, a wildcard host); null when they can. */
+  routineBlocker?: string | null;
 }
 export interface CapabilityTestView { at: number; ok: boolean; seconds: number; output: string }
 /** A capability's definition (hosts as text) and what the admin shows about it. */
@@ -44,6 +48,8 @@ export interface CapabilityView {
   owner?: string;
   /** That blueprint's title (its name when it has none). */
   ownerTitle?: string;
+  /** Routine scouts it backs, and the bots that run each without asking. */
+  routineScouts?: { name: string; title: string; bots: string[] }[];
 }
 export type CapabilityInput = Pick<CapabilityView, "name" | "description" | "install" | "network">;
 export interface CapabilityRevisionView {
@@ -108,7 +114,7 @@ export const scoutApi = {
   update: (h: string, name: string, value: Partial<ScoutFields>) =>
     call<void>("PATCH", at(h, name), {
       ...value,
-      ...Object.fromEntries(["title", "emoji", "workspace", "agent", "resources"]
+      ...Object.fromEntries(["title", "emoji", "workspace", "agent", "resources", "routine"]
         .filter(key => Object.hasOwn(value, key) && (value as Record<string, unknown>)[key] === undefined)
         .map(key => [key, null])),
     }),

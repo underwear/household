@@ -2,7 +2,7 @@ import { scoutDomain } from "../core/scout-facts";
 import { randomBytes } from "node:crypto";
 import type { House, Household, Pet } from "../core/household";
 import { assertWorkspaceCapacity, workspaceResourcesSchema, type ResourceAllocation } from "../core/resources";
-import { scoutNetworkWords, scoutNetwork, scoutProblems, scoutRuntime, blueprintCapabilities, routineFor, type CapabilityDefinition, type ScoutRunDefinition } from "../core/scouts";
+import { scoutNetworkWords, scoutNetwork, scoutProblems, scoutRuntime, blueprintCapabilities, routineFor, routineBlocker, type CapabilityDefinition, type ScoutRunDefinition } from "../core/scouts";
 import { formatAllowEntry, type AllowEntry } from "../core/network-policy";
 import { houseFeatures } from "../core/house-features";
 import type { PetIdentity } from "../infra/agent-api";
@@ -282,8 +282,8 @@ export class Scouts {
       if(!runtime.agent)throw new Error("Your human has not chosen a harness for this scout yet (Scouts → Settings in the admin)");
       const definition:ScoutRunDefinition={...structuredClone(base),capabilities:names,...structuredClone(runtime.agent),resources:runtime.resources};
       const used=names.flatMap(name=>all.filter(capability=>capability.name===name));
-      // Routine only as the owner set it, for this pet with no routine run of it under way, on the network its VM gets now (closed), and with no secrets of the pet's: those bring the Run card back, with their names.
-      const routine=!byOwner&&!busy&&!!def.routine?.includes(c.pet)&&!scoutNetwork(definition,used).open&&!Object.keys(values).length;
+      // Routine only as the owner set it, for this pet with no routine run of it under way, on the network its VM gets now (exact hosts), and with no secrets of the pet's: those bring the Run card back, with their names.
+      const routine=!byOwner&&!busy&&!!def.routine?.includes(c.pet)&&!routineBlocker(scoutNetwork(definition,used))&&!Object.keys(values).length;
       const runtimeWords=[definition.model??definition.agent,`${definition.resources.cpus} vCPU`,`${Math.round(definition.resources.memoryMiB/102.4)/10} GiB`].join(" · ");
       const number=1+this.runs.filter(each=>each.house===c.house&&each.blueprint===base.name).reduce((most,each)=>Math.max(most,each.number??0),0);
       const r:ScoutRun={...(runtimeWords?{runtime:runtimeWords}:{}),number,id:`scout-${randomBytes(5).toString('hex')}`,house:c.house,scout:base.name,blueprint:base.name,parent:c.pet,task:input.task,report:byOwner?"owner":(input.report as "pet"|"owner"|undefined)??"owner",...(byOwner?{byOwner:true}:{}),...(routine?{routine:true}:{}),status:"waiting_approval",createdAt:this.now(),steps:0,actions:[],secretRequests:[],files:[],definition,capabilities:structuredClone(used)};
@@ -470,8 +470,10 @@ export class Scouts {
   async finish(c:PetIdentity,outcome:unknown) {
     const r=this.self(c);if(!['success','failed','blocked'].includes(String(outcome)))throw new Error("outcome must be success, failed or blocked");
     r.outcome=outcome as ScoutOutcome;this.save();
-    if(await this.stillRoutine(r)){
-      if(terminal(r.status))return {outcome:r.outcome,closing:"You have ended already."};
+    const routine=await this.stillRoutine(r);
+    // Cancelled while the config was read: nothing left to close.
+    if(terminal(r.status))return {outcome:r.outcome,closing:"You have ended already."};
+    if(routine){
       this.deps.send(r.house,r.parent,`Household: routine scout ${r.id} is done, with outcome ${r.outcome}, and closed. Anything it offered you still reaches you only if your human passes it.`);
       void this.end(r,"done").catch(()=>this.deps.log(`scout ${r.house}/${r.id}: cleanup failed`));
       return {outcome:r.outcome,closing:"This was a routine run: Household closes you now."};
@@ -592,9 +594,17 @@ export class Scouts {
     try{await clean;}finally{this.cleaning.delete(r.id);}
   }
   networkFact(house:string,id:string,target:string,_status:string){const r=this.run(house,id);if(!r||terminal(r.status))return;const fact=scoutDomain(target);if(fact.infrastructure)r.infrastructure=(r.infrastructure??0)+1;else if(fact.domain){r.domains??={};r.domains[fact.domain]??=this.now();}this.activities.set(id,this.now());this.save();}
+  /**
+   * The owner allowed a host for a run, before it is applied: routine was trusted on the network the run had, so it
+   * ends here, and no message of its pet slips through unreviewed while the grant goes in.
+   */
+  grantDecided(house:string,id:string){const r=this.run(house,id);if(r)this.unroutine(r,"its human allowed it a host");}
+  /** What a network card for a run adds (HTML): on a routine run, that its pet's messages reached it unreviewed. */
+  networkFacts(house:string,id:string):string[]{const r=this.run(house,id);return r?.routine?[`Routine run: messages from ${html(this.title(r))} reached it unreviewed.`]:[];}
   accessFact(house:string,id:string,domain:string,status:string){
     const r=this.run(house,id);if(!r)return;const fact=scoutDomain(domain);r.networkRequests??=[];r.networkRequests.push({domain:fact.domain??"infrastructure",status});r.networkRequests=r.networkRequests.slice(-50);this.save();
-    // Routine was trusted on the network it had at the call: one more host or port granted, and it asks as any run does.
+    // Routine was trusted on the network it had at the call: one more host or port granted, and it asks as any run
+    // does. `grantDecided` ends it on the decision already; this holds for any other way a grant gets in.
     if(GRANTED.includes(status))this.unroutine(r,"a host was granted to it");
   }
   activity(update:DeliveryUpdate) {

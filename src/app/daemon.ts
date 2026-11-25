@@ -528,6 +528,9 @@ export async function startDaemon(deps: DaemonDeps) {
     choose: (house, pet, card, signal) => chat.ownerCard(house, pet, card, signal),
     notice: (house, pet, text) => chat.notice(house, pet, text),
     deferScreen: (house,pet)=>!!scouts.run(house,pet),
+    // A routine scout run: its card says its pet's messages reached it unreviewed, and an allow ends routine at once.
+    facts: (house,pet)=>scouts.networkFacts(house,pet),
+    allowed: (house,pet)=>scouts.grantDecided(house,pet),
     // A scout's grants last for its run only: its card has no "forever" (its network is its capabilities').
     permanent: async (house, domain, pet) => { if (pet && scouts.run(house, pet)) throw new Error("A scout's network comes from its capabilities"); await config.grantHost(house, domain); },
     changed: () => enqueue(async () => {

@@ -4,7 +4,7 @@ import { ConfigStore, capabilityDefinitionInput } from "../../src/infra/config-s
 import type { CapabilityDefinition } from "../../src/core/scouts";
 import { capabilityDefinitionSchema, parseHousehold, scoutDefinitionSchema } from "../../src/infra/config-schema";
 import { houseSecrets, scoutSecrets } from "../../src/core/secrets";
-import { capabilityKind, scoutsBlock, scoutKeys, scoutLimits, scoutNetwork, scoutProblems } from "../../src/core/scouts";
+import { capabilityKind, routineBlocker, scoutsBlock, scoutKeys, scoutLimits, scoutNetwork, scoutProblems } from "../../src/core/scouts";
 import { tempDir } from "../helpers";
 
 const definition = (extra = {}) => scoutDefinitionSchema.parse({ name: "breaker", description: "Diagnose incidents", ...extra });
@@ -153,7 +153,7 @@ test("routine: only for bots of the workspace, only on a closed network; saving 
   expect((await store.load()).houses[0]!.scouts![0]!.routine).toEqual(["sibling", "helper"]);
   expect(() => definition({ routine: ["sibling", "sibling"] })).toThrow("listed twice");
   const reader = (await store.load()).houses[0]!.scouts![0]!;
-  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["browser"] })).rejects.toThrow("reaches the open internet, so it cannot be routine");
+  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["browser"] })).rejects.toThrow("scout 'work/reader' cannot be routine: reaches the open internet. Limit its network to exact hosts first");
   await expect(store.updateScout("work", "reader", { ...reader, routine: ["ghost"] })).rejects.toThrow("routine for unknown bot 'ghost'");
   await expect(store.addScout("work", definition({ name: "open", routine: ["sibling"] }))).rejects.toThrow("cannot be routine");
   await expect(store.updateCapability("work", "meter", { ...capabilityDefinitionSchema.parse({ name: "meter" }) })).rejects.toThrow("cannot be routine"); // opening its only limit
@@ -171,21 +171,32 @@ test("the scouts block says which scouts are routine for this pet, and only whil
   expect(lines().map(line => line.routine)).toEqual([undefined, undefined]);
 });
 
-test("a limit that lists * (any public host) is no limit: open, and never routine; *.example.com stays closed", async () => {
+test("a limit that lists * (any public host) is no limit: open, and never routine; *.example.com stays closed", () => {
   for (const host of ["*", "*:*", "*:8443"]) {
     const wild = capability({ name: "wild", network: { any: false, allow: [host] } });
     expect(scoutNetwork({ capabilities: ["wild"] }, [wild])).toMatchObject({ open: true, limitedBy: ["wild"] });
+    expect(routineBlocker(scoutNetwork({ capabilities: ["wild"] }, [wild]))).toBe("Reaches the open internet");
     expect(scoutsBlock({ features: { scouts: true }, scouts: [definition({ capabilities: ["wild"], routine: ["sibling"] })], capabilities: [wild] }, "sibling")).toContain('"network":"open internet"');
     expect(scoutsBlock({ features: { scouts: true }, scouts: [definition({ capabilities: ["wild"], routine: ["sibling"] })], capabilities: [wild] }, "sibling")).not.toContain('"routine"');
   }
   const sub = capability({ name: "sub", network: { any: false, allow: ["*.example.com"] } });
   expect(scoutNetwork({ capabilities: ["sub"] }, [sub])).toMatchObject({ open: false, allow: [{ host: "*.example.com", port: 443 }] });
+});
+
+test("routine needs exact hosts: a wildcard (*.github.io, *) disqualifies a scout, which still runs strict", async () => {
+  const exact = capability({ name: "meter", network: { any: false, allow: ["meter.example.com"] } });
+  const sub = capability({ name: "sub", network: { any: false, allow: ["*.github.io"] } });
+  expect(routineBlocker(scoutNetwork({ capabilities: ["meter"] }, [exact]))).toBeUndefined();
+  expect(routineBlocker(scoutNetwork({ capabilities: ["meter", "sub"] }, [exact, sub]))).toBe("Reaches *.github.io: routine needs exact hosts");
+  expect(scoutsBlock({ features: { scouts: true }, scouts: [definition({ capabilities: ["sub"], routine: ["sibling"] })], capabilities: [sub] }, "sibling")).not.toContain('"routine"');
   const path = join(await tempDir(), "household.yaml");
-  await Bun.write(path, "houses:\n  work:\n    network: { allow: [] }\n    pets:\n      sibling:\n    capabilities:\n      - { name: wild, network: { any: false, allow: ['*'] } }\n      - { name: sub, network: { any: false, allow: ['*.example.com'] } }\n    scouts:\n      - { name: reader, description: Meter reading, capabilities: [sub], routine: [sibling] }\n");
+  await Bun.write(path, "houses:\n  work:\n    network: { allow: [] }\n    pets:\n      sibling:\n    capabilities:\n      - { name: meter, network: { any: false, allow: [meter.example.com] } }\n      - { name: wild, network: { any: false, allow: ['*'] } }\n      - { name: sub, network: { any: false, allow: ['*.github.io'] } }\n    scouts:\n      - { name: reader, description: Meter reading, capabilities: [meter], routine: [sibling] }\n      - { name: pages, description: Pages, capabilities: [sub] }\n");
   const store = new ConfigStore(path);
   const reader = (await store.load()).houses[0]!.scouts![0]!;
-  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["wild"] })).rejects.toThrow("cannot be routine");
-  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["sub", "wild"] })).rejects.toThrow("cannot be routine");
+  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["wild"] })).rejects.toThrow("cannot be routine: reaches the open internet");
+  await expect(store.updateScout("work", "reader", { ...reader, capabilities: ["meter", "sub"] })).rejects.toThrow("scout 'work/reader' cannot be routine: reaches *.github.io: routine needs exact hosts");
+  await expect(store.updateCapability("work", "meter", capabilityDefinitionSchema.parse({ name: "meter", network: { any: false, allow: ["*.example.com"] } }))).rejects.toThrow("routine needs exact hosts");
+  expect((await store.load()).houses[0]!.scouts![1]!.name).toBe("pages"); // a wildcard is fine for a scout that asks every time
 });
 
 test("a routine scout limited only by its own capability is deleted with it, in one edit", async () => {

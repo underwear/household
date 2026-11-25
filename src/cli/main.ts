@@ -325,6 +325,7 @@ async function main(argv: string[]): Promise<void> {
       install: { type: "string" },
       network: { type: "string" },
       capabilities: { type: "string" },
+      routine: { type: "string" },
       instructions: { type: "string" },
       repo: { type: "string" },
       branch: { type: "string" },

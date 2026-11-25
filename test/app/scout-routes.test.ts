@@ -49,6 +49,15 @@ test("scouts: definitions, defaults and limits; a scout's network is its capabil
   expect((await f.call("DELETE", "capabilities/heroku"))!.status).toBe(400); // used by a scout
 });
 
+test("a scout's edit takes its basics only: the admin's whole view of it is refused", async () => {
+  const f = await fixture(); await f.create();
+  const view = (await f.json("GET", "scouts/breaker")).scout;
+  const whole = await f.call("PATCH", "scouts/breaker", { ...view, title: "Expert" });
+  expect(whole!.status).toBe(400); expect((await whole!.json()).error).toContain("Unrecognized keys");
+  expect((await f.call("PATCH", "scouts/breaker", { title: "Expert", emoji: null, description: "Incidents" }))!.status).toBe(200);
+  expect((await f.config.load()).houses[0]!.scouts![0]).toMatchObject({ title: "Expert", description: "Incidents" });
+});
+
 test("instructions reject stale revisions even for simultaneous writes", async () => {
   const f = await fixture(); await f.create();
   const original = await f.json("GET", "scouts/breaker/instructions");
@@ -171,6 +180,9 @@ test("scout runs: the owner starts one, reads it, its VM's logs and screen while
   expect((await call("POST", "scouts/breaker/runs", { task: "x", secrets: {} })).status).toBe(400); // only a task and a pet
 
   expect(await (await call("GET", "scout-runs")).json()).toEqual([expect.objectContaining({ id: "scout-1", number: 3, byOwner: true, steps: 2 })]);
+  run.routine = true;
+  expect(await (await call("GET", "scout-runs")).json()).toEqual([expect.objectContaining({ id: "scout-1", routine: true })]);
+  delete run.routine;
   expect(await (await call("GET", "scout-runs/scout-1")).json()).toMatchObject({ id: "scout-1", tools: { Bash: 2 }, files: [], networkRequests: [] });
   expect(await (await call("GET", "scout-runs/scout-1/logs?source=docker&lines=5")).json()).toMatchObject({ text: "scout-1 docker 5" });
   expect((await call("GET", "scout-runs/scout-1/logs?source=nope")).status).toBe(400);
@@ -188,7 +200,12 @@ test("a routine scout whose own capability is its only limit can be deleted", as
   const f = await fixture(); await f.config.addPet("work", "sibling"); await f.create();
   await f.call("POST", "scouts/breaker/own");
   await f.call("PUT", "capabilities/breaker", { name: "breaker", install: "", network: { any: false, allow: ["meter.example.com"] } });
+  expect((await f.json("GET", "scouts/breaker")).scout.routineBlocker).toBeNull();
   expect((await f.call("PATCH", "scouts/breaker", { routine: ["sibling"] }))!.status).toBe(200);
+  const opened = await f.call("PUT", "capabilities/breaker", { name: "breaker", install: "", network: { any: false, allow: ["*.example.com"] } });
+  expect(opened!.status).toBe(400);
+  expect((await opened!.json()).error).toBe("breaker backs routine scout breaker (run without asking by sibling). With this change it reaches *.example.com: routine needs exact hosts. Untick its bots first.");
+  expect((await f.json("GET", "capabilities/breaker")).capability.routineScouts).toEqual([{ name: "breaker", title: "breaker", bots: ["sibling"] }]);
   await f.capabilities.save("work", { name: "breaker", description: "", install: "v2", network: { any: false, allow: [{ host: "meter.example.com", port: 443 }] }, keys: [], owner: "breaker" });
   expect(f.capabilities.history("work", "breaker")).toHaveLength(3);
   expect((await f.call("DELETE", "scouts/breaker"))!.status).toBe(200);
@@ -196,4 +213,28 @@ test("a routine scout whose own capability is its only limit can be deleted", as
   expect(house.scouts ?? []).toEqual([]);
   expect(house.capabilities ?? []).toEqual([]);
   expect(f.capabilities.history("work", "breaker")).toEqual([]); // its history goes with it
+});
+
+test("routine through the admin: bots of the workspace only, exact hosts only, said plainly; drafts and restores are checked too", async () => {
+  const f = await fixture(); await f.config.addPet("work", "sibling"); await f.create();
+  await f.call("POST", "capabilities", { name: "meter", network: { any: false, allow: ["meter.example.com"] } });
+  await f.call("PATCH", "scouts/breaker", { capabilities: ["meter"] });
+  const ghost = await f.call("PATCH", "scouts/breaker", { routine: ["ghost"] });
+  expect(ghost!.status).toBe(400); expect((await ghost!.json()).error).toBe("ghost is not a bot of this workspace");
+  const added = await f.call("POST", "scouts", { name: "reader", description: "Meter", capabilities: ["meter"], routine: ["ghost"] });
+  expect(added!.status).toBe(400); expect((await added!.json()).error).toBe("ghost is not a bot of this workspace");
+  expect((await f.call("POST", "scouts", { name: "reader", description: "Meter", capabilities: ["meter"], routine: ["sibling"] }))!.status).toBe(201);
+  expect((await f.call("PATCH", "scouts/breaker", { routine: ["sibling"] }))!.status).toBe(200);
+  expect((await f.json("GET", "scouts/breaker")).scout).toMatchObject({ routine: ["sibling"], routineBlocker: null });
+  const open = await f.call("PATCH", "scouts/breaker", { capabilities: [] });
+  expect((await open!.json()).error).toBe("Reaches the open internet, so breaker cannot run without asking. Untick its bots (sibling), or limit its network to exact hosts.");
+  await f.call("PUT", "capabilities/meter", { name: "meter", network: { any: false, allow: ["meter.example.com", "backup.example.com"] } });
+  expect((await f.call("POST", "capabilities/meter/restore", { rev: 1 }))!.status).toBe(200); // still exact hosts
+  await f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "meter", network: { any: true } });
+  const [draft] = await f.json("GET", "capability-drafts");
+  const applied = await f.call("POST", `capability-drafts/${draft.id}/apply`);
+  expect(applied!.status).toBe(400); expect((await applied!.json()).error).toContain("meter backs routine scout breaker");
+  expect((await f.call("PATCH", "scouts/breaker", { routine: null }))!.status).toBe(200); // cleared: strict again
+  expect((await f.config.load()).houses[0]!.scouts![0]!.routine).toBeUndefined();
+  expect((await f.json("GET", "scouts/breaker")).scout.routineBlocker).toBeNull();
 });

@@ -18,7 +18,8 @@
 - **Scouts and capabilities** (`house scout …`, `house capability …`, `--json` on both): capabilities are install
   scripts with network (`--network any` for a tool, `--network host1,host2` for an access capability) and keys
   (`--via gateway` or `--via vm`); `capability test` installs one in a fresh VM; bots can propose drafts. Scouts are
-  made of capabilities; `house scout run` starts one directly, `house scout runs` lists runs.
+  made of capabilities; `house scout run` starts one directly, `house scout runs` lists runs; `house scout set …
+  --routine bot1,bot2` lets those bots run it without asking (exact hosts only).
 - **Workspace features**: `house features <workspace> scouts|preview|sideworkers=on|off`.
 - **Web UI**: `house dashboard` (one-time sign-in link).
 

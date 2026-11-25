@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { HouseholdError } from "../core/errors";
-import { capabilityKind, scoutLimits, scoutNetwork, scoutProblems, blueprintCapabilities, type CapabilityDefinition } from "../core/scouts";
+import { blueprintNetwork, capabilityKind, scoutLimits, scoutNetwork, scoutProblems, blueprintCapabilities, routineBlocker, type CapabilityDefinition, type ScoutDefinition } from "../core/scouts";
 import { formatAllowEntry } from "../core/network-policy";
 import { CAPABILITY_TEMPLATES } from "../builtin-capabilities";
 import { capabilityDefinitionSchema, scoutAgentSchema, scoutDefinitionSchema, scoutLimitsSchema } from "../infra/config-schema";
@@ -30,7 +30,7 @@ export interface ScoutRoutesDeps {
 }
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 const document = (content: string) => ({ content, revision: createHash("sha256").update(content).digest("hex") });
-const runView = (run: ScoutRun) => ({ id: run.id, scout: run.scout, ...(run.blueprint ? { blueprint: run.blueprint } : {}), ...(run.number ? { number: run.number } : {}), ...(run.byOwner ? { byOwner: true } : {}),
+const runView = (run: ScoutRun) => ({ id: run.id, scout: run.scout, ...(run.blueprint ? { blueprint: run.blueprint } : {}), ...(run.number ? { number: run.number } : {}), ...(run.byOwner ? { byOwner: true } : {}), ...(run.routine ? { routine: true } : {}),
   capabilities: run.capabilities.map(c => c.name), parent: run.parent, task: run.task, status: run.status, steps: run.steps,
   ...(run.startedAt ? { startedAt: new Date(run.startedAt).toISOString() } : {}),
   ...(run.endedAt ? { endedAt: new Date(run.endedAt).toISOString() } : {}),
@@ -46,6 +46,24 @@ const keyBody = z.strictObject({
   secret: z.string(), value: z.string().min(1).max(4096), hosts: z.array(z.string()).min(1).max(20),
   via: z.enum(["gateway", "vm"]), env: z.string(), header: z.string().nullish(),
 });
+
+/** Lowercase first: a phrase that goes on after a colon. */
+const phrase = (text: string) => `${text[0]!.toLowerCase()}${text.slice(1)}`;
+/**
+ * What the config would refuse, said for the owner before anything is saved: a routine scout that would reach the
+ * open internet or a wildcard host. `capability`: the change is to that capability, not to the scout itself.
+ */
+function assertRoutine(scouts: readonly ScoutDefinition[], capabilities: readonly CapabilityDefinition[], capability?: string) {
+  for (const scout of scouts) {
+    if (!scout.routine?.length) continue;
+    const blocker = routineBlocker(blueprintNetwork(scout, capabilities));
+    if (!blocker) continue;
+    const title = scout.title ?? scout.name, bots = scout.routine.join(", ");
+    throw new HouseholdError(capability
+      ? `${capability} backs routine scout ${title} (run without asking by ${bots}). With this change it ${phrase(blocker)}. Untick its bots first.`
+      : `${blocker}, so ${title} cannot run without asking. Untick its bots (${bots}), or limit its network to exact hosts.`);
+  }
+}
 
 /** Mounted behind the existing owner authentication (and on the owner's private CLI socket). */
 export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promise<Response | undefined> {
@@ -65,15 +83,21 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
         usedBy: capability.owner ? [capability.owner] : (house.scouts ?? []).filter(scout => scout.capabilities.includes(capability.name)).map(scout => scout.name),
         keyVariables: capability.keys.map(key => ({ secret: key.secret, via: key.via, env: key.via === "vm" ? key.env : envOf(key.secret) ?? "" })),
         lastTest: deps.tests?.last(houseName, capability.name) ?? null, testing: deps.tests?.busy(houseName, capability.name) ?? false,
+        // Routine scouts it backs: a change to it reaches runs nobody approves one by one.
+        routineScouts: (house.scouts ?? []).filter(scout => scout.routine?.length && (capability.owner === scout.name || scout.capabilities.includes(capability.name))).map(scout => ({ name: scout.name, title: scout.title ?? scout.name, bots: scout.routine! })),
         revisions: deps.capabilities.history(houseName, capability.name).length,
       });
+      // Routine bots are bots of this workspace, said plainly (the config would refuse them less readably).
+      const assertBots = (scout: ScoutDefinition) => { for (const bot of scout.routine ?? []) if (!house.pets.some(pet => pet.name === bot)) throw new HouseholdError(`${bot} is not a bot of this workspace`); };
       const draftView = (draft: ReturnType<Capabilities["drafts"]>[number]) => ({ ...draft, definition: capabilityDefinitionInput(draft.definition) });
       const scoutView = (scout: NonNullable<typeof house.scouts>[number]) => {
         const names = blueprintCapabilities(scout, capabilities), network = scoutNetwork({ capabilities: names, workspace: scout.workspace }, capabilities);
         const own = capabilities.find(c => c.owner === scout.name);
         return { ...scout, own: own ? capabilityView(own) : null, network: { open: network.open, allow: network.allow.map(formatAllowEntry), limitedBy: network.limitedBy },
           keysInVm: capabilities.filter(c => names.includes(c.name)).flatMap(c => c.keys.filter(k => k.via === "vm").map(k => ({ capability: c.name, env: k.via === "vm" ? k.env : "" }))),
-          problems: scoutProblems({ capabilities: names }, capabilities, envOf) };
+          problems: scoutProblems({ capabilities: names }, capabilities, envOf),
+          // Why its bots cannot run it without asking (open network, a wildcard host); null when they can.
+          routineBlocker: routineBlocker(network) ?? null };
       };
 
       if (area === "scout-runs") {
@@ -120,7 +144,11 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       }
       if (area === "capability-drafts") {
         if (!name) return request.method === "GET" ? json(deps.capabilities.drafts(houseName).map(draftView)) : json({ error: "Not found" }, 404);
-        if (tail === "apply" && request.method === "POST") return json(await deps.capabilities.applyDraft(houseName, name));
+        if (tail === "apply" && request.method === "POST") {
+          const draft = deps.capabilities.drafts(houseName).find(d => d.id === name);
+          if (draft && capabilities.some(c => c.name === draft.capability)) assertRoutine(house.scouts ?? [], capabilities.map(c => c.name === draft.capability ? { ...c, network: draft.definition.network } : c), draft.capability);
+          return json(await deps.capabilities.applyDraft(houseName, name));
+        }
         if (!tail && request.method === "DELETE") { deps.capabilities.discard(houseName, name); return json({ ok: true }); }
         return json({ error: "Not found" }, 404);
       }
@@ -139,6 +167,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
             if (value.name !== name) throw new HouseholdError("A capability's name cannot be changed");
             // Keys are added and removed on their own (they create and remove secrets), its blueprint is fixed: a save keeps both.
             const { owner: _owner, ...fields } = value;
+            assertRoutine(house.scouts ?? [], capabilities.map(c => c.name === name ? { ...c, network: value.network } : c), name);
             return json(await deps.capabilities.save(houseName, { ...fields, keys: capability.keys, ...(capability.owner ? { owner: capability.owner } : {}) }));
           }
           if (request.method === "DELETE") {
@@ -146,7 +175,12 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
             return json({ ok: true });
           }
         }
-        if (tail === "restore" && request.method === "POST") { const value = await body(request, z.strictObject({ rev: z.number().int().min(1) })); return json(await deps.capabilities.restore(houseName, name, value.rev)); }
+        if (tail === "restore" && request.method === "POST") {
+          const value = await body(request, z.strictObject({ rev: z.number().int().min(1) }));
+          const revision = deps.capabilities.history(houseName, name).find(r => r.rev === value.rev);
+          if (revision) assertRoutine(house.scouts ?? [], capabilities.map(c => c.name === name ? { ...c, network: revision.definition.network } : c), name);
+          return json(await deps.capabilities.restore(houseName, name, value.rev));
+        }
         if (tail === "duplicate" && request.method === "POST" && !capability.owner) { const value = await body(request, z.strictObject({ as: z.string() })); return json(await deps.capabilities.duplicate(houseName, name, value.as), 201); }
         if (tail === "test" && request.method === "POST") {
           if (!deps.tests) return json({ error: "Tests are unavailable" }, 503);
@@ -188,6 +222,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
           const value = await body(request, scoutDefinitionSchema);
           if (value.capabilities.some(c => capabilities.find(each => each.name === c)?.owner)) throw new HouseholdError("A blueprint ticks shared capabilities only");
           const problems = scoutProblems(value, capabilities, envOf); if (problems.length) throw new HouseholdError(problems.join("; "));
+          assertRoutine([value], capabilities); assertBots(value);
           await deps.config.addScout(houseName, value); await deps.apply(); return json({ scout: scoutView(value) }, 201);
         }
         return json({ error: "Not found" }, 404);
@@ -199,11 +234,12 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
         if (request.method === "PATCH") {
           const fields = await body(request, z.record(z.string(), z.unknown()));
           const merged: Record<string, unknown> = { ...scoutDefinitionInput(scout), ...fields };
-          for (const optional of ["title", "emoji", "workspace", "agent", "resources"]) if (merged[optional] === null) delete merged[optional];
+          for (const optional of ["title", "emoji", "workspace", "agent", "resources", "routine"]) if (merged[optional] === null) delete merged[optional];
           const parsed = scoutDefinitionSchema.safeParse(merged);
           if (!parsed.success) throw new HouseholdError(z.prettifyError(parsed.error));
           if (parsed.data.capabilities.some(c => capabilities.find(each => each.name === c)?.owner)) throw new HouseholdError("A blueprint ticks shared capabilities only");
           const problems = scoutProblems({ capabilities: blueprintCapabilities(parsed.data, capabilities) }, capabilities, envOf); if (problems.length) throw new HouseholdError(problems.join("; "));
+          assertRoutine([parsed.data], capabilities); assertBots(parsed.data);
           await deps.config.updateScout(houseName, name, parsed.data); await deps.apply(); return json({ scout: scoutView(parsed.data) });
         }
         if (request.method === "DELETE") {

@@ -39,8 +39,11 @@ export const SCOUT_USAGE = `  house scout ls <workspace>         its scouts (cap
   house scout show <workspace> <name>  one: what it is, its access, what it runs on and its recent runs
   house scout add <workspace> <name> --description <text> [--title <t>] [--emoji <e>] [--capabilities a,b] [--instructions <file>|-]
                   [--repo <https url> [--branch <b>]] [--harness <a> --key <k> [--model …] [--reasoning-effort …] [--mode …]] [--cpus <n>] [--memory <GiB>]
-  house scout set <workspace> <name> [the same flags]  ("" removes title, emoji, repo, harness, cpus or memory)
+                  [--routine bot1,bot2]
+  house scout set <workspace> <name> [the same flags]  ("" removes title, emoji, repo, harness, cpus, memory or routine)
                                  description: when a bot should call it; capabilities: shared ones, installed in order
+                                 routine: bots that run it without asking (no Run card, their messages without Pass);
+                                 only for a scout on exact hosts; what it sends back still waits for your Pass
   house scout rm <workspace> <name>
   house scout own <workspace> <name> give it a setup of its own (a capability named after it): edit it with house capability set
   house scout instructions <workspace> <name>  /  house scout instructions set <workspace> <name> [<file>]
@@ -66,6 +69,7 @@ export interface ScoutValues {
   install?: string;
   network?: string;
   capabilities?: string;
+  routine?: string;
   instructions?: string;
   repo?: string;
   branch?: string;
@@ -104,10 +108,11 @@ interface ScoutView {
   name: string; title?: string; emoji?: string; description: string; instructions: string; capabilities: string[];
   workspace?: { repo: string; branch?: string }; agent?: ScoutAgent; resources?: { cpus?: number; memoryMiB?: number };
   own: CapabilityView | null; network: { open: boolean; allow: string[]; limitedBy: string[] }; keysInVm: { capability: string; env: string }[]; problems: string[];
+  routine?: string[]; routineBlocker?: string | null;
 }
 interface Limits { maxScouts?: number; cpus: number; memoryMiB: number }
 interface RunView {
-  id: string; scout: string; blueprint?: string; number?: number; byOwner?: boolean; capabilities: string[]; parent: string; task: string;
+  id: string; scout: string; blueprint?: string; number?: number; byOwner?: boolean; routine?: boolean; capabilities: string[]; parent: string; task: string;
   status: string; steps: number; startedAt?: string; endedAt?: string; outcome?: string; report?: string; setupFailure?: string;
 }
 interface RunDetail extends RunView {
@@ -148,6 +153,8 @@ const firstLine = (text: string, max = 80) => {
   const line = text.split("\n")[0]!.trim();
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 };
+/** Who started a run: you, or the bot that called it (without asking, on a routine run). */
+const caller = (run: RunView) => (run.byOwner ? "by you" : `for ${run.parent}${run.routine ? " (routine)" : ""}`);
 const runName = (run: RunView) => `${run.blueprint ?? run.scout}${run.number ? ` #${run.number}` : ""}`;
 const time = (iso: string | undefined) => (iso ? iso.slice(0, 16).replace("T", " ") : "-");
 
@@ -386,7 +393,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
     return out(values, view, () => {
       if (view.scouts.length === 0) say("no scouts (turn them on: house features <workspace> scouts=on)");
       for (const s of view.scouts) {
-        say(`${s.name}${s.title ? `  "${s.emoji ?? "🧭"} ${s.title}"` : ""}  capabilities: ${s.capabilities.join(", ") || "-"}${s.own ? " + own setup" : ""}  network: ${networkWords(s.network)}${s.problems.length ? `  ! ${s.problems.join("; ")}` : ""}`);
+        say(`${s.name}${s.title ? `  "${s.emoji ?? "🧭"} ${s.title}"` : ""}  capabilities: ${s.capabilities.join(", ") || "-"}${s.own ? " + own setup" : ""}  network: ${networkWords(s.network)}${s.routine?.length ? `  routine for: ${s.routine.join(", ")}` : ""}${s.problems.length ? `  ! ${s.problems.join("; ")}` : ""}`);
         say(`  ${firstLine(s.description, 110)}`);
       }
       say(`\nsettings: shared workspace budget; default ${view.limits.cpus} vCPU, ${gib(view.limits.memoryMiB)} each; harness: ${agentWords(view.agent)}`);
@@ -421,7 +428,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
     const runs = (await api<RunView[]>(paths, "GET", `${house(h)}/scout-runs`)).filter((r) => !name || (r.blueprint ?? r.scout) === name).reverse();
     return out(values, runs, () => {
       if (runs.length === 0) say("no runs");
-      for (const r of runs) say(`${r.id}  ${runName(r).padEnd(14)} ${r.status.padEnd(16)} ${(r.outcome ?? "").padEnd(8)} ${time(r.startedAt)}  ${r.byOwner ? "by you" : `for ${r.parent}`}  ${firstLine(r.task, 60)}`);
+      for (const r of runs) say(`${r.id}  ${runName(r).padEnd(14)} ${r.status.padEnd(16)} ${(r.outcome ?? "").padEnd(8)} ${time(r.startedAt)}  ${caller(r)}  ${firstLine(r.task, 60)}`);
     });
   }
   // house instructions set <house> <name> [<file>]: reads as verb "instructions", h "set".
@@ -444,6 +451,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       say(`capabilities ${s.capabilities.join(", ") || "-"}${s.own ? `  + own setup (house capability show ${h} ${s.own.name})` : ""}`);
       say(`network      ${networkWords(s.network)}${s.network.limitedBy.length ? `  (limited by ${s.network.limitedBy.join(", ")})` : ""}`);
       if (s.keysInVm.length) say(`keys in VM   ${s.keysInVm.map((k) => `$${k.env} (${k.capability})`).join(", ")}`);
+      say(`routine      ${s.routine?.length ? `${s.routine.join(", ")} run it without asking` : "none: every run waits for your Run"}${s.routineBlocker ? `  (cannot be routine: ${s.routineBlocker})` : ""}`);
       if (s.workspace) say(`workspace    ${s.workspace.repo}${s.workspace.branch ? ` @ ${s.workspace.branch}` : ""}`);
       say(`harness        ${s.agent ? agentWords(s.agent) : `the workspace's: ${agentWords(view.defaults.agent)}`}`);
       const cpus = s.resources?.cpus ?? view.defaults.limits.cpus, memory = s.resources?.memoryMiB ?? view.defaults.limits.memoryMiB;
@@ -451,7 +459,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       say(`instructions ${s.instructions.trim() ? `${s.instructions.length} characters (house scout instructions ${h} ${s.name})` : "none"}`);
       if (s.problems.length) say(`problems     ${s.problems.join("; ")}`);
       const runs = view.runs.slice(-5).reverse();
-      if (runs.length) say(`runs         ${runs.map((r) => `${r.id} ${r.status}${r.outcome ? `/${r.outcome}` : ""}`).join(", ")}`);
+      if (runs.length) say(`runs         ${runs.map((r) => `${r.id} ${r.status}${r.outcome ? `/${r.outcome}` : ""}${r.routine ? " (routine)" : ""}`).join(", ")}`);
     });
   }
   if ((verb === "add" || verb === "set") && rest.length === 0) {
@@ -465,6 +473,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       ...(values.description !== undefined ? { description: values.description } : {}),
       ...(instructions !== undefined ? { instructions } : {}),
       ...(values.capabilities !== undefined ? { capabilities: list(values.capabilities) } : {}),
+      ...(values.routine !== undefined ? { routine: list(values.routine)!.length ? list(values.routine) : null } : {}),
       ...(workspace !== undefined ? { workspace } : {}),
     };
     const agent = agentOf(values, current?.agent), resources = resourcesOf(values, current?.resources);
@@ -515,7 +524,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
   if (verb === "status" && rest.length === 0) {
     const r = await api<RunDetail>(paths, "GET", run(name));
     return out(values, r, () => {
-      say(`run          ${r.id}  ${runName(r)}  ${r.byOwner ? "started by you" : `called by ${r.parent}`}`);
+      say(`run          ${r.id}  ${runName(r)}  ${r.byOwner ? "started by you" : `called by ${r.parent}${r.routine ? ", routine: no Run card, its messages without Pass" : ""}`}`);
       say(`status       ${r.status}${r.outcome ? `  outcome ${r.outcome}` : ""}`);
       say(`times        created ${time(r.createdAt)}  started ${time(r.startedAt)}  ended ${time(r.endedAt)}`);
       say(`capabilities ${r.capabilities.join(", ") || "-"}${r.runtime ? `  runs on ${r.runtime}` : ""}`);

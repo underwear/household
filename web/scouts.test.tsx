@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ScoutAccess, ScoutCard, ScoutDetailPage, ScoutDialog, ScoutRuns, ScoutsPage } from "./components/scouts";
-import { CapabilitiesPage, CapabilityPage, ScoutsTabs } from "./components/capabilities";
+import { ScoutAccess, ScoutCard, ScoutDetailPage, ScoutDialog, ScoutRoutine, ScoutRuns, ScoutsPage, newScoutValue, routineFormKey, routinePatch, routineToggleable, scoutEdit } from "./components/scouts";
+import { CapabilitiesPage, CapabilityPage, DraftDialog, ScoutsTabs, draftWarning, routineWarning, saveConfirmation } from "./components/capabilities";
 import { SecretDialog } from "./components/secrets";
 import { Shell } from "./components/shell";
 import { WorkspaceFeatureSettings } from "./components/workspace-features";
 import { SkillsPage } from "./components/skills";
 import { capabilityPath, routeOf, scoutPath } from "./router";
 import type { WorkspaceView, SecretView } from "./api";
-import type { CapabilityView, ScoutDetailView, ScoutListView, ScoutRunView, ScoutView } from "./scout-api";
+import { scoutApi, type CapabilityView, type ScoutDetailView, type ScoutListView, type ScoutRunView, type ScoutView } from "./scout-api";
 
 const heroku: CapabilityView = {
   name: "heroku-prod", description: "Heroku CLI for prod", install: "curl … | sh", network: { any: false, allow: ["api.heroku.com"] },
@@ -21,7 +21,7 @@ const scout: ScoutView = {
   name: "prod-ops", title: "Prod Ops", emoji: "🛠️", description: "Production incidents", instructions: "Read first.", capabilities: ["browser"], own,
   network: { open: false, allow: ["api.heroku.com"], limitedBy: ["prod-ops"] }, keysInVm: [{ capability: "prod-ops", env: "HEROKU_API_KEY" }], problems: [],
 };
-const house: WorkspaceView = { name: "work", owners: [], pets: [{ name: "sibling", title: "Sibling", emoji: "🤖" } as WorkspaceView["pets"][number]], channels: [], allow: [], features: { scouts: true, preview: false, sideworkers: true } };
+const house: WorkspaceView = { name: "work", owners: [], pets: [{ name: "sibling", title: "Sibling", emoji: "🤖", display: "🤖 Sibling" } as WorkspaceView["pets"][number], { name: "helper", title: "Helper", emoji: "🐾", display: "🐾 Helper", sideworker: { parent: "sibling", cwd: "/w" } } as WorkspaceView["pets"][number]], channels: [], allow: [], features: { scouts: true, preview: false, sideworkers: true } };
 const limits = { maxScouts: 2, cpus: 2, memoryMiB: 2048 };
 const initial: ScoutDetailView = { scout, capabilities: [heroku, browser], runs: [], defaults: { agent: null, limits } };
 const list = (extra: Partial<ScoutListView> = {}): ScoutListView => ({ scouts: [scout], capabilities: [heroku, browser], runs: [], limits, agent: null, ...extra });
@@ -113,7 +113,7 @@ test("a scout's access: shared ticks, its own setup in rows, workspace, and what
 });
 
 test("new scout: shared ones to tick, an own setup to opt into; harness and resources come later", () => {
-  const html = renderToStaticMarkup(<ScoutDialog capabilities={[heroku, browser]} taken={[]} onClose={() => {}} save={noop} />);
+  const html = renderToStaticMarkup(<ScoutDialog capabilities={[heroku, browser]} taken={[]} onClose={() => {}} create={noop} />);
   expect(html).toContain("A setup of its own");
   expect(html).toContain("heroku-prod");
   for (const gone of ["vCPU", "Model", "special"]) expect(html).not.toContain(gone);
@@ -143,4 +143,94 @@ test("secrets: kept for capabilities, never the bots'; a capability's skills are
   expect(html).toContain("Bots and sideworkers never get it");
   const skills = renderToStaticMarkup(<SkillsPage house="work" capability="heroku-prod" notify={() => {}} />);
   expect(skills).toContain("Loading skills…");
+});
+
+test("who runs a scout without asking: the workspace's bots to tick, the risk said plainly, Save", () => {
+  const html = renderToStaticMarkup(<ScoutRoutine pets={house.pets} scout={{ ...scout, routineBlocker: null }} save={noop} />);
+  expect(html).toContain(">Who runs it without asking<");
+  expect(html).toContain("A routine scout does whatever these bots tell it, with its access. Tick a bot only when the worst that can happen is acceptable.");
+  expect(html).toContain("🤖 Sibling");
+  expect(html).not.toContain("Helper"); // a sideworker is no bot to trust
+  expect(html).toContain("Strict: you approve each run.");
+  expect(html).not.toContain('<input type="checkbox" disabled=""');
+  const ticked = renderToStaticMarkup(<ScoutRoutine pets={house.pets} scout={{ ...scout, routine: ["sibling"], routineBlocker: null }} save={noop} />);
+  expect(ticked).toContain("checked");
+  expect(ticked).toContain("What it sends back still waits for your Pass.");
+});
+
+test("a scout that cannot be routine says why in its own terms, and its boxes are off", () => {
+  for (const blocker of ["Reaches the open internet", "Reaches *.example.com: routine needs exact hosts"]) {
+    const html = renderToStaticMarkup(<ScoutRoutine pets={house.pets} scout={{ ...scout, routineBlocker: blocker }} save={noop} />);
+    expect(html).toContain(`${blocker}. Its bots ask you every time.`);
+    expect(html).toContain('<input type="checkbox" disabled=""/>');
+    expect(html).toContain("A routine scout does whatever these bots tell it"); // always there
+  }
+});
+
+test("routine shows on the scout's card and page, and on its runs", () => {
+  const routine = { ...scout, routine: ["sibling"] };
+  expect(renderToStaticMarkup(<ScoutCard house="work" scout={routine} pets={house.pets} />)).toContain("Routine for 🤖 Sibling");
+  expect(renderToStaticMarkup(<ScoutCard house="work" scout={scout} pets={house.pets} />)).not.toContain("Routine for");
+  expect(renderToStaticMarkup(<ScoutDetailPage {...props} name={scout.name} initial={{ ...initial, scout: routine }} />)).toContain("Routine for 🤖 Sibling");
+  expect(renderToStaticMarkup(<ScoutDetailPage {...props} name={scout.name} initial={initial} />)).toContain("No bot: every run waits for your Run");
+  const runs = renderToStaticMarkup(<ScoutRuns house="work" pets={house.pets} scouts={[scout]} runs={[run({ routine: true }), run({ id: "run-2" })]} refresh={noop} />);
+  expect(runs.match(/>Routine</g)).toHaveLength(1);
+});
+
+test("a capability that lists * opens the network: the page names it, and the access result says open internet", () => {
+  const wild = { ...scout, network: { open: true, allow: ["*"], limitedBy: ["prod-ops"] } };
+  const page = renderToStaticMarkup(<ScoutDetailPage {...props} name={scout.name} initial={{ ...initial, scout: wild }} />);
+  expect(page).toContain("prod-ops allows any host");
+  expect(page).not.toContain("no capability limits it");
+  const access = renderToStaticMarkup(<ScoutAccess house="work" scout={{ ...scout, own: { ...own, network: { any: false, allow: ["*"] } } }} capabilities={[heroku, browser]} save={noop} />);
+  expect(access).toContain("Open internet");
+  expect(access).toContain("This scout holds keys and has the open internet.");
+});
+
+test("a capability behind routine scouts names them before a change is applied", () => {
+  expect(routineWarning([])).toBe("");
+  expect(routineWarning([{ name: "meter", title: "Meter reader", bots: ["sibling"] }])).toBe("Backs routine scout Meter reader: its bots run it without asking.");
+  expect(routineWarning([{ name: "a", title: "A", bots: ["x"] }, { name: "b", title: "B", bots: ["y"] }])).toBe("Backs routine scouts A, B: their bots run them without asking.");
+});
+
+/** What `scoutApi` sent while `run` ran: method, path and body of each request. */
+async function sent(run: () => Promise<unknown>) {
+  const original = globalThis.fetch, requests: { method: string; url: string; body?: unknown }[] = [];
+  globalThis.fetch = (async (url, options) => { requests.push({ method: options!.method!, url: String(url), ...(options!.body ? { body: JSON.parse(options!.body as string) } : {}) }); return Response.json({}); }) as typeof fetch;
+  try { await run(); } finally { globalThis.fetch = original; }
+  return requests;
+}
+
+test("editing a scout sends only what the dialog edits: never its view (network, problems…) nor its routine bots", async () => {
+  const fields = { name: "prod-ops", title: " ", emoji: "🛠️", description: " Prod incidents " };
+  expect(scoutEdit(fields)).toEqual({ title: undefined, emoji: "🛠️", description: "Prod incidents" });
+  const requests = await sent(() => scoutApi.update("work", "prod-ops", scoutEdit(fields)));
+  expect(requests).toEqual([{ method: "PATCH", url: "/api/houses/work/scouts/prod-ops", body: { emoji: "🛠️", description: "Prod incidents", title: null } }]);
+  expect(newScoutValue({ ...fields, title: "Prod Ops" }, ["browser"])).toEqual({ name: "prod-ops", title: "Prod Ops", emoji: "🛠️", description: "Prod incidents", instructions: "", capabilities: ["browser"] });
+});
+
+test("routine Save sends the ticked bots in the workspace's order, and none as null; a ticked box stays free while blocked", async () => {
+  const pets = [{ name: "a" }, { name: "b" }, { name: "w", sideworker: { parent: "a", cwd: "/" } }] as WorkspaceView["pets"];
+  expect(routinePatch(pets, ["b", "a", "w"])).toEqual({ routine: ["a", "b"] }); // a sideworker is never one
+  expect(await sent(() => scoutApi.update("work", "prod-ops", routinePatch(pets, [])))).toEqual([{ method: "PATCH", url: "/api/houses/work/scouts/prod-ops", body: { routine: null } }]);
+  expect(routineToggleable("Reaches the open internet", ["a"], "a")).toBe(true);
+  expect(routineToggleable("Reaches the open internet", ["a"], "b")).toBe(false);
+  expect(routineToggleable(null, [], "b")).toBe(true);
+  const html = renderToStaticMarkup(<ScoutRoutine pets={house.pets} scout={{ ...scout, routine: ["sibling"], routineBlocker: "Reaches the open internet" }} save={noop} />);
+  expect(html).toContain('<input type="checkbox" checked=""/>'); // not disabled: it can be unticked
+  // After a save the list differs, and the form starts afresh from what was saved.
+  expect(routineFormKey({ routine: ["sibling"] })).not.toBe(routineFormKey({}));
+  expect(routineFormKey({ routine: [] })).toBe(routineFormKey({}));
+});
+
+test("a capability behind a routine scout: saving asks first, and a bot's draft says whose runs it reaches", () => {
+  const routine = [{ name: "meter", title: "Meter reader", bots: ["sibling"] }];
+  expect(saveConfirmation("meter-site", [])).toBeUndefined();
+  expect(saveConfirmation("meter-site", routine)).toEqual({ title: "Save meter-site?", body: "Backs routine scout Meter reader: its bots run it without asking. Their next runs get this change.", confirmLabel: "Save" });
+  expect(draftWarning(undefined)).toBe("");
+  const draft = { id: "d1", capability: "meter-site", pet: "sibling", at: Date.now(), definition: { name: "meter-site", description: "", install: "", network: { any: true, allow: [] } }, needsKeys: [] };
+  const current = { name: "meter-site", description: "", install: "", network: { any: false, allow: ["meter.example.com"] } };
+  const html = renderToStaticMarkup(<DraftDialog house={house} draft={draft} current={current} routine={routine} onClose={() => {}} done={noop} />);
+  expect(html).toContain("Backs routine scout Meter reader: its bots run it without asking. A bot drafted this change: read it as one of theirs.");
+  expect(renderToStaticMarkup(<DraftDialog house={house} draft={draft} current={current} onClose={() => {}} done={noop} />)).not.toContain("Backs routine");
 });

@@ -28,6 +28,23 @@ export const ago = (at: number) => {
 /** A capability's kind in words, as a tag: a tool does not limit its scouts' network; access does. */
 export const kindTag = (kind: CapabilityView["kind"]) => <span className={kind === "access" ? "tag busy" : "tag"}>{kind === "access" ? "Access" : "Tool"}</span>;
 const networkWords = (network: CapabilityInput["network"]) => network.any ? "Any host" : `Only ${network.allow.join(", ")}`;
+/**
+ * Saving a capability that backs routine scouts asks first (their bots run them without asking, so the change reaches
+ * runs nobody approves); undefined: it saves at once.
+ */
+export const saveConfirmation = (name: string, routine: CapabilityView["routineScouts"]) => {
+  const warning = routineWarning(routine);
+  return warning ? { title: `Save ${name}?`, body: `${warning} Their next runs get this change.`, confirmLabel: "Save" } : undefined;
+};
+/** The draft dialog's warning: the routine scouts the capability backs, and that the change is a bot's. */
+export const draftWarning = (routine: CapabilityView["routineScouts"]) => {
+  const warning = routineWarning(routine);
+  return warning && `${warning} A bot drafted this change: read it as one of theirs.`;
+};
+/** What a change to a capability reaches beyond your review: the routine scouts it backs, by name. Empty when none. */
+export const routineWarning = (routine: CapabilityView["routineScouts"] = []) => !routine.length ? "" : routine.length === 1
+  ? `Backs routine scout ${routine[0]!.title}: its bots run it without asking.`
+  : `Backs routine scouts ${routine.map(scout => scout.title).join(", ")}: their bots run them without asking.`;
 
 /** The Scouts page's tabs: the scouts (and their runs), and the capabilities they are built from. */
 export function ScoutsTabs({ house, current, count }: { house: string; current: "scouts" | "capabilities"; /** How many capabilities. */ count?: number }) {
@@ -122,8 +139,9 @@ function NewCapabilityDialog({ house, taken, onClose, created }: { house: string
 }
 
 /** A bot's draft beside what is in force: field by field, then Apply (a new revision) or Discard. */
-function DraftDialog({ house, draft, current, onClose, done }: { house: WorkspaceView; draft: CapabilityDraftView; current?: CapabilityInput; onClose: () => void; done: (applied: boolean) => Promise<void> }) {
+export function DraftDialog({ house, draft, current, routine, onClose, done }: { house: WorkspaceView; draft: CapabilityDraftView; current?: CapabilityInput; /** Routine scouts the capability backs now. */ routine?: CapabilityView["routineScouts"]; onClose: () => void; done: (applied: boolean) => Promise<void> }) {
   const [error, setError] = useState<string>();
+  const warning = draftWarning(routine);
   const fields: [string, string, string][] = [
     ["Description", current?.description ?? "", draft.definition.description],
     ["Install", current?.install ?? "", draft.definition.install],
@@ -139,6 +157,7 @@ function DraftDialog({ house, draft, current, onClose, done }: { house: Workspac
       children: (
         <Stack gap={4}>
           <p className="hint">{ago(draft.at)}. The install script runs as root in every scout that has this capability: read it before applying. Run Test install afterwards.</p>
+          {warning && <div className="banner" role="note">{warning}</div>}
           {changed.length === 0 && <p className="hint">Nothing differs from what is in force.</p>}
           {changed.map(([label, before, after]) => (
             <div key={label} className="stack gap-2">
@@ -185,12 +204,19 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
   const capability = view.capability;
   const saved = { description: capability.description, install: capability.install, network: capability.network };
   const dirty = JSON.stringify({ description: form.description, install: form.install, network: form.network }) !== JSON.stringify(saved);
-  const save = async () => {
-    if (!dirty || busy) return;
+  const warning = routineWarning(capability.routineScouts);
+  const store = async () => {
     setBusy(true); setError(undefined);
     try { const revision = await capabilityApi.save(house.name, form); setForm(undefined); await load(); notify(`Saved as r${revision.rev}`); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
+  };
+  // A capability behind a routine scout reaches runs nobody approves one by one: its change is confirmed first.
+  const save = async () => {
+    if (!dirty || busy) return;
+    const confirm = saveConfirmation(name, capability.routineScouts);
+    if (!confirm) return store();
+    dialog.open({ ...confirm, onConfirm: store });
   };
   const test = async () => {
     setTesting(true); setError(undefined);
@@ -210,6 +236,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
       </>
     }>
       {error && <p className="error" role="alert">{error}</p>}
+      {warning && <div className="banner" role="note">{warning} A change here reaches their next runs.</div>}
       {capability.owner && <p className="hint">The own setup of scout <Link href={scoutPath(house.name, capability.owner, "access")} className="text-link">{capability.ownerTitle ?? capability.owner}</Link>: no other scout and no bot can use it. It goes when the scout is deleted.</p>}
       {draft && (
         <div className="bot-off" role="status">
@@ -291,7 +318,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
       <Section width="narrow" title="History" hint="Every save is a revision. Restoring one makes it the newest.">
         <List>
           {view.history.map((revision, index) => (
-            <ListRow key={revision.rev} actions={index === 0 ? <span className="tag">Current</span> : <button type="button" className="text-btn plain" onClick={() => dialog.open({ title: `Restore r${revision.rev}?`, body: "Its description, install script and network become a new revision. Keys stay as they are.", confirmLabel: `Restore r${revision.rev}`, onConfirm: async () => { await capabilityApi.restore(house.name, name, revision.rev); setForm(undefined); await load(); notify(`Restored r${revision.rev}`); } })}>Restore</button>}>
+            <ListRow key={revision.rev} actions={index === 0 ? <span className="tag">Current</span> : <button type="button" className="text-btn plain" onClick={() => dialog.open({ title: `Restore r${revision.rev}?`, body: `Its description, install script and network become a new revision. Keys stay as they are.${warning ? ` ${warning}` : ""}`, confirmLabel: `Restore r${revision.rev}`, onConfirm: async () => { await capabilityApi.restore(house.name, name, revision.rev); setForm(undefined); await load(); notify(`Restored r${revision.rev}`); } })}>Restore</button>}>
               <Cell lines>
                 <span><span className="strong">r{revision.rev}</span> · {revision.summary}</span>
                 <span className="hint">{ago(revision.at)} · {revision.author.kind === "owner" ? "you" : `${petTitle(house, revision.author.pet)}'s draft`}{revision.from ? ` · copied from ${revision.from.capability} r${revision.from.rev}` : ""}</span>
@@ -317,7 +344,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
         </Panel>
       </Section>}
       {addingKey && <KeyDialog capability={capability} onClose={() => setAddingKey(false)} save={async key => { await capabilityApi.addKey(house.name, name, key); await load(); notify(`Key ${key.secret} added`); }} />}
-      {reviewing && <DraftDialog house={house} draft={reviewing} current={saved && { name, ...saved }} onClose={() => setReviewing(undefined)} done={async applied => { setForm(undefined); await load(); notify(applied ? "Draft applied as a new revision" : "Draft discarded"); }} />}
+      {reviewing && <DraftDialog house={house} draft={reviewing} current={saved && { name, ...saved }} routine={capability.routineScouts} onClose={() => setReviewing(undefined)} done={async applied => { setForm(undefined); await load(); notify(applied ? "Draft applied as a new revision" : "Draft discarded"); }} />}
       {duplicating && <DuplicateDialog house={house.name} name={name} onClose={() => setDuplicating(false)} done={async copy => { await refresh(); navigate(capabilityPath(house.name, copy)); notify(`Copied to ${copy}`); }} />}
       {dialog.element}
     </Page>

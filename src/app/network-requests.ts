@@ -87,6 +87,10 @@ export interface NetworkRequestOptions {
   permanent(house: string, endpoint: string, pet?: string): Promise<void>;
   /** Scouts ask before DNS so an unapproved hostname cannot exfiltrate data. */
   deferScreen?(house:string,pet:string):boolean;
+  /** More of what the owner should know on the card (HTML facts), for this pet: a routine scout run says so. */
+  facts?(house: string, pet: string): string[];
+  /** The owner allowed the request (for 15 minutes or for good), before anything is applied. */
+  allowed?(house: string, pet: string): void;
   /** Apply effective policies immediately; expiry calls the same seam. Reject when application failed. */
   changed(): Promise<void>;
   clock?: Clock;
@@ -278,9 +282,9 @@ export class NetworkRequests {
       const text = cardText({
         title: `${html(title)} wants to reach ${html(shown(domain, port))}`,
         quote: { label: "Why", text: reason },
-        facts: deferred
+        facts: [...(deferred
           ? ["Resolves: checked only after you allow it", "For: this run of the scout only"]
-          : [`Resolves to: ${addresses.map((address) => `<code>${address}</code>`).join(", ")}`],
+          : [`Resolves to: ${addresses.map((address) => `<code>${address}</code>`).join(", ")}`]), ...this.options.facts?.(house, pet) ?? []],
       });
       // The wait runs on through the card's confirmation step: a timeout closes it wherever it is.
       const decided = await Promise.race([this.options.choose(house, pet, networkCard(text, `${domain}:${port}`, deferred), controller.signal), cancelled]);
@@ -289,6 +293,7 @@ export class NetworkRequests {
       if (decided?.step !== "resolved") return { domain, port, status: "unavailable" };
       const { decision } = decided;
       if (decision === "denied") return { domain, port, status: "denied" };
+      this.options.allowed?.(house, pet);
       if(deferred){
         const checked=await Promise.race([this.options.screen(domain),cancelled]);
         if(!checked||controller.signal.aborted)return {domain,port,status:"cancelled"};

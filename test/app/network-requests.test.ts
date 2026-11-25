@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { OwnerCard } from "../../src/app/chat";
-import { CONFIRM_CHOICES, NETWORK_CHOICES, NETWORK_TTL_MS, NetworkRequests, networkCard, requestDomain, requestPort, type NetworkStep } from "../../src/app/network-requests";
+import { CONFIRM_CHOICES, NETWORK_CHOICES, NETWORK_TTL_MS, NetworkRequests, networkCard, requestDomain, requestPort, type NetworkRequestOptions, type NetworkStep } from "../../src/app/network-requests";
 import type { NetworkPolicy } from "../../src/core/network-policy";
 import type { Screened } from "../../src/infra/public-resolve";
 import { telegramHtml } from "../../src/channel-adapters/telegram/html";
@@ -37,7 +37,8 @@ function show(card: OwnerCard<NetworkStep>, signal: AbortSignal, done: (state?: 
   return shown;
 }
 
-function setup(saved = new Map<string, string>(), clock = fakeClock(), deferred = false) {
+/** `extra`: a routine scout's hooks, and `changed` to see when a policy is applied. */
+function setup(saved = new Map<string, string>(), clock = fakeClock(), deferred = false, extra: Pick<Partial<NetworkRequestOptions>, "facts" | "allowed"> & { changed?: () => void } = {}) {
   const base: NetworkPolicy = { kind: "allowlist", allow: [{ host: "api.anthropic.com", port: 443 }] };
   const cards: ShownCard[] = [];
   const notices: string[] = [];
@@ -57,8 +58,8 @@ function setup(saved = new Map<string, string>(), clock = fakeClock(), deferred 
     choose: (_, __, card, signal) => new Promise((done) => cards.push(show(card, signal, done))),
     notice: async (_, __, text) => { notices.push(text); },
     permanent: async (_, domain, pet) => { permanentCallers.push(pet); permanent.push(domain); const [host, port] = domain.split(":"); base.allow.push({ host: host!, port: Number(port) }); },
-    changed: async () => { applications++; if (failApply) throw new Error("gateway unavailable"); applied = service.effective("work", "sibling", base); },
-    clock, waitMs: 1000,
+    changed: async () => { applications++; extra.changed?.(); if (failApply) throw new Error("gateway unavailable"); applied = service.effective("work", "sibling", base); },
+    clock, waitMs: 1000, ...(extra.facts ? { facts: extra.facts } : {}), ...(extra.allowed ? { allowed: extra.allowed } : {}),
   });
   return { service, cards, notices, screened, clock, saved, permanent, permanentCallers, base, applied: () => applied, applications: () => applications, removePet: () => { available = false; }, failApply: (value: boolean) => { failApply = value; } };
 }
@@ -449,4 +450,19 @@ test("a scout's card has no forever: its network is its capabilities', a grant l
   expect(await pending).toMatchObject({domain:"db.example.com",port:5432,status:"temporary"});
   expect(env.permanent).toEqual([]);
   await env.service.stop();
+});
+
+test("a routine scout run: its card says so, and Allow is reported before the grant is applied; Deny is not", async () => {
+  const order: string[] = [];
+  const env = setup(undefined, undefined, true, { facts: () => ["Routine run: messages from 🤖 Sibling reached it unreviewed."], allowed: (_house, pet) => { order.push(`allowed ${pet}`); }, changed: () => { order.push("applied"); } });
+  const denied = env.service.request("work", "sibling", "meter.example.org", reason);
+  await settle();
+  expect(env.cards[0]!.text).toEndWith("For: this run of the scout only\nRoutine run: messages from 🤖 Sibling reached it unreviewed.");
+  env.cards[0]!.answer(1); // Deny
+  expect((await denied).status).toBe("denied");
+  expect(order).toEqual([]);
+  const allowed = env.service.request("work", "sibling", "meter.example.org", reason);
+  await settle(); env.cards[1]!.answer(0);
+  expect((await allowed).status).toBe("temporary");
+  expect(order).toEqual(["allowed sibling", "applied"]);
 });

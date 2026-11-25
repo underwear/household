@@ -13,7 +13,7 @@ import { HouseholdError } from "../core/errors";
 import type { Household, Owner } from "../core/household";
 import { PROVIDERS } from "../core/keys";
 import { DEFAULT_SECRET_HEADER, envProblem, secretHost } from "../core/secrets";
-import { scoutProblems, scoutNetwork, blueprintCapabilities } from "../core/scouts";
+import { scoutProblems, blueprintCapabilities, blueprintNetwork, routineBlocker } from "../core/scouts";
 import { NAME_PATTERN, PET_NAME_HINT, PET_NAME_PATTERN } from "../core/names";
 import { allowEntryError, parseAllowEntry, parseEndpoint } from "../core/network-policy";
 import { nestingIn, volumeFieldsSchema, volumePathProblem } from "../core/volumes";
@@ -419,8 +419,8 @@ export function parseHousehold(raw: unknown, source: string): Household {
         problems.push(`scout '${house.name}/${scout.name}': ${problem}`);
       // Routine skips the owner's Run and Pass: only for a scout that reaches listed hosts alone, so a bot's errand cannot carry its data anywhere.
       for (const bot of scout.routine ?? []) if (!house.pets.some(pet => pet.name === bot)) problems.push(`scout '${house.name}/${scout.name}' is routine for unknown bot '${bot}'`);
-      if (scout.routine?.length && scoutNetwork({ capabilities: blueprintCapabilities(scout, house.capabilities ?? []), workspace: scout.workspace }, house.capabilities ?? []).open)
-        problems.push(`scout '${house.name}/${scout.name}' reaches the open internet, so it cannot be routine: limit its network to listed hosts first, or remove its routine bots`);
+      const blocker = scout.routine?.length ? routineBlocker(blueprintNetwork(scout, house.capabilities ?? [])) : undefined;
+      if (blocker) problems.push(`scout '${house.name}/${scout.name}' cannot be routine: ${blocker[0]!.toLowerCase()}${blocker.slice(1)}. Limit its network to exact hosts first, or remove its routine bots`);
     }
   }
   for (const house of household.houses) {

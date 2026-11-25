@@ -101,11 +101,25 @@ export function scoutNetwork(scout: Pick<ScoutDefinition, "capabilities" | "work
 }
 
 /**
+ * Why a scout on this network cannot be routine, in the owner's terms; undefined when it can. Routine needs exact
+ * hosts: an open network lets a bot's errand carry data anywhere, and a wildcard (`*.github.io`) covers hosts anyone
+ * can set up, which is no standing limit either. Wildcards stay fine for a scout that asks every time.
+ */
+export function routineBlocker(network: ScoutNetwork): string | undefined {
+  if (network.open) return "Reaches the open internet";
+  const wildcard = network.allow.find(entry => entry.host.startsWith("*"));
+  return wildcard ? `Reaches ${formatAllowEntry(wildcard)}: routine needs exact hosts` : undefined;
+}
+/** The network a scout gets from its definition: its ticked capabilities, its own one, its repository's host. */
+export const blueprintNetwork = (scout: Pick<ScoutDefinition, "name" | "capabilities" | "workspace">, capabilities: readonly CapabilityDefinition[]) =>
+  scoutNetwork({ capabilities: blueprintCapabilities(scout, capabilities), workspace: scout.workspace }, capabilities);
+
+/**
  * Whether `pet` runs this scout as routine (no Run card, no Pass on its messages): the owner listed it, and the scout
- * reaches only listed hosts. An open network (a capability edited since) makes every run strict again.
+ * reaches exact hosts only (`routineBlocker`). A capability edited since to open it makes every run strict again.
  */
 export function routineFor(scout: Pick<ScoutDefinition, "name" | "capabilities" | "workspace" | "routine">, capabilities: readonly CapabilityDefinition[], pet: string): boolean {
-  return !!scout.routine?.includes(pet) && !scoutNetwork({ capabilities: blueprintCapabilities(scout, capabilities), workspace: scout.workspace }, capabilities).open;
+  return !!scout.routine?.includes(pet) && !routineBlocker(blueprintNetwork(scout, capabilities));
 }
 
 /**

@@ -32,6 +32,10 @@ type Notify = (text: string, warning?: boolean) => void;
 const done = (run: ScoutRunView) => ["done", "failed", "cancelled"].includes(run.status);
 const networkLabel = (network: ScoutView["network"]) =>
   network.open ? "Open internet" : `Only ${network.allow.length} ${network.allow.length === 1 ? "host" : "hosts"}`;
+/** A bot of the workspace as people see it ("🤖 Sibling"), or its name when it is gone. */
+const botTitle = (pets: WorkspaceView["pets"], bot: string) => pets.find(pet => pet.name === bot)?.display ?? bot;
+/** A host entry that reaches any public host (`*`, `*:8443`): no limit, whatever capability lists it. */
+const anyHost = (entry: string) => entry === "*" || entry.startsWith("*:");
 const ago = (value?: string) => {
   if (!value) return "Not started";
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
@@ -136,7 +140,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
               </div>
             ) : (
               <ul className="bot-cards">
-                {view.scouts.map(scout => <li key={scout.name}><ScoutCard house={house.name} scout={scout} runs={view.runs.filter(run => run.blueprint === scout.name)} /></li>)}
+                {view.scouts.map(scout => <li key={scout.name}><ScoutCard house={house.name} scout={scout} pets={house.pets} runs={view.runs.filter(run => run.blueprint === scout.name)} /></li>)}
               </ul>
             )}
           </Section>
@@ -149,7 +153,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
       )}
       {adding && (
         <ScoutDialog capabilities={view?.capabilities ?? []} taken={[...(view?.scouts.map(s => s.name) ?? []), ...(view?.capabilities.map(c => c.name) ?? [])]} onClose={() => setAdding(false)}
-          save={async (scout, own) => {
+          create={async (scout, own) => {
             await scoutApi.create(house.name, scout);
             if (own) await scoutApi.createOwn(house.name, scout.name);
             await refresh(); navigate(scoutPath(house.name, scout.name, "access")); notify("Scout created");
@@ -168,7 +172,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
 }
 
 /** A scout's card: who it is, what it is made of (its own setup first), its network, and its last run. */
-export function ScoutCard({ house, scout, runs = [] }: { house: string; scout: ScoutView; runs?: ScoutRunView[] }) {
+export function ScoutCard({ house, scout, runs = [], pets = [] }: { house: string; scout: ScoutView; runs?: ScoutRunView[]; /** The workspace's bots, to name the ones it is routine for. */ pets?: WorkspaceView["pets"] }) {
   const last = runs.find(run => run.startedAt) ?? runs[0];
   const state = last && runState(last);
   return (
@@ -189,6 +193,7 @@ export function ScoutCard({ house, scout, runs = [] }: { house: string; scout: S
       <span className="hint">
         {networkLabel(scout.network)}
         {scout.keysInVm.length > 0 && <> · <span className="busy">{scout.keysInVm.length} {scout.keysInVm.length === 1 ? "key" : "keys"} in its VM</span></>}
+        {scout.routine?.length ? <> · <span className="busy">Routine for {scout.routine.map(bot => botTitle(pets, bot)).join(", ")}</span></> : null}
         {` · ${runs.length ? `${runs.length} ${runs.length === 1 ? "run" : "runs"}` : "no runs"}`}
       </span>
       {scout.problems.length > 0 && <span className="error">{scout.problems[0]}</span>}
@@ -273,6 +278,7 @@ export function ScoutRuns({
               {scoutColumn && <Cell label="Scout"><RunScout house={house} run={run} scouts={scouts} /></Cell>}
               <Cell label="Called by">
                 <Link className="row-link ellipsis" href={botPath(house, run.parent)}>{parent?.title ?? run.parent}</Link>
+                {run.routine && <span className="tag" title="Started without a Run card: the scout is routine for this bot">Routine</span>}
               </Cell>
               <Cell label="Task"><span className="ellipsis" title={run.task}>{run.task}</span></Cell>
               <Cell label={running ? "Started" : "Outcome"}>
@@ -380,19 +386,33 @@ function ScoutRuntimeDialog({ scout, defaults, agents, keys, onClose, save }: { 
   );
 }
 
-/** A new scout, or its basics edited: who it is and when bots call it; new: shared capabilities and its own setup. */
+/** What the Edit dialog changes of a scout: its basics, nothing else (title or emoji left empty is cleared). */
+export type ScoutEdit = Pick<Partial<ScoutDefinition>, "title" | "emoji" | "description">;
+type DialogFields = { name: string; title: string; emoji: string; description: string };
+/** A new scout, whole: its basics and the shared capabilities ticked; instructions come later. */
+export const newScoutValue = (f: DialogFields, capabilities: string[]): ScoutDefinition =>
+  ({ name: f.name.trim(), ...(f.title.trim() ? { title: f.title.trim() } : {}), ...(f.emoji.trim() ? { emoji: f.emoji.trim() } : {}), description: f.description.trim(), instructions: "", capabilities });
+/**
+ * An edit sends only the fields the dialog shows: never the page's view of the scout (its network, problems…, which
+ * the daemon refuses) nor a list it does not edit (its routine bots, saved since elsewhere).
+ */
+export const scoutEdit = (f: DialogFields): ScoutEdit => ({ title: f.title.trim() || undefined, emoji: f.emoji.trim() || undefined, description: f.description.trim() });
+
+/** A new scout (`create`), or its basics edited (`update`): who it is and when bots call it; new: shared capabilities and its own setup. */
 export function ScoutDialog({
   scout,
   capabilities = [],
   taken,
   onClose,
-  save,
+  create,
+  update,
 }: {
   scout?: ScoutDefinition;
   capabilities?: CapabilityView[];
   taken: string[];
   onClose: () => void;
-  save: (value: ScoutDefinition, own: boolean) => Promise<void>;
+  create?: (value: ScoutDefinition, own: boolean) => Promise<void>;
+  update?: (patch: ScoutEdit) => Promise<void>;
 }) {
   const [name, setName] = useState(scout?.name ?? "");
   const [title, setTitle] = useState(scout?.title ?? "");
@@ -409,11 +429,9 @@ export function ScoutDialog({
       onConfirm: async () => {
         if (!name.trim() || nameError) throw new Error(nameError || "Name the scout.");
         if (!description.trim()) throw new Error("Describe when bots should call it.");
-        await save({
-          ...(scout ?? { instructions: "" }),
-          name: name.trim(), title: title.trim() || undefined, emoji: emoji.trim() || undefined, description: description.trim(),
-          capabilities: scout ? scout.capabilities : chosen,
-        }, !scout && own);
+        const fields = { name, title, emoji, description };
+        if (scout) await update?.(scoutEdit(fields));
+        else await create?.(newScoutValue(fields, chosen), own);
       },
       children: (
         <>
@@ -470,7 +488,10 @@ export function ScoutDetailPage({ house, name, tab = "overview", agents, keys, r
   const details: [string, React.ReactNode][] = [
     ["Bots call it", <span className="mono">{scout.name}</span>],
     ["Capabilities", scout.own || scout.capabilities.length ? [...(scout.own ? ["own setup"] : []), ...scout.capabilities].join(", ") : <span className="faint">None</span>],
-    ["Network", scout.network.open ? <>Open internet <span className="faint">· no capability limits it</span></> : <>Only {scout.network.allow.join(", ")} <span className="faint">· {scout.network.limitedBy.join(" and ")}</span></>],
+    ["Network", scout.network.open
+      ? <>Open internet <span className="faint">· {scout.network.limitedBy.length ? `${scout.network.limitedBy.join(" and ")} ${scout.network.limitedBy.length === 1 ? "allows" : "allow"} any host` : "no capability limits it"}</span></>
+      : <>Only {scout.network.allow.join(", ")} <span className="faint">· {scout.network.limitedBy.join(" and ")}</span></>],
+    ["Without asking", scout.routine?.length ? <span className="busy">Routine for {scout.routine.map(bot => botTitle(house.pets, bot)).join(", ")}</span> : <span className="faint">No bot: every run waits for your Run</span>],
     ["Keys in its VM", scout.keysInVm.length ? <span className="busy">{scout.keysInVm.map(key => `$${key.env}`).join(", ")}</span> : <span className="faint">None</span>],
     ["Workspace", scout.workspace ? <span className="mono">{scout.workspace.repo}{scout.workspace.branch ? ` · ${scout.workspace.branch}` : ""}</span> : <span className="faint">An empty folder</span>],
     ["Runs on", <>{runtimeWords(scout.agent ?? view.defaults.agent, effective)} <span className="faint">· {own ? "its own" : "the workspace's"}</span> <button type="button" className="text-btn" onClick={() => setRuntime(true)}>Change…</button></>],
@@ -512,8 +533,9 @@ export function ScoutDetailPage({ house, name, tab = "overview", agents, keys, r
       {tab === "instructions" && <ScoutDocumentEditor house={house.name} scout={name} kind="instructions" />}
       {tab === "access" && <ScoutAccess key={JSON.stringify([scout.capabilities, scout.workspace ?? null])} house={house.name} scout={scout} capabilities={view.capabilities} save={save}
         created={async () => { await load(); navigate(capabilityPath(house.name, scout.name)); }} />}
+      {tab === "access" && <ScoutRoutine key={routineFormKey(scout)} pets={house.pets} scout={scout} save={save} />}
       {tab === "runs" && <Section><ScoutRuns house={house.name} pets={house.pets} runs={view.runs} scouts={[scout]} refresh={load} /></Section>}
-      {editing && <ScoutDialog scout={scout} taken={[]} onClose={() => setEditing(false)} save={value => save(value)} />}
+      {editing && <ScoutDialog scout={scout} taken={[]} onClose={() => setEditing(false)} update={save} />}
       {runtime && <ScoutRuntimeDialog scout={scout} defaults={view.defaults} agents={agents} keys={keysFor(keys, house.name)} onClose={() => setRuntime(false)} save={save} />}
       {dialog.element}
     </Page>
@@ -541,6 +563,8 @@ export function ScoutAccess({ house, scout, capabilities, save, created }: { hou
   let repoHost: string | undefined;
   try { repoHost = workspace && !repoError ? new URL(workspace.repo).hostname : undefined; } catch { repoHost = undefined; }
   const hosts = [...new Set([...limiting.flatMap(capability => capability.network.allow), ...(repoHost ? [repoHost] : [])])];
+  // No capability limits it, or one lists `*`: either way it reaches any public host.
+  const open = limiting.length === 0 || hosts.some(anyHost);
   const inVm = used.flatMap(capability => capability.keyVariables.filter(key => key.via === "vm").map(key => `$${key.env}`));
   const own = scout.own;
   const submit = () => {
@@ -600,13 +624,68 @@ export function ScoutAccess({ house, scout, capabilities, save, created }: { hou
         <div className="access-result">
           <span>
             <span className="muted">Result: </span>
-            {limiting.length === 0 ? "Open internet" : `Only ${hosts.join(", ")}`}
+            {open ? "Open internet" : `Only ${hosts.join(", ")}`}
             {" · "}
             {inVm.length ? <span className="busy">{inVm.join(", ")} inside its VM</span> : "no keys inside its VM"}
           </span>
           <button type="submit" className="btn primary" disabled={!dirty || busy || !!repoError}>{busy ? "Saving…" : "Save"}</button>
         </div>
-        {limiting.length === 0 && inVm.length > 0 && <div className="banner">This scout holds keys and has the open internet.</div>}
+        {open && inVm.length > 0 && <div className="banner">This scout holds keys and has the open internet.</div>}
+        {error && <p className="error" role="alert">{error}</p>}
+      </Section>
+    </form>
+  );
+}
+
+/**
+ * Which bots run a scout without asking: no Run card, and their messages to it pass without you. Only for a scout on
+ * exact hosts (`routineBlocker` says why not, in its own terms); what it sends back still waits for your Pass.
+ */
+/** The bots that may be ticked: the workspace's own, not sideworkers. */
+const routineBots = (pets: WorkspaceView["pets"]) => pets.filter(pet => !pet.sideworker);
+/** What Save sends: the ticked bots in the workspace's order; none clears the list (sent as null: strict again). */
+export const routinePatch = (pets: WorkspaceView["pets"], chosen: string[]): Pick<Partial<ScoutDefinition>, "routine"> => {
+  const routine = routineBots(pets).map(pet => pet.name).filter(name => chosen.includes(name));
+  return { routine: routine.length ? routine : undefined };
+};
+/** A box can be ticked only while the scout can be routine; one ticked already can always be unticked. */
+export const routineToggleable = (blocker: string | null | undefined, chosen: string[], bot: string) => !blocker || chosen.includes(bot);
+/** The form's identity: a save that changed the list starts it afresh from what was saved. */
+export const routineFormKey = (scout: Pick<ScoutDefinition, "routine">) => JSON.stringify(scout.routine ?? []);
+
+export function ScoutRoutine({ pets, scout, save }: { pets: WorkspaceView["pets"]; scout: ScoutView; save: (patch: Partial<ScoutDefinition>) => Promise<void> }) {
+  const [chosen, setChosen] = useState(scout.routine ?? []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const bots = routineBots(pets);
+  const blocker = scout.routineBlocker ?? undefined;
+  const dirty = JSON.stringify([...chosen].sort()) !== JSON.stringify([...(scout.routine ?? [])].sort());
+  const submit = () => {
+    if (busy || !dirty) return;
+    setBusy(true); setError(undefined);
+    void save(routinePatch(pets, chosen)).catch((e: Error) => setError(e.message)).finally(() => setBusy(false));
+  };
+  return (
+    <form onSubmit={event => { event.preventDefault(); submit(); }}>
+      <Section width="narrow" title="Who runs it without asking" hint="For a small errand on a schedule. None ticked: every run waits for your Run, and every message to it for your Pass.">
+        {blocker && <p className="hint busy">{blocker}. Its bots ask you every time.</p>}
+        <List empty="No bots in this workspace yet.">
+          {bots.map(pet => (
+            <ListRow key={pet.name}>
+              <Cell>
+                <label className="check grow">
+                  <input type="checkbox" disabled={!routineToggleable(blocker, chosen, pet.name)} checked={chosen.includes(pet.name)} onChange={() => setChosen(current => current.includes(pet.name) ? current.filter(each => each !== pet.name) : [...current, pet.name])} />
+                  <span>{pet.display}</span>
+                </label>
+              </Cell>
+            </ListRow>
+          ))}
+        </List>
+        <p className="hint">A routine scout does whatever these bots tell it, with its access. Tick a bot only when the worst that can happen is acceptable.</p>
+        <div className="access-result">
+          <span className="hint">{chosen.length ? "What it sends back still waits for your Pass." : "Strict: you approve each run."}</span>
+          <button type="submit" className="btn primary" disabled={!dirty || busy || (!!blocker && chosen.length > 0)}>{busy ? "Saving…" : "Save"}</button>
+        </div>
         {error && <p className="error" role="alert">{error}</p>}
       </Section>
     </form>

@@ -45,7 +45,8 @@ Install the `household` skill too, for running Household afterwards:
   and secrets, and is closed when the job is done.
 - **Scout**: a specialist a bot calls for one risky or privileged task ("find this movie on a torrent site", "buy
   two bus tickets"). It runs in a fresh throwaway VM built only from the **capabilities** the owner set (install
-  script, network, keys), sees nothing of the bot, starts only when the owner presses **Run**, and is deleted after.
+  script, network, keys), sees nothing of the bot, starts only when the owner presses **Run** (or at once, when the
+  owner made it routine for that bot), and is deleted after.
 - **Channel**: where people talk to bots: a Telegram group with a topic per bot, a Telegram private chat (threaded
   or plain), or a Slack DM.
 - **Inbox**: a bot's subscription to outside events: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,
@@ -79,8 +80,8 @@ Install the `household` skill too, for running Household afterwards:
   sends the value with `/secret` (deleted from the chat before processing) or adds it in the admin. Credentials the
   proxy cannot inject (an SSH key, a database password) have to live in the VM, and the bot is told to say so first.
 - **Owners decide.** Only workspace owners can give a bot orders; everyone else in a chat is a guest. Network grants,
-  secrets, shared folders, scout runs and HTTP previews of a bot's web app (a 15-minute link) each need the owner's
-  approval in the chat.
+  secrets, shared folders, scout runs (unless the owner made a scout routine for that bot) and HTTP previews of a
+  bot's web app (a 15-minute link) each need the owner's approval in the chat.
 - **Scouts for what a bot should not hold.** Errands on untrusted sites, purchases with your card, a key a bot shouldn't hold go to a
   scout. A scout with an access capability reaches only that capability's hosts; its keys never reach the bot, and
   its words and files reach the bot only when the owner passes them, as untrusted input.
@@ -104,7 +105,7 @@ Install the `household` skill too, for running Household afterwards:
 - [Provider keys](https://agents-household.dev/docs/keys/): Claude or ChatGPT subscriptions by sign-in, tokens and API keys; bots never see them
 - [Instructions, skills and memory](https://agents-household.dev/docs/instructions/): a bot's AGENTS.md, its own and shared skills, and its memory
 - [Sideworkers](https://agents-household.dev/docs/sideworkers/): extra assistants a bot starts for one job, in VMs of their own
-- [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; every run waits for the owner's approval
+- [Scouts](https://agents-household.dev/docs/scouts/): specialists a bot calls for one task in their own VM; every run waits for the owner's approval, unless the owner made the scout routine for that bot
 - [Channels](https://agents-household.dev/docs/channels/): connecting messengers, owners, the default bot, a section per messenger
 - [Connectors](https://agents-household.dev/docs/connectors/): letting bots use your accounts, with access per account and per bot; a section per connector
 - [Network and secrets](https://agents-household.dev/docs/network/): the allowlist, temporary access, secrets as placeholders substituted at egress

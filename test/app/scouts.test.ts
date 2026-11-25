@@ -580,3 +580,35 @@ test('a host granted to a routine run ends routine for the rest of it: messages 
  expect(cards.map(card=>card.text)).toEqual([expect.stringContaining('wants to tell'),expect.stringContaining('is done')]);
  await scouts.stop();
 });
+test('a wildcard host (*.github.io) keeps a scout strict: routine needs exact hosts; its card still says closed',async()=>{
+ const {scouts,house,launches}=routineFixture();
+ house.capabilities=[{...house.capabilities![0]!,network:{any:false,allow:[{host:'*.github.io',port:443}]}}];
+ expect((await scouts.catalog(parent))[0]).not.toHaveProperty('routine');
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Submit it'});await settle();
+ expect(scouts.run('work',id)!.routine).toBeUndefined();
+ expect(launches[0]!.text).toContain('🔒 Network: only <code>*.github.io</code>');
+ await scouts.stop();
+});
+test('the owner allowing a host ends routine on the decision; the network card of a routine run says its messages went unreviewed',async()=>{
+ const {scouts}=routineFixture();
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Submit it'});await settle();
+ expect(scouts.networkFacts('work',id)).toEqual(['Routine run: messages from parent reached it unreviewed.']);
+ scouts.grantDecided('work',id);
+ expect(scouts.status(parent,id)).not.toHaveProperty('routine');
+ expect(scouts.networkFacts('work',id)).toEqual([]);
+ expect(await scouts.send(parent,id,'next')).toEqual({status:'waiting_owner'});
+ expect(scouts.networkFacts('work','parent')).toEqual([]); // not a scout
+ await scouts.stop();
+});
+test('finish after the run was cancelled while the config was read: no Close card',async()=>{
+ let during:(()=>Promise<unknown>)|undefined,config!:Household;
+ const f=routineFixture({configured:async()=>{const hook=during;during=undefined;await hook?.();return config;}});const {scouts,house,cards}=f;
+ config=f.config;
+ const {id}=await scouts.spawn(parent,{scout:'helper',task:'Submit it'});await settle();
+ house.scouts=[{...house.scouts![0]!,routine:[]}]; // taken back: finish reads the config
+ during=()=>scouts.cancel(parent,id);
+ expect(await scouts.finish({house:'work',pet:id},'success')).toMatchObject({closing:'You have ended already.'});await settle();
+ expect(cards).toEqual([]);
+ expect(scouts.status(parent,id).status).toBe('cancelled');
+ await scouts.stop();
+});

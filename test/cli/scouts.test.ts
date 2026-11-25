@@ -93,6 +93,36 @@ test("scout add and set: flags become the API's fields; \"\" removes; an agent m
   await expect(runScouts(paths, "scout", ["add", "work", "x"], {})).rejects.toThrow("needs --description");
 });
 
+test("routine bots: --routine sets them, \"\" clears them; show, ls, runs and status say who runs it without asking", async () => {
+  const reader = { name: "reader", description: "Meter reading", instructions: "", capabilities: ["meter"], own: null, network: { open: false, allow: ["meter.example.com"], limitedBy: ["meter"] }, keysInVm: [], problems: [], routine: ["sibling"], routineBlocker: null };
+  const routineRun = { id: "scout-3", scout: "reader", blueprint: "reader", number: 3, routine: true, capabilities: ["meter"], parent: "sibling", task: "Submit the reading", status: "done", outcome: "success", steps: 4, startedAt: "2026-11-25T10:00:00Z" };
+  const { paths, calls, said } = await daemon({
+    "GET /api/houses/work/scouts/reader": { body: { scout: reader, runs: [routineRun], defaults: { agent: null, limits: { cpus: 2, memoryMiB: 2048 } } } },
+    "GET /api/houses/work/scouts/general": { body: { scout: { ...reader, name: "general", network: { open: true, allow: [], limitedBy: [] }, routine: undefined, routineBlocker: "Reaches the open internet" }, runs: [], defaults: { agent: null, limits: { cpus: 2, memoryMiB: 2048 } } } },
+    "GET /api/houses/work/scouts": { body: { scouts: [reader], runs: [], limits: { cpus: 2, memoryMiB: 2048 }, agent: null } },
+    "GET /api/houses/work/scout-runs": { body: [routineRun] },
+    "GET /api/houses/work/scout-runs/scout-3": { body: { ...routineRun, createdAt: "2026-11-25T10:00:00Z", tools: {}, files: [], secretRequests: [], networkRequests: [] } },
+  });
+  await runScouts(paths, "scout", ["set", "work", "reader"], { routine: "sibling, helper" });
+  expect(calls.at(-1)).toEqual({ method: "PATCH", path: "/api/houses/work/scouts/reader", body: { routine: ["sibling", "helper"] } });
+  await runScouts(paths, "scout", ["set", "work", "reader"], { routine: "" });
+  expect(calls.at(-1)).toEqual({ method: "PATCH", path: "/api/houses/work/scouts/reader", body: { routine: null } });
+  await runScouts(paths, "scout", ["add", "work", "meter"], { description: "Meter", routine: "" });
+  expect(calls.at(-1)!.body).toEqual({ name: "meter", description: "Meter" }); // none: nothing to send
+  said.length = 0;
+  await runScouts(paths, "scout", ["show", "work", "reader"], {});
+  expect(said).toContain("routine      sibling run it without asking");
+  expect(said.at(-1)).toBe("runs         scout-3 done/success (routine)");
+  await runScouts(paths, "scout", ["show", "work", "general"], {});
+  expect(said).toContain("routine      none: every run waits for your Run  (cannot be routine: Reaches the open internet)");
+  await runScouts(paths, "scout", ["ls", "work"], {});
+  expect(said.some((line) => line.includes("routine for: sibling"))).toBe(true);
+  await runScouts(paths, "scout", ["runs", "work"], {});
+  expect(said.at(-1)).toContain("for sibling (routine)");
+  await runScouts(paths, "scout", ["status", "work", "scout-3"], {});
+  expect(said.some((line) => line.includes("called by sibling, routine: no Run card, its messages without Pass"))).toBe(true);
+});
+
 test("scout run --wait: the owner's run, followed until it says it is done; exit 1 unless it succeeded", async () => {
   let reads = 0;
   const { paths, calls, said } = await daemon({
