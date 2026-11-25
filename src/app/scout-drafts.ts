@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { cardText, html } from "../core/card";
 import { HouseholdError } from "../core/errors";
+import { assertPlain } from "../core/hidden-text";
 import type { House, Household } from "../core/household";
 import { houseFeatures } from "../core/house-features";
 import { NAME_PATTERN } from "../core/names";
@@ -12,7 +13,7 @@ import { capabilityDefinitionSchema, scoutDefinitionSchema } from "../infra/conf
 import { capabilityDefinitionInput, NotFoundError, ScoutRevisionError, scoutDefinitionInput, type ConfigStore } from "../infra/config-store";
 import type { McpTool } from "../infra/mcp-server";
 import type { KeyValueStore } from "../infra/sqlite-store";
-import { draftKeys, draftNetwork, draftText, type Capabilities } from "./capabilities";
+import { draftKeys, draftNetwork, draftText, lineEnds, type Capabilities } from "./capabilities";
 import type { PostedNotice } from "./chat";
 import { networkFact } from "./scouts";
 
@@ -49,7 +50,11 @@ export interface ScoutDraft {
  * `keys`: whether the keys a change puts at stake (`KeyGate`) go along (keep) or its own setup's come off (drop); only
  * when some are. `force`: apply a draft made against a scout that changed since.
  */
-export interface ApplyOptions { routine?: readonly string[]; keys?: "keep" | "drop"; force?: boolean }
+export interface ApplyOptions {
+  routine?: readonly string[]; keys?: "keep" | "drop"; force?: boolean;
+  /** The fingerprint of the review the owner decided on (`reviewed` of the draft's view). */
+  reviewed?: string;
+}
 export interface ScoutDraftDeps {
   config: ConfigStore;
   store: KeyValueStore;
@@ -84,6 +89,13 @@ const SETUP_FIELDS = ["install", "network", "needs_keys"];
 /** A config error said to a bot: what is wrong, never where the owner keeps their config. */
 const withoutSource = (message: string) => message.replace(/^invalid config [^\n]*:\n/, "");
 
+/** The shared capabilities a composed scout ticks, as the review lists them. */
+function sharedOf(composed: { definition: ScoutDefinition; capabilities: readonly CapabilityDefinition[] }) {
+  return composed.definition.capabilities.flatMap(name => composed.capabilities.filter(capability => capability.name === name)).map(capability => ({
+    name: capability.name, description: capability.description, hosts: capability.network.any ? null : capability.network.allow.map(formatAllowEntry), installs: !!capability.install.trim(),
+  }));
+}
+const fingerprint = (basis: unknown) => createHash("sha256").update(JSON.stringify(basis)).digest("hex").slice(0, 16);
 /** What of its own setup's install and network a draft changes (none when it proposes no setup, or there was none). */
 function ownChanges(own: CapabilityDefinition | null | undefined, current: CapabilityDefinition | undefined): ("install" | "network")[] {
   if (!own || !current) return [];
@@ -109,6 +121,8 @@ export interface KeyGate {
   /** `drop` takes its own setup's keys off; a shared capability's key comes with the capability: keep it, or untick that. */
   choices: ("keep" | "drop")[];
 }
+/** A key whose value is inside a scout's VM, plainly: where it can go, and what no check of Household's covers. */
+export const VM_KEY_NOTE = "A key whose value is inside the scout's VM can reach every host the scout reaches, not only its own capability's. Household guards where it can go; what the instructions tell the scout to do with it is yours to read.";
 /** What the owner's apply did with the scout's keys: the choice made (none asked: null), what it carries, what came off. */
 export interface KeysOutcome { choice: "keep" | "drop" | null; kept: string[]; dropped: string[] }
 
@@ -203,6 +217,8 @@ export class ScoutDrafts {
     for (const name of composed.definition.capabilities.filter(name => !current.capabilities.includes(name))) {
       const brought = keys.filter(key => key.source === name);
       if (brought.length) reasons.push(`added capability ${name} brings ${brought.map(keyName).join(", ")}`);
+      // Its install script runs as root in the VM that holds them, before the scout starts: a way to them of its own.
+      else if (composed.capabilities.find(capability => capability.name === name)?.install.trim()) reasons.push(`added capability ${name} runs its install script beside them`);
     }
     return reasons.length ? { keys, reasons, choices: keys.some(key => key.source === "own setup") ? ["keep", "drop"] : ["keep"] } : null;
   }
@@ -212,7 +228,9 @@ export class ScoutDrafts {
    * config with it in), so what is wrong with it is said to the bot now, not found by the owner later. One per scout:
    * a newer one replaces the older. Its notice goes to the bot's chat; the owner decides on the review page.
    */
-  draft(caller: PetIdentity, input: Record<string, unknown>) {
+  draft(caller: PetIdentity, raw: Record<string, unknown>) {
+    const input: Record<string, unknown> = { ...raw, ...Object.fromEntries(["description", "instructions", "reason"].filter(field => field in raw).map(field => [field, lineEnds(raw[field])])),
+      ...(raw.setup && typeof raw.setup === "object" && !Array.isArray(raw.setup) && "install" in raw.setup ? { setup: { ...raw.setup, install: lineEnds((raw.setup as Record<string, unknown>).install) } } : {}) };
     return this.serial(async () => {
       // Before anything is read: a bot past its rate costs nothing but this answer.
       const rate = `${caller.house}/${caller.pet}`, recent = (this.saves.get(rate) ?? []).filter(at => this.now() - at < RATE_MS);
@@ -228,6 +246,7 @@ export class ScoutDrafts {
       if (input.routine !== undefined && typeof input.routine !== "boolean") throw new HouseholdError("routine: true to ask to run it without asking, else leave it out");
       for (const field of ["description", "instructions"]) if (typeof input[field] !== "string") throw new HouseholdError(`${field} is required: ${field === "description" ? "when a bot should call this scout" : "how the scout does its task"}`);
       for (const field of ["title", "emoji"]) if (input[field] !== undefined && typeof input[field] !== "string") throw new HouseholdError(`${field} must be text`);
+      for (const field of ["description", "instructions", "reason", "title"]) assertPlain(input[field], field);
 
       const all = house.capabilities ?? [], scouts = house.scouts ?? [], drafts = this.standing(house);
       const current = scouts.find(scout => scout.name === name), currentOwn = all.find(capability => capability.owner === name);
@@ -243,6 +262,7 @@ export class ScoutDrafts {
       if (input.setup !== undefined) {
         const setup = input.setup as Record<string, unknown>;
         if (!setup || typeof setup !== "object" || Array.isArray(setup) || Object.keys(setup).some(key => !SETUP_FIELDS.includes(key))) throw new HouseholdError("setup: {install?, network?, needs_keys?}, as in capability_draft");
+        assertPlain(setup.install, "setup.install");
         // Its own capability is named after it: a shared one by that name is a clash the config would refuse.
         if (!currentOwn && all.some(capability => capability.name === name)) throw new HouseholdError(`A capability is already named ${name}, the name its own setup would take: pick another name for the scout`);
         own = {
@@ -341,6 +361,21 @@ export class ScoutDrafts {
     const house = await this.house(houseName);
     return this.standing(house).map(draft => this.present(house, draft));
   }
+  /**
+   * What the owner decides on, as the review shows it: the keys at stake and why, where the result can go, every key it
+   * carries, what changed since it was drafted, whether it can be routine, the shared capabilities it ticks. Its
+   * fingerprint goes back with the owner's apply: one that no longer matches means they decided on something else.
+   */
+  private basis(house: House, draft: ScoutDraft) {
+    const composed = this.compose(house, draft), network = blueprintNetwork(composed.definition, composed.capabilities);
+    return {
+      keyGate: this.gate(house, draft), network: { open: network.open, allow: network.allow.map(formatAllowEntry) },
+      keys: this.keys(house, composed, ownChanges(draft.own, composed.currentOwn)), changedSince: scoutBaseChanges(draft.base, scoutBase(house, draft.scout), draft.scout),
+      // The scout as it is, values and all: a second edit of a field already named, or bots ticked elsewhere, move it too.
+      now: scoutBase(house, draft.scout), routine: composed.current?.routine ?? [],
+      routineBlocker: routineBlocker(network) ?? null, shared: sharedOf(composed),
+    };
+  }
   private present(house: House, draft: ScoutDraft) {
     const composed = this.compose(house, draft), names = blueprintCapabilities(composed.definition, composed.capabilities);
     const network = blueprintNetwork(composed.definition, composed.capabilities);
@@ -362,6 +397,8 @@ export class ScoutDrafts {
       ownChanges: changes,
       /** The keys this change puts at stake and why; applying it then needs the owner's choice. Null: none are. */
       keyGate: this.gate(house, draft),
+      // What the gate does not do, said wherever the keys are listed: it guards where a key can go, not what it is used for.
+      vmKeyNote: keys.some(key => key.via === "vm") ? VM_KEY_NOTE : null,
       // Still missing: one the owner has added since is no longer asked for.
       needsKeys: draft.needsKeys.filter(env => !keys.some(key => key.env === env)),
       network: { open: network.open, allow: network.allow.map(formatAllowEntry), limitedBy: network.limitedBy },
@@ -369,6 +406,10 @@ export class ScoutDrafts {
       networkWords: scoutNetworkWords(composed.definition, composed.capabilities),
       routineBlocker: routineBlocker(network) ?? null,
       problems: scoutProblems({ capabilities: names }, composed.capabilities, envOf),
+      /** The shared capabilities it ticks as the owner has them: their hosts (null: any), whether they install something. */
+      shared: sharedOf(composed),
+      /** What the owner decides on, fingerprinted: sent back with apply, which refuses when it no longer matches. */
+      reviewed: fingerprint(this.basis(house, draft)),
     };
   }
 
@@ -385,6 +426,8 @@ export class ScoutDrafts {
     return this.serial(async () => {
       const house = await this.house(houseName), draft = this.standing(house).find(each => each.id === id);
       if (!draft) throw new NotFoundError("unknown draft");
+      // The owner's choices hold for what they saw: keys at stake, hosts, what changed since, all as the review showed them.
+      if (options.reviewed !== undefined && options.reviewed !== fingerprint(this.basis(house, draft))) throw new ScoutRevisionError("What this draft would do changed since you reviewed it: reload it and decide again.");
       const since = scoutBaseChanges(draft.base, scoutBase(house, draft.scout), draft.scout);
       if (since.length && !options.force) throw new ScoutRevisionError(staleDraftMessage(draft.scout, since));
       const gate = this.gate(house, draft);
@@ -401,7 +444,11 @@ export class ScoutDrafts {
       const composed = this.compose(house, draft, options), { definition, own, capabilities, current, currentOwn } = composed;
       check?.(composed);
       // Under the config's lock: an edit of the owner's that landed since this was read is never overwritten.
-      await this.deps.config.putScout(houseName, definition, own, options.force ? {} : { expected: draft.base });
+      // With force, over what changed since the draft, as read just now: never over an edit that lands during this apply.
+      await this.deps.config.putScout(houseName, definition, own, { expected: options.force ? scoutBase(house, draft.scout) : draft.base }).catch(error => {
+        if (options.force && error instanceof ScoutRevisionError) throw new ScoutRevisionError(`Scout ${draft.scout} changed while the draft was being applied; nothing was written. Review it again.`);
+        throw error;
+      });
       // It is in the config: the draft is done, whatever happens next.
       this.setDrafts(houseName, this.stored(houseName).filter(each => each.id !== id));
       const after = this.keys(house, composed, []).map(keyName), before = this.keys(house, this.compose(house, draft), []).map(keyName);

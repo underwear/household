@@ -27,6 +27,7 @@ import { SkillPreview } from "./skills";
 import { ScoutDocumentEditor } from "./scout-editor";
 import { ScoutsTabs, kindTag } from "./capabilities";
 import { FreeLink } from "./workspace-resources";
+import { ScoutDrafts, ScoutDraftsWaiting } from "./scout-drafts";
 
 type Notify = (text: string, warning?: boolean) => void;
 const done = (run: ScoutRunView) => ["done", "failed", "cancelled"].includes(run.status);
@@ -85,7 +86,8 @@ function useScouts(house: WorkspaceView, initial?: ScoutListView) {
   const enabled = houseFeatures(house).scouts;
   const load = useCallback(async () => { setView(await scoutApi.list(house.name)); setError(undefined); }, [house.name]);
   useEffect(() => {
-    if (!enabled) return;
+    // Off: bots cannot call scouts, but drafts they made before still wait for the owner: read once, to show them.
+    if (!enabled) { void scoutApi.list(house.name).then(setView, () => {}); return; }
     let active = true;
     const poll = () => scoutApi.list(house.name).then(
       next => { if (active) { setView(next); setError(undefined); } },
@@ -107,7 +109,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
   const [adding, setAdding] = useState(false);
   const [settings, setSettings] = useState(false);
   const [all, setAll] = useState(false);
-  if (!enabled) return <Page title="Scouts"><FeatureOff house={house.name} text={OFF_TEXT} /></Page>;
+  if (!enabled) return <Page title="Scouts"><FeatureOff house={house.name} text={OFF_TEXT} /><ScoutDrafts house={house.name} drafts={view?.drafts ?? []} /></Page>;
   const running = (view?.runs ?? []).filter(run => !done(run));
   const ended = (view?.runs ?? []).filter(done);
   const shown = all ? ended : ended.slice(0, 5);
@@ -130,6 +132,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
           ) : (
             <Section><p className="blank-line"><span><span className="dot off" /> None running{house.resources && <> · <FreeLink house={house} /> to start one</>}</span></p></Section>
           )}
+          <ScoutDrafts house={house.name} drafts={view.drafts ?? []} />
           <Section>
             {view.scouts.length === 0 ? (
               <div className="skills-blank">
@@ -140,7 +143,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
               </div>
             ) : (
               <ul className="bot-cards">
-                {view.scouts.map(scout => <li key={scout.name}><ScoutCard house={house.name} scout={scout} pets={house.pets} runs={view.runs.filter(run => run.blueprint === scout.name)} /></li>)}
+                {view.scouts.map(scout => <li key={scout.name}><ScoutCard house={house.name} scout={scout} pets={house.pets} runs={view.runs.filter(run => run.blueprint === scout.name)} drafts={(view.drafts ?? []).filter(draft => draft.scout === scout.name).length} /></li>)}
               </ul>
             )}
           </Section>
@@ -172,7 +175,7 @@ export function ScoutsPage({ house, agents, keys, host, refresh, notify, initial
 }
 
 /** A scout's card: who it is, what it is made of (its own setup first), its network, and its last run. */
-export function ScoutCard({ house, scout, runs = [], pets = [] }: { house: string; scout: ScoutView; runs?: ScoutRunView[]; /** The workspace's bots, to name the ones it is routine for. */ pets?: WorkspaceView["pets"] }) {
+export function ScoutCard({ house, scout, runs = [], pets = [], drafts = 0 }: { house: string; scout: ScoutView; runs?: ScoutRunView[]; /** The workspace's bots, to name the ones it is routine for. */ pets?: WorkspaceView["pets"]; /** Bots' drafts of a change to it, waiting for review. */ drafts?: number }) {
   const last = runs.find(run => run.startedAt) ?? runs[0];
   const state = last && runState(last);
   return (
@@ -186,6 +189,7 @@ export function ScoutCard({ house, scout, runs = [], pets = [] }: { house: strin
         <span className="hint clamp-two">{scout.description}</span>
       </Stack>
       <span className="cluster gap-1">
+        {drafts > 0 && <span className="tag busy">Draft waiting</span>}
         {scout.own && <span className="tag">own setup</span>}
         {scout.capabilities.map(name => <span key={name} className="tag mono">{name}</span>)}
         {!scout.own && scout.capabilities.length === 0 && <span className="hint">No capabilities</span>}
@@ -507,6 +511,7 @@ export function ScoutDetailPage({ house, name, tab = "overview", agents, keys, r
       ]} />
       {error && <p className="error" role="alert">{error}</p>}
       {scout.problems.length > 0 && <div className="banner danger" role="alert">{scout.problems.join("; ")}</div>}
+      <ScoutDraftsWaiting house={house.name} drafts={view.drafts ?? []} />
       {tab === "overview" && (
         <>
           <Section width="narrow">
@@ -642,7 +647,7 @@ export function ScoutAccess({ house, scout, capabilities, save, created }: { hou
  * exact hosts (`routineBlocker` says why not, in its own terms); what it sends back still waits for your Pass.
  */
 /** The bots that may be ticked: the workspace's own, not sideworkers. */
-const routineBots = (pets: WorkspaceView["pets"]) => pets.filter(pet => !pet.sideworker);
+export const routineBots = (pets: WorkspaceView["pets"]) => pets.filter(pet => !pet.sideworker);
 /** What Save sends: the ticked bots in the workspace's order; none clears the list (sent as null: strict again). */
 export const routinePatch = (pets: WorkspaceView["pets"], chosen: string[]): Pick<Partial<ScoutDefinition>, "routine"> => {
   const routine = routineBots(pets).map(pet => pet.name).filter(name => chosen.includes(name));
@@ -652,6 +657,9 @@ export const routinePatch = (pets: WorkspaceView["pets"], chosen: string[]): Pic
 export const routineToggleable = (blocker: string | null | undefined, chosen: string[], bot: string) => !blocker || chosen.includes(bot);
 /** The form's identity: a save that changed the list starts it afresh from what was saved. */
 export const routineFormKey = (scout: Pick<ScoutDefinition, "routine">) => JSON.stringify(scout.routine ?? []);
+
+/** The standing warning wherever bots are ticked to run a scout without asking. */
+export const ROUTINE_WARNING = "A routine scout does whatever these bots tell it, with its access. Tick a bot only when the worst that can happen is acceptable.";
 
 export function ScoutRoutine({ pets, scout, save }: { pets: WorkspaceView["pets"]; scout: ScoutView; save: (patch: Partial<ScoutDefinition>) => Promise<void> }) {
   const [chosen, setChosen] = useState(scout.routine ?? []);
@@ -681,7 +689,7 @@ export function ScoutRoutine({ pets, scout, save }: { pets: WorkspaceView["pets"
             </ListRow>
           ))}
         </List>
-        <p className="hint">A routine scout does whatever these bots tell it, with its access. Tick a bot only when the worst that can happen is acceptable.</p>
+        <p className="hint">{ROUTINE_WARNING}</p>
         <div className="access-result">
           <span className="hint">{chosen.length ? "What it sends back still waits for your Pass." : "Strict: you approve each run."}</span>
           <button type="submit" className="btn primary" disabled={!dirty || busy || (!!blocker && chosen.length > 0)}>{busy ? "Saving…" : "Save"}</button>

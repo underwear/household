@@ -99,6 +99,8 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       // Routine bots are bots of this workspace, said plainly (the config would refuse them less readably).
       const assertBots = (scout: ScoutDefinition) => { for (const bot of scout.routine ?? []) if (!house.pets.some(pet => pet.name === bot)) throw new HouseholdError(`${bot} is not a bot of this workspace`); };
       const draftView = (draft: ReturnType<Capabilities["drafts"]>[number]) => ({ ...draft, definition: capabilityDefinitionInput(draft.definition) });
+      // Bots' drafts waiting for review, as a list shows them: who, new or a change, when, stale, asking for routine.
+      const draftsWaiting = async () => (await deps.drafts?.views(houseName) ?? []).map(draft => ({ id: draft.id, scout: draft.scout, pet: draft.pet, petTitle: draft.petTitle, at: draft.at, change: draft.change, stale: draft.stale, wantsRoutine: draft.wantsRoutine }));
       const scoutView = (scout: NonNullable<typeof house.scouts>[number]) => {
         const names = blueprintCapabilities(scout, capabilities), network = scoutNetwork({ capabilities: names, workspace: scout.workspace }, capabilities);
         const own = capabilities.find(c => c.owner === scout.name);
@@ -154,7 +156,9 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
         if (tail === "apply" && request.method === "POST") {
           // Who runs it without asking is the owner's, said here; none said, every run asks (whatever it did before).
           // `keys`: the keys in its VM a change puts at stake (keep, or drop its own setup's); `force`: a draft its scout outran.
-          const value = await optionalBody(request, z.strictObject({ routine: z.array(z.string()).max(64).optional(), keys: z.enum(["keep", "drop"]).optional(), force: z.boolean().optional() }));
+          const value = await optionalBody(request, z.strictObject({ routine: z.array(z.string()).max(64).optional(), keys: z.enum(["keep", "drop"]).optional(), force: z.boolean().optional(), reviewed: z.string().max(64).optional() }));
+          // An apply is a decision on what the review showed: it comes with that review's fingerprint, or not at all.
+          if (!value.reviewed) throw new HouseholdError("reviewed: send the fingerprint of the draft view you decided on (house scout draft show prints it), so that your decision holds only for what you saw");
           // The same checks as the owner's own edit of a scout (PATCH below), said for the owner; the config checks it all again.
           return json(await deps.drafts.apply(houseName, name, value, ({ definition, capabilities: after }) => {
             const problems = scoutProblems({ capabilities: blueprintCapabilities(definition, after) }, after, envOf); if (problems.length) throw new HouseholdError(problems.join("; "));
@@ -244,7 +248,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       // Scouts.
       if (!name) {
         if (request.method === "GET") return json({ scouts: (house.scouts ?? []).map(scoutView), capabilities: capabilities.filter(c => !c.owner).map(capabilityView), runs: runs().map(runView), limits: scoutLimits(house), agent: house.scoutAgent ?? null,
-          drafts: (await deps.drafts?.list(houseName) ?? []).map(draft => ({ id: draft.id, scout: draft.scout, pet: draft.pet, at: draft.at })) });
+          drafts: await draftsWaiting() });
         if (request.method === "POST") {
           const value = await body(request, scoutDefinitionSchema);
           if (value.capabilities.some(c => capabilities.find(each => each.name === c)?.owner)) throw new HouseholdError("A blueprint ticks shared capabilities only");
@@ -257,7 +261,8 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       const scout = house.scouts?.find(s => s.name === name);
       if (!scout) throw new NotFoundError("Unknown scout");
       if (!tail) {
-        if (request.method === "GET") return json({ scout: scoutView(scout), capabilities: capabilities.filter(c => !c.owner).map(capabilityView), runs: runs().filter(r => r.blueprint === name).map(runView), defaults: { agent: house.scoutAgent ?? null, limits: scoutLimits(house) } });
+        if (request.method === "GET") return json({ scout: scoutView(scout), capabilities: capabilities.filter(c => !c.owner).map(capabilityView), runs: runs().filter(r => r.blueprint === name).map(runView), defaults: { agent: house.scoutAgent ?? null, limits: scoutLimits(house) },
+          drafts: (await draftsWaiting()).filter(draft => draft.scout === name) });
         if (request.method === "PATCH") {
           const fields = await body(request, z.record(z.string(), z.unknown()));
           const merged: Record<string, unknown> = { ...scoutDefinitionInput(scout), ...fields };

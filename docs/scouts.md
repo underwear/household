@@ -22,7 +22,7 @@ Say you ask your bot to buy a bus ticket.
 
 ## What you decide
 
-**Capabilities.** A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you; nothing changes until you apply it.
+**Capabilities.** A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you, or a whole scout (below); nothing changes until you apply it.
 
 **Any host or only these hosts.** **Any host** suits a scout that only reads the web. A scout that carries a card or a password should reach **only these hosts**, the ones its errand needs; mid-task it can ask you for one more, for that run only.
 
@@ -47,3 +47,15 @@ Some errands are small and the same every time, often on a schedule: submit the 
 - **Exact hosts only.** The scout reaches only hosts named in full: not the open internet, and not a wildcard such as `*.github.io`, under which anyone can put up a site.
 - **One run at a time** for each bot: a second one while the first is going waits for **Run**.
 - **Approval comes back.** A run the bot passes secrets to asks for **Run**. Allowing a run one more host, or taking the bot off the list, makes the rest of that run ask like any other.
+
+## Letting a bot propose a scout
+
+You don't have to set a scout up yourself. Describe the errand to your bot, say "submit my meter reading every month", and when no scout fits, it drafts one: what it is for, its instructions, the capabilities it needs, and a setup of its own with the least access it thinks the errand takes. Nothing exists until you apply it. Household tells you in the bot's chat that a draft is waiting, with the facts it computed itself: where the scout could go and which keys it would hold.
+
+**What you read.** The review sets out what you decide on, in order: what the scout is for (and, in the bot's own words, why), what it runs (its instructions and its own install script, in full; the shared capabilities it ticks keep the install scripts you gave them), where it can go (with the hosts it doesn't reach today marked), and what it holds (every key, wherever it comes from). For a change to a scout you have, each part shows how it is now and what the bot proposes. Key values never come from the bot: the draft names the variables it needs, and you add the values after applying.
+
+**Running without asking.** A bot can ask to run its scout without asking, but only you grant that, and only for a scout on exact hosts. Applying a change never keeps that trust on its own: if the scout was routine before, it asks every time again unless you tick its bots once more. A bot that rewrites a scout's hosts or instructions can't take along a trust you gave it for the old ones.
+
+**Keys that would reach somewhere new.** A key whose value sits inside the scout's VM can reach every host the scout reaches. When a change would let such a key go somewhere it couldn't before, adds an install script that runs beside it, or brings in a capability with one, you choose whether the key stays with the scout. If you take your own setup's keys off, they stay among the workspace's secrets.
+
+**A draft that is out of date.** If you have changed the scout since the bot drafted, applying the draft would undo that. Household tells you what changed, and applies it only when you confirm. And if anything you decided on moves while you review (a host, a key, a change of yours), it asks you to look again rather than apply what you didn't see. You can also decline a draft. Either way, the bot is told what you decided.

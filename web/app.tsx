@@ -1,4 +1,5 @@
 import { ScoutDetailPage } from "./components/scouts";
+import { ScoutDraftPage } from "./components/scout-drafts";
 import { CapabilityPage } from "./components/capabilities";
 import { TimezoneSettings } from "./components/timezone-settings";
 import { useCallback, useEffect, useState } from "react";
@@ -79,7 +80,7 @@ export function App() {
       </Page>
     ) : null;
 
-  const houseName = route.page === "workspace" ? route.name : (route.page === "bot" || route.page === "scout" || route.page === "capability") ? route.workspace : undefined;
+  const houseName = route.page === "workspace" ? route.name : (route.page === "bot" || route.page === "scout" || route.page === "capability" || route.page === "scout-draft") ? route.workspace : undefined;
   const house = houses.find((candidate) => candidate.name === houseName);
   const pet = route.page === "bot" ? house?.pets.find((candidate) => candidate.name === route.bot) : undefined;
   const capacity = { host: me.host, houses };
@@ -126,6 +127,7 @@ export function App() {
         )}
         {route.page === "workspace" && house && <WorkspacePage key={house.name} house={house} tab={route.tab} known={me} keys={keys} capacity={capacity} refresh={refresh} notify={notify} />}
         {route.page === "capability" && house && <CapabilityPage key={`${house.name}/${route.capability}`} house={house} name={route.capability} refresh={refresh} notify={notify} />}
+        {route.page === "scout-draft" && house && <ScoutDraftPage key={`${house.name}/${route.draft}`} house={house} id={route.draft} refresh={refresh} notify={notify} />}
         {route.page === "scout" && house && <ScoutDetailPage key={`${house.name}/${route.scout}`} house={house} name={route.scout} tab={route.tab} agents={me.agents} keys={keys} refresh={refresh} notify={notify} />}
         {route.page === "bot" && house && pet && <BotDetailPage key={`${house.name}/${pet.name}`} house={house} pet={pet} tab={route.tab} agents={me.agents} platforms={me.platforms} keys={keys} capacity={capacity} refresh={refresh} notify={notify} />}
         {route.page === "bot" && house && !pet && <Page title={`No bot named ${route.bot}`}><Link className="text-link" href={workspacePath(house.name, "bots")}>All bots in {house.name}</Link></Page>}
@@ -138,7 +140,7 @@ export function App() {
             </Cluster>
           </Page>
         )}
-        {(route.page === "workspace" || route.page === "bot" || route.page === "scout" || route.page === "capability") && !house && (
+        {(route.page === "workspace" || route.page === "bot" || route.page === "scout" || route.page === "capability" || route.page === "scout-draft") && !house && (
           <Page title={`No workspace named ${houseName}`}>
             <Cluster>
               <Link href="/" className="btn">

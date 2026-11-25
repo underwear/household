@@ -46,8 +46,11 @@ export const SCOUT_USAGE = `  house scout ls <workspace>         its scouts (cap
                                  only for a scout on exact hosts; what it sends back still waits for your Pass
   house scout rm <workspace> <name>
   house scout drafts <workspace>     scouts bots proposed (scout_draft), waiting for your review
-  house scout draft show|apply|discard <workspace> <id> [--routine bot1,bot2] [--keep-keys|--drop-keys] [--force]
-                                 show: what it would be against what it is, its network, every key it would carry;
+  house scout draft show|apply|discard <workspace> <id> [--reviewed <fingerprint>] [--routine bot1,bot2] [--keep-keys|--drop-keys] [--force]
+                                 show: what it would be against what it is, its network, every key it would carry,
+                                 and its fingerprint; apply with --routine, --keep-keys, --drop-keys or --force needs
+                                 --reviewed <that fingerprint> (refused if what you saw moved since); a plain apply
+                                 prints what it applies;
                                  apply: the scout and its own setup as drafted, run without asking only by the bots of
                                  --routine (none given: every run asks, even if it did not before); a change that puts
                                  keys in its VM at stake (new hosts, a changed install, a capability bringing one)
@@ -81,6 +84,7 @@ export interface ScoutValues {
   capabilities?: string;
   routine?: string;
   "keep-keys"?: boolean;
+  reviewed?: string;
   "drop-keys"?: boolean;
   force?: boolean;
   instructions?: string;
@@ -123,6 +127,9 @@ interface ScoutDraftView {
   own: { install: string; network: { any: boolean; allow: string[] } } | null; currentOwn: { install: string; network: { any: boolean; allow: string[] } } | null;
   current: { title?: string; description: string; instructions: string; capabilities: string[]; routine?: string[] } | null;
   keys: { env: string | null; secret: string; source: string; via: "gateway" | "vm"; keptWith?: string[] }[]; ownChanges: string[];
+  vmKeyNote?: string | null;
+  /** The fingerprint of what the owner decides on: sent back with apply. */
+  reviewed: string;
   keyGate: { keys: { env: string | null; secret: string; source: string }[]; reasons: string[]; choices: ("keep" | "drop")[] } | null;
   needsKeys: string[]; network: { open: boolean; allow: string[] }; currentNetwork: { open: boolean; allow: string[] } | null; routineBlocker: string | null; problems: string[];
 }
@@ -481,6 +488,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
           say(`# ${label} (changed)\n${[...marked("-", before), ...marked("+", after)].join("\n")}`);
         };
         say(`draft ${d.id}: ${d.change ? "a change to" : "new"} scout ${scout.name}, by ${d.pet}, ${time(new Date(d.at).toISOString())}`);
+        say(`fingerprint  ${d.reviewed}  (decide on this: house scout draft apply ${houseName} ${d.id} --reviewed ${d.reviewed} …)`);
         say(`why          ${d.reason}`);
         if (d.stale) say(`stale        changed since it was drafted: ${d.changedSince.join(", ")} (applying it undoes that: apply --force)`);
         say(`title        ${scout.emoji ? `${scout.emoji} ` : ""}${scout.title ?? "-"}${was && was.title !== scout.title ? `  (now ${was.title ?? "-"})` : ""}`);
@@ -489,6 +497,7 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
         field("capabilities", was ? ticked(was.capabilities, !!d.currentOwn) : undefined, ticked(scout.capabilities, !!(d.own || d.currentOwn)));
         field("network", d.currentNetwork ? networkWords(d.currentNetwork) : undefined, networkWords(d.network));
         say(`keys         ${d.keys.map((key) => `${key.env ?? key.secret} (${key.source}, ${key.via === "vm" ? "value in its VM" : "gateway placeholder"}${key.keptWith?.length ? `; kept, with a changed ${key.keptWith.join(" and ")}` : ""})`).join("\n             ") || "none"}`);
+        if (d.vmKeyNote) say(`             ${d.vmKeyNote}`);
         const gate = d.keyGate;
         if (gate) say(`at stake     ${gate.keys.map((key) => key.env ?? key.secret).join(", ")}: ${gate.reasons.join("; ")}\n             apply needs ${gate.choices.includes("drop") ? "--keep-keys or --drop-keys (drop takes its own setup's off)" : "--keep-keys (a shared capability's key: to leave it out, untick that capability instead)"}`);
         if (d.needsKeys.length) say(`needs keys   ${d.needsKeys.join(", ")}`);
@@ -505,13 +514,21 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
       const routine = list(values.routine);
       if (values["keep-keys"] && values["drop-keys"]) usage(SCOUT_USAGE, "--keep-keys or --drop-keys, not both");
       const keys = values["keep-keys"] ? "keep" : values["drop-keys"] ? "drop" : undefined;
-      // Over changes made since it was drafted: say which, before they are undone.
-      if (values.force && !values.json) {
+      // A choice is made on what `draft show` showed: its fingerprint comes along (--reviewed), and the daemon refuses the
+      // apply when what it rests on moved since. Without choices, what is applied is what is read and printed here.
+      const show = `house scout draft show ${houseName} ${id}`;
+      if ((routine?.length || keys || values.force) && !values.reviewed) usage(SCOUT_USAGE, `--routine, --keep-keys, --drop-keys and --force are decisions on what you reviewed: run ${show} first, then pass its fingerprint with --reviewed <fingerprint>`);
+      let reviewed = values.reviewed;
+      if (!reviewed) {
         const d = await api<ScoutDraftView>(paths, "GET", path);
-        if (d.stale) say(`applying over what changed since it was drafted: ${d.changedSince.join(", ")}`);
+        reviewed = d.reviewed;
+        if (!values.json) for (const line of decisionBasis(d)) say(line);
       }
-      const body = { ...(routine?.length ? { routine } : {}), ...(keys ? { keys } : {}), ...(values.force ? { force: true } : {}) };
-      const result = await api<{ scout: string; routine: string[]; keys: { choice: string | null; kept: string[]; dropped: string[]; sharedStay?: string[] } }>(paths, "POST", `${path}/apply`, Object.keys(body).length ? body : undefined);
+      const body = { ...(routine?.length ? { routine } : {}), ...(keys ? { keys } : {}), ...(values.force ? { force: true } : {}), reviewed };
+      const result = await api<{ scout: string; routine: string[]; keys: { choice: string | null; kept: string[]; dropped: string[]; sharedStay?: string[] } }>(paths, "POST", `${path}/apply`, body).catch((error: Error) => {
+        if (/changed since you reviewed it/.test(error.message)) throw new HouseholdError(`reviewed against something else: run ${show} again, and decide on what it shows`);
+        throw error;
+      });
       return out(values, result, () => {
         say(`draft ${id} applied: scout '${result.scout}' ${result.routine.length ? `runs without asking for ${result.routine.join(", ")}` : "asks before every run"}`);
         const { kept, dropped, sharedStay } = result.keys;
@@ -674,6 +691,18 @@ async function scout(paths: Paths, args: string[], values: ScoutValues): Promise
     return out(values, { ok: true }, () => say(`run ${name} stopped; its VM is deleted`));
   }
   usage(SCOUT_USAGE, `unknown command or missing arguments: house scout ${args.join(" ")}`);
+}
+
+/** What a plain `draft apply` applies, printed before it does: the network (new hosts marked), every key, what changed since. */
+function decisionBasis(d: ScoutDraftView): string[] {
+  const now = d.currentNetwork;
+  const fresh = !now || now.open ? [] : d.network.open ? ["the open internet"] : d.network.allow.filter((host) => !now.allow.includes(host));
+  return [
+    `applying draft ${d.id}: ${d.change ? "a change to" : "new"} scout ${d.scout}, by ${d.pet}`,
+    `network      ${networkWords(d.network)}${fresh.length ? `  (new: ${fresh.join(", ")})` : ""}`,
+    `keys         ${d.keys.map((key) => `${key.env ?? key.secret} (${key.source}, ${key.via === "vm" ? "value in its VM" : "gateway placeholder"})`).join(", ") || "none"}`,
+    `changed      ${d.changedSince.length ? `since it was drafted: ${d.changedSince.join(", ")}` : "nothing since it was drafted"}`,
+  ];
 }
 
 /** Polls a run until it says it is done (an outcome) or ends; says each change of its status. */

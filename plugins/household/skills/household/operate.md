@@ -19,7 +19,12 @@
   scripts with network (`--network any` for a tool, `--network host1,host2` for an access capability) and keys
   (`--via gateway` or `--via vm`); `capability test` installs one in a fresh VM; bots can propose drafts. Scouts are
   made of capabilities; `house scout run` starts one directly, `house scout runs` lists runs; `house scout set …
-  --routine bot1,bot2` lets those bots run it without asking (exact hosts only).
+  --routine bot1,bot2` lets those bots run it without asking (exact hosts only). Bots propose whole scouts
+  (`scout_draft`): `house scout drafts <workspace>` lists them, `house scout draft show <workspace> <id>` shows one
+  against the scout as it is (network, every key, what is stale) with its fingerprint; `house scout draft apply
+  <workspace> <id> --reviewed <fingerprint> [--routine bot1,bot2] [--keep-keys|--drop-keys] [--force]` applies it,
+  refused if what was shown moved since (choices need `--reviewed`; a plain apply prints what it applies; no
+  `--routine`: every run asks); `house scout draft discard <workspace> <id>` declines it; the bot is told either way.
 - **Workspace features**: `house features <workspace> scouts|preview|sideworkers=on|off`.
 - **Web UI**: `house dashboard` (one-time sign-in link).
 

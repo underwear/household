@@ -1,4 +1,5 @@
 import { HouseholdError } from "../core/errors";
+import { assertPlain } from "../core/hidden-text";
 import { capabilityKind, type CapabilityDefinition } from "../core/scouts";
 import { NAME_PATTERN } from "../core/names";
 import { formatAllowEntry, parseAllowEntry } from "../core/network-policy";
@@ -41,6 +42,8 @@ export function changedFields(before: CapabilityDefinition | undefined, after: C
   return changed.length ? changed.join(", ") : "no change";
 }
 
+/** Windows line ends in a bot's text are line ends: only a lone carriage return is refused. */
+export const lineEnds = (value: unknown) => typeof value === "string" ? value.replaceAll("\r\n", "\n") : value;
 /** A drafted text field: `fallback` (the current value) when left out. Shared by capability and scout drafts. */
 export function draftText(value: unknown, field: string, max: number, fallback: string): string {
   if (value === undefined) return fallback;
@@ -148,11 +151,13 @@ export class Capabilities {
     const current = (house.capabilities ?? []).find(capability => capability.name === input.name);
     if (current?.owner) throw new HouseholdError(`${input.name} belongs to a scout blueprint; only your human edits it`);
     if (!current && this.drafts(caller.house).filter(each => !(house.capabilities ?? []).some(c => c.name === each.capability)).length >= 10) throw new HouseholdError("Ten new capabilities already wait for your human; ask them to review those first");
+    // What runs as root in the scouts that have it: the owner reads it before applying, so it hides nothing.
+    for (const field of ["description", "install"] as const) assertPlain(input[field], field);
     const needsKeys = draftKeys(input.needs_keys);
     const definition: CapabilityDefinition = {
       name: input.name,
-      description: draftText(input.description, "description", 1000, current?.description ?? ""),
-      install: draftText(input.install, "install", 100_000, current?.install ?? ""),
+      description: draftText(lineEnds(input.description), "description", 1000, current?.description ?? ""),
+      install: draftText(lineEnds(input.install), "install", 100_000, current?.install ?? ""),
       network: draftNetwork(input.network, current?.network),
       keys: current?.keys ?? [],
     };

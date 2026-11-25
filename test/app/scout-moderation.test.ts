@@ -7,7 +7,7 @@ const definition = { ...scoutDefinitionSchema.parse({ name: "browser", title: "B
 const files: ScoutFile[] = [{ id: "file-1", type: "pdf", size: 184320, sha256: "aa" }, { id: "file-2", type: "html", size: 12288, sha256: "bb" }];
 
 /** A running scout whose owner cards are answered in order by `answers` (undefined: left open). */
-function fixture(answers: ("yes" | "no")[]) {
+function fixture(answers: ("yes" | "no")[], names: Record<string, string> = { "file-1": "ticket.pdf", "file-2": "receipt.html" }) {
   const values = new Map<string, string>(), sent: string[] = [], cards: string[] = [], passed: string[][] = [];
   const run: ScoutRun = { capabilities: [], id: "scout-test", house: "work", scout: "browser", parent: "sibling", task: "test", report: "pet", status: "running", createdAt: Date.now(), steps: 0, actions: [], secretRequests: [], files: [], definition };
   values.set("scouts.runs.v1", JSON.stringify([run]));
@@ -16,7 +16,7 @@ function fixture(answers: ("yes" | "no")[]) {
     choose: async (_caller, card) => { cards.push(card.text); return answers.shift(); },
     prepare: async () => undefined, launch: async () => {}, ready: async () => true, remove: async () => {}, closedNotice: () => async () => {}, notice: async () => {},
     send: (_h, _p, text) => { sent.push(text); }, secret: async () => {}, log: () => {},
-    collect: async () => files, fileNames: async () => ({ "file-1": "ticket.pdf", "file-2": "receipt.html" }),
+    collect: async () => files, fileNames: async () => names,
     passFiles: async (_r, ids) => { passed.push(ids); return ids.map(id => `/home/agent/inbox/scout-${id}`); },
     title: (_h, pet) => pet === "sibling" ? "🤖 Sibling" : pet,
   };
@@ -68,4 +68,12 @@ test("the pet's facts count domains and tools, and never name a domain", () => {
   expect(status.tools).toEqual({ Bash: 1, other: 1 });
   expect(JSON.stringify(status)).not.toContain("send-all-money");
   expect(JSON.stringify(status)).not.toContain("moventis");
+});
+
+test("a file's name on its card is shown as it reads: characters no one sees are removed", async () => {
+  const f = fixture(["yes", "yes", "yes"], { "file-1": "ticket\u{202E}fdp.exe", "file-2": "\u{E0073}\u{E0065}" });
+  await f.scouts.parentSend(self, "Booked", ["/work/out/a", "/work/out/b"]);
+  await settle();
+  expect(f.cards[1]).toContain("File: <code>ticketfdp.exe</code>");
+  expect(f.cards[2]).toContain("File: <code>file-2</code>"); // nothing visible left: its handle
 });

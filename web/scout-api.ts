@@ -69,6 +69,45 @@ export interface CapabilityDraftView {
   needsKeys: string[];
 }
 export interface CapabilityTemplate extends CapabilityInput { label: string }
+/** A bot's scout draft as lists show it: who proposed it, new or a change, when, stale, whether it asks to run without asking. */
+export interface ScoutDraftSummary { id: string; scout: string; pet: string; petTitle: string; at: number; change: boolean; stale: boolean; wantsRoutine: boolean }
+/** A key the drafted scout would carry: its variable, where it comes from, how it is delivered. */
+export interface ScoutDraftKey { env: string | null; secret: string; source: string; via: "gateway" | "vm"; keptWith?: ("install" | "network")[] }
+type DraftNetwork = { open: boolean; allow: string[]; limitedBy: string[] };
+/** Everything the owner's review of a scout draft needs (`GET scout-drafts/:id`). */
+export interface ScoutDraftView extends ScoutDraftSummary {
+  /** The bot's words for the owner: why this scout, why this access. */
+  reason: string;
+  /** What it was made against changed since: these fields. Applying it would undo them. */
+  changedSince: string[];
+  /** The scout it would be (never with a routine list: that is the owner's, given on apply). */
+  definition: ScoutDefinition;
+  /** Its own setup as proposed; null: its own setup stays as it is (or it has none). */
+  own: CapabilityInput | null;
+  /** For a change: the scout and its own setup as they are now. */
+  current: ScoutDefinition | null;
+  currentOwn: (CapabilityInput & { keys: CapabilityView["keys"] }) | null;
+  /** Every key the result carries. */
+  keys: ScoutDraftKey[];
+  ownChanges: ("install" | "network")[];
+  /** Said wherever keys are listed when one is inside its VM: where such a key can go, and what no check covers. */
+  vmKeyNote: string | null;
+  /** Keys in its VM this change puts at stake, and why; applying needs the owner's choice. */
+  keyGate: { keys: ScoutDraftKey[]; reasons: string[]; choices: ("keep" | "drop")[] } | null;
+  /** Variables still to be provided, by name. */
+  needsKeys: string[];
+  network: DraftNetwork;
+  currentNetwork: DraftNetwork | null;
+  routineBlocker: string | null;
+  problems: string[];
+  /** The shared capabilities it ticks, as the owner has them: their hosts (null: any) and whether they install something. */
+  shared: { name: string; description: string; hosts: string[] | null; installs: boolean }[];
+  /** The fingerprint of what the owner decides on: sent back with apply, which refuses when it moved since. */
+  reviewed: string;
+}
+/** The owner's word on applying a draft: who runs it without asking, the keys at stake, and applying over changes since. */
+export interface ScoutDraftApply { reviewed: string; routine?: string[]; keys?: "keep" | "drop"; force?: true }
+export interface ScoutDraftApplied { scout: string; routine: string[]; keys: { choice: "keep" | "drop" | null; kept: string[]; dropped: string[]; sharedStay?: string[] } }
 export interface ScoutListView {
   scouts: ScoutView[];
   capabilities: CapabilityView[];
@@ -76,6 +115,8 @@ export interface ScoutListView {
   limits: ScoutLimits;
   /** The workspace's harness: scouts that set none of their own run on it. */
   agent: ScoutHarness | null;
+  /** Scouts bots proposed, waiting for review. */
+  drafts?: ScoutDraftSummary[];
 }
 export interface ScoutDetailView {
   scout: ScoutView;
@@ -83,6 +124,8 @@ export interface ScoutDetailView {
   runs: ScoutRunView[];
   /** The workspace's harness and resources: what it runs on unless it sets its own. */
   defaults: { agent: ScoutHarness | null; limits: ScoutLimits };
+  /** Drafts of a change to it, waiting for review. */
+  drafts?: ScoutDraftSummary[];
 }
 export interface CapabilityDetailView {
   capability: CapabilityView;
@@ -127,6 +170,13 @@ export const scoutApi = {
   agent: (h: string) => call<ScoutHarness | null>("GET", `${base(h)}/scout-agent`),
   setHarness: (h: string, value: ScoutHarness) => call<ScoutHarness>("PUT", `${base(h)}/scout-agent`, value),
   setLimits: (h: string, value: ScoutLimits) => call<ScoutLimits>("PUT", `${base(h)}/scout-limits`, value),
+};
+const draft = (house: string, id: string) => `${base(house)}/scout-drafts/${encodeURIComponent(id)}`;
+export const scoutDraftApi = {
+  view: (h: string, id: string) => call<ScoutDraftView>("GET", draft(h, id)),
+  /** Always with the fingerprint of the view the owner decided on; nothing else when they chose nothing (every run asks). */
+  apply: (h: string, id: string, body: ScoutDraftApply) => call<ScoutDraftApplied>("POST", `${draft(h, id)}/apply`, body),
+  decline: (h: string, id: string) => call<void>("DELETE", draft(h, id)),
 };
 export const capabilityApi = {
   list: (h: string) => call<{ capabilities: CapabilityView[]; drafts: CapabilityDraftView[] }>("GET", `${base(h)}/capabilities`),

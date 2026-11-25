@@ -132,7 +132,7 @@ test("scout drafts: listed, shown against the scout as it is (keys, staleness, b
     currentOwn: { install: "apt-get install -y curl", network: { any: false, allow: ["meter.example.com"] } },
     current: { title: "Meter", description: "Submits the reading", instructions: "Log in.", capabilities: [], routine: ["sibling"] },
     keys: [{ env: "METER_PASSWORD", secret: "meter-pass", source: "own setup", via: "vm", keptWith: ["install"] }, { env: "DD_API_KEY", secret: "dd", source: "datadog", via: "gateway" }],
-    ownChanges: ["install"],
+    ownChanges: ["install"], reviewed: "fp1", vmKeyNote: "A key whose value is inside the scout's VM can reach every host the scout reaches.",
     keyGate: { keys: [{ env: "METER_PASSWORD", secret: "meter-pass", source: "own setup" }], reasons: ["it would reach new hosts: api.datadoghq.eu", "its own install script changes"], choices: ["keep", "drop"] },
     needsKeys: ["METER_USER"], network: { open: false, allow: ["meter.example.com", "api.datadoghq.eu"] }, currentNetwork: { open: false, allow: ["meter.example.com"] }, routineBlocker: null, problems: [],
   };
@@ -140,7 +140,8 @@ test("scout drafts: listed, shown against the scout as it is (keys, staleness, b
     "GET /api/houses/work/scout-drafts": { body: [draft] },
     "GET /api/houses/work/scout-drafts/d1": { body: draft },
     "POST /api/houses/work/scout-drafts/d1/apply": () => {
-      const sent = calls.at(-1)!.body as { routine?: string[]; keys?: string } | undefined;
+      const sent = calls.at(-1)!.body as { routine?: string[]; keys?: string; reviewed?: string } | undefined;
+      if (sent?.reviewed === "stale") return { status: 409, body: { error: "What this draft would do changed since you reviewed it: reload it and decide again." } };
       const keys = sent?.keys === "drop" ? { choice: "drop", kept: ["DD_API_KEY"], dropped: ["METER_PASSWORD"], sharedStay: ["DD_API_KEY (datadog, value in its VM)"] } : { choice: sent?.keys ?? null, kept: ["METER_PASSWORD", "DD_API_KEY"], dropped: [] };
       return { body: { scout: "meter", routine: sent?.routine ?? [], keys } };
     },
@@ -158,25 +159,38 @@ test("scout drafts: listed, shown against the scout as it is (keys, staleness, b
   expect(said).toContain("capabilities - own setup\n             + datadog, own setup");
   expect(said).toContain("network      - only meter.example.com\n             + only meter.example.com, api.datadoghq.eu");
   expect(said).toContain("keys         METER_PASSWORD (own setup, value in its VM; kept, with a changed install)\n             DD_API_KEY (datadog, gateway placeholder)");
+  expect(said).toContain("             A key whose value is inside the scout's VM can reach every host the scout reaches.");
   expect(said).toContain("at stake     METER_PASSWORD: it would reach new hosts: api.datadoghq.eu; its own install script changes\n             apply needs --keep-keys or --drop-keys (drop takes its own setup's off)");
   expect(said).toContain("routine      asked: give it with apply --routine  (now routine for sibling; applying without --routine ends that)");
   expect(said).toContain("# instructions (changed)\n- Log in.\n+ Log in, submit.");
   expect(said).toContain("# own install script (changed)\n- apt-get install -y curl\n+ curl -d \"$METER_PASSWORD\" https://meter.example.com");
-  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], {});
-  expect(calls.at(-1)).toEqual({ method: "POST", path: "/api/houses/work/scout-drafts/d1/apply" }); // no body: strict, no choices made
-  expect(said.slice(-2)).toEqual(["draft d1 applied: scout 'meter' asks before every run", "keys         carries METER_PASSWORD, DD_API_KEY"]);
+  expect(said).toContain("fingerprint  fp1  (decide on this: house scout draft apply work d1 --reviewed fp1 …)");
+  // A plain apply: what it applies is read and printed in full, and its fingerprint goes along.
   said.length = 0;
-  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { routine: "sibling", "drop-keys": true, force: true });
-  expect(calls.at(-1)).toEqual({ method: "POST", path: "/api/houses/work/scout-drafts/d1/apply", body: { routine: ["sibling"], keys: "drop", force: true } });
+  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], {});
+  expect(calls.slice(-2)).toEqual([{ method: "GET", path: "/api/houses/work/scout-drafts/d1" }, { method: "POST", path: "/api/houses/work/scout-drafts/d1/apply", body: { reviewed: "fp1" } }]);
   expect(said).toEqual([
-    "applying over what changed since it was drafted: capabilities",
+    "applying draft d1: a change to scout meter, by sibling",
+    "network      only meter.example.com, api.datadoghq.eu  (new: api.datadoghq.eu)",
+    "keys         METER_PASSWORD (own setup, value in its VM), DD_API_KEY (datadog, gateway placeholder)",
+    "changed      since it was drafted: capabilities",
+    "draft d1 applied: scout 'meter' asks before every run",
+    "keys         carries METER_PASSWORD, DD_API_KEY",
+  ]);
+  // Choices are decisions on what draft show showed: never without its fingerprint, and never fetched for them here.
+  for (const flags of [{ routine: "sibling" }, { "keep-keys": true }, { "drop-keys": true }, { force: true }])
+    await expect(runScouts(paths, "scout", ["draft", "apply", "work", "d1"], flags)).rejects.toThrow("run house scout draft show work d1 first, then pass its fingerprint with --reviewed <fingerprint>");
+  const before = calls.length;
+  said.length = 0;
+  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { routine: "sibling", "drop-keys": true, force: true, reviewed: "fp0" });
+  expect(calls.slice(before)).toEqual([{ method: "POST", path: "/api/houses/work/scout-drafts/d1/apply", body: { routine: ["sibling"], keys: "drop", force: true, reviewed: "fp0" } }]);
+  expect(said).toEqual([
     "draft d1 applied: scout 'meter' runs without asking for sibling",
     "keys         carries DD_API_KEY; taken off its own setup: METER_PASSWORD (the workspace's secrets stay)",
     "             still carried, from shared capabilities: DD_API_KEY (datadog, value in its VM)",
   ]);
-  await runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { "keep-keys": true });
-  expect(calls.at(-1)!.body).toEqual({ keys: "keep" });
-  await expect(runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { "keep-keys": true, "drop-keys": true })).rejects.toThrow("--keep-keys or --drop-keys, not both");
+  await expect(runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { "keep-keys": true, reviewed: "stale" })).rejects.toThrow("reviewed against something else: run house scout draft show work d1 again, and decide on what it shows");
+  await expect(runScouts(paths, "scout", ["draft", "apply", "work", "d1"], { "keep-keys": true, "drop-keys": true, reviewed: "fp1" })).rejects.toThrow("--keep-keys or --drop-keys, not both");
   await runScouts(paths, "scout", ["draft", "discard", "work", "d1"], {});
   expect(calls.at(-1)).toEqual({ method: "DELETE", path: "/api/houses/work/scout-drafts/d1" });
   await runScouts(paths, "scout", ["ls", "work"], {});

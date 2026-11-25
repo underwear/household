@@ -12,7 +12,7 @@ export type ScoutTab = (typeof SCOUT_TABS)[number];
 
 
 /** The screens so far: the workspaces, Household settings (keys, …), a page of one workspace, or a path that stands for another. */
-export type Route = { page: "workspaces" } | { page: "settings" } | { page: "setup" } | { page: "workspace"; name: string; tab: WorkspaceTab } | { page: "bot"; workspace: string; bot: string; tab: BotTab } | { page: "scout"; workspace: string; scout: string; tab: ScoutTab } | { page: "capability"; workspace: string; capability: string } | { page: "redirect"; to: string } | { page: "missing" };
+export type Route = { page: "workspaces" } | { page: "settings" } | { page: "setup" } | { page: "workspace"; name: string; tab: WorkspaceTab } | { page: "bot"; workspace: string; bot: string; tab: BotTab } | { page: "scout"; workspace: string; scout: string; tab: ScoutTab } | { page: "capability"; workspace: string; capability: string } | { page: "scout-draft"; workspace: string; draft: string } | { page: "redirect"; to: string } | { page: "missing" };
 
 /**
  * The pages by path pattern, first match wins; `:name` is one path segment (URI-decoded). A new screen is a line
@@ -36,6 +36,9 @@ const ROUTES: RouteEntry[] = [
   ["/workspaces/:workspace/bots/:bot/monitoring", ({ workspace, bot }) => ({ page: "redirect", to: botPath(workspace!, bot!, "resources") })],
   ["/workspaces/:workspace/scouts/:scout", ({ workspace, scout }) => ({ page: "scout", workspace: workspace!, scout: scout!, tab: "overview" })],
   ...SCOUT_TABS.filter((tab) => tab !== "overview").map((tab): RouteEntry => [`/workspaces/:workspace/scouts/:scout/${tab}`, ({ workspace, scout }) => ({ page: "scout", workspace: workspace!, scout: scout!, tab })]),
+  // A bot's draft of a scout, under Scouts → Drafts (the chat notice names that place). After a scout's own tabs: a
+  // scout named "drafts" keeps its pages, and a draft's id is never a tab's name.
+  ["/workspaces/:workspace/scouts/drafts/:draft", ({ workspace, draft }) => ({ page: "scout-draft", workspace: workspace!, draft: draft! })],
   // Default and special scouts became one list of scouts; its limit, harness and resources a dialog on it.
   ["/workspaces/:workspace/special-scouts/:scout", ({ workspace, scout }) => ({ page: "redirect", to: scoutPath(workspace!, scout!) })],
   ...["special-scouts", "scout-default", "scout-resources"].map((old): RouteEntry => [`/workspaces/:workspace/${old}`, ({ workspace }) => ({ page: "redirect", to: workspacePath(workspace!, "scouts") })]),
@@ -121,6 +124,8 @@ export function usePath(): string {
   return path;
 }
 
+/** The review of a bot's scout draft. */
+export const scoutDraftPath = (workspace: string, draft: string) => `${workspacePath(workspace, "scouts")}/drafts/${encodeURIComponent(draft)}`;
 /** A page of a scout: its overview unless another is named. */
 export const scoutPath = (workspace: string, scout: string, tab: ScoutTab = "overview") => `${workspacePath(workspace, "scouts")}/${encodeURIComponent(scout)}${tab === "overview" ? "" : `/${tab}`}`;
 

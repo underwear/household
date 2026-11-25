@@ -46,7 +46,8 @@ Install the `household` skill too, for running Household afterwards:
 - **Scout**: a specialist a bot calls for one risky or privileged task ("find this movie on a torrent site", "buy
   two bus tickets"). It runs in a fresh throwaway VM built only from the **capabilities** the owner set (install
   script, network, keys), sees nothing of the bot, starts only when the owner presses **Run** (or at once, when the
-  owner made it routine for that bot), and is deleted after.
+  owner made it routine for that bot), and is deleted after. A bot may draft a scout for a recurring errand; it
+  exists only once the owner reviews and applies the draft, and only the owner grants it routine.
 - **Channel**: where people talk to bots: a Telegram group with a topic per bot, a Telegram private chat (threaded
   or plain), or a Slack DM.
 - **Inbox**: a bot's subscription to outside events: mail (IMAP/POP3), feeds, health checks, Grafana, Datadog,

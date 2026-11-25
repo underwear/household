@@ -109,6 +109,15 @@ test("a pet's draft waits for the owner; applying makes a revision by the pet; t
   expect((await f.json("GET", "capabilities/media")).history[0].author).toEqual({ kind: "pet", pet: "sibling" });
 });
 
+test("a pet's capability draft that hides characters is refused; Windows line ends are line ends", async () => {
+  const f = await fixture();
+  await f.config.addPet("work", "sibling");
+  await expect(f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", install: "pip install yt-dlp\u{E0063}\u{E0075}\u{E0072}\u{E006C}" })).rejects.toThrow("install holds a character that hides or reorders text (U+E0063)");
+  await expect(f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", description: "Downloads\u{200B}" })).rejects.toThrow("description holds a character that hides or reorders text (U+200B)");
+  await f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", install: "apt-get update\r\napt-get install -y ffmpeg\r\n" });
+  expect(f.capabilities.drafts("work")[0]!.definition.install).toBe("apt-get update\napt-get install -y ffmpeg\n");
+});
+
 test("Test install runs a VM for the capability and keeps only its outcome", async () => {
   const f = await fixture();
   await f.call("POST", "capabilities", { name: "media", install: "pip install yt-dlp" });

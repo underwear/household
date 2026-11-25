@@ -327,6 +327,7 @@ async function main(argv: string[]): Promise<void> {
       capabilities: { type: "string" },
       routine: { type: "string" },
       "keep-keys": { type: "boolean" },
+      reviewed: { type: "string" },
       "drop-keys": { type: "boolean" },
       instructions: { type: "string" },
       repo: { type: "string" },
