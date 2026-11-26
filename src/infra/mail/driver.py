@@ -14,7 +14,9 @@ import socket
 import ssl
 import sys
 
-MAX_MESSAGE = 12 * 1024 * 1024
+# What mail services carry: attachments up to 25 MiB, about a third more once encoded in a message.
+MAX_ATTACHMENT = 25 * 1024 * 1024
+MAX_MESSAGE = 40 * 1024 * 1024
 MAX_HEADER = 65536
 MAX_UIDS = 100000
 
@@ -31,7 +33,7 @@ def tls_context(endpoint):
 class BoundedRead:
     def _charge(self, size):
         self.response_bytes = getattr(self, "response_bytes", 0) + size
-        if self.response_bytes > 32 * 1024 * 1024: raise MailError("message-too-large")
+        if self.response_bytes > 64 * 1024 * 1024: raise MailError("message-too-large")
 
     def _get_line(self):
         line = super()._get_line()
@@ -355,7 +357,7 @@ def execute(config, operation, params):
             for index, part in attachment_parts(parsed(raw)):
                 if str(index) == params["attachment"]:
                     data = attachment_bytes(part)
-                    if len(data) > 8 * 1024 * 1024: raise MailError("message-too-large")
+                    if len(data) > MAX_ATTACHMENT: raise MailError("message-too-large")
                     return {"filename": str(part.get_filename() or "attachment")[:200], "contentType": part.get_content_type(), "data": base64.b64encode(data).decode()}
             raise MailError("attachment-not-found")
         # Verify existence without changing Seen before a mutation.

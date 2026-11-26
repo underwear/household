@@ -34,7 +34,7 @@ export type MailDriver = (config: MailConnectionInput, operation: string, params
 /** One bounded host process. Never forwards stderr or server text into errors. */
 export const mailDriver: MailDriver = async (config, operation, params, signal) => {
   signal?.throwIfAborted();
-  const proc = Bun.spawn(["python3", "-c", helper], { stdin: new Blob([JSON.stringify({ config, operation, params })]), stdout: "pipe", stderr: "pipe", timeout: 60_000, killSignal: "SIGKILL", signal });
+  const proc = Bun.spawn(["python3", "-c", helper], { stdin: new Blob([JSON.stringify({ config, operation, params })]), stdout: "pipe", stderr: "pipe", timeout: 180_000, killSignal: "SIGKILL", signal });
   const read = async (stream: ReadableStream<Uint8Array>, limit: number) => {
     const reader = stream.getReader(), chunks: Uint8Array[] = [];
     let size = 0;
@@ -49,7 +49,7 @@ export const mailDriver: MailDriver = async (config, operation, params, signal) 
     } finally { reader.releaseLock(); }
     return Buffer.concat(chunks).toString("utf8");
   };
-  const results = await Promise.allSettled([read(proc.stdout, 20 * 1024 * 1024), read(proc.stderr, 128 * 1024), proc.exited]);
+  const results = await Promise.allSettled([read(proc.stdout, 64 * 1024 * 1024), read(proc.stderr, 128 * 1024), proc.exited]);
   const output = results[0], exit = results[2];
   if (output.status !== "fulfilled" || exit.status !== "fulfilled") throw new MailTransportError("mail");
   let parsed: { data?: unknown; error?: string };

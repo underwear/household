@@ -11,7 +11,7 @@ import { mailCatalog, mailOperation } from "../infra/mail/operations";
 import { TokenBucket } from "./token-bucket";
 
 const KEY = "house.connectors.mail.v1", SENDS = "house.connectors.mail.sends.v1", USED = "house.connectors.mail.used.v1.";
-const MAX_ATTACHMENT = 8 * 1024 * 1024, APPROVAL_MS = 10 * 60_000;
+const MAX_ATTACHMENT = 25 * 1024 * 1024, APPROVAL_MS = 10 * 60_000;
 const hash = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
 interface Connection extends MailConnectionInput { id: string; house: string; revision: string; connectedAt: string }
 interface Send extends MailSendView { house: string; revision: string; key: string; inputHash: string; raw?: string }
@@ -192,7 +192,7 @@ export class MailConnectors {
         }
         if (operation === "attachments.download") {
           const bytes = Buffer.from(data.data, "base64");
-          if (bytes.length > MAX_ATTACHMENT) throw new HouseholdError("Attachment exceeds 8 MiB");
+          if (bytes.length > MAX_ATTACHMENT) throw new HouseholdError("Attachment exceeds 25 MiB");
           const name = String(data.filename).replace(/[/\\\x00-\x1f]/g, "_").slice(0, 180) || "attachment";
           const path = await this.files.save(caller, name, bytes);
           combined.throwIfAborted(); this.allowed(caller, id);
@@ -269,7 +269,7 @@ export class MailConnectors {
       for (const item of params.attachments) {
         const bytes = await this.files.read(caller, item.path, MAX_ATTACHMENT);
         total += bytes.length;
-        if (total > MAX_ATTACHMENT) throw new HouseholdError("Outgoing attachments exceed 8 MiB in total");
+        if (total > MAX_ATTACHMENT) throw new HouseholdError("Outgoing attachments exceed 25 MiB in total");
         const contentType = /^(message|multipart)\//i.test(item.contentType) ? "application/octet-stream" : item.contentType;
         attachments.push({ filename: item.filename, contentType, data: Buffer.from(bytes).toString("base64") });
         summaries.push({ filename: item.filename, contentType, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });

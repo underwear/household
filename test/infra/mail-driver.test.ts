@@ -79,7 +79,7 @@ async function fixture(protocol: "imap" | "smtp", security: "tls" | "starttls", 
         else if (command === "UID" && args[0] === "FETCH") {
           const uid = Number(args[1]), message = messages[uid - 1];
           if (message === undefined) { ok(); continue; }
-          if (line.includes("RFC822.SIZE")) { socket.write(`* ${uid} FETCH (UID ${uid} RFC822.SIZE ${options.oversized ? 20_000_000 : Buffer.byteLength(message)})\r\n`); ok(); }
+          if (line.includes("RFC822.SIZE")) { socket.write(`* ${uid} FETCH (UID ${uid} RFC822.SIZE ${options.oversized ? 50_000_000 : Buffer.byteLength(message)})\r\n`); ok(); }
           else {
             const raw = line.includes("[HEADER]") ? message.split("\r\n\r\n")[0]! + "\r\n\r\n" : message;
             socket.write(`* ${uid} FETCH (UID ${uid} BODY[] {${Buffer.byteLength(raw)}}\r\n${raw})\r\n`); ok();
@@ -282,3 +282,15 @@ for (const security of ["tls", "starttls"] as const) test(`SMTP ${security}: EHL
     expect(server.commands.filter(c => /^ehlo /i.test(c.line)).every(c => c.line.toLowerCase() === "ehlo [127.0.0.1]")).toBe(true);
   } finally { await server.close(); }
 });
+
+test("a message with an ordinary large attachment (a 20 MiB scan) is read and its attachment downloaded", async () => {
+  const server = await fixture("imap", "tls"), c = config(server.endpoint);
+  try {
+    const scan = Buffer.alloc(20 * 1024 * 1024, 7);
+    server.messages[0] = 'Subject: scan\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nsee attached\r\n--b\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename="scan.pdf"\r\nContent-Transfer-Encoding: base64\r\n\r\n' + (scan.toString("base64").match(/.{1,76}/g) ?? []).join("\r\n") + "\r\n--b--\r\n";
+    const read = await mailDriver(c, "messages.read", { ref: ref() });
+    expect(read.attachments).toHaveLength(1);
+    const file = await mailDriver(c, "attachments.download", { ref: ref(), attachment: read.attachments[0].id });
+    expect(Buffer.from(file.data, "base64").equals(scan)).toBe(true);
+  } finally { await server.close(); }
+}, 30000);
