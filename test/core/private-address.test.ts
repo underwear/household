@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { canonicalAddress, isLocalName, isPublicAddress, parseIpv6 } from "../../src/core/private-address";
+import { canonicalAddress, inSubnet, isLanAddress, isLocalName, isPublicAddress, parseIpv6 } from "../../src/core/private-address";
 
 describe("isPublicAddress", () => {
   test.each(["93.184.215.14", "1.1.1.1", "8.8.8.8", "100.63.255.255", "100.128.0.1", "172.32.0.1", "2606:4700::1111", "2a00:1450:4001::200e", "::ffff:93.184.215.14", "::ffff:5db8:d70e", "64:ff9b::808:808", "2002:808:808::1"])(
@@ -63,4 +63,18 @@ describe("isLocalName", () => {
     (host) => expect(isLocalName(host)).toBe(true),
   );
   test.each(["example.com", "internal.example.com", "local.example.com", "localhost.example.com"])("%p does not", (host) => expect(isLocalName(host)).toBe(false));
+});
+
+describe("isLanAddress", () => {
+  test.each(["10.0.0.5", "172.16.0.1", "172.31.255.255", "192.168.2.120", "::ffff:192.168.1.1", "fd00::1", "fc00::1"])("%p is on a local network", (address) => expect(isLanAddress(address)).toBe(true));
+  test.each(["127.0.0.1", "0.0.0.0", "169.254.169.254", "100.64.1.1", "172.32.0.1", "8.8.8.8", "::1", "fe80::1", "2606:4700::1111", "::ffff:127.0.0.1", "printer.local"])("%p is not", (address) => expect(isLanAddress(address)).toBe(false));
+});
+
+test("inSubnet: by prefix, IPv4 and IPv6, never across families or on a malformed subnet", () => {
+  expect(inSubnet("192.168.139.200", "192.168.139.3/23")).toBe(true);
+  expect(inSubnet("192.168.140.1", "192.168.139.3/23")).toBe(false);
+  expect(inSubnet("fd00:1::9", "fd00:1::1/64")).toBe(true);
+  expect(inSubnet("fd00:1:0:1::9", "fd00:1::1/64")).toBe(false);
+  expect(inSubnet("fd00:1::9", "fd00::/7")).toBe(true);
+  for (const [address, subnet] of [["10.0.0.1", "::/0"], ["fd00::1", "10.0.0.0/8"], ["10.0.0.1", "10.0.0.0"], ["10.0.0.1", "10.0.0.0/x"], ["fd00::1", "fd00::/129"]]) expect(inSubnet(address!, subnet!)).toBe(false);
 });

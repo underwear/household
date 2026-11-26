@@ -172,6 +172,9 @@ describe("reach", () => {
     expect(within("any", "public")).toBe(false);
     expect(within("any", at)).toBe(false);
     expect(within(at, "public")).toBe(true);
+    // A grant pinned to the local network is not within what reaches public addresses only.
+    expect(within({ pinned: ["192.168.2.120"] }, "public")).toBe(false);
+    expect(within({ pinned: ["192.168.2.120"] }, { pinned: ["192.168.2.120"] })).toBe(true);
     expect(within(at, { pinned: ["93.184.215.14", "93.184.215.15"] })).toBe(true);
     expect(within(at, { pinned: ["93.184.215.15"] })).toBe(false);
     expect(within("public", at)).toBe(false);

@@ -1,4 +1,4 @@
-import { covers, entryReach, formatEndpoint, isIpLiteral, reachOf, sameEndpoint, within, type AllowEntry, type Endpoint, type NetworkPolicy, type Reach } from "./network-policy";
+import { covers, entryReach, formatEndpoint, isIpLiteral, pinnedReach, reachOf, sameEndpoint, within, type AllowEntry, type Endpoint, type NetworkPolicy, type Reach } from "./network-policy";
 import { isLocalName, isPublicAddress } from "./private-address";
 
 /** Who owns a source subnet. Only houses exist now; scouts will add a kind. */
@@ -97,7 +97,8 @@ export function decide(rules: SubjectRule[], pet: PetIdentity, target: Endpoint,
   const rule = ruleOf(rules, pet);
   if (!rule) return { verdict: "deny", reason: "the caller's house has no network policy" };
   const { subject, intercept } = rule;
-  const allowed = reachOf(petPolicy(rule, pet.pet), target, now);
+  const policy = petPolicy(rule, pet.pet);
+  const allowed = reachOf(policy, target, now);
   if (!allowed) {
     const reason = `host ${formatEndpoint(target)} is not allowed by Household for ${describeSubject(subject)}`;
     return { verdict: "deny", subject, reason };
@@ -105,11 +106,26 @@ export function decide(rules: SubjectRule[], pet: PetIdentity, target: Endpoint,
   // A host to intercept is one an agent declares or an owner's secret names: exact, whatever else covers it; the
   // interception does not widen the allowlist entry's address reach.
   const intercepted = intercept.some((host) => sameEndpoint(host, target));
-  const reach = allowed;
-  if (reach !== "any" && (isLocalName(target.host) || (isIpLiteral(target.host) && !isPublicAddress(target.host)))) {
-    return { verdict: "deny", subject, reason: privateReason(target, subject) };
+  let reach = allowed;
+  // A wildcard never reaches a local name or a private address. A grant pinned to addresses the owner approved may:
+  // the proxy connects to those only.
+  if (reach === "public" && offPublic(target)) {
+    const pinned = pinnedReach(policy, target, now);
+    if (!pinned) return { verdict: "deny", subject, reason: privateReason(target, subject) };
+    reach = pinned;
   }
   return { verdict: "allow", subject, intercept: intercepted, reach };
+}
+
+/** Whether a target says by itself that it is not on the public internet: a local name, or a non-public address. */
+export function offPublic(target: Endpoint): boolean {
+  return isLocalName(target.host) || (isIpLiteral(target.host) && !isPublicAddress(target.host));
+}
+
+/** Whether `policy` lets a connection reach `target`: an entry covers it, and not a wildcard alone where it is not public. */
+export function reaches(policy: NetworkPolicy, target: Endpoint, now = Date.now()): boolean {
+  const reach = reachOf(policy, target, now);
+  return reach !== undefined && (reach !== "public" || !offPublic(target) || pinnedReach(policy, target, now) !== undefined);
 }
 
 /**

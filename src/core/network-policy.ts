@@ -1,4 +1,5 @@
 import { parseIpv4 } from "./cidr";
+import { isPublicAddress } from "./private-address";
 
 /** A concrete place to connect to: a CONNECT target, a host an agent declares. */
 export interface Endpoint {
@@ -9,8 +10,9 @@ export interface Endpoint {
 /**
  * Where a connection an entry allows may go once its host is resolved: wherever the name leads (`any`: an exact
  * entry the owner wrote on purpose, `db.internal:5432`); only to public addresses (`public`: a wildcard, or a grant
- * the owner approved from a pet's request); or only to these public addresses, the ones the owner was shown when
- * approving (`pinned`), so DNS answering otherwise later (rebinding) changes nothing. Addresses are canonical.
+ * the owner approved for good from a pet's request); or only to these addresses, the ones the owner was shown when
+ * approving (`pinned`: public, or on the local network), so DNS answering otherwise later (rebinding) changes
+ * nothing. Addresses are canonical.
  */
 export type Reach = "any" | "public" | { pinned: string[] };
 
@@ -128,7 +130,8 @@ export function entryReach(entry: AllowEntry): Reach {
 export function within(opened: Reach, allowed: Reach): boolean {
   if (allowed === "any") return true;
   if (opened === "any") return false; // by name: wherever DNS led, which nothing checked
-  if (allowed === "public") return true;
+  // A pinned address may be on the local network, which `public` never reaches.
+  if (allowed === "public") return opened === "public" || opened.pinned.every(isPublicAddress);
   return opened !== "public" && opened.pinned.every((address) => allowed.pinned.includes(address));
 }
 
@@ -139,6 +142,11 @@ export function reachOf(policy: NetworkPolicy, target: Endpoint, now = Date.now(
   if (reaches.includes("any")) return "any";
   if (reaches.includes("public")) return "public";
   return { pinned: [...new Set(reaches.flatMap((reach) => (typeof reach === "object" ? reach.pinned : [])))] };
+}
+
+/** The reach of the grants pinned to addresses that cover `target`: what may reach it where `public` does not. */
+export function pinnedReach(policy: NetworkPolicy, target: Endpoint, now = Date.now()): Reach | undefined {
+  return reachOf({ kind: "allowlist", allow: policy.allow.filter((entry) => typeof entryReach(entry) === "object") }, target, now);
 }
 
 export function isAllowed(policy: NetworkPolicy, target: Endpoint, now = Date.now()): boolean {

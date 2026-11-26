@@ -180,10 +180,12 @@ class Connection {
     let opened: Reach = "any";
     let { interceptor } = allowed;
     if (allowed.reach !== "any") {
-      // A pinned grant connects only to its own addresses, checked again as DNS answers would be.
+      // A pinned grant connects only to its own addresses, checked again as DNS answers would be. Those the owner
+      // approved may be on the local network; they are still never this machine's own.
       const { reach } = allowed;
-      const resolve = typeof reach === "object" ? async () => reach.pinned : this.options.resolve ?? systemResolve;
-      const screened = await screenHost(endpoint.host, resolve, this.options.ownAddresses ?? ownAddresses, this.timeouts.connectMs);
+      const pinned = typeof reach === "object";
+      const resolve = pinned ? async () => reach.pinned : this.options.resolve ?? systemResolve;
+      const screened = await screenHost(endpoint.host, resolve, this.options.ownAddresses ?? ownAddresses, this.timeouts.connectMs, pinned);
       if ((state as string) === "done") return; // the client left meanwhile (its close handler logged it)
       if ("failed" in screened) {
         state = "done";

@@ -1,8 +1,9 @@
 import { CLOCK, type Clock } from "../core/clock";
-import type { PetGrant } from "../core/egress";
+import { offPublic, reaches, type PetGrant } from "../core/egress";
 import { HouseholdError } from "../core/errors";
-import { isAllowed, type AllowEntry, type NetworkPolicy } from "../core/network-policy";
-import { canonicalAddress, isPublicAddress } from "../core/private-address";
+import type { AllowEntry, NetworkPolicy } from "../core/network-policy";
+import { parseIpv4 } from "../core/cidr";
+import { canonicalAddress, isLanAddress, isPublicAddress } from "../core/private-address";
 import { carriesHouseholdTag } from "../core/tags";
 import type { Screened } from "../infra/public-resolve";
 import type { KeyValueStore } from "../infra/sqlite-store";
@@ -18,7 +19,7 @@ const shown = (domain: string, port: number) => (port === 443 ? domain : `${doma
 const STATE_KEY = "network.temporary-grants.v1";
 const WAIT_MS = 5 * 60_000;
 
-/** A temporary grant: for one pet only, to the addresses its owner was shown (all public) and to no other. */
+/** A temporary grant: for one pet only, to the addresses its owner was shown (public, or on the local network) and to no other. */
 export interface TemporaryGrant {
   house: string;
   pet: string;
@@ -33,7 +34,7 @@ export interface TemporaryGrant {
 export type NetworkRequestResult = {
   domain: string;
   port: number;
-  /** `refused`: the domain resolves to an address off the public internet, so no owner is asked; `unresolvable`: it resolves to none. */
+  /** `refused`: the domain resolves to this machine or a reserved address, so no owner is asked; `unresolvable`: it resolves to none. */
   status: "temporary" | "permanent" | "permanent-pending" | "denied" | "refused" | "unresolvable" | "cancelled" | "timeout" | "already-allowed" | "unavailable" | "busy" | "failed";
   expiresAt?: number;
   message?: string;
@@ -52,7 +53,7 @@ const DECIDED: Record<NetworkDecision, string> = { temporary: NETWORK_CHOICES[0]
  * The owner's card for a request (`text`, HTML): "Allow 15 min" and "Deny" decide at once; "Allow forever" asks
  * again, and "Cancel" goes back to the three answers.
  */
-export function networkCard(text: string, endpoint: string, scout = false): OwnerCard<NetworkStep> {
+export function networkCard(text: string, endpoint: string, scout = false, lan = false): OwnerCard<NetworkStep> {
   const resolved = (decision: NetworkDecision): NetworkStep => ({ step: "resolved", decision });
   return {
     text,
@@ -61,7 +62,7 @@ export function networkCard(text: string, endpoint: string, scout = false): Owne
     view: (state) => {
       // A scout's grant lasts for its run: no "forever" (its network is its capabilities').
       if (state.step === "initial") return { choices: scout ? [NETWORK_CHOICES[0]!, NETWORK_CHOICES[2]!] : NETWORK_CHOICES, text };
-      if (state.step === "confirming") return { choices: CONFIRM_CHOICES, text: cardText({ title: `Allow ${html(endpoint)} for good?`, note: "Every pet in the house can reach it until you remove it from the allowlist." }) };
+      if (state.step === "confirming") return { choices: CONFIRM_CHOICES, text: cardText({ title: `Allow ${html(endpoint)} for good?`, note: lan ? "Every pet in the house can reach this address on your local network until you remove it from the allowlist." : "Every pet in the house can reach it until you remove it from the allowlist." }) };
       return { outcome: DECIDED[state.decision] };
     },
     press: (state, index) => {
@@ -77,14 +78,17 @@ export interface NetworkRequestOptions {
   /** Current effective policy, including the agent's hosts; undefined when the house or pet no longer exists. */
   policy(house: string, pet: string): NetworkPolicy | undefined;
   petTitle(house: string, pet: string): string;
-  /** Where a domain resolves, refused when anywhere off the public internet (`screenHost`), within a deadline. */
+  /** Where a domain resolves (`screenHost`, the local network let through and marked `lan`), refused when on this machine or a reserved range, within a deadline. */
   screen(domain: string): Promise<Screened>;
   /** Household's card (`networkCard`): only its owner moves it; it resolves to its decided step, undefined on abort/disconnection. */
   choose(house: string, pet: string, card: OwnerCard<NetworkStep>, signal: AbortSignal): Promise<NetworkStep | undefined>;
   /** Tells the pet's owner, in its chat, of a request Household refused without asking. */
   notice(house: string, pet: string, text: string): Promise<void>;
-  /** Persist the exact domain:port pair, including the default port, as a grant: it reaches public addresses only. */
-  permanent(house: string, endpoint: string, pet?: string): Promise<void>;
+  /**
+   * Persist the exact domain:port pair, including the default port, as a grant: it reaches public addresses only.
+   * `lan`: a local network address the owner approved, kept as their own allowlist entry.
+   */
+  permanent(house: string, endpoint: string, pet?: string, lan?: boolean): Promise<void>;
   /** Scouts ask before DNS so an unapproved hostname cannot exfiltrate data. */
   deferScreen?(house:string,pet:string):boolean;
   /** More of what the owner should know on the card (HTML facts), for this pet: a routine scout run says so. */
@@ -97,14 +101,25 @@ export interface NetworkRequestOptions {
   waitMs?: number;
 }
 
-/** A request grants one exact DNS name; config's wildcard/IP syntax is deliberately unavailable. */
+/** The local names a request may name: a device on the owner's network. Never `localhost` or `*.internal` (this machine, a VM's host, cloud metadata). */
+const LAN_NAME = /\.(?:local|lan|home|localdomain)$/;
+
+/** Whether a request's domain is an address on the local network, written as one (`192.168.1.20`). */
+export const isLanLiteral = (domain: string) => parseIpv4(domain) !== undefined && canonicalAddress(domain) === domain && isLanAddress(domain);
+
+/**
+ * A request grants one exact DNS name, or one IPv4 address on the local network (a printer, a NAS); config's
+ * wildcard syntax and public IP addresses are deliberately unavailable.
+ */
 export function requestDomain(value: string): string {
   const domain = value.trim().toLowerCase();
+  if (isLanLiteral(domain) && !/[\x00-\x1f\x7f-\x9f]/.test(value)) return domain;
   const labels = domain.split(".");
   const valid = domain.length <= 253 && labels.length >= 2 && labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
   const tld = /^(?:[a-z]{2,63}|xn--[a-z0-9-]+)$/.test(labels.at(-1)!);
-  if (!valid || !tld || /[\x00-\x1f\x7f-\x9f]/.test(value) || carriesHouseholdTag(domain) || /(?:^|\.)(?:localhost|local|localdomain|internal|lan|home|test|invalid|example)$/.test(domain)) {
-    throw new HouseholdError("domain must be an exact DNS name (ASCII/punycode), without a URL, IP, wildcard, port, local suffix or trailing dot");
+  const reserved = /(?:^|\.)(?:localhost|local|localdomain|internal|lan|home|test|invalid|example)$/.test(domain) && !LAN_NAME.test(domain);
+  if (!valid || !tld || /[\x00-\x1f\x7f-\x9f]/.test(value) || carriesHouseholdTag(domain) || reserved) {
+    throw new HouseholdError("domain must be an exact DNS name (ASCII/punycode) or an IPv4 address on the local network (such as 192.168.1.20), without a URL, wildcard, port or trailing dot; not a public IP address, localhost or a reserved name");
   }
   return domain;
 }
@@ -125,10 +140,10 @@ function requestReason(value: string): string {
   return reason;
 }
 
-/** Addresses a grant may be pinned to: some, each public and canonical (as `screenHost` gives them). */
+/** Addresses a grant may be pinned to: some, each public or on the local network, and canonical (as `screenHost` gives them). */
 function pinnable(addresses: unknown): addresses is string[] {
   return Array.isArray(addresses) && addresses.length > 0 && addresses.length <= 64 &&
-    addresses.every((address) => typeof address === "string" && isPublicAddress(address) && canonicalAddress(address) === address);
+    addresses.every((address) => typeof address === "string" && (isPublicAddress(address) || isLanAddress(address)) && canonicalAddress(address) === address);
 }
 
 /** A grant as the gateway allows it: its pet's, until its deadline, to its own addresses only. */
@@ -139,8 +154,8 @@ const sameGrant = (grant: TemporaryGrant, house: string, pet: string, domain: st
 
 /**
  * Owner decisions and durable temporary grants, each for the one pet that asked. A domain is resolved before its
- * owner is asked: one that leads off the public internet is refused outright, and a temporary grant reaches only
- * the addresses the owner was shown. It never widens the proxy's address guards.
+ * owner is asked: one that leads to this machine or a reserved range is refused outright, one on the local network
+ * is asked about as such, and a temporary grant reaches only the addresses the owner was shown.
  */
 export class NetworkRequests {
   private readonly clock: Clock;
@@ -191,7 +206,7 @@ export class NetworkRequests {
   effective(house: string, pet: string, base: NetworkPolicy): NetworkPolicy {
     const allow = [...base.allow];
     for (const grant of this.active(house, pet)) {
-      if (!isAllowed({ kind: "allowlist", allow }, { host: grant.domain, port: grant.port }, this.clock.now())) allow.push(grantEntry(grant));
+      if (!reaches({ kind: "allowlist", allow }, { host: grant.domain, port: grant.port }, this.clock.now())) allow.push(grantEntry(grant));
     }
     return { kind: "allowlist", allow };
   }
@@ -209,7 +224,8 @@ export class NetworkRequests {
     if (this.stopped || signal?.aborted) return { domain, port, status: "cancelled" };
     const policy = this.options.policy(house, pet);
     if (!policy) return { domain, port, status: "unavailable" };
-    if (isAllowed(this.effective(house, pet, policy), { host: domain, port }, this.clock.now())) return { domain, port, status: "already-allowed" };
+    // A wildcard covers a local name or address without reaching it: that is still to ask for.
+    if (reaches(this.effective(house, pet, policy), { host: domain, port }, this.clock.now())) return { domain, port, status: "already-allowed" };
     const key = `${house}/${pet}/${domain}:${port}`;
     const existing = this.pending.get(key);
     if (existing) {
@@ -267,27 +283,35 @@ export class NetworkRequests {
     const cancelTimer = this.clock.after(this.options.waitMs ?? WAIT_MS, () => { timeout = true; controller.abort(); });
     try {
       const cancelled = new Promise<undefined>((resolve) => controller.signal.addEventListener("abort", () => resolve(undefined), { once: true }));
-      // What the owner is shown is what a temporary grant reaches; a name leading off the public internet is never asked about.
+      // What the owner is shown is what a temporary grant reaches; a name leading to this machine or a reserved range is never asked about.
       const deferred=this.options.deferScreen?.(house,pet)??false;
+      // A scout's owner approves a name unseen, so a scout never asks for the local network.
+      if (deferred && offPublic({ host: domain, port })) return { domain, port, status: "refused", message: "A scout cannot ask for an address or a name on the local network. Its owner may add it to the scout's network themselves." };
       let screened = deferred ? {addresses:[] as string[]} : await Promise.race([this.options.screen(domain), cancelled]);
       if (screened === undefined || this.stopped) return { domain, port, status: timeout ? "timeout" : "cancelled" };
       const title = this.options.petTitle(house, pet);
       if ("failed" in screened) return { domain, port, status: "unresolvable", message: "The domain does not resolve to any address; nothing was asked of your owner. Check the name." };
       if ("private" in screened) {
-        await this.options.notice(house, pet, `Denied ${title} access to ${shown(domain, port)}: it points to a private address (${screened.private}), which chat never grants. If it is needed, add it to the workspace's allowlist yourself.`).catch(() => {});
-        return { domain, port, status: "refused", message: "The domain resolves to an address that is not on the public internet. Household never grants such a domain from chat; your owner was told and may add it to the workspace's allowlist themselves." };
+        await this.options.notice(house, pet, `Denied ${title} access to ${shown(domain, port)}: it points to ${screened.private}, this machine or a reserved address, which chat never grants. If it is needed, add it to the workspace's allowlist yourself.`).catch(() => {});
+        return { domain, port, status: "refused", message: "The domain resolves to this machine or a reserved address. Household never grants such a domain from chat; your owner was told and may add it to the workspace's allowlist themselves." };
       }
       let { addresses } = screened;
+      // On the local network: said on the card. For good only as the address itself: a name may lead elsewhere later.
+      const lan = "lan" in screened && screened.lan !== undefined;
+      const literal = isLanLiteral(domain);
       // Who asks for what, why (its own words, quoted), and the addresses a grant would reach: what the owner approves.
       const text = cardText({
         title: `${html(title)} wants to reach ${html(shown(domain, port))}`,
         quote: { label: "Why", text: reason },
         facts: [...(deferred
           ? ["Resolves: checked only after you allow it", "For: this run of the scout only"]
-          : [`Resolves to: ${addresses.map((address) => `<code>${address}</code>`).join(", ")}`]), ...this.options.facts?.(house, pet) ?? []],
+          : [
+            ...(literal ? [] : [`Resolves to: ${addresses.map((address) => `<code>${address}</code>`).join(", ")}`]),
+            ...(lan ? [literal ? "A device on your local network" : "A device on your local network: to allow it for good, add its address to the allowlist"] : []),
+          ]), ...this.options.facts?.(house, pet) ?? []],
       });
       // The wait runs on through the card's confirmation step: a timeout closes it wherever it is.
-      const decided = await Promise.race([this.options.choose(house, pet, networkCard(text, `${domain}:${port}`, deferred), controller.signal), cancelled]);
+      const decided = await Promise.race([this.options.choose(house, pet, networkCard(text, `${domain}:${port}`, deferred || ((lan || offPublic({ host: domain, port })) && !literal), lan), controller.signal), cancelled]);
       if (controller.signal.aborted || this.stopped) return { domain, port, status: timeout ? "timeout" : "cancelled" };
       if (!this.options.policy(house, pet)) return { domain, port, status: "unavailable" };
       if (decided?.step !== "resolved") return { domain, port, status: "unavailable" };
@@ -298,13 +322,14 @@ export class NetworkRequests {
         const checked=await Promise.race([this.options.screen(domain),cancelled]);
         if(!checked||controller.signal.aborted)return {domain,port,status:"cancelled"};
         if("failed" in checked)return {domain,port,status:"unresolvable"};
-        if("private" in checked){await this.options.notice(house,pet,"Access refused: the approved domain resolves to a non-public address.");return {domain,port,status:"refused"};}
+        // A scout's owner approved a name unseen: it never leads into the local network.
+        if("private" in checked||checked.lan!==undefined){await this.options.notice(house,pet,"Access refused: the approved domain resolves to a non-public address.");return {domain,port,status:"refused"};}
         addresses=checked.addresses;
       }
       return await this.write(async () => {
         if (controller.signal.aborted || this.stopped || !this.options.policy(house, pet)) return { domain, port, status: "cancelled" } as NetworkRequestResult;
         if (decision === "permanent") {
-          await this.options.permanent(house, `${domain}:${port}`, pet);
+          await this.options.permanent(house, `${domain}:${port}`, pet, lan);
           // This is a durable owner decision. Never delete an entry another editor may now rely on.
           const pending: NetworkRequestResult = { domain, port, status: "permanent-pending", message: "Your owner approved this domain and TCP port and the permanent allowance was saved. It is not confirmed effective yet; Household must apply network policy successfully before you retry access." };
           if (this.stopped) return pending;

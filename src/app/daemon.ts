@@ -533,7 +533,7 @@ export async function startDaemon(deps: DaemonDeps) {
       return configured?.pets.some(({ name }) => name === pet) ? houseSubject(configured, placed).policy : undefined;
     },
     petTitle: (house, pet) => petDisplay(appliedHousehold?.houses.find(({ name }) => name === house)?.pets.find(({ name }) => name === pet) ?? { name: pet }),
-    screen: (domain) => screenHost(domain, deps.networkResolve ?? systemResolve, ownAddresses),
+    screen: (domain) => screenHost(domain, deps.networkResolve ?? systemResolve, ownAddresses, undefined, true),
     choose: (house, pet, card, signal) => chat.ownerCard(house, pet, card, signal),
     notice: (house, pet, text) => chat.notice(house, pet, text),
     deferScreen: (house,pet)=>!!scouts.run(house,pet),
@@ -541,7 +541,7 @@ export async function startDaemon(deps: DaemonDeps) {
     facts: (house,pet)=>scouts.networkFacts(house,pet),
     allowed: (house,pet)=>scouts.grantDecided(house,pet),
     // A scout's grants last for its run only: its card has no "forever" (its network is its capabilities').
-    permanent: async (house, domain, pet) => { if (pet && scouts.run(house, pet)) throw new Error("A scout's network comes from its capabilities"); await config.grantHost(house, domain); },
+    permanent: async (house, domain, pet, lan) => { if (pet && scouts.run(house, pet)) throw new Error("A scout's network comes from its capabilities"); await (lan ? config.allowHost(house, domain) : config.grantHost(house, domain)); },
     changed: () => enqueue(async () => {
       if (!appliedHousehold) return;
       const latest = await config.load();

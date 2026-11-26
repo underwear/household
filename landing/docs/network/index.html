@@ -179,7 +179,7 @@
 <ul>
 <li><strong>One way out,</strong> through Household's proxy. Web requests and other TCP (SSH, a database) reach allowed hosts and ports only.</li>
 <li><strong>One allowlist per workspace,</strong> shared by its bots and their sideworkers. Your harness's hosts, such as its model provider, are added for you.</li>
-<li><strong>Your local network stays closed.</strong> Only an exact entry you write yourself, such as <code>nas.local:445</code>, reaches a private address. Wildcards, <code>*</code> and chat approvals reach public addresses only, so a name someone points at your router cannot open your network.</li>
+<li><strong>Your local network opens one device at a time.</strong> A bot can ask for a printer or a NAS by its address, and you see on the request that it is on your network. Wildcards and <code>*</code> reach public addresses only, so a name someone points at your router cannot open your network. The machine Household runs on is never granted from chat, nor are the VMs and containers on it: only an exact entry you write yourself, such as <code>localhost:8080</code>, reaches it.</li>
 <li><strong>Household sees the host, not the content,</strong> except where it fills in a key.</li>
 <li><strong><a href="../connectors/">Connectors</a> are not on it,</strong> so a connector that can change things is a way out the allowlist does not cover (unless it asks you first).</li>
 </ul>
@@ -203,7 +203,8 @@
 </tbody>
 </table>
 <h2 id="when-a-bot-asks-for-a-host">When a bot asks for a host</h2>
-<p>A bot asks in its chat for one exact host name, never a wildcard or an IP address. <strong>Allow 15 min</strong> opens it to that bot only. <strong>Allow forever</strong> adds it to the workspace's allowlist. Only owners can answer.</p>
+<p>A bot asks in its chat for one exact host name, never a wildcard or a public IP address. <strong>Allow 15 min</strong> opens it to that bot only. <strong>Allow forever</strong> adds it to the workspace's allowlist. Only owners can answer.</p>
+<p>A device on your local network is asked for by its address, such as <code>192.168.1.20:631</code>. A local name such as <code>printer.local</code> can be allowed for 15 minutes; for good, allow its address.</p>
 <h2 id="secrets">Secrets</h2>
 <p>A secret is a token saved with its hosts and a variable name, say <code>GITHUB_TOKEN</code> for <code>api.github.com</code>. In the VM the variable holds a placeholder; when the bot sends it in a header to one of those hosts, Household swaps in the real token. The real value never enters a VM, so a bot cannot leak it.</p>
 <p><strong>Add one</strong> under <strong>Workspace → Secrets</strong>. A secret chooses where its value is filled in, not where bots may go: its hosts still have to be allowed. With scout capabilities, you can give a secret to scouts only, keeping even the placeholder from bots.</p>

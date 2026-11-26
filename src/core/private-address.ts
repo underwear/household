@@ -22,6 +22,9 @@ const PRIVATE_V4: Cidr[] = [
   "240.0.0.0/4",
 ].map((text) => parseCidr(text)!);
 
+/** A home or office network: RFC 1918. What an owner may approve from chat for one bot, the address shown to them. */
+const LAN_V4: Cidr[] = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"].map((text) => parseCidr(text)!);
+
 /** Names that never leave the local network, whatever DNS says of them. */
 const LOCAL_SUFFIXES = ["localhost", "local", "internal", "lan", "localdomain", "home.arpa", "home", "corp", "intranet", "private", "test", "example", "invalid", "onion", "in-addr.arpa", "ip6.arpa"];
 
@@ -66,6 +69,40 @@ export function isPublicAddress(text: string): boolean {
   if ((a & 0xe000) !== 0x2000) return false;
   // 2001::/23 is special-purpose (Teredo, benchmarking, …); 2001:db8::/32 is for documentation.
   return !(a === 0x2001 && (b < 0x200 || b === 0xdb8));
+}
+
+/**
+ * Whether an address is on a local network (RFC 1918, or an IPv6 unique local one, `fc00::/7`): another device
+ * there, such as a printer or a NAS. Never loopback, link-local (cloud metadata) or a reserved range. That it is
+ * not this machine's own address is the caller's to check (`screenHost`).
+ */
+export function isLanAddress(text: string): boolean {
+  const lanV4 = (ip: number) => LAN_V4.some((cidr) => cidrContains(cidr, ip));
+  const v4 = parseIpv4(text);
+  if (v4 !== undefined) return lanV4(v4);
+  const groups = parseIpv6(text);
+  if (!groups) return false;
+  const [a, b, c, d, e, f, g, h] = groups as [number, number, number, number, number, number, number, number];
+  if ([a, b, c, d, e].every((part) => part === 0) && f === 0xffff) return lanV4(g * 0x10000 + h); // ::ffff:a.b.c.d
+  return (a & 0xfe00) === 0xfc00;
+}
+
+/** Whether `address` lies in `subnet` (`192.168.64.0/24`, `fd00:1::/64`; the address part need not be the network's). */
+export function inSubnet(address: string, subnet: string): boolean {
+  const [base = "", bitsText = ""] = subnet.split("/");
+  const bits = Number(bitsText);
+  if (!/^\d{1,3}$/.test(bitsText)) return false;
+  const v4 = parseIpv4(address);
+  const cidr = parseCidr(`${base}/${bits}`);
+  if (v4 !== undefined || cidr) return v4 !== undefined && !!cidr && cidrContains(cidr, v4);
+  const groups = parseIpv6(address);
+  const of = parseIpv6(base);
+  if (!groups || !of || bits > 128) return false;
+  return groups.every((group, index) => {
+    const taken = Math.min(16, Math.max(0, bits - index * 16));
+    const mask = taken === 0 ? 0 : (0xffff << (16 - taken)) & 0xffff;
+    return (group & mask) === (of[index]! & mask);
+  });
 }
 
 /** One spelling per address, to compare them (`::FFFF:10.0.0.1` is `10.0.0.1`, `fe80:0::1` is `fe80::1`). */

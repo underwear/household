@@ -6,7 +6,7 @@ A bot's VM has no way to the internet of its own. Everything it sends goes throu
 
 - **One way out,** through Household's proxy. Web requests and other TCP (SSH, a database) reach allowed hosts and ports only.
 - **One allowlist per workspace,** shared by its bots and their sideworkers. Your harness's hosts, such as its model provider, are added for you.
-- **Your local network stays closed.** Only an exact entry you write yourself, such as `nas.local:445`, reaches a private address. Wildcards, `*` and chat approvals reach public addresses only, so a name someone points at your router cannot open your network.
+- **Your local network opens one device at a time.** A bot can ask for a printer or a NAS by its address, and you see on the request that it is on your network. Wildcards and `*` reach public addresses only, so a name someone points at your router cannot open your network. The machine Household runs on is never granted from chat, nor are the VMs and containers on it: only an exact entry you write yourself, such as `localhost:8080`, reaches it.
 - **Household sees the host, not the content,** except where it fills in a key.
 - **[Connectors](../connectors/) are not on it,** so a connector that can change things is a way out the allowlist does not cover (unless it asks you first).
 
@@ -29,7 +29,9 @@ The allowlist limits where data can go, not what goes there:
 
 ## When a bot asks for a host
 
-A bot asks in its chat for one exact host name, never a wildcard or an IP address. **Allow 15 min** opens it to that bot only. **Allow forever** adds it to the workspace's allowlist. Only owners can answer.
+A bot asks in its chat for one exact host name, never a wildcard or a public IP address. **Allow 15 min** opens it to that bot only. **Allow forever** adds it to the workspace's allowlist. Only owners can answer.
+
+A device on your local network is asked for by its address, such as `192.168.1.20:631`. A local name such as `printer.local` can be allowed for 15 minutes; for good, allow its address.
 
 ## Secrets
 

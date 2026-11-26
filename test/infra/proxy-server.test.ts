@@ -418,3 +418,28 @@ test("a screened address is handed to MITM and retained for grant expiry", async
     expect(reaches).toEqual([{ pinned: ["93.184.215.14"] }]);
   } finally { socket.destroy(); proxy.close(); fakeMitm.close(); }
 });
+
+test("a grant pinned to a local network address reaches it, also under a wildcard; never this machine's own or loopback", async () => {
+  const grant = (host: string, address: string) => [{ pet: "sibling", entry: { host, port: 631, reach: { pinned: [address] } } }];
+  revoked = true; // the host closes each tunnel once told where it goes: nothing is connected to, here
+  try {
+    for (const allow of [[], ["*:*"]]) {
+      useEntries(allow, grant("192.168.2.120", "192.168.2.120"));
+      await connect("192.168.2.120:631");
+      expect(opened).toEqual([{ pet: "sibling", target: "192.168.2.120:631", reach: { pinned: ["192.168.2.120"] } }]);
+    }
+    useEntries([], grant("printer.local", "192.168.2.120"));
+    await connect("printer.local:631");
+    expect(resolved).toEqual([]);
+    expect(opened).toEqual([{ pet: "sibling", target: "printer.local:631", reach: { pinned: ["192.168.2.120"] } }]);
+    // Another pet holds no such grant, and a wildcard alone reaches no private address.
+    useEntries(["*:*"], grant("192.168.2.120", "192.168.2.120"));
+    pet = "other";
+    expect(await connect("192.168.2.120:631").finally(() => (pet = "sibling"))).toEndWith(NOT_ALLOWED);
+    for (const address of ["127.0.0.1", "169.254.169.254"]) {
+      useEntries([], grant("trick.example.net", address));
+      expect(await connect("trick.example.net:631")).toEndWith(NOT_ALLOWED);
+    }
+    expect(opened).toEqual([]);
+  } finally { revoked = false; }
+});

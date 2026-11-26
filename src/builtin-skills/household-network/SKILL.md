@@ -11,8 +11,10 @@ workspace allowlist. `network_list` shows what your workspace can reach now.
 ## A host is blocked
 
 1. Check `network_list`: maybe it is allowed under another name or port.
-2. `network_request({domain, port?, reason})`: the exact DNS name (no wildcards, IPs or URLs), the TCP port (443
-   unless given) and a reason your human can judge: what the host is and what you need it for.
+2. `network_request({domain, port?, reason})`: the exact DNS name (no wildcards, public IPs or URLs), the TCP port
+   (443 unless given) and a reason your human can judge: what the host is and what you need it for. A device on
+   your human's local network is asked for by its IPv4 address (`192.168.1.20`) or its `.local` name. The machine
+   you run on (`localhost`) is never granted.
 3. Your human chooses: 15 minutes, permanently, or no. The tool waits for the answer. A refusal grants nothing:
    find another way or tell your human what you are blocked on.
 

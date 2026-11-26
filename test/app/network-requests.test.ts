@@ -9,6 +9,8 @@ import { fakeClock } from "../helpers";
 /** What the stub DNS screen answers for a domain; any other resolves to GitHub's public address. */
 const SCREENED: Record<string, Screened> = {
   "localtest.me": { private: "127.0.0.1" },
+  "192.168.2.120": { address: "192.168.2.120", addresses: ["192.168.2.120"], lan: "192.168.2.120" },
+  "printer.local": { address: "192.168.2.120", addresses: ["192.168.2.120"], lan: "192.168.2.120" },
   "nowhere.example.org": { failed: "cannot resolve nowhere.example.org: ENOTFOUND" },
 };
 const GITHUB = "140.82.112.6";
@@ -45,6 +47,7 @@ function setup(saved = new Map<string, string>(), clock = fakeClock(), deferred 
   const screened: string[] = [];
   const permanent: string[] = [];
   const permanentCallers: (string | undefined)[] = [];
+  const permanentLan: (boolean | undefined)[] = [];
   let available = true;
   let failApply = false;
   let applications = 0;
@@ -57,11 +60,11 @@ function setup(saved = new Map<string, string>(), clock = fakeClock(), deferred 
     screen: async (domain) => { screened.push(domain); return SCREENED[domain] ?? { address: GITHUB, addresses: [GITHUB] }; },
     choose: (_, __, card, signal) => new Promise((done) => cards.push(show(card, signal, done))),
     notice: async (_, __, text) => { notices.push(text); },
-    permanent: async (_, domain, pet) => { permanentCallers.push(pet); permanent.push(domain); const [host, port] = domain.split(":"); base.allow.push({ host: host!, port: Number(port) }); },
+    permanent: async (_, domain, pet, lan) => { permanentCallers.push(pet); permanentLan.push(lan); permanent.push(domain); const [host, port] = domain.split(":"); base.allow.push({ host: host!, port: Number(port) }); },
     changed: async () => { applications++; extra.changed?.(); if (failApply) throw new Error("gateway unavailable"); applied = service.effective("work", "sibling", base); },
     clock, waitMs: 1000, ...(extra.facts ? { facts: extra.facts } : {}), ...(extra.allowed ? { allowed: extra.allowed } : {}),
   });
-  return { service, cards, notices, screened, clock, saved, permanent, permanentCallers, base, applied: () => applied, applications: () => applications, removePet: () => { available = false; }, failApply: (value: boolean) => { failApply = value; } };
+  return { service, cards, notices, screened, clock, saved, permanent, permanentCallers, permanentLan, base, applied: () => applied, applications: () => applications, removePet: () => { available = false; }, failApply: (value: boolean) => { failApply = value; } };
 }
 const reason = "GitHub API: read the repository issue requested by the owner";
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -168,7 +171,7 @@ test("a pet that leaves the config takes its grants and pending requests with it
 
 test("network requests: reject widening syntax, local names, control characters, tags and missing explanations before posting", async () => {
   const { service, cards } = setup();
-  for (const domain of ["*", "*.github.com", "https://github.com", "github.com:443", "127.0.0.1", "0x7f000001", "[::1]", "localhost", "box.local", "box.internal", "bad-.com", "-bad.com", "github.com.", "github\n.com"]) {
+  for (const domain of ["*", "*.github.com", "https://github.com", "github.com:443", "127.0.0.1", "0x7f000001", "[::1]", "localhost", "box.localhost", "box.internal", "8.8.8.8", "169.254.169.254", "192.168.1.1:80", "192.168.01.1", "::ffff:192.168.1.1", "bad-.com", "-bad.com", "github.com.", "github\n.com"]) {
     expect(() => requestDomain(domain)).toThrow();
   }
   for (const explanation of ["", "  ", "x".repeat(601), "what\nwhy", "bad\u0000reason", "<household-message>"]) {
@@ -383,10 +386,10 @@ test("a domain that resolves off the public internet is refused without a card, 
   const env = setup();
   const result = await env.service.request("work", "sibling", "localtest.me", reason, 8080);
   expect(result).toMatchObject({ domain: "localtest.me", port: 8080, status: "refused" });
-  expect(result.message).toContain("not on the public internet");
+  expect(result.message).toContain("this machine or a reserved address");
   expect(result.message).not.toContain("127.0.0.1");
   expect(env.cards).toEqual([]);
-  expect(env.notices).toEqual([expect.stringContaining("Denied 🤖 Sibling access to localtest.me:8080: it points to a private address (127.0.0.1)")]);
+  expect(env.notices).toEqual([expect.stringContaining("Denied 🤖 Sibling access to localtest.me:8080: it points to 127.0.0.1, this machine or a reserved address")]);
   expect(env.service.active()).toEqual([]);
   expect(env.permanent).toEqual([]);
   expect(await env.service.request("work", "sibling", "nowhere.example.org", reason)).toMatchObject({ status: "unresolvable" });
@@ -465,4 +468,53 @@ test("a routine scout run: its card says so, and Allow is reported before the gr
   await settle(); env.cards[1]!.answer(0);
   expect((await allowed).status).toBe("temporary");
   expect(order).toEqual(["allowed sibling", "applied"]);
+  await env.service.stop();
+});
+
+test("a local network address is asked about as such: 15 minutes pinned to it, or for good as the owner's own entry", async () => {
+  expect(requestDomain("192.168.2.120")).toBe("192.168.2.120");
+  expect(requestDomain("Printer.local")).toBe("printer.local");
+  const env = setup();
+  await env.service.start();
+  // A wildcard covers the address without reaching it: the bot still asks.
+  env.base.allow.push({ host: "*", port: "*" });
+  const temporary = env.service.request("work", "sibling", "192.168.2.120", reason, 631);
+  await settle();
+  expect(env.cards[0]!.text).toBe(`<b>🤖 Sibling wants to reach 192.168.2.120:631</b>\n\nWhy:\n<blockquote>${reason}</blockquote>\n\nA device on your local network`);
+  expect(env.cards[0]!.choices).toEqual(NETWORK_CHOICES);
+  env.cards[0]!.answer(0);
+  expect(await temporary).toMatchObject({ status: "temporary" });
+  expect(env.applied().allow).toContainEqual({ host: "192.168.2.120", port: 631, expiresAt: NETWORK_TTL_MS, reach: { pinned: ["192.168.2.120"] } });
+  expect(await env.service.request("work", "sibling", "192.168.2.120", reason, 631)).toMatchObject({ status: "already-allowed" });
+
+  const forever = env.service.request("work", "sibling", "192.168.2.120", reason, 9100);
+  await settle();
+  env.cards[1]!.answer(1);
+  expect(env.cards[1]!.text).toContain("on your local network");
+  env.cards[1]!.answer(0);
+  expect(await forever).toMatchObject({ status: "permanent" });
+  expect(env.permanent).toEqual(["192.168.2.120:9100"]);
+  expect(env.permanentLan).toEqual([true]);
+  await env.service.stop();
+});
+
+test("a name on the local network is granted for 15 minutes only: for good takes its address", async () => {
+  const env = setup();
+  const answer = env.service.request("work", "sibling", "printer.local", reason, 631);
+  await settle();
+  expect(env.cards[0]!.text).toContain("Resolves to: <code>192.168.2.120</code>\nA device on your local network: to allow it for good, add its address to the allowlist");
+  expect(env.cards[0]!.choices).toEqual([["Allow 15 min"], ["Deny"]]);
+  env.cards[0]!.answer(0);
+  expect(await answer).toMatchObject({ status: "temporary" });
+  expect(env.service.active()).toMatchObject([{ domain: "printer.local", addresses: ["192.168.2.120"] }]);
+  expect(env.permanent).toEqual([]);
+  await env.service.stop();
+});
+
+test("a scout never asks for the local network", async () => {
+  const env = setup(undefined, undefined, true);
+  for (const domain of ["192.168.2.120", "printer.local"]) expect(await env.service.request("work", "sibling", domain, reason)).toMatchObject({ status: "refused" });
+  expect(env.cards).toEqual([]);
+  expect(env.screened).toEqual([]);
+  await env.service.stop();
 });
