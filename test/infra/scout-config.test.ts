@@ -229,3 +229,11 @@ test("a routine scout limited only by its own capability is deleted with it, in 
   expect(house.scouts ?? []).toEqual([]);
   expect(house.capabilities ?? []).toEqual([]);
 });
+
+test("a draft's base stored before install hosts were part of one does not read as stale for them", async () => {
+  const { scoutBaseChanges } = await import("../../src/core/scouts");
+  const own = { install: "v1", network: { any: false, allow: ["meter.example.com"] }, keys: [] };
+  const scout = { name: "meter", description: "Readings" };
+  expect(scoutBaseChanges({ scout, own }, { scout, own: { ...own, installHosts: ["deb.debian.org:80"] } }, "meter")).toEqual([]);
+  expect(scoutBaseChanges({ scout, own: { ...own, installHosts: [] } }, { scout, own: { ...own, installHosts: ["deb.debian.org:80"] } }, "meter")).toEqual(["own setup's install hosts"]);
+});

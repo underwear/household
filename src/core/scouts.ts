@@ -172,7 +172,8 @@ export function scoutBaseChanges(then: ScoutBase, now: ScoutBase, name: string):
   else if (then.own && !now.own) changes.push("own setup (removed)");
   else if (then.own && now.own) {
     for (const field of ["install", "network", "keys"] as const) if (!same(then.own[field], now.own[field])) changes.push(`own setup's ${field}`);
-    if (!same(then.own.installHosts ?? [], now.own.installHosts ?? [])) changes.push("own setup's install hosts");
+    // A base stored before install hosts were part of one: its draft carries none, so applying it undoes none.
+    if (then.own.installHosts && !same(then.own.installHosts, now.own.installHosts ?? [])) changes.push("own setup's install hosts");
   }
   return changes;
 }

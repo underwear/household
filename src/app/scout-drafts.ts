@@ -278,7 +278,7 @@ export class ScoutDrafts {
           keys: currentOwn?.keys ?? [], owner: name,
         };
         // Only what the bot said ([] too): left out, the ones its own setup has when the owner applies it (`compose`).
-        if (setup.install_hosts !== undefined) own.installHosts = draftInstallHosts(setup.install_hosts, undefined) ?? [];
+        if (setup.install_hosts !== undefined) own.installHosts = draftInstallHosts(setup.install_hosts, undefined);
         needsKeys = draftKeys(setup.needs_keys);
       }
 
