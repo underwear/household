@@ -324,6 +324,7 @@ async function main(argv: string[]): Promise<void> {
       description: { type: "string" },
       install: { type: "string" },
       network: { type: "string" },
+      "install-hosts": { type: "string" },
       capabilities: { type: "string" },
       routine: { type: "string" },
       "keep-keys": { type: "boolean" },

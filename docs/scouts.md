@@ -22,7 +22,7 @@ Say you ask your bot to buy a bus ticket.
 
 ## What you decide
 
-**Capabilities.** A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you, or a whole scout (below); nothing changes until you apply it.
+**Capabilities.** A scout is built from capabilities, each one small thing it can do: a tool to install, the hosts it may reach, the keys it gets. Your bot can draft one for you, or a whole scout (below); nothing changes until you apply it. A scout whose network is limited still installs its tools: the hosts an install script downloads from are open while it runs and closed before the scout starts work.
 
 **Any host or only these hosts.** **Any host** suits a scout that only reads the web. A scout that carries a card or a password should reach **only these hosts**, the ones its errand needs; mid-task it can ask you for one more, for that run only.
 

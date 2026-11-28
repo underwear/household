@@ -122,7 +122,7 @@ function NewCapabilityDialog({ house, taken, onClose, created }: { house: string
       confirmLabel: "Create capability",
       onConfirm: async () => {
         if (!name.trim() || nameError) throw new Error(nameError || "Name the capability.");
-        await capabilityApi.create(house, { name: name.trim(), description: chosen?.description ?? "", install: chosen?.install ?? "", network: chosen?.network ?? { any: true, allow: [] } });
+        await capabilityApi.create(house, { name: name.trim(), description: chosen?.description ?? "", install: chosen?.install ?? "", network: chosen?.network ?? { any: true, allow: [] }, ...(chosen?.installHosts?.length ? { installHosts: chosen.installHosts } : {}) });
         await created(name.trim());
       },
       children: (
@@ -146,6 +146,7 @@ export function DraftDialog({ house, draft, current, routine, onClose, done }: {
     ["Description", current?.description ?? "", draft.definition.description],
     ["Install", current?.install ?? "", draft.definition.install],
     ["Network", current ? networkWords(current.network) : "", networkWords(draft.definition.network)],
+    ["Install downloads from", current?.installHosts?.join(", ") ?? "", draft.definition.installHosts?.join(", ") ?? ""],
   ];
   const changed = fields.filter(([, before, after]) => before !== after);
   return (
@@ -188,6 +189,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
   const [testing, setTesting] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [host, setHost] = useState("");
+  const [installHost, setInstallHost] = useState("");
   const [addingKey, setAddingKey] = useState(false);
   const [reviewing, setReviewing] = useState<CapabilityDraftView>();
   const [duplicating, setDuplicating] = useState(false);
@@ -195,15 +197,15 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
   const load = useCallback(async () => {
     const next = await capabilityApi.detail(house.name, name);
     setView(next); setError(undefined);
-    setForm(current => current ?? { name: next.capability.name, description: next.capability.description, install: next.capability.install, network: next.capability.network });
+    setForm(current => current ?? { name: next.capability.name, description: next.capability.description, install: next.capability.install, network: next.capability.network, installHosts: next.capability.installHosts ?? [] });
     return next;
   }, [house.name, name]);
   useEffect(() => { void load().catch((e: Error) => setError(e.message)); }, [load]);
   if (!houseFeatures(house).scouts) return <Page title={name}><p className="hint">Scouts are off in this workspace. <Link href={workspacePath(house.name, "settings")} className="text-link">Turn them on in Settings</Link></p></Page>;
   if (!view || !form) return <Page title={name}>{error ? <p className="error" role="alert">{error}</p> : <p className="hint">Loading…</p>}</Page>;
   const capability = view.capability;
-  const saved = { description: capability.description, install: capability.install, network: capability.network };
-  const dirty = JSON.stringify({ description: form.description, install: form.install, network: form.network }) !== JSON.stringify(saved);
+  const saved = { description: capability.description, install: capability.install, network: capability.network, installHosts: capability.installHosts ?? [] };
+  const dirty = JSON.stringify({ description: form.description, install: form.install, network: form.network, installHosts: form.installHosts ?? [] }) !== JSON.stringify(saved);
   const warning = routineWarning(capability.routineScouts);
   const store = async () => {
     setBusy(true); setError(undefined);
@@ -278,7 +280,7 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
       <Section width="narrow" title="Network">
         <ChoiceList label="Hosts" value={form.network.any ? "any" : "only"} onChange={value => setForm({ ...form, network: { any: value === "any", allow: form.network.allow } })} options={[
           { value: "any", label: "Any host", description: "A tool: it does not limit the network of the scouts that have it." },
-          { value: "only", label: "Only these hosts", description: "Access: a scout with it reaches only the hosts of its capabilities. Add the hosts the install script downloads from too." },
+          { value: "only", label: "Only these hosts", description: "Access: a scout with it reaches only the hosts of its capabilities." },
         ]} />
         {!form.network.any && (
           <>
@@ -299,6 +301,23 @@ export function CapabilityPage({ house, name, refresh, notify }: { house: Worksp
             </List>
           </>
         )}
+      </Section>
+      <Section width="narrow" title="Install downloads from" hint="Where the install script fetches software (apt's mirror, npm, a vendor's site). Open to its scouts only while install scripts run, closed before the agent starts: a scout whose network is limited can still install it.">
+        <AddForm addLabel="Add host" ready={!!installHost.trim()} onAdd={() => {
+          const value = installHost.trim().toLowerCase();
+          if (!/^[a-z0-9.-]+(:\d{1,5})?$/.test(value)) throw new Error("Use a host or host:port.");
+          if ((form.installHosts ?? []).includes(value)) throw new Error("Already there.");
+          setForm({ ...form, installHosts: [...form.installHosts ?? [], value] }); setInstallHost("");
+        }}>
+          <TextField label="Install host" hideLabel mono value={installHost} onChange={setInstallHost} placeholder="deb.debian.org or deb.debian.org:80" />
+        </AddForm>
+        <List empty="None: its install script downloads nothing, or only from its network's hosts.">
+          {(form.installHosts ?? []).map(entry => (
+            <ListRow key={entry} actions={<button type="button" className="text-btn" onClick={() => setForm({ ...form, installHosts: (form.installHosts ?? []).filter(each => each !== entry) })}>Remove</button>}>
+              <Cell mono>{entry}</Cell>
+            </ListRow>
+          ))}
+        </List>
       </Section>
       <Section width="narrow" title="Keys" hint="Secrets this capability brings, kept only for it: never a bot's. Added and removed at once, not with Save." actions={<button type="button" className="btn small" onClick={() => setAddingKey(true)}>+ Add key</button>}>
         <List empty="No keys.">

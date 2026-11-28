@@ -29,7 +29,7 @@ import { ScoutArtifacts } from "../infra/scout-artifacts";
 import { Capabilities, capabilityTools } from "./capabilities";
 import { mayDraft, ScoutDrafts, scoutDraftTools } from "./scout-drafts";
 import { CapabilityTests } from "./capability-test";
-import { scoutsBlock, scoutNetwork } from "../core/scouts";
+import { scoutsBlock, scoutInstallHosts, scoutNetwork } from "../core/scouts";
 import { scoutRoutes } from "./scout-routes";
 import { scoutSubjects } from "./agents";
 import { houseFeatures } from "../core/house-features";
@@ -300,6 +300,10 @@ export async function startDaemon(deps: DaemonDeps) {
   const scoutStorage = new ScoutStorage(paths.stateDir);
   const scoutArtifacts = new ScoutArtifacts(paths.stateDir, scoutStorage, (run,text)=>scouts.redact(run.house,run.id,text));
   const scoutPostedFiles = new Set<string>();
+  // Scout runs whose install scripts have not run yet: their install hosts are open (`scoutSubjects`). Only a run
+  // prepared now enters it; one this daemon did not start (it restarted meanwhile) has had its setup.
+  const scoutSetup = new Set<string>();
+  const settingUp = (house: string, pet: string) => scoutSetup.has(`${house}/${pet}`);
   const scouts = new Scouts({
     otherAllocations: house => [...sideworkers.allocations(house), ...pets.resourceAllocations(house)],
     store: records, configured: () => config.load(),
@@ -315,12 +319,15 @@ export async function startDaemon(deps: DaemonDeps) {
       const material=await scoutStorage.prepare(run.house,run.id,run.definition,{capabilities:run.capabilities,values,ownedSecrets:current.houses.find(house => house.name === run.house)?.secrets ?? [],sharedSkills:await new HouseSkills(houseSkillsRoot(paths.stateDir)).ensure(run.house)});
       // No capability limits it: any host, any port. A limit's own `*` stays as written (its port too).
       const network=scoutNetwork(run.definition,run.capabilities);
-      return {...material,capabilities:run.capabilities.map(capability=>capability.name),definition:run.scout,parent:run.parent,network:{kind:"allowlist",allow:[...network.allow,...(!network.limitedBy.length?[{host:"*",port:"*" as const,reach:"public" as const}]:[])]},instructions:run.definition.instructions};
+      // Where its capabilities' install scripts download from: open until they have run (`pets.scoutSetupDone`).
+      const setupNetwork=scoutInstallHosts(run.definition,run.capabilities);
+      if(setupNetwork.length)scoutSetup.add(`${run.house}/${run.id}`);
+      return {...material,...(setupNetwork.length?{setupNetwork}:{}),capabilities:run.capabilities.map(capability=>capability.name),definition:run.scout,parent:run.parent,network:{kind:"allowlist",allow:[...network.allow,...(!network.limitedBy.length?[{host:"*",port:"*" as const,reach:"public" as const}]:[])]},instructions:run.definition.instructions};
     },
     launch: ()=>applyConfig(),
     ready: async run=>{const p=placed.find(p=>p.house===run.house&&p.pet===run.id);return !!p&&(await p.agent.isReady(pets.exec(run.house,run.id),p.mode)).ready;},
     isIdle: async (house,id)=>{const p=placed.find(p=>p.house===house&&p.pet===id);return p?.agent.isIdle?p.agent.isIdle(pets.exec(house,id)):false;},
-    remove: run=>scoutStorage.deleteRun(run.house,run.id),
+    remove: run=>{scoutSetup.delete(`${run.house}/${run.id}`);return scoutStorage.deleteRun(run.house,run.id);},
     closedNotice: run=>chat.prepareSideworkerCloseNotice(run.house,run.id,"Scout"),
     notice: (run,text)=>chat.notice(run.house,run.id,scouts.redact(run.house,run.id,text)),
     status: async (run,text,handle)=>{
@@ -513,7 +520,7 @@ export async function startDaemon(deps: DaemonDeps) {
   const specsOf = (household: Household, wanted: PlacedPet[]) => [...household.houses.map((house) => {
     const spec = houseSubject(house, wanted);
     return { ...spec, grants: networkRequests.petGrants(house.name).filter(g=>!scouts.isScout({house:house.name,pet:g.pet})) };
-  }), ...scoutSubjects(wanted).map(spec=>({...spec,grants:networkRequests.petGrants(spec.subject.name).filter(g=>spec.subject.kind=== "scout" && g.pet===spec.subject.pet)}))];
+  }), ...scoutSubjects(wanted,settingUp).map(spec=>({...spec,grants:networkRequests.petGrants(spec.subject.name).filter(g=>spec.subject.kind=== "scout" && g.pet===spec.subject.pet)}))];
   const applyNetwork = async (household: Household, wanted: PlacedPet[]) => {
     const staged = await subscriptionKeys.prepare(wanted, household.keys, household.houses);
     try {
@@ -529,13 +536,19 @@ export async function startDaemon(deps: DaemonDeps) {
       throw error;
     }
   };
+  // Its install scripts have run: its install hosts close (open tunnels to them too) before its agent starts. This
+  // runs inside the reload that starts its VM, after it applied the network: the policy as applied, minus those hosts.
+  pets.scoutSetupDone = async (house, pet) => {
+    if (!scoutSetup.delete(`${house}/${pet}`) || !appliedHousehold) return;
+    await applyNetwork(appliedHousehold, placed);
+  };
   const networkRequests = new NetworkRequests({
     clock: deps.networkClock,
     store: records,
     policy: (house, pet) => {
       const configured = appliedHousehold?.houses.find(({ name }) => name === house);
       const scout=placed.find(p=>p.house===house&&p.pet===pet&&p.scout);
-      if(scout)return scoutSubjects([scout])[0]?.policy;
+      if(scout)return scoutSubjects([scout],settingUp)[0]?.policy;
       return configured?.pets.some(({ name }) => name === pet) ? houseSubject(configured, placed).policy : undefined;
     },
     petTitle: (house, pet) => petDisplay(appliedHousehold?.houses.find(({ name }) => name === house)?.pets.find(({ name }) => name === pet) ?? { name: pet }),

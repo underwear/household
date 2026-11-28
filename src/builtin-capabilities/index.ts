@@ -1,3 +1,4 @@
+import type { AllowEntry } from "../core/network-policy";
 import type { CapabilityDefinition } from "../core/scouts";
 
 /**
@@ -5,6 +6,15 @@ import type { CapabilityDefinition } from "../core/scouts";
  * nodejs carries npm and conflicts with Debian's npm package, so no template installs that one.
  */
 const NODE = "apt-get update -qq\napt-get install -y -qq curl ca-certificates\ncurl -fsSL https://deb.nodesource.com/setup_22.x | bash -\napt-get install -y -qq nodejs\n";
+
+/**
+ * Where the templates' install scripts download from: Debian's mirror (apt, over HTTP or HTTPS), Docker's apt source
+ * the agents' images carry (apt-get update reads it too), and NodeSource's for Node.
+ */
+const APT: AllowEntry[] = [{ host: "deb.debian.org", port: 80 }, { host: "deb.debian.org", port: 443 }, { host: "download.docker.com", port: 443 }];
+const NODE_HOSTS: AllowEntry[] = [...APT, { host: "deb.nodesource.com", port: 443 }];
+/** npm's registry, and the CDNs Playwright downloads its browsers from (newest first). */
+const PLAYWRIGHT_HOSTS: AllowEntry[] = [{ host: "registry.npmjs.org", port: 443 }, { host: "cdn.playwright.dev", port: 443 }, { host: "playwright.download.prss.microsoft.com", port: 443 }, { host: "playwright.azureedge.net", port: 443 }];
 
 /** What the browser and dev templates installed before Node came from NodeSource: rewritten by config migration 3. */
 export const LEGACY_NODE_INSTALLS: Record<string, string> = {
@@ -22,18 +32,21 @@ export const CAPABILITY_TEMPLATES: (Omit<CapabilityDefinition, "keys"> & { label
     description: "A headless Chromium driven by Playwright: sites without an API, forms, tickets, screenshots.",
     install: `${NODE}npm install -g playwright\nplaywright install --with-deps chromium\n`,
     network: { any: true, allow: [] },
+    installHosts: [...NODE_HOSTS, ...PLAYWRIGHT_HOSTS],
   },
   {
     name: "media", label: "Media (yt-dlp, ffmpeg)",
     description: "Download video and audio with yt-dlp; convert and cut with ffmpeg.",
     install: "apt-get update -qq\napt-get install -y -qq ffmpeg python3-pip\npip install --break-system-packages -q yt-dlp\n",
     network: { any: true, allow: [] },
+    installHosts: [...APT, { host: "pypi.org", port: 443 }, { host: "files.pythonhosted.org", port: 443 }],
   },
   {
     name: "dev", label: "Developer tools",
     description: "git, Node.js, Python and the usual command-line tools, to clone and inspect repositories.",
     install: `${NODE}apt-get install -y -qq git jq python3 python3-pip\n`,
     network: { any: true, allow: [] },
+    installHosts: NODE_HOSTS,
   },
   {
     name: "heroku-cli", label: "Heroku CLI",
@@ -45,8 +58,8 @@ export const CAPABILITY_TEMPLATES: (Omit<CapabilityDefinition, "keys"> & { label
     name: "psql", label: "PostgreSQL client",
     description: "psql for one database. Give it a connection string as a key (DATABASE_URL) and the database's host and port.",
     install: "apt-get update -qq\napt-get install -y -qq postgresql-client\n",
-    // apt's mirror too: with a host list, the install script reaches only these hosts.
-    network: { any: false, allow: [{ host: "deb.debian.org", port: 80 }, { host: "deb.debian.org", port: 443 }, { host: "db.example.com", port: 5432 }] },
+    network: { any: false, allow: [{ host: "db.example.com", port: 5432 }] },
+    installHosts: APT,
   },
 ];
 

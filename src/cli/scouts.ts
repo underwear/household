@@ -17,11 +17,12 @@ export const FEATURES_USAGE = `  house features <workspace> [scouts|preview|side
 export const CAPABILITY_USAGE = `  house capability ls <workspace>    shared capabilities (kind, network, which scouts use them, last test) and bots' drafts
   house capability templates <workspace>  the built-in capabilities a new one can start from
   house capability show <workspace> <name>  one: its install script, network, keys, last test and revisions
-  house capability add <workspace> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2]
-  house capability set <workspace> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2]
+  house capability add <workspace> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2] [--install-hosts h1,h2]
+  house capability set <workspace> <name> [--description <text>] [--install <file>|-] [--network any|h1,h2] [--install-hosts h1,h2]
                                  install: bash, as root, at the start of every run of a scout that has it; network:
-                                 any (a tool) or only these hosts (access: its scouts reach only its hosts; list the
-                                 hosts its install downloads from too)
+                                 any (a tool) or only these hosts (access: its scouts reach only its hosts);
+                                 install-hosts: where its install downloads from, open only while install scripts
+                                 run ("" for none)
   house capability rm <workspace> <name>
   house capability test <workspace> <name>  run its install in a fresh VM now; its log's tail, exit 1 when it failed
   house capability restore <workspace> <name> <rev>   a revision back, as a new one
@@ -81,6 +82,7 @@ export interface ScoutValues {
   description?: string;
   install?: string;
   network?: string;
+  "install-hosts"?: string;
   capabilities?: string;
   routine?: string;
   "keep-keys"?: boolean;
@@ -114,7 +116,7 @@ export interface ScoutValues {
 }
 
 interface CapabilityView {
-  name: string; description: string; install: string; network: { any: boolean; allow: string[] }; owner?: string; ownerTitle?: string;
+  name: string; description: string; install: string; network: { any: boolean; allow: string[] }; installHosts?: string[]; owner?: string; ownerTitle?: string;
   keys: unknown[]; kind: string; usedBy: string[]; keyVariables: { secret: string; via: string; env: string }[];
   lastTest: { at: number; ok: boolean; seconds: number; output: string } | null; testing: boolean; revisions: number;
 }
@@ -353,6 +355,7 @@ async function capability(paths: Paths, args: string[], values: ScoutValues): Pr
       say(`description  ${c.description || "-"}`);
       say(`kind         ${c.kind}`);
       say(`network      ${networkWords(c.network)}`);
+      say(`installs from ${c.installHosts?.join(", ") || "-"}`);
       say(`keys         ${c.keyVariables.map((key) => `${key.secret} (${key.via}${key.env ? `, $${key.env}` : ""})`).join(", ") || "-"}`);
       say(`used by      ${c.usedBy.join(", ") || "-"}`);
       say(`last test    ${c.testing ? "running now" : c.lastTest ? `${c.lastTest.ok ? "ok" : "FAILED"} in ${c.lastTest.seconds} s, ${time(new Date(c.lastTest.at).toISOString())}` : "never"}`);
@@ -365,13 +368,14 @@ async function capability(paths: Paths, args: string[], values: ScoutValues): Pr
   if ((verb === "add" || verb === "set") && rest.length === 0) {
     const install = values.install === undefined ? undefined : await textFrom(values.install);
     if (verb === "add") {
-      const body = { name, ...(values.description !== undefined ? { description: values.description } : {}), ...(install !== undefined ? { install } : {}), ...(values.network !== undefined ? { network: network(values.network) } : {}) };
+      const body = { name, ...(values.description !== undefined ? { description: values.description } : {}), ...(install !== undefined ? { install } : {}), ...(values.network !== undefined ? { network: network(values.network) } : {}), ...(values["install-hosts"] !== undefined ? { installHosts: list(values["install-hosts"]) } : {}) };
       const saved = await api(paths, "POST", `${house(h)}/capabilities`, body);
       return out(values, saved, () => say(`capability '${name}' added to workspace '${h}'; try its install: house capability test ${h} ${name}`));
     }
     const { capability: c } = await api<{ capability: CapabilityView }>(paths, "GET", at(name));
     const body = {
       name, description: values.description ?? c.description, install: install ?? c.install, network: network(values.network) ?? c.network, keys: c.keys,
+      ...((list(values["install-hosts"]) ?? c.installHosts) ? { installHosts: list(values["install-hosts"]) ?? c.installHosts } : {}),
       ...(c.owner ? { owner: c.owner } : {}),
     };
     const saved = await api(paths, "PUT", at(name), body);

@@ -135,6 +135,9 @@ export class PetPlane {
   /** Label selecting the pets of this Household instance. */
   private readonly mine: string;
 
+  /** A scout's install scripts have run: what was open for them closes before its agent starts (the daemon's). */
+  scoutSetupDone?: (house: string, pet: string) => Promise<void>;
+
   constructor(
     private readonly runtime: ExecutionRuntime,
     /** Host path of Household's CA certificate. */
@@ -506,6 +509,7 @@ export class PetPlane {
       cpus, limits: { ...PET_LIMITS, memory: `${memoryMiB}M` },
       ...(placed.environment?.onStart === undefined ? {} : { environmentOnStart: placed.environment.onStart }),
       ...(placed.scout?.setup !== undefined ? { environmentSetup: placed.scout.setup } : placed.environment?.setup === undefined ? {} : { environmentSetup: placed.environment.setup }),
+      ...(placed.scout?.setupNetwork?.length ? { afterSetup: () => this.scoutSetupDone?.(house, pet) ?? Promise.resolve() } : {}),
     };
     return { spec, identity, launch };
   }

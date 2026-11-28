@@ -4,7 +4,7 @@ import { ConfigStore, capabilityDefinitionInput } from "../../src/infra/config-s
 import type { CapabilityDefinition } from "../../src/core/scouts";
 import { capabilityDefinitionSchema, parseHousehold, scoutDefinitionSchema } from "../../src/infra/config-schema";
 import { houseSecrets, scoutSecrets } from "../../src/core/secrets";
-import { capabilityKind, routineBlocker, scoutsBlock, scoutKeys, scoutLimits, scoutNetwork, scoutProblems } from "../../src/core/scouts";
+import { capabilityKind, routineBlocker, scoutInstallHosts, scoutsBlock, scoutKeys, scoutLimits, scoutNetwork, scoutProblems } from "../../src/core/scouts";
 import { tempDir } from "../helpers";
 
 const definition = (extra = {}) => scoutDefinitionSchema.parse({ name: "breaker", description: "Diagnose incidents", ...extra });
@@ -32,6 +32,22 @@ test("a scout's network: open unless a capability limits it, then only their hos
   expect(scoutNetwork({ capabilities: ["browser"] }, [browser, heroku])).toEqual({ open: true, allow: [], limitedBy: [] });
   expect(scoutNetwork({ capabilities: ["browser", "heroku", "datadog"], workspace: { repo: "https://github.com/acme/ops.git" } }, [browser, heroku, datadog]))
     .toEqual({ open: false, allow: [{ host: "api.heroku.com", port: 443 }, { host: "api.datadoghq.eu", port: 443 }, { host: "github.com", port: 443 }], limitedBy: ["heroku", "datadog"] });
+});
+
+test("a scout's install hosts: open only where its network is limited, public addresses only, none it reaches anyway", () => {
+  const browser = capabilityDefinitionSchema.parse({ name: "browser", installHosts: ["deb.debian.org:80", "deb.debian.org", "registry.npmjs.org"] });
+  const naturgy = capability({ name: "naturgy", network: { any: false, allow: ["omega.naturgy.es", "registry.npmjs.org"] } });
+  expect(browser.installHosts).toEqual([{ host: "deb.debian.org", port: 80 }, { host: "deb.debian.org", port: 443 }, { host: "registry.npmjs.org", port: 443 }]);
+  expect(capabilityDefinitionSchema.parse({ name: "media" }).installHosts).toBeUndefined();
+  // On the open internet it reaches them anyway: nothing to open.
+  expect(scoutInstallHosts({ capabilities: ["browser"] }, [browser, naturgy])).toEqual([]);
+  // Limited by its own setup: the browser's install hosts, but not one its network has already.
+  expect(scoutInstallHosts({ capabilities: ["browser", "naturgy"] }, [browser, naturgy])).toEqual([
+    { host: "deb.debian.org", port: 80, reach: "public" },
+    { host: "deb.debian.org", port: 443, reach: "public" },
+  ]);
+  expect(capabilityDefinitionInput(browser).installHosts).toEqual(["deb.debian.org:80", "deb.debian.org", "registry.npmjs.org"]);
+  expect("installHosts" in capabilityDefinitionInput(naturgy)).toBe(false);
 });
 
 test("two capabilities putting a key in one variable cannot make one scout", () => {

@@ -21,8 +21,11 @@ of capabilities; your human edits them in the admin, with every change kept as a
   pipx, uv tools, `cargo install` and `go install` to /usr/local/bin. Do not install into ~ (that is /root here).
 - **network** — `{any: true}` when the capability only needs software from the internet and does not limit
   anything (a browser, a downloader). `{any: false, allow: ["api.example.com", "db.example.com:5432"]}` when it brings
-  access to something valuable: a scout with it reaches only the hosts of its capabilities. With a host list, the
-  hosts your install script downloads from must be on it too (`deb.debian.org:80` for apt, the vendor's host).
+  access to something valuable: a scout with it reaches only the hosts of its capabilities while it works.
+- **install_hosts** — where your install script downloads from: `["deb.debian.org:80", "deb.debian.org"]` for apt,
+  `registry.npmjs.org` for npm, `pypi.org` and `files.pythonhosted.org` for pip, the vendor's host. Open only while
+  install scripts run, closed before the scout's agent starts, so a scout whose network is limited can still install
+  it. Never put these in `network`: there they stay open for the whole run.
 - **needs_keys** — the environment variable **names** the software reads (`DD_API_KEY`, `HEROKU_API_KEY`). Your
   human adds the values in the admin. Never put a key, token or password anywhere in a draft.
 - **description** — one or two sentences: what it gives a scout and which variables it uses.

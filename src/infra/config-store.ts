@@ -1046,5 +1046,6 @@ export function scoutDefinitionInput(scout: ScoutDefinition) {
 
 /** The domain network has parsed endpoints; YAML and HTTP inputs use their host:port spelling. */
 export function capabilityDefinitionInput(capability: CapabilityDefinition) {
-  return { ...capability, network: { any: capability.network.any, allow: capability.network.allow.map(formatAllowEntry) } };
+  const { installHosts, ...rest } = capability;
+  return { ...rest, network: { any: capability.network.any, allow: capability.network.allow.map(formatAllowEntry) }, ...(installHosts?.length ? { installHosts: installHosts.map(formatAllowEntry) } : {}) };
 }

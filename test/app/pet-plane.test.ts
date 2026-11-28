@@ -639,6 +639,18 @@ test("sideworkers mount private harness home and parent's shared home, with sepa
   expect(spec.limits!.memory).toBe("512M");
 });
 
+test("a scout with install hosts tells the plane when its setup has run; one without has no such step", async () => {
+  const {runtime,plane}=setup();
+  const done:string[]=[];
+  plane.scoutSetupDone=async(house,pet)=>{done.push(`${house}/${pet}`);};
+  const scout=(pet:string,setupNetwork?:{host:string;port:number}[])=>({...pets[0]!,pet,scout:{definition:"helper",parent:"sibling",homePath:`/private/${pet}/home`,instructions:"",setup:"apt-get update",network:{kind:"allowlist" as const,allow:[]},...(setupNetwork?{setupNetwork}:{})}});
+  await plane.reconcile([scout("sc-a",[{host:"deb.debian.org",port:443}]),scout("sc-b")]);
+  const [a,b]=[runtime.specs.find(spec=>spec.name.endsWith("sc-a"))!,runtime.specs.find(spec=>spec.name.endsWith("sc-b"))!];
+  expect(b.afterSetup).toBeUndefined();
+  await a.afterSetup!();
+  expect(done).toEqual([`${pets[0]!.house}/sc-a`]);
+});
+
 test("scout runs mount only their private material and use scout instructions", async () => {
   const {runtime,plane}=setup();
   const scoutAgent={...agent,env:({home,workspace,instructions,scout}:Parameters<AgentAdapter["env"]>[0])=>({HOME:home!,CWD:workspace!,INSTRUCTIONS:instructions,SCOUT:String(scout)})};

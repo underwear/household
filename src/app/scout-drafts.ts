@@ -185,7 +185,8 @@ export class ScoutDrafts {
       ...(options.routine?.length ? { routine: [...options.routine] } : {}),
     };
     const keys = (currentOwn?.keys ?? []).filter(key => options.keys !== "drop" || key.via !== "vm");
-    const own = draft.own ? { ...structuredClone(draft.own), name: currentOwn?.name ?? draft.own.name, keys, owner: draft.scout }
+    const installHosts = draft.own?.installHosts ?? currentOwn?.installHosts;
+    const own = draft.own ? { ...structuredClone(draft.own), name: currentOwn?.name ?? draft.own.name, keys, owner: draft.scout, ...(installHosts ? { installHosts: structuredClone(installHosts) } : {}) }
       : options.keys === "drop" && currentOwn ? { ...structuredClone(currentOwn), keys } : undefined;
     const capabilities = own ? [...all.filter(capability => capability !== currentOwn), own] : all;
     return { current, currentOwn, definition, own, capabilities };

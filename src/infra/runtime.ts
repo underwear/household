@@ -51,6 +51,8 @@ export interface ContainerSpec {
   limits?: { pids: number; memory: string };
   /** Skip the guest services (nested Docker and its readiness): a throwaway VM that runs one command needs none. */
   noGuestServices?: boolean;
+  /** Called once its setup script has run, before its agent starts: what was open for the setup only closes. */
+  afterSetup?: () => Promise<void>;
 }
 
 /**

@@ -37,6 +37,8 @@ export interface CapabilityView {
   description: string;
   install: string;
   network: { any: boolean; allow: string[] };
+  /** Where its install script downloads from: open to its scouts only while their install scripts run. */
+  installHosts?: string[];
   keys: ({ secret: string; via: "gateway" } | { secret: string; via: "vm"; env: string })[];
   kind: "tool" | "access";
   usedBy: string[];
@@ -51,7 +53,7 @@ export interface CapabilityView {
   /** Routine scouts it backs, and the bots that run each without asking. */
   routineScouts?: { name: string; title: string; bots: string[] }[];
 }
-export type CapabilityInput = Pick<CapabilityView, "name" | "description" | "install" | "network">;
+export type CapabilityInput = Pick<CapabilityView, "name" | "description" | "install" | "network" | "installHosts">;
 export interface CapabilityRevisionView {
   rev: number;
   at: number;

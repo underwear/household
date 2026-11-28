@@ -203,7 +203,7 @@ houses:
   expect(readFileSync(join(backup.dir!, "household.yaml"), "utf8")).toBe(old);
   const records = new SqliteStore(paths.database);
   try {
-    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4, 5, 6, 7]); // the secrets, the resource budgets, sideworkers' default size, then the inboxes switch
+    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4, 5, 6, 7, 8]); // the secrets, the resource budgets, sideworkers' default size, the inboxes switch, then the templates' install hosts
     const saved = readFileSync(paths.configFile, "utf8");
     expect(saved).not.toMatch(/^secrets:/m);
     expect(saved).toContain("# Owner configuration");
@@ -284,4 +284,24 @@ houses:
   const result = await config.load();
   expect(result.houses[0]!.secrets![1]!.value).toBe("synthetic-aliased");
   expect(result.houses[1]!.secrets!.map(secret => secret.value)).toEqual(["synthetic-aliased", "synthetic-aliased"]);
+});
+
+test("migration 8: the browser, media and dev templates, as they came, say where their installs download from", async () => {
+  const { parseDocument } = await import("yaml");
+  const { CAPABILITY_TEMPLATES } = await import("../../src/builtin-capabilities");
+  const migration = CONFIG_MIGRATIONS.find((each) => each.id === 8)!;
+  const template = (name: string) => CAPABILITY_TEMPLATES.find((each) => each.name === name)!;
+  const doc = parseDocument("houses:\n  work:\n    capabilities: []\n");
+  const capabilities = doc.getIn(["houses", "work", "capabilities"]) as import("yaml").YAMLSeq;
+  capabilities.items.push(doc.createNode({ name: "browser", install: template("browser").install, network: { any: true, allow: [] } }));
+  capabilities.items.push(doc.createNode({ name: "media", install: "my own script\n", network: { any: true, allow: [] } }));
+  capabilities.items.push(doc.createNode({ name: "dev", install: template("dev").install, network: { any: true, allow: [] }, installHosts: ["mirror.example.com"] }));
+  capabilities.items.push(doc.createNode({ name: "psql", install: template("psql").install, network: { any: false, allow: ["deb.debian.org:80", "db.example.com:5432"] } }));
+  migration.change(doc);
+  const after = (doc.toJS() as { houses: { work: { capabilities: { name: string; installHosts?: string[] }[] } } }).houses.work.capabilities;
+  expect(after[0]!.installHosts).toEqual(expect.arrayContaining(["deb.debian.org:80", "deb.debian.org", "deb.nodesource.com", "registry.npmjs.org", "cdn.playwright.dev"]));
+  expect(after[1]!.installHosts).toBeUndefined(); // the owner's own script: theirs to say
+  expect(after[2]!.installHosts).toEqual(["mirror.example.com"]); // already says
+  expect(after[3]!.installHosts).toBeUndefined(); // access: its network lists its mirror already
+  migration.change(parseDocument("houses:\n  work:\n    network: { allow: [] }\n")); // nothing to rewrite: harmless
 });

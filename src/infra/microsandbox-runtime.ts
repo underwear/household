@@ -62,6 +62,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
   private version?: Promise<void>;
   private readonly run: MicrosandboxRun;
   private readonly setupScripts = new Map<string, string>();
+  private readonly afterSetup = new Map<string, () => Promise<void>>();
   /** VMs started without guest services (`ContainerSpec.noGuestServices`). */
   private readonly withoutServices = new Set<string>();
   private readonly setupRunSources = new Map<string, string>();
@@ -185,6 +186,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
 
   private async create(spec: ContainerSpec): Promise<void> {
     this.configureEnvironmentSetup(spec.name, spec.environmentSetup, spec.environmentOnStart);
+    if (spec.afterSetup) this.afterSetup.set(spec.name, spec.afterSetup); else this.afterSetup.delete(spec.name);
     if (spec.noGuestServices) this.withoutServices.add(spec.name); else this.withoutServices.delete(spec.name);
     const args = ["create", spec.image, "--name", spec.name, "--pull", "never", "--cpus", String(spec.cpus ?? this.options.cpus ?? 2), "--memory", spec.limits?.memory ?? "1G", "--no-net"];
     for (const port of new Set([this.options.proxyPort, this.options.relayPort])) args.push("--net-rule", `allow@host:tcp:${port}`);
@@ -225,6 +227,7 @@ export class MicrosandboxRuntime implements PetRuntime, ImageBuilder {
       await this.checked(["exec", "--stream", "--no-tty", name, "--", "python3", "-"], { stdin: GUEST_SKILLS_SETUP });
     }
     await this.runEnvironmentPhase(name, "setup", true);
+    await this.afterSetup.get(name)?.();
     await this.runEnvironmentPhase(name, "onStart", true);
     const job = (await this.checked(["exec", "--detach", "--no-stdin", "--no-tty", name, "--", ...command])).trim();
     if (!JOB_ID.test(job)) throw new Error("invalid microsandbox main job identifier");

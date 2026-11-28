@@ -2,6 +2,7 @@ import { isMap, isScalar, isSeq, visit, type Document, type YAMLMap } from "yaml
 import { CAPABILITY_TEMPLATES, GENERAL_SCOUT, LEGACY_NODE_INSTALLS } from "../builtin-capabilities";
 import { HouseholdError } from "../core/errors";
 import { DEFAULT_WORKSPACE_RESOURCES, workspaceBudget } from "../core/resources";
+import { formatAllowEntry } from "../core/network-policy";
 import { setIn } from "./yaml-doc";
 
 /**
@@ -26,6 +27,7 @@ export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 5, store: "config", name: "workspace CPU/RAM budgets replace helper count limits", change: migrateResourceBudgets },
   { id: 6, store: "config", name: "sideworkers' default VM size is dropped: bots size each one", change: (doc) => { for (const house of houseNames(doc)) doc.deleteIn(["houses", house, "sideworkerLimits"]); } },
   { id: 7, store: "config", name: "inboxes become a workspace feature, on where a workspace has inboxes", change: migrateInboxesFeature },
+  { id: 8, store: "config", name: "the browser, media and dev capabilities say where their install scripts download from", change: migrateInstallHosts },
 ];
 
 /** The houses the config names. */
@@ -168,5 +170,21 @@ export function migrateInboxesFeature(doc: Document): void {
     const inboxes = doc.getIn(["houses", house, "inboxes"]);
     if (!isSeq(inboxes) || !inboxes.items.length || doc.hasIn(["houses", house, "features", "inboxes"])) continue;
     setIn(doc, ["houses", house, "features", "inboxes"], doc.createNode(true));
+  }
+}
+
+/**
+ * A template's install script, as it came, gets the hosts it downloads from: a scout whose other capabilities limit
+ * its network can install it now. One the owner changed, or that names its install hosts already, stays as it is.
+ */
+export function migrateInstallHosts(doc: Document): void {
+  for (const house of houseNames(doc)) {
+    const capabilities = doc.getIn(["houses", house, "capabilities"]);
+    if (!isSeq(capabilities)) continue;
+    for (const item of capabilities.items) {
+      if (!isMap(item) || item.has("installHosts")) continue;
+      const template = CAPABILITY_TEMPLATES.find(each => each.name === item.get("name") && each.network.any);
+      if (template?.installHosts?.length && item.get("install") === template.install) item.set("installHosts", doc.createNode(template.installHosts.map(formatAllowEntry)));
+    }
   }
 }

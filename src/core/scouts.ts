@@ -13,6 +13,11 @@ export interface CapabilityDefinition {
   install: string;
   /** `any`: the capability does not narrow its scouts' network; else the hosts it needs, and only those. */
   network: { any: boolean; allow: AllowEntry[] };
+  /**
+   * Where its install script downloads from (apt's mirror, npm…): open to its scouts while their install scripts run,
+   * closed before their agent starts. None: its install needs nothing beyond its network.
+   */
+  installHosts?: AllowEntry[];
   keys: CapabilityKey[];
   /** The scout blueprint it belongs to: such a capability is that blueprint's own, seen and used nowhere else. */
   owner?: string;
@@ -98,6 +103,19 @@ export function scoutNetwork(scout: Pick<ScoutDefinition, "capabilities" | "work
   const unique = [...new Map(allow.map(entry => [`${entry.host}:${entry.port}`, entry])).values()];
   // `allow` stays what the VM's proxy gets (a `*:443` keeps its port); `open` says what that means for its data.
   return { open: limiting.length === 0 || unique.some(isWholeInternet), allow: limiting.length === 0 ? (repo ? [repo] : []) : unique, limitedBy: limiting.map(capability => capability.name) };
+}
+
+/**
+ * What a scout's VM may reach besides its network while its install scripts run: the install hosts of its
+ * capabilities, public addresses only. None for a scout on the open internet, which reaches them anyway.
+ */
+export function scoutInstallHosts(scout: Pick<ScoutDefinition, "capabilities" | "workspace">, capabilities: readonly CapabilityDefinition[]): AllowEntry[] {
+  const network = scoutNetwork(scout, capabilities);
+  if (network.open) return [];
+  const used = scout.capabilities.flatMap(name => capabilities.filter(capability => capability.name === name));
+  const extra = used.flatMap(capability => capability.installHosts ?? [])
+    .filter(entry => !network.allow.some(allowed => allowed.host === entry.host && allowed.port === entry.port));
+  return [...new Map(extra.map(entry => [`${entry.host}:${entry.port}`, { host: entry.host, port: entry.port, reach: "public" as const }])).values()];
 }
 
 /**

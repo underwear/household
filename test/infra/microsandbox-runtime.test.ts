@@ -95,6 +95,17 @@ test("VM creation is detached and default-deny, exposing only the two House port
   expect(env.calls[setupIndex]!.command).toEqual(["msb", "exec", "--stream", "--no-tty", "--timeout", "915s", "household.work.sibling", "--", "sh", "-c", environmentScript("setup", true)]);
 });
 
+test("what was open for the setup closes after it runs and before the agent starts", async () => {
+  const env = setup();
+  let callsWhenClosed = -1;
+  await env.runtime.runContainer({ name: "household.work.scout-1", image: "house-agent:test", environmentSetup: "apt-get update", afterSetup: async () => { callsWhenClosed = env.calls.length; } });
+  const setupIndex = env.calls.findIndex(({ command }) => command.includes(environmentScript("setup", true)));
+  const mainIndex = env.calls.findIndex(({ command }) => command.includes("--detach"));
+  expect(setupIndex).toBeGreaterThan(0);
+  expect(callsWhenClosed).toBe(setupIndex + 1); // right after the setup, nothing else between
+  expect(mainIndex).toBeGreaterThanOrEqual(callsWhenClosed);
+});
+
 test("ordinary setup failures still launch the agent on creation and start; transport failure stays fatal and private", async () => {
   for (const start of [false, true]) {
     const env = setup();

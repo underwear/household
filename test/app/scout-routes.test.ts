@@ -109,6 +109,20 @@ test("a pet's draft waits for the owner; applying makes a revision by the pet; t
   expect((await f.json("GET", "capabilities/media")).history[0].author).toEqual({ kind: "pet", pet: "sibling" });
 });
 
+test("install hosts: the owner sets them, a save keeps them, a bot drafts them, a draft without them keeps them", async () => {
+  const f = await fixture();
+  await f.config.addPet("work", "sibling");
+  await f.call("POST", "capabilities", { name: "media", install: "pip install yt-dlp", installHosts: ["pypi.org", "files.pythonhosted.org"] });
+  expect((await f.json("GET", "capabilities/media")).capability.installHosts).toEqual(["pypi.org", "files.pythonhosted.org"]);
+  await f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", description: "yt-dlp" });
+  await f.call("POST", `capability-drafts/${(await f.json("GET", "capability-drafts"))[0].id}/apply`);
+  expect((await f.json("GET", "capabilities/media")).capability.installHosts).toEqual(["pypi.org", "files.pythonhosted.org"]);
+  await expect(f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", install_hosts: ["*.pythonhosted.org"] })).rejects.toThrow("not an exact host");
+  await f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", install_hosts: ["deb.debian.org:80"] });
+  await f.call("POST", `capability-drafts/${(await f.json("GET", "capability-drafts"))[0].id}/apply`);
+  expect((await f.json("GET", "capabilities/media")).capability.installHosts).toEqual(["deb.debian.org:80"]);
+});
+
 test("a pet's capability draft that hides characters is refused; Windows line ends are line ends", async () => {
   const f = await fixture();
   await f.config.addPet("work", "sibling");

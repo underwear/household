@@ -18,7 +18,7 @@ export interface Pet {
   chatPlace?: string;
   /** Runtime-only parent conversation captured when a helper was spawned. */
   originPlace?: string;
-  scout?: { gatewaySecrets?: import("./secrets").PlacedSecret[]; /** The capabilities it was made of: its keys must be restricted to one of them. */ capabilities?: string[]; definition: string; parent: string; homePath: string; skillsPath?: string; instructions: string; env?: Record<string, string>; setup?: string; network: NetworkPolicy };
+  scout?: { gatewaySecrets?: import("./secrets").PlacedSecret[]; /** The capabilities it was made of: its keys must be restricted to one of them. */ capabilities?: string[]; definition: string; parent: string; homePath: string; skillsPath?: string; instructions: string; env?: Record<string, string>; setup?: string; network: NetworkPolicy; /** Open besides `network` only while its install scripts run (`scoutInstallHosts`). */ setupNetwork?: import("./network-policy").AllowEntry[] };
   /** Runtime-only worker identity; workers are persisted separately from configured pets. */
   sideworker?: { parent: string; cwd: string; parentHome?: string; /** Its own git worktree's branch, when it has one. */ branch?: string };
   /** False temporarily stops the pet; omission means enabled. */

@@ -169,9 +169,11 @@ export function keyKind(agents: Agents, key: AgentKey): string | undefined {
 }
 
 /** Each run has its own exact subject; the house allowlist never grants a scout access. */
-export function scoutSubjects(pets: PlacedPet[]): import("./gateway").SubjectSpec[] {
+export function scoutSubjects(pets: PlacedPet[], settingUp: (house: string, pet: string) => boolean = () => false): import("./gateway").SubjectSpec[] {
   return pets.filter(pet => pet.scout).map(pet => {
     const intercept = [...pet.keyUse.wire.map(wire => wire.target), ...(pet.secrets ?? []).flatMap(secret => secret.hosts)];
-    return { subject: { kind: "scout" as const, name: pet.house, pet: pet.pet }, policy: { kind: "allowlist" as const, allow: [...pet.scout!.network.allow, ...pet.keyUse.wire.map(wire => wire.target)] }, intercept };
+    // Its install hosts only until its install scripts have run: its agent never reaches them.
+    const setup = settingUp(pet.house, pet.pet) ? pet.scout!.setupNetwork ?? [] : [];
+    return { subject: { kind: "scout" as const, name: pet.house, pet: pet.pet }, policy: { kind: "allowlist" as const, allow: [...pet.scout!.network.allow, ...setup, ...pet.keyUse.wire.map(wire => wire.target)] }, intercept };
   });
 }

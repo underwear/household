@@ -266,6 +266,7 @@ export const capabilityDefinitionSchema = z.strictObject({
   description: z.string().trim().max(1000).default(""),
   install: z.string().max(100_000).default(""),
   network: z.strictObject({ any: z.boolean().default(true), allow: list(endpoint) }).default({ any: true, allow: [] }),
+  installHosts: list(endpoint).optional(),
   keys: z.array(capabilityKey).max(32).default([]),
   owner: name.optional(),
 }).superRefine((capability, ctx) => {

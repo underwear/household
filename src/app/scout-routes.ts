@@ -170,7 +170,7 @@ export function scoutRoutes(deps: ScoutRoutesDeps): (request: Request) => Promis
       }
       if (area === "capability-templates") {
         if (request.method !== "GET" || name) return json({ error: "Not found" }, 404);
-        return json(CAPABILITY_TEMPLATES.map(template => ({ ...template, network: { any: template.network.any, allow: template.network.allow.map(formatAllowEntry) } })));
+        return json(CAPABILITY_TEMPLATES.map(({ installHosts, ...template }) => ({ ...template, network: { any: template.network.any, allow: template.network.allow.map(formatAllowEntry) }, ...(installHosts?.length ? { installHosts: installHosts.map(formatAllowEntry) } : {}) })));
       }
       if (area === "capability-drafts") {
         if (!name) return request.method === "GET" ? json(deps.capabilities.drafts(houseName).map(draftView)) : json({ error: "Not found" }, 404);

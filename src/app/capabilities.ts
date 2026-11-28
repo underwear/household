@@ -33,7 +33,7 @@ export interface CapabilityDraft {
 
 const historyKey = (house: string, name: string) => `capabilities.revisions.v1.${house}.${name}`;
 const draftsKey = (house: string) => `capabilities.drafts.v1.${house}`;
-const FIELDS: (keyof CapabilityDefinition)[] = ["description", "install", "network", "keys"];
+const FIELDS: (keyof CapabilityDefinition)[] = ["description", "install", "network", "installHosts", "keys"];
 
 /** The fields that differ between two definitions, as a revision's summary. */
 export function changedFields(before: CapabilityDefinition | undefined, after: CapabilityDefinition): string {
@@ -58,6 +58,17 @@ export function draftNetwork(input: unknown, current: CapabilityDefinition["netw
   const allow = ((raw.allow ?? []) as unknown[]).map(entry => { const parsed = typeof entry === "string" ? parseAllowEntry(entry) : undefined; if (!parsed) throw new HouseholdError(`network.allow: ${String(entry)} is not a host or host:port`); return parsed; });
   if (!raw.any && allow.length === 0) throw new HouseholdError("network: name at least one host, or any: true");
   return { any: raw.any, allow };
+}
+/** Where a drafted install downloads from: exact hosts (no wildcard), the current ones when left out. */
+export function draftInstallHosts(input: unknown, current: CapabilityDefinition["installHosts"]): CapabilityDefinition["installHosts"] {
+  if (input === undefined) return current;
+  if (!Array.isArray(input) || input.length > 64) throw new HouseholdError("install_hosts: [\"host\" or \"host:port\"]");
+  const hosts = input.map(entry => {
+    const parsed = typeof entry === "string" ? parseAllowEntry(entry) : undefined;
+    if (!parsed || parsed.host.startsWith("*")) throw new HouseholdError(`install_hosts: ${String(entry)} is not an exact host or host:port`);
+    return parsed;
+  });
+  return hosts.length ? hosts : undefined;
 }
 /** The key variables a draft says it needs: names only (a value never goes in a draft). */
 export function draftKeys(input: unknown): string[] {
@@ -144,7 +155,7 @@ export class Capabilities {
    * A pet's draft: a whole definition (new, or a change to one) that only the owner applies. Its keys are kept as
    * they are (a pet never names a secret); the variables it says it needs are names, shown to the owner as missing.
    */
-  async draft(caller: PetIdentity, input: { name: unknown; description?: unknown; install?: unknown; network?: unknown; needs_keys?: unknown }) {
+  async draft(caller: PetIdentity, input: { name: unknown; description?: unknown; install?: unknown; network?: unknown; install_hosts?: unknown; needs_keys?: unknown }) {
     if (typeof input.name !== "string" || !NAME_PATTERN.test(input.name)) throw new HouseholdError("name: lowercase letters, digits and hyphens, starting with a letter");
     const house = await this.house(caller.house);
     if (!house.pets.some(pet => pet.name === caller.pet)) throw new HouseholdError("Only a bot of this workspace may draft its capabilities");
@@ -161,6 +172,8 @@ export class Capabilities {
       network: draftNetwork(input.network, current?.network),
       keys: current?.keys ?? [],
     };
+    const installHosts = draftInstallHosts(input.install_hosts, current?.installHosts);
+    if (installHosts) definition.installHosts = installHosts;
     const draft: CapabilityDraft = { id: crypto.randomUUID(), capability: input.name, pet: caller.pet, at: Date.now(), definition, needsKeys };
     // One draft per capability: a newer one replaces the older.
     this.setDrafts(caller.house, [...this.drafts(caller.house).filter(each => each.capability !== input.name), draft]);
@@ -170,8 +183,10 @@ export class Capabilities {
     const draft = this.drafts(house).find(each => each.id === id);
     if (!draft) throw new NotFoundError("unknown draft");
     const current = (await this.list(house)).find(capability => capability.name === draft.capability);
-    // Keys are the owner's: the definition's keys at apply time win over what the draft carried.
-    const revision = await this.save(house, { ...draft.definition, keys: current?.keys ?? [] }, { kind: "pet", pet: draft.pet });
+    // Keys are the owner's: the definition's keys at apply time win over what the draft carried. A draft that names no
+    // install hosts keeps the capability's.
+    const installHosts = draft.definition.installHosts ?? current?.installHosts;
+    const revision = await this.save(house, { ...draft.definition, keys: current?.keys ?? [], ...(installHosts ? { installHosts } : {}) }, { kind: "pet", pet: draft.pet });
     this.setDrafts(house, this.drafts(house).filter(each => each.id !== id));
     return revision;
   }
@@ -202,10 +217,11 @@ export function capabilityTools(capabilities: Capabilities, envOf: (house: strin
     },
     {
       name: "capability_draft",
-      description: "Propose a capability, or a change to one (same name): description, a bash install script (runs as root at the start of every scout run; fetch software with package managers, pin versions in the script if needed), network ({any:true} or {any:false, allow:[\"host\",\"host:port\"]}) and needs_keys (environment variable NAMES the owner must supply, never values). Your human reviews, tests and applies it in the admin; nothing changes until then.",
+      description: "Propose a capability, or a change to one (same name): description, a bash install script (runs as root at the start of every scout run; fetch software with package managers, pin versions in the script if needed), network ({any:true} or {any:false, allow:[\"host\",\"host:port\"]}: where scouts with it may go while they work), install_hosts (where the install script downloads from, such as deb.debian.org:80 for apt: open only while install scripts run, so never list those in network) and needs_keys (environment variable NAMES the owner must supply, never values). Your human reviews, tests and applies it in the admin; nothing changes until then.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: {
         name: { type: "string" }, description: { type: "string" }, install: { type: "string" },
         network: { type: "object", properties: { any: { type: "boolean" }, allow: { type: "array", items: { type: "string" } } }, required: ["any"], additionalProperties: false },
+        install_hosts: { type: "array", items: { type: "string" } },
         needs_keys: { type: "array", items: { type: "string" } },
       } },
       available: enabled,
