@@ -98,10 +98,11 @@ existing scout proposes a change to it, written whole.
 - **What goes in it.** `name`, `title`, `emoji`; `description`: when a bot should call it (you and the other bots choose
   by it); `instructions`: how it does the task, step by step, and what it must not do; `capabilities`: shared ones from
   `capabilities` (a browser, a downloader); `setup`: what only it needs, as in `capability_draft` (`install`, `network`,
-  `needs_keys`, see `household-capabilities`); `reason`: one or two lines for your human, why this scout and this
+  `install_hosts`, `needs_keys`, see `household-capabilities`); `reason`: one or two lines for your human, why this scout and this
   access, and the worst it could do.
 - **The least access.** Exact hosts in `setup.network` (`meter.example.com`, not `*.example.com`, not the open
-  internet) whenever the task allows, plus the hosts its install downloads from; the fewest keys. A scout reaches the
+  internet) whenever the task allows; the hosts its install downloads from go in `setup.install_hosts`, open only
+  while install scripts run; the fewest keys. A scout reaches the
   hosts of the capabilities that list hosts, together; one that lists none (`any: true`) adds no limit and opens
   nothing. It is open only when none of them lists hosts, or one lists `*`.
 - **Routine.** Ask for it (`routine: true`) only for a low-stakes errand on exact hosts, one you will run often, and

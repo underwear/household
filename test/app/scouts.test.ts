@@ -132,6 +132,14 @@ test("a scout's thread is its name and its run's number, never the task", async 
   await scouts.stop();
 });
 
+test("the launch card names what its install scripts reach besides its network, only when there is some", async () => {
+  const { launchCard } = await import("../../src/app/scouts");
+  const card = (installs?: { host: string; port: number }[]) => launchCard({ pet: "🤖 Sibly", scout: "🔥 Naturgy", task: "Submit 1234", report: "owner", capabilities: [{ name: "browser" }, { name: "naturgy", own: true }], network: { open: false, allow: [{ host: "omega.naturgy.es", port: 443 }] }, ...(installs ? { installs } : {}), keysInVm: [], secrets: [] });
+  expect(card([{ host: "deb.debian.org", port: 80 }, { host: "registry.npmjs.org", port: 443 }])).toContain("🔒 Network: only <code>omega.naturgy.es</code>\n📦 While it installs, also: <code>deb.debian.org:80</code>, <code>registry.npmjs.org</code>");
+  expect(card([])).not.toContain("While it installs");
+  expect(card()).not.toContain("While it installs");
+});
+
 test("the launch card: who wants to run which scout, the task, then what it can do; the default result goes unsaid", async () => {
   const { launchCard } = await import("../../src/app/scouts");
   const plain = launchCard({ pet: "🤖 Boltun", scout: "▶️ Content Downloader", task: "Download <this>", report: "owner", capabilities: [{ name: "media" }], network: { open: true, allow: [] }, keysInVm: [], secrets: [] });

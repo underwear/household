@@ -1,4 +1,4 @@
-import { formatAllowEntry, isWholeInternet, type AllowEntry } from "./network-policy";
+import { formatAllowEntry, isAllowed, isWholeInternet, type AllowEntry } from "./network-policy";
 import { houseFeatures, type HouseFeatures } from "./house-features";
 import { block, SCOUTS_TAG, tagFreeJson } from "./tags";
 
@@ -113,8 +113,8 @@ export function scoutInstallHosts(scout: Pick<ScoutDefinition, "capabilities" | 
   const network = scoutNetwork(scout, capabilities);
   if (network.open) return [];
   const used = scout.capabilities.flatMap(name => capabilities.filter(capability => capability.name === name));
-  const extra = used.flatMap(capability => capability.installHosts ?? [])
-    .filter(entry => !network.allow.some(allowed => allowed.host === entry.host && allowed.port === entry.port));
+  const reached = { kind: "allowlist" as const, allow: network.allow };
+  const extra = used.flatMap(capability => capability.installHosts ?? []).filter(entry => !isAllowed(reached, { host: entry.host, port: entry.port as number }));
   return [...new Map(extra.map(entry => [`${entry.host}:${entry.port}`, { host: entry.host, port: entry.port, reach: "public" as const }])).values()];
 }
 
@@ -128,6 +128,9 @@ export function routineBlocker(network: ScoutNetwork): string | undefined {
   const wildcard = network.allow.find(entry => entry.host.startsWith("*"));
   return wildcard ? `Reaches ${formatAllowEntry(wildcard)}: routine needs exact hosts` : undefined;
 }
+/** The install hosts a scout gets from its definition (`scoutInstallHosts`): its ticked capabilities' and its own one's. */
+export const blueprintInstallHosts = (scout: Pick<ScoutDefinition, "name" | "capabilities" | "workspace">, capabilities: readonly CapabilityDefinition[]) =>
+  scoutInstallHosts({ capabilities: blueprintCapabilities(scout, capabilities), workspace: scout.workspace }, capabilities);
 /** The network a scout gets from its definition: its ticked capabilities, its own one, its repository's host. */
 export const blueprintNetwork = (scout: Pick<ScoutDefinition, "name" | "capabilities" | "workspace">, capabilities: readonly CapabilityDefinition[]) =>
   scoutNetwork({ capabilities: blueprintCapabilities(scout, capabilities), workspace: scout.workspace }, capabilities);

@@ -238,6 +238,7 @@ export function ScoutDraftPage({ house, id, refresh, notify, initial }: { house:
               <BeforeAfter label="Its own setup's description" before={view.currentOwn?.description} after={view.own.description} />
               <BeforeAfter label="Its own install script (runs as root at the start of every run)" before={view.currentOwn?.install} after={view.own.install} block by={pet} />
               <BeforeAfter label="Its own setup's network" before={view.currentOwn ? hostWords(view.currentOwn.network.any ? null : view.currentOwn.network.allow) : undefined} after={hostWords(view.own.network.any ? null : view.own.network.allow)} by={pet} />
+              {(view.own.installHosts?.length || view.currentOwn?.installHosts?.length) ? <BeforeAfter label="Its install downloads from (open only while install scripts run)" before={view.currentOwn ? view.currentOwn.installHosts?.join(", ") || "none" : undefined} after={view.own.installHosts?.join(", ") || "none"} by={pet} /> : null}
             </>
           ) : <span className="hint">{view.currentOwn ? "Its own setup stays as it is." : "No setup of its own."}</span>}
         </Stack>

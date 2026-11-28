@@ -89,7 +89,7 @@ test("a draft is checked as the owner's apply will be: schemas, shared capabilit
   await fails(meter({ capabilities: ["browser", "browser"] }), "listed twice");
   await fails(meter({ emoji: "two words" }), "one emoji");
   await fails(meter({ setup: { install: "", needs_keys: ["sk-live-abc123"] } }), "needs_keys: environment variable names only");
-  await fails(meter({ setup: { install: "", keys: [{ secret: "x", via: "vm", env: "X" }] } }), "setup: {install?, network?, needs_keys?}");
+  await fails(meter({ setup: { install: "", keys: [{ secret: "x", via: "vm", env: "X" }] } }), "setup: {install?, network?, install_hosts?, needs_keys?}");
   await fails(meter({ setup: { network: { any: false, allow: [] } } }), "name at least one host");
   await fails(meter({ name: "browser" }), "A capability is already named browser"); // its own setup would clash
   expect(await f.drafts.list("work")).toEqual([]);
@@ -241,6 +241,28 @@ test("new hosts of its own setup put its VM key at stake: drop takes it off and 
   }
   expect(await (await g.decide(draft!.id, {})).json()).toMatchObject({ keys: { choice: null, kept: ["METER_PASSWORD"], dropped: [] } });
   expect((await g.house()).capabilities![0]!.keys).toHaveLength(1);
+});
+
+test("its own setup's install hosts: a bot drafts them, the review shows them, new ones put its VM key at stake, [] removes them", async () => {
+  const f = await fixture(keyed);
+  await f.drafts.draft(sibling, { name: "meter", description: "Readings", instructions: "x", reason: "r", setup: { install_hosts: ["deb.debian.org:80"] } });
+  let [draft] = await f.drafts.list("work");
+  const view = await (await f.call("GET", `scout-drafts/${draft!.id}`)).json();
+  expect(view.own.installHosts).toEqual(["deb.debian.org:80"]);
+  // Its install scripts run beside the key: a host they download from is a way out it did not have.
+  expect(view.keyGate).toMatchObject({ reasons: ["its install scripts would download from new hosts: deb.debian.org:80"] });
+  await f.decide(draft!.id, { keys: "keep" });
+  expect((await f.house()).capabilities![0]).toMatchObject({ installHosts: [{ host: "deb.debian.org", port: 80 }], keys: [{ secret: "meter-pass" }] });
+  // Left out: kept. [] : removed, and removing one is no way out.
+  await f.drafts.draft(sibling, { name: "meter", description: "Monthly readings", instructions: "x", reason: "r", setup: { install: "true" } });
+  [draft] = await f.drafts.list("work");
+  expect((await (await f.call("GET", `scout-drafts/${draft!.id}`)).json()).own.installHosts).toEqual(["deb.debian.org:80"]);
+  await f.drafts.draft(sibling, { name: "meter", description: "Monthly readings", instructions: "x", reason: "r", setup: { install_hosts: [] } });
+  [draft] = await f.drafts.list("work");
+  const cleared = await (await f.call("GET", `scout-drafts/${draft!.id}`)).json();
+  expect(cleared.own.installHosts).toBeUndefined();
+  expect(cleared.keyGate).toBeNull();
+  await expect(f.drafts.draft(sibling, { name: "meter", description: "x", instructions: "x", reason: "r", setup: { install_hosts: ["*.debian.org"] } })).rejects.toThrow("not an exact host");
 });
 
 /** Scout meter: its own setup holds METER_PASSWORD (in its VM) and reaches meter.example.com alone; shared capabilities to tick. */

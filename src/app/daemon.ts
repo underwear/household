@@ -538,6 +538,8 @@ export async function startDaemon(deps: DaemonDeps) {
   };
   // Its install scripts have run: its install hosts close (open tunnels to them too) before its agent starts. This
   // runs inside the reload that starts its VM, after it applied the network: the policy as applied, minus those hosts.
+  // Applied in full, keys prepared afresh: credentials kept from that apply hold tokens minutes old by now, and writing
+  // them again would put back one a refresher has replaced meanwhile.
   pets.scoutSetupDone = async (house, pet) => {
     if (!scoutSetup.delete(`${house}/${pet}`) || !appliedHousehold) return;
     await applyNetwork(appliedHousehold, placed);

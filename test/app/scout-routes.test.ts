@@ -121,6 +121,9 @@ test("install hosts: the owner sets them, a save keeps them, a bot drafts them, 
   await f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", install_hosts: ["deb.debian.org:80"] });
   await f.call("POST", `capability-drafts/${(await f.json("GET", "capability-drafts"))[0].id}/apply`);
   expect((await f.json("GET", "capabilities/media")).capability.installHosts).toEqual(["deb.debian.org:80"]);
+  await f.capabilities.draft({ house: "work", pet: "sibling" }, { name: "media", install_hosts: [] }); // [] removes them
+  await f.call("POST", `capability-drafts/${(await f.json("GET", "capability-drafts"))[0].id}/apply`);
+  expect((await f.json("GET", "capabilities/media")).capability.installHosts).toBeUndefined();
 });
 
 test("a pet's capability draft that hides characters is refused; Windows line ends are line ends", async () => {

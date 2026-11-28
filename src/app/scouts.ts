@@ -2,7 +2,7 @@ import { scoutDomain } from "../core/scout-facts";
 import { randomBytes } from "node:crypto";
 import type { House, Household, Pet } from "../core/household";
 import { assertWorkspaceCapacity, workspaceResourcesSchema, type ResourceAllocation } from "../core/resources";
-import { scoutNetworkWords, scoutNetwork, scoutProblems, scoutRuntime, blueprintCapabilities, routineFor, routineBlocker, type CapabilityDefinition, type ScoutRunDefinition } from "../core/scouts";
+import { scoutNetworkWords, scoutNetwork, scoutInstallHosts, scoutProblems, scoutRuntime, blueprintCapabilities, routineFor, routineBlocker, type CapabilityDefinition, type ScoutRunDefinition } from "../core/scouts";
 import { formatAllowEntry, type AllowEntry } from "../core/network-policy";
 import { houseFeatures } from "../core/house-features";
 import type { PetIdentity } from "../infra/agent-api";
@@ -130,7 +130,7 @@ export const networkFact=(network:{open:boolean;allow:AllowEntry[]}):string=>net
  */
 export function launchCard(run:{pet:string;scout:string;task:string;report:"pet"|"owner";/** In the scout's own thread. */here?:boolean;
   /** What it is made of: shared capabilities by name, its own setup as such. */capabilities:{name:string;own?:boolean}[];
-  network:{open:boolean;allow:AllowEntry[]};keysInVm:string[];secrets:string[];runtime?:string;
+  network:{open:boolean;allow:AllowEntry[]};/** Open besides its network while its install scripts run. */installs?:AllowEntry[];keysInVm:string[];secrets:string[];runtime?:string;
   /** Characters the task hid, removed before it was shown here: the scout gets the task as shown. */hidden?:number}):string {
   const capabilities=run.capabilities.map(capability=>capability.own?"own setup":`<code>${html(capability.name)}</code>`).join(", ")||"none";
   const network=networkFact(run.network);
@@ -138,6 +138,7 @@ export function launchCard(run:{pet:string;scout:string;task:string;report:"pet"
     title:run.here?`${html(run.scout)} scout · called by ${html(run.pet)}`:`${html(run.pet)} wants to run ${html(run.scout)} scout`,
     quote:{label:"Task",text:run.task},
     facts:[`Capabilities: ${capabilities}`,network,
+      ...(run.installs?.length?[`📦 While it installs, also: ${run.installs.map(entry=>`<code>${html(formatAllowEntry(entry))}</code>`).join(", ")}`]:[]),
       ...(run.network.open&&(run.keysInVm.length||run.secrets.length)?["⚠️ Real secrets on the open internet: a tricked scout can send them anywhere."]:[]),
       ...(run.keysInVm.length?[`⚠️ Keys inside its VM: ${run.keysInVm.map(env=>`<code>$${html(env)}</code>`).join(", ")}`]:[]),
       ...(run.secrets.length?[`Secrets from ${html(run.pet)}: ${run.secrets.map(key=>`<code>${html(key)}</code>`).join(", ")}`]:[]),
@@ -328,7 +329,7 @@ export class Scouts {
     // what, where the result goes and the network; then only what there is to say (keys inside its VM, secrets from
     // the pet, its own agent).
     if(!r.byOwner){
-      const text=launchCard({pet:this.title(r),scout:`${d.emoji??"🧭"} ${d.title??d.name}`,task:r.task,report:r.report,capabilities:r.capabilities.map(capability=>({name:capability.name,own:capability.owner===d.name})),network:scoutNetwork(d,r.capabilities),
+      const text=launchCard({pet:this.title(r),scout:`${d.emoji??"🧭"} ${d.title??d.name}`,task:r.task,report:r.report,capabilities:r.capabilities.map(capability=>({name:capability.name,own:capability.owner===d.name})),network:scoutNetwork(d,r.capabilities),installs:scoutInstallHosts(d,r.capabilities),
         keysInVm:r.capabilities.flatMap(capability=>capability.keys.flatMap(key=>key.via==="vm"?[key.env]:[])),secrets:Object.keys(values),...(r.runtime?{runtime:r.runtime}:{}),...(r.taskHidden?{hidden:r.taskHidden}:{})});
       const posted=(notice:PostedNotice,shown=text)=>{r.announcement={...notice,text:shown};r.channel=parsePlaceKey(notice.place)?.channel??r.channel;this.save();};
       // Routine: the owner approved it in advance, so the same card goes up as a notice, saying so; nothing waits on it.
@@ -537,7 +538,7 @@ export class Scouts {
       line=progress===undefined?`🖥 Booting its VM… ${since(this.now()-card.since)}`
         :`📦 ${installs?`Installing ${html(installs)}`:"Setting up"}… ${since(this.now()-card.since)}${progress?`\n<code>${html(this.redact(r.house,r.id,progress).slice(0,120))}</code>`:""}`;
     }
-    const text=[launchCard({pet:r.byOwner?"you":this.title(r),scout:this.name(r),task:r.task,report:r.report,here:true,capabilities:r.capabilities.map(capability=>({name:capability.name,own:capability.owner===d.name})),network:scoutNetwork(d,r.capabilities),keysInVm:[],secrets:[]}),
+    const text=[launchCard({pet:r.byOwner?"you":this.title(r),scout:this.name(r),task:r.task,report:r.report,here:true,capabilities:r.capabilities.map(capability=>({name:capability.name,own:capability.owner===d.name})),network:scoutNetwork(d,r.capabilities),installs:scoutInstallHosts(d,r.capabilities),keysInVm:[],secrets:[]}),
       `\n\n${line}`].join("");
     // One post at a time: a tick while it is being posted would post a second card.
     const first=card.handle===undefined;if(first)card.posting=true;

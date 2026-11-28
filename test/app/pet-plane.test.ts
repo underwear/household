@@ -647,8 +647,8 @@ test("a scout with install hosts tells the plane when its setup has run; one wit
   await plane.reconcile([scout("sc-a",[{host:"deb.debian.org",port:443}]),scout("sc-b")]);
   const [a,b]=[runtime.specs.find(spec=>spec.name.endsWith("sc-a"))!,runtime.specs.find(spec=>spec.name.endsWith("sc-b"))!];
   expect(b.afterSetup).toBeUndefined();
-  await a.afterSetup!();
-  expect(done).toEqual([`${pets[0]!.house}/sc-a`]);
+  expect(a.afterSetup).toBeDefined();
+  expect(done).toEqual([`${pets[0]!.house}/sc-a`]); // the runtime called it once its setup ran
 });
 
 test("scout runs mount only their private material and use scout instructions", async () => {

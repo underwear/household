@@ -59,7 +59,7 @@ export function draftNetwork(input: unknown, current: CapabilityDefinition["netw
   if (!raw.any && allow.length === 0) throw new HouseholdError("network: name at least one host, or any: true");
   return { any: raw.any, allow };
 }
-/** Where a drafted install downloads from: exact hosts (no wildcard), the current ones when left out. */
+/** Where a drafted install downloads from: exact hosts (no wildcard), the current ones when left out, none for `[]`. */
 export function draftInstallHosts(input: unknown, current: CapabilityDefinition["installHosts"]): CapabilityDefinition["installHosts"] {
   if (input === undefined) return current;
   if (!Array.isArray(input) || input.length > 64) throw new HouseholdError("install_hosts: [\"host\" or \"host:port\"]");
@@ -68,7 +68,7 @@ export function draftInstallHosts(input: unknown, current: CapabilityDefinition[
     if (!parsed || parsed.host.startsWith("*")) throw new HouseholdError(`install_hosts: ${String(entry)} is not an exact host or host:port`);
     return parsed;
   });
-  return hosts.length ? hosts : undefined;
+  return hosts;
 }
 /** The key variables a draft says it needs: names only (a value never goes in a draft). */
 export function draftKeys(input: unknown): string[] {
@@ -173,7 +173,7 @@ export class Capabilities {
       keys: current?.keys ?? [],
     };
     const installHosts = draftInstallHosts(input.install_hosts, current?.installHosts);
-    if (installHosts) definition.installHosts = installHosts;
+    if (installHosts?.length || current?.installHosts?.length) definition.installHosts = installHosts ?? [];
     const draft: CapabilityDraft = { id: crypto.randomUUID(), capability: input.name, pet: caller.pet, at: Date.now(), definition, needsKeys };
     // One draft per capability: a newer one replaces the older.
     this.setDrafts(caller.house, [...this.drafts(caller.house).filter(each => each.capability !== input.name), draft]);
@@ -217,7 +217,7 @@ export function capabilityTools(capabilities: Capabilities, envOf: (house: strin
     },
     {
       name: "capability_draft",
-      description: "Propose a capability, or a change to one (same name): description, a bash install script (runs as root at the start of every scout run; fetch software with package managers, pin versions in the script if needed), network ({any:true} or {any:false, allow:[\"host\",\"host:port\"]}: where scouts with it may go while they work), install_hosts (where the install script downloads from, such as deb.debian.org:80 for apt: open only while install scripts run, so never list those in network) and needs_keys (environment variable NAMES the owner must supply, never values). Your human reviews, tests and applies it in the admin; nothing changes until then.",
+      description: "Propose a capability, or a change to one (same name): description, a bash install script (runs as root at the start of every scout run; fetch software with package managers, pin versions in the script if needed), network ({any:true} or {any:false, allow:[\"host\",\"host:port\"]}: where scouts with it may go while they work), install_hosts (where the install script downloads from, such as deb.debian.org:80 for apt: open only while install scripts run, so never list those in network; left out keeps the current ones, [] removes them) and needs_keys (environment variable NAMES the owner must supply, never values). Your human reviews, tests and applies it in the admin; nothing changes until then.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: {
         name: { type: "string" }, description: { type: "string" }, install: { type: "string" },
         network: { type: "object", properties: { any: { type: "boolean" }, allow: { type: "array", items: { type: "string" } } }, required: ["any"], additionalProperties: false },

@@ -6,14 +6,14 @@ import { assertPlain } from "../core/hidden-text";
 import type { House, Household } from "../core/household";
 import { houseFeatures } from "../core/house-features";
 import { NAME_PATTERN } from "../core/names";
-import { blueprintCapabilities, blueprintNetwork, routineBlocker, routineFor, scoutBase, scoutBaseChanges, scoutKeys, scoutNetworkWords, scoutProblems, staleDraftMessage, type CapabilityDefinition, type ScoutBase, type ScoutDefinition } from "../core/scouts";
+import { blueprintCapabilities, blueprintInstallHosts, blueprintNetwork, routineBlocker, routineFor, scoutBase, scoutBaseChanges, scoutKeys, scoutNetworkWords, scoutProblems, staleDraftMessage, type CapabilityDefinition, type ScoutBase, type ScoutDefinition } from "../core/scouts";
 import { formatAllowEntry } from "../core/network-policy";
 import type { PetIdentity } from "../infra/agent-api";
 import { capabilityDefinitionSchema, scoutDefinitionSchema } from "../infra/config-schema";
 import { capabilityDefinitionInput, NotFoundError, ScoutRevisionError, scoutDefinitionInput, type ConfigStore } from "../infra/config-store";
 import type { McpTool } from "../infra/mcp-server";
 import type { KeyValueStore } from "../infra/sqlite-store";
-import { draftKeys, draftNetwork, draftText, lineEnds, type Capabilities } from "./capabilities";
+import { draftInstallHosts, draftKeys, draftNetwork, draftText, lineEnds, type Capabilities } from "./capabilities";
 import type { PostedNotice } from "./chat";
 import { networkFact } from "./scouts";
 
@@ -85,7 +85,7 @@ const RATE_COUNT = 6, RATE_MS = 10 * 60_000;
 /** How long a script is, for the owner to know what reading it takes. */
 const lines = (script: string) => { const count = script.trimEnd().split("\n").length; return `${count} line${count === 1 ? "" : "s"} to read`; };
 /** The setup's fields: the same as a capability draft's. */
-const SETUP_FIELDS = ["install", "network", "needs_keys"];
+const SETUP_FIELDS = ["install", "network", "install_hosts", "needs_keys"];
 /** A config error said to a bot: what is wrong, never where the owner keeps their config. */
 const withoutSource = (message: string) => message.replace(/^invalid config [^\n]*:\n/, "");
 
@@ -185,7 +185,7 @@ export class ScoutDrafts {
       ...(options.routine?.length ? { routine: [...options.routine] } : {}),
     };
     const keys = (currentOwn?.keys ?? []).filter(key => options.keys !== "drop" || key.via !== "vm");
-    const installHosts = draft.own?.installHosts ?? currentOwn?.installHosts;
+    const installHosts = draft.own && "installHosts" in draft.own ? draft.own.installHosts : currentOwn?.installHosts;
     const own = draft.own ? { ...structuredClone(draft.own), name: currentOwn?.name ?? draft.own.name, keys, owner: draft.scout, ...(installHosts ? { installHosts: structuredClone(installHosts) } : {}) }
       : options.keys === "drop" && currentOwn ? { ...structuredClone(currentOwn), keys } : undefined;
     const capabilities = own ? [...all.filter(capability => capability !== currentOwn), own] : all;
@@ -215,6 +215,10 @@ export class ScoutDrafts {
       if (fresh.length) reasons.push(`it would reach new hosts: ${fresh.join(", ")}`);
     }
     if (ownChanges(draft.own, composed.currentOwn).includes("install")) reasons.push("its own install script changes");
+    // Its install scripts run beside the keys: a host they may download from is a way out while they run.
+    const installedFrom = new Set(blueprintInstallHosts(current, house.capabilities ?? []).map(formatAllowEntry));
+    const freshInstalls = blueprintInstallHosts(composed.definition, composed.capabilities).map(formatAllowEntry).filter(host => !installedFrom.has(host));
+    if (freshInstalls.length) reasons.push(`its install scripts would download from new hosts: ${freshInstalls.join(", ")}`);
     for (const name of composed.definition.capabilities.filter(name => !current.capabilities.includes(name))) {
       const brought = keys.filter(key => key.source === name);
       if (brought.length) reasons.push(`added capability ${name} brings ${brought.map(keyName).join(", ")}`);
@@ -262,7 +266,7 @@ export class ScoutDrafts {
       let own: CapabilityDefinition | undefined, needsKeys: string[] = [];
       if (input.setup !== undefined) {
         const setup = input.setup as Record<string, unknown>;
-        if (!setup || typeof setup !== "object" || Array.isArray(setup) || Object.keys(setup).some(key => !SETUP_FIELDS.includes(key))) throw new HouseholdError("setup: {install?, network?, needs_keys?}, as in capability_draft");
+        if (!setup || typeof setup !== "object" || Array.isArray(setup) || Object.keys(setup).some(key => !SETUP_FIELDS.includes(key))) throw new HouseholdError("setup: {install?, network?, install_hosts?, needs_keys?}, as in capability_draft");
         assertPlain(setup.install, "setup.install");
         // Its own capability is named after it: a shared one by that name is a clash the config would refuse.
         if (!currentOwn && all.some(capability => capability.name === name)) throw new HouseholdError(`A capability is already named ${name}, the name its own setup would take: pick another name for the scout`);
@@ -271,6 +275,8 @@ export class ScoutDrafts {
           install: draftText(setup.install, "setup.install", 100_000, currentOwn?.install ?? ""), network: draftNetwork(setup.network, currentOwn?.network),
           keys: currentOwn?.keys ?? [], owner: name,
         };
+        const installHosts = draftInstallHosts(setup.install_hosts, currentOwn?.installHosts);
+        if (installHosts?.length || currentOwn?.installHosts?.length) own.installHosts = installHosts ?? [];
         needsKeys = draftKeys(setup.needs_keys);
       }
 
@@ -281,7 +287,8 @@ export class ScoutDrafts {
       if (own) {
         const setup = capabilityDefinitionSchema.safeParse(capabilityDefinitionInput(own));
         if (!setup.success) throw new HouseholdError(`setup: ${z.prettifyError(setup.error)}`);
-        own = setup.data as CapabilityDefinition;
+        // A list the bot emptied stays said ([]): a draft that names none keeps the current ones (`compose`).
+        own = { ...setup.data as CapabilityDefinition, ...(own.installHosts ? { installHosts: own.installHosts } : {}) };
       }
       const composed = this.compose(house, { scout: name, definition, own: own ?? null });
       const envOf = (secret: string) => (house.secrets ?? []).find(item => item.name === secret)?.env;
@@ -492,11 +499,11 @@ export function scoutDraftTools(drafts: ScoutDrafts, enabled: (caller: PetIdenti
   const network = { type: "object", properties: { any: { type: "boolean" }, allow: { type: "array", items: { type: "string" } } }, required: ["any"], additionalProperties: false };
   return [{
     name: "scout_draft",
-    description: "Propose a scout, or a change to one (same name), when no scout fits a task that will recur or needs access you should not hold. Read household-scouts (Drafting a scout) first. name; title, emoji; description (when a bot should call it); instructions (how it does its task); capabilities (names of shared ones, from the capabilities tool); setup: its own install script, network ({any:true} or {any:false, allow:[\"host\",\"host:port\"]}) and needs_keys (environment variable NAMES your human supplies, never values), as in capability_draft; routine: true to ask that you may run it without asking (low-stakes errands on exact hosts only); reason: one or two lines for your human, why this scout and this access and the worst it could do. Your human reviews and applies it; nothing changes until then, and you are told the outcome. At most 6 drafts in 10 minutes.",
+    description: "Propose a scout, or a change to one (same name), when no scout fits a task that will recur or needs access you should not hold. Read household-scouts (Drafting a scout) first. name; title, emoji; description (when a bot should call it); instructions (how it does its task); capabilities (names of shared ones, from the capabilities tool); setup: its own install script, network ({any:true} or {any:false, allow:[\"host\",\"host:port\"]}: where it may go while it works), install_hosts (where its install script downloads from, open only while install scripts run) and needs_keys (environment variable NAMES your human supplies, never values), as in capability_draft; routine: true to ask that you may run it without asking (low-stakes errands on exact hosts only); reason: one or two lines for your human, why this scout and this access and the worst it could do. Your human reviews and applies it; nothing changes until then, and you are told the outcome. At most 6 drafts in 10 minutes.",
     inputSchema: { type: "object", additionalProperties: false, required: ["name", "description", "instructions", "reason"], properties: {
       name: { type: "string" }, title: { type: "string" }, emoji: { type: "string" }, description: { type: "string" }, instructions: { type: "string" },
       capabilities: { type: "array", items: { type: "string" } },
-      setup: { type: "object", additionalProperties: false, properties: { install: { type: "string" }, network, needs_keys: { type: "array", items: { type: "string" } } } },
+      setup: { type: "object", additionalProperties: false, properties: { install: { type: "string" }, network, install_hosts: { type: "array", items: { type: "string" } }, needs_keys: { type: "array", items: { type: "string" } } } },
       routine: { type: "boolean" }, reason: { type: "string" },
     } },
     available: enabled,

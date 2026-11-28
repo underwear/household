@@ -1060,6 +1060,36 @@ test("disabled pets stay stopped across daemon restart and enable reuses the sam
   } finally { await daemon.stop(); }
 });
 
+test("a scout limited to its own hosts reaches its install hosts while its install scripts run, and not once they have", async () => {
+  const { paths, config, runtime, deps } = setup();
+  runtime.output = () => "❯\u00a0\n  ⏵⏵ bypass permissions on (shift+tab to cycle)";
+  await config.createHouse("work");
+  await config.addPet("work", "sibling", { key: "claude" });
+  await connect(config, "work"); // a run's thread opens in its bot's channel
+  await config.setHouseFeatures("work", { features: { scouts: true }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" } }); // browser, media, dev
+  await config.setScoutAgent("work", { agent: "claude-code-tmux", key: "claude" });
+  await config.addCapability("work", { name: "meter", description: "The meter's site", install: "", network: { any: false, allow: [{ host: "meter.example.com", port: 443 }] }, keys: [] });
+  await config.putScout("work", { name: "meter", description: "Reads the meter", instructions: "", capabilities: ["browser", "meter"] }, undefined);
+  // What the gateway lets the scout reach, as published.
+  const reach = () => policyOf(paths).rules.filter((rule) => rule.subject.kind === "scout").map((rule) => rule.policy.allow.map((entry) => `${entry.host}:${entry.port}`));
+  let during: string[][] = [];
+  runtime.duringSetup = (spec) => { if (spec.afterSetup) during = reach(); };
+  const daemon = await startDaemon(deps);
+  try {
+    const started = await callControl<ApiAnswer>(paths.socket, "/api", { method: "POST", path: "/api/houses/work/scouts/meter/runs", body: { task: "Read the meter" } });
+    expect(started).toMatchObject({ status: 201 });
+    await waitFor(() => during.length > 0 && reach().length > 0 && !reach()[0]!.includes("deb.nodesource.com:443"));
+    // While it installs: its own host, and where the browser's install downloads from (public addresses only).
+    expect(during[0]).toEqual(expect.arrayContaining(["meter.example.com:443", "deb.debian.org:80", "deb.nodesource.com:443", "registry.npmjs.org:443", "cdn.playwright.dev:443"]));
+    expect(policyOf(paths).rules.find((rule) => rule.subject.kind === "scout")).toBeDefined();
+    // Once its install scripts have run, before its agent starts: its own host alone (and its harness's).
+    expect(reach()[0]).toContain("meter.example.com:443");
+    expect(reach()[0]!.filter((host) => /debian|nodesource|npmjs|playwright|docker/.test(host))).toEqual([]);
+  } finally {
+    await daemon.stop();
+  }
+});
+
 test("secret add/rotate/remove hot-applies gateway rules without restarting a pet or granting network", async () => {
   const { paths, config, runtime, deps } = setup();
   runtime.output = () => READY;

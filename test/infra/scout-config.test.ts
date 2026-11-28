@@ -47,6 +47,11 @@ test("a scout's install hosts: open only where its network is limited, public ad
     { host: "deb.debian.org", port: 443, reach: "public" },
   ]);
   expect(capabilityDefinitionInput(browser).installHosts).toEqual(["deb.debian.org:80", "deb.debian.org", "registry.npmjs.org"]);
+  // Exact hosts only, as the admin and bots' drafts take them.
+  for (const wild of ["*.debian.org", "*", "*:*"]) expect(() => capabilityDefinitionSchema.parse({ name: "browser", installHosts: [wild] })).toThrow("without wildcards");
+  // One its network covers already, by a wildcard too, is not opened twice.
+  const debian = capability({ name: "debian", network: { any: false, allow: ["*.debian.org", "deb.debian.org:80"] } });
+  expect(scoutInstallHosts({ capabilities: ["browser", "debian"] }, [browser, debian])).toEqual([{ host: "registry.npmjs.org", port: 443, reach: "public" }]);
   expect("installHosts" in capabilityDefinitionInput(naturgy)).toBe(false);
 });
 

@@ -33,11 +33,17 @@ export class FakeRuntime implements ContainerRuntime {
     return { ref: tag, id: `sha256:${tag}-${this.imageVersion}` };
   }
 
+  /** Called while a VM's setup "runs", before what its spec does once it has (`afterSetup`). */
+  duringSetup?: (spec: ContainerSpec) => void | Promise<void>;
+
   async runContainer(spec: ContainerSpec): Promise<void> {
     this.calls.push(`run ${spec.name}`);
     this.specs.push(spec);
     this.containers.set(spec.name, { state: "running", labels: { ...spec.labels }, env: spec.env });
     for (const mount of spec.mounts ?? []) if (mount.type === "disk") this.disks.add(mount.source);
+    // Like the real one: its setup, then the step after it, before its agent would start.
+    await this.duringSetup?.(spec);
+    await spec.afterSetup?.();
   }
 
   async stopContainer(name: string): Promise<void> {
