@@ -12,7 +12,7 @@ import { telegram, telegramGroup, telegramPrivate } from "../src/channel-adapter
 import { ChannelDialog, ChannelsPage } from "./components/channels";
 import { Dialog, firstFocus } from "./components/dialog";
 import { SelectField, TextField } from "./components/fields";
-import { Cell, Cluster, FormGrid, List, ListRow, Page, Section } from "./components/layout";
+import { Cell, Cluster, FormGrid, List, ListRow, Page, Section, sidewaysOffset } from "./components/layout";
 import { WorkspacesTable } from "./components/workspaces";
 import { KeyDialog, KeysSection } from "./components/keys";
 import { AllowlistSection, TemporaryNetworkSection, allowDialog, presetDialog, revokeTemporaryDialog } from "./components/workspace";
@@ -643,4 +643,12 @@ test("a new bot's config name follows its display name; harnesses go by the name
   expect(harnessLabel("claude-code-tmux")).toBe("Claude Code");
   expect(harnessLabel("codex-app-server")).toBe("Codex");
   expect(harnessLabel("other-harness")).toBe("other-harness");
+});
+
+test("tabs that scroll sideways move only as far as shows the current one whole", () => {
+  const strip = { left: 0, right: 300 };
+  expect(sidewaysOffset(strip, { left: 100, right: 180 })).toBe(0); // in view: nothing moves
+  expect(sidewaysOffset(strip, { left: 280, right: 360 })).toBe(60); // past the right edge
+  expect(sidewaysOffset(strip, { left: -40, right: 40 })).toBe(-40); // past the left edge
+  expect(sidewaysOffset(strip, { left: 250, right: 650 })).toBe(250); // wider than the strip: its start shows
 });

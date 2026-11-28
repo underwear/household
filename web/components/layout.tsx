@@ -44,16 +44,28 @@ export function Page({ title, actions, back, children }: { title: ReactNode; act
   );
 }
 
+/** How far a strip that scrolls sideways must move for `item` to show whole in it (negative: to the left; 0: it does). */
+export function sidewaysOffset(strip: { left: number; right: number }, item: { left: number; right: number }): number {
+  if (item.left < strip.left) return item.left - strip.left;
+  if (item.right > strip.right) return Math.min(item.right - strip.right, item.left - strip.left);
+  return 0;
+}
+
 /**
  * A page's tabs, under its title: each a link to its own path (so Back and a copied link work), the current one
  * underlined; `count` beside a label says how many it holds.
  */
 export function Tabs({ label, items }: { label: string; items: ({ label: string; href: string; current: boolean; count?: number; disabled?: false } | { label: string; disabled: true })[] }) {
   const nav = useRef<HTMLElement>(null);
+  const current = items.find((item) => !item.disabled && item.current)?.label;
   // On a narrow screen the tabs scroll sideways: keep the current one in view (the last ones are off it otherwise).
+  // Only the tabs' own strip moves, and only when the tab changes: scrollIntoView would scroll the window too, back up
+  // to the tabs on every re-render of a page that polls.
   useEffect(() => {
-    nav.current?.querySelector<HTMLElement>(".tab.current")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  });
+    const strip = nav.current;
+    const tab = strip?.querySelector<HTMLElement>(".tab.current");
+    if (strip && tab) strip.scrollLeft += sidewaysOffset(strip.getBoundingClientRect(), tab.getBoundingClientRect());
+  }, [current]);
   return (
     <nav ref={nav} className="tabs" aria-label={label}>
       {items.map((item) => item.disabled ? (
