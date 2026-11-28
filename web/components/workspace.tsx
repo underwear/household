@@ -57,7 +57,9 @@ export function WorkspacePage({ house, tab, known, keys, capacity, refresh, noti
       {tab === "overview" && <WorkspaceOverviewPage house={house} />}
       {tab === "bots" && <BotsPage {...props} agents={known.agents} keys={keys} capacity={capacity} />}
       {tab === "channels" && <ChannelsPage {...props} kinds={known.channelKinds} platforms={known.platforms} noteMax={known.noteMax} />}
-      {tab === "inboxes" && <WorkspaceInboxesPage key={house.name} house={house} notify={notify} />}
+      {tab === "inboxes" && (houseFeatures(house).inboxes
+        ? <WorkspaceInboxesPage key={house.name} house={house} notify={notify} />
+        : <Page title="Inboxes"><FeatureOff house={house.name} text="Household checks no sources and brings bots no events. Inboxes you set up and their undelivered events wait." /></Page>)}
       {tab === "connectors" && <WorkspaceConnectors key={house.name} house={house} notify={notify} />}
       {tab === "skills" && <SkillsPage key={house.name} house={house.name} notify={notify} />}
       {tab === "scouts" && <ScoutsPage house={house} agents={known.agents} keys={keys} host={capacity.host} refresh={refresh} notify={notify} />}

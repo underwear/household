@@ -642,7 +642,7 @@ test("house features default previews off and persist owner-controlled preview s
   const { houseFeatures } = await import("../../src/core/house-features");
   const { config, text } = store();
   await config.createHouse("work");
-  expect(houseFeatures((await config.load()).houses[0]!)).toEqual({ preview: false, sideworkers: true, scouts: false });
+  expect(houseFeatures((await config.load()).houses[0]!)).toEqual({ preview: false, sideworkers: true, scouts: false, inboxes: false });
   await config.setHouseFeatures("work", { features: { preview: true, sideworkers: false }, preview: { bindAddress: "0.0.0.0", publicHost: "preview.example.com" } });
   expect((await config.load()).houses[0]).toMatchObject({ features: { preview: true, sideworkers: false }, preview: { bindAddress: "0.0.0.0", publicHost: "preview.example.com" } });
   const before = await text();

@@ -6,7 +6,7 @@ import { routeOf, scoutDraftPath, scoutPath } from "./router";
 import type { WorkspaceView } from "./api";
 import { scoutDraftApi, type ScoutDraftSummary, type ScoutDraftView, type ScoutView } from "./scout-api";
 
-const house: WorkspaceView = { name: "work", owners: [], pets: [{ name: "sibling", title: "Sibling", emoji: "🤖", display: "🤖 Sibling" } as WorkspaceView["pets"][number], { name: "helper", title: "Helper", emoji: "🐾", display: "🐾 Helper", sideworker: { parent: "sibling", cwd: "/w" } } as WorkspaceView["pets"][number]], channels: [], allow: [], features: { scouts: true, preview: false, sideworkers: true } };
+const house: WorkspaceView = { name: "work", owners: [], pets: [{ name: "sibling", title: "Sibling", emoji: "🤖", display: "🤖 Sibling" } as WorkspaceView["pets"][number], { name: "helper", title: "Helper", emoji: "🐾", display: "🐾 Helper", sideworker: { parent: "sibling", cwd: "/w" } } as WorkspaceView["pets"][number]], channels: [], allow: [], features: { scouts: true, preview: false, sideworkers: true, inboxes: false } };
 const noop = async () => {};
 /** A change to scout meter: a bot ticks `uploads`, which reaches a host the scout did not, while its own setup holds a key in its VM. */
 const view = (extra: Partial<ScoutDraftView> = {}): ScoutDraftView => ({

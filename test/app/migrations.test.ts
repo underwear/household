@@ -132,6 +132,35 @@ test("migration 3: browser and dev capabilities left as their templates made the
   migration.change(parseDocument("houses:\n  work:\n    network: { allow: [] }\n")); // nothing to rewrite: harmless
 });
 
+test("migration 7: a workspace that has inboxes keeps them on; one without, or that already says, is left alone", async () => {
+  const { parseDocument } = await import("yaml");
+  const migration = CONFIG_MIGRATIONS.find((each) => each.id === 7)!;
+  const doc = parseDocument([
+    "houses:",
+    "  mail:",
+    "    features: { scouts: true }",
+    "    inboxes: [{ name: feed }]",
+    "  bare:",
+    "    inboxes: [{ name: feed }]",
+    "  none:",
+    "    pets: {}",
+    "  empty:",
+    "    inboxes: []",
+    "  chosen:",
+    "    features: { inboxes: false }",
+    "    inboxes: [{ name: feed }]",
+    "",
+  ].join("\n"));
+  migration.change(doc);
+  const houses = (doc.toJS() as { houses: Record<string, { features?: Record<string, boolean> }> }).houses;
+  expect(houses.mail!.features).toEqual({ scouts: true, inboxes: true });
+  expect(houses.bare!.features).toEqual({ inboxes: true });
+  expect(houses.none!.features).toBeUndefined();
+  expect(houses.empty!.features).toBeUndefined();
+  expect(houses.chosen!.features).toEqual({ inboxes: false });
+  migration.change(parseDocument("keys: {}\n")); // nothing to rewrite: harmless
+});
+
 test("migration 4 copies shared secrets only to existing recipients, preserving capability restrictions and independent ownership", async () => {
   const paths = household();
   const old = `# Owner configuration
@@ -174,7 +203,7 @@ houses:
   expect(readFileSync(join(backup.dir!, "household.yaml"), "utf8")).toBe(old);
   const records = new SqliteStore(paths.database);
   try {
-    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4, 5, 6]); // the secrets, the resource budgets, then sideworkers' default size
+    expect((await migrateHousehold({ config, records })).map(step => step.id)).toEqual([4, 5, 6, 7]); // the secrets, the resource budgets, sideworkers' default size, then the inboxes switch
     const saved = readFileSync(paths.configFile, "utf8");
     expect(saved).not.toMatch(/^secrets:/m);
     expect(saved).toContain("# Owner configuration");

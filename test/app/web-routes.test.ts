@@ -241,7 +241,7 @@ test("houses: list and one, with the hosts their pets' agents add; me", async ()
   expect(telegramPrivate).toMatchObject({ platform: "telegram", audience: "private", chat: { key: "chat" }, fields: [{ key: "token", mono: true, wide: true }] });
   const work: HouseView = {
     name: "work",
-    features: { preview: false, sideworkers: true, scouts: false },
+    features: { preview: false, sideworkers: true, scouts: false, inboxes: false },
     preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" },
     resources: expect.any(Object),
     sideworkerProfiles: [],
@@ -270,7 +270,7 @@ test("create a house, add and remove hosts, delete it: in household.yaml with it
   await signIn();
   const created = await call("POST", "/api/houses", { name: "lab" });
   expect(created.status).toBe(201);
-  expect(await created.json()).toEqual({ house: { name: "lab", features: { preview: false, sideworkers: true, scouts: false }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" }, resources: expect.any(Object), sideworkerProfiles: [], allow: [], owners: [], channels: [], pets: [] } } satisfies WriteView);
+  expect(await created.json()).toEqual({ house: { name: "lab", features: { preview: false, sideworkers: true, scouts: false, inboxes: false }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" }, resources: expect.any(Object), sideworkerProfiles: [], allow: [], owners: [], channels: [], pets: [] } } satisfies WriteView);
   expect(applied).toEqual(["reload"]);
 
   const added = await call("POST", "/api/houses/work/allow", { host: "db.internal:5432" });
@@ -1087,6 +1087,8 @@ test("inbox API creates, tests, polls, deduplicates, changes frequency and remov
     expect((await s.call("POST", path + "/test", body)).status).toBe(200);
     expect(s.inboxPosts).toEqual([]);
     expect((await s.call("POST", path, body)).status).toBe(201);
+    expect((await s.call("POST", path + "/incoming/poll")).status).toBe(400); // inboxes are off by default
+    expect((await s.call("PUT", "/api/houses/work/features", { features: { inboxes: true }, preview: { bindAddress: "127.0.0.1", publicHost: "127.0.0.1" } })).status).toBe(200);
     expect((await s.call("POST", path + "/incoming/poll")).status).toBe(200);
     events.push({ id: "one", title: "New message", text: "body" });
     expect((await s.call("POST", path + "/incoming/poll")).status).toBe(200);

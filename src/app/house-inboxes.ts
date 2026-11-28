@@ -3,6 +3,7 @@ import { HouseholdError } from "../core/errors";
 import { createHash, randomUUID } from "node:crypto";
 import { InboxPollError, inboxMetadataSchema, houseInboxSchema, pollResultSchema, type HouseInbox, type InboxItem, type InboxState, type InboxView } from "../core/house-inboxes";
 import type { House } from "../core/household";
+import { houseFeatures } from "../core/house-features";
 import type { KeyValueStore } from "../infra/sqlite-store";
 import { pollInbox, type Poller } from "../infra/inbox-pollers";
 
@@ -35,7 +36,7 @@ export class HouseInboxes {
   setHouses(houses: House[]) {
     this.houses = houses;
     for (const [key, controller] of this.active) {
-      const found = houses.flatMap(h => (h.inboxes ?? []).map(i => ({ key: stateKey(h.name, i.name), inbox: i }))).find(i => i.key === key);
+      const found = houses.filter(h => houseFeatures(h).inboxes).flatMap(h => (h.inboxes ?? []).map(i => ({ key: stateKey(h.name, i.name), inbox: i }))).find(i => i.key === key);
       if (!found?.inbox.enabled) controller.abort();
     }
   }
@@ -91,13 +92,15 @@ export class HouseInboxes {
     await Promise.all(this.finished.values());
   }
   tick() {
-    for (const house of this.houses) for (const inbox of house.inboxes ?? []) {
+    // A workspace with inboxes off keeps their settings and pending events; nothing is checked or delivered.
+    for (const house of this.houses.filter(h => houseFeatures(h).inboxes)) for (const inbox of house.inboxes ?? []) {
       if (this.active.size >= 4) return;
       if (!this.blocked.has(stateKey(house.name, inbox.name)) && inbox.enabled && this.state(house.name, inbox).nextCheck <= this.now() && !this.active.has(stateKey(house.name, inbox.name))) void this.run(house.name, inbox.name).catch(() => {});
     }
   }
   async run(house: string, name: string) {
     const inbox = this.config(house, name);
+    if (!houseFeatures(this.houses.find(h => h.name === house)!).inboxes) throw new HouseholdError("Inboxes are off in this workspace. Turn them on in Settings.");
     if (!inbox.enabled) throw new HouseholdError("Resume this inbox before polling");
     const key = stateKey(house, name);
     if (this.blocked.has(key)) throw new HouseholdError("Inbox settings are being saved");

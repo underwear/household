@@ -28,7 +28,7 @@ const houseNav = (house: string, view?: WorkspaceView): NavEntry[] => {
     { label: "Overview", icon: LayoutDashboard, path: workspacePath(house) },
     { label: "Bots", icon: Bot, path: workspacePath(house, "bots") },
     { label: "Channels", icon: MessagesSquare, path: workspacePath(house, "channels") },
-    { label: "Inboxes", icon: Archive, path: workspacePath(house, "inboxes") },
+    ...(on.inboxes ? [{ label: "Inboxes", icon: Archive, path: workspacePath(house, "inboxes") }] : []),
     { label: "Connectors", icon: Globe, path: workspacePath(house, "connectors") },
     { label: "Shared Skills", icon: BookOpen, path: workspacePath(house, "skills") },
     ...(on.sideworkers ? [{ label: "Sideworkers", icon: Pickaxe, path: workspacePath(house, "sideworkers") }] : []),

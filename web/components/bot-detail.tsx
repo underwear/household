@@ -28,6 +28,7 @@ import { DisableDialog, RestartDialog, harnessLabel, modeLabel, BotDialog, type 
 import { gib, petResources } from "../../src/core/resources";
 import { TerminalDialog } from "./terminal";
 import { written } from "./section";
+import { FeatureOff } from "./workspace";
 
 /** The tabs a sideworker's page has. */
 const WORKER_TABS: BotTab[] = ["overview", "skills", "memory", "resources"];
@@ -64,7 +65,8 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
   // "1 running · 1 busy": each state its workers are in, by how many.
   const workerStates = Object.entries(Object.groupBy(workers, (each) => petState(each.state).label)).map(([state, list]) => `${list!.length} ${state.toLowerCase()}`).join(" · ");
   const crons = useBotCrons(house.name, pet.name, !worker);
-  const inboxes = useWorkspaceInboxes(house.name, !worker);
+  const inboxesOn = houseFeatures(house).inboxes;
+  const inboxes = useWorkspaceInboxes(house.name, !worker && inboxesOn);
   const channels = house.channels.filter((channel) => channel.pets.includes(worker?.parent ?? pet.name));
   const defaults = channels.filter((channel) => channel.default === pet.name || channel.pets.length === 1).length;
   const next = crons.view?.jobs.filter((job) => job.state === "scheduled").sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
@@ -155,7 +157,7 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
           { label: "AGENTS.md", href: botPath(house.name, pet.name, "instructions"), current: tab === "instructions" },
           { label: "Lifecycle", href: botPath(house.name, pet.name, "lifecycle"), current: tab === "lifecycle" },
           { label: "Channels", href: botPath(house.name, pet.name, "channels"), current: tab === "channels" },
-          { label: "Inboxes", href: botPath(house.name, pet.name, "inboxes"), current: tab === "inboxes" },
+          ...(inboxesOn ? [{ label: "Inboxes", href: botPath(house.name, pet.name, "inboxes"), current: tab === "inboxes" }] : []),
           { label: "Scheduled tasks", href: botPath(house.name, pet.name, "tasks"), current: tab === "tasks", count: scheduledCount(crons.view) },
           { label: "Skills", href: botPath(house.name, pet.name, "skills"), current: tab === "skills" },
           { label: "Environment", href: botPath(house.name, pet.name, "environment"), current: tab === "environment" },
@@ -270,7 +272,9 @@ export function BotDetailPage({ house, pet, tab = "overview", agents, keys, capa
       {tab === "instructions" && <BotInstructions key={`${house.name}/${pet.name}`} house={house.name} pet={pet} />}
       {tab === "lifecycle" && <BotLifecycleTab key={`${house.name}/${pet.name}`} house={house.name} pet={pet} refresh={refresh} notify={notify} />}
       {tab === "channels" && <BotChannels house={house} pet={pet} platforms={platforms} refresh={refresh} notify={notify} />}
-      {tab === "inboxes" && <BotInboxes house={house} pet={pet} inboxes={inboxes} notify={notify} />}
+      {tab === "inboxes" && (inboxesOn
+        ? <BotInboxes house={house} pet={pet} inboxes={inboxes} notify={notify} />
+        : <FeatureOff house={house.name} text="Inboxes are off in this workspace: this bot gets no events from them." />)}
       {tab === "memory" && <BotMemory key={`${house.name}/${pet.name}`} house={house.name} pet={pet.name} />}
       {tab === "tasks" && <BotCrons house={house.name} pet={pet.name} crons={crons} />}
       {tab === "skills" && <SkillsPage key={`${house.name}/${pet.name}`} house={house.name} pet={pet.name} title={pet.title} worker={!!worker} notify={notify} />}

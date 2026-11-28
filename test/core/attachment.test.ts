@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { attachmentsBlock, inboxFileName, INBOX_DAYS, INBOX_DIR, withFiles, type Attachment, type FileRef } from "../../src/core/attachment";
 import type { Header } from "../../src/core/header";
 import { systemPrompt } from "../../src/core/prompts";
-const PET_INSTRUCTIONS = systemPrompt({ role: { kind: "pet" }, features: { scouts: true, preview: true, sideworkers: true } });
+const PET_INSTRUCTIONS = systemPrompt({ role: { kind: "pet" }, features: { scouts: true, preview: true, sideworkers: true, inboxes: true } });
 import { promptText, type Message } from "../../src/core/message";
 
 const file = (fields: Partial<Attachment> = {}): Attachment => ({ kind: "document", file: "f" as FileRef, ...fields });

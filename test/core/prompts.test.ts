@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { systemPrompt, type PromptRole } from "../../src/core/prompts";
 import { SCOUT_TOOLS } from "../../src/app/scouts";
 
-const all = { scouts: true, preview: true, sideworkers: true };
-const none = { scouts: false, preview: false, sideworkers: false };
+const all = { scouts: true, preview: true, sideworkers: true, inboxes: true };
+const none = { scouts: false, preview: false, sideworkers: false, inboxes: false };
 const pet: PromptRole = { kind: "pet" };
 const worker: PromptRole = { kind: "sideworker", name: "sibling-w1", parent: "sibling", house: "work", cwd: "/home/agent/work/app", branch: "w1" };
 const scout: PromptRole = { kind: "scout", name: "prod-ops", parent: "sibling", house: "work", instructions: "Read first, change nothing.\n" };
@@ -20,9 +20,10 @@ test("a pet's prompt: its sections in order; every on feature its own section, n
   expect(text).toContain("Do not promise a result of your own");
   expect(text).toContain("propose one with `scout_draft`"); // a recurring errand gets a scout of its own, set up by the human
   expect(text).not.toContain("Off in this workspace");
+  expect(text).toContain("inbox_history");
   const bare = systemPrompt({ role: pet, features: none });
-  for (const gone of ["\nScouts\n", "\nSideworkers\n", "\nHTTP previews\n", "scout_spawn", "preview_open"]) expect(bare).not.toContain(gone);
-  expect(bare).toContain("Off in this workspace\n- Scouts, HTTP previews, Sideworkers: your human can turn them on in Workspace Settings.");
+  for (const gone of ["\nScouts\n", "\nSideworkers\n", "\nHTTP previews\n", "scout_spawn", "preview_open", "inbox_history"]) expect(bare).not.toContain(gone);
+  expect(bare).toContain("Off in this workspace\n- Scouts, HTTP previews, Sideworkers, Inboxes: your human can turn them on in Workspace Settings.");
 });
 
 test("a sideworker's prompt: who dispatched it and where it works; no scouts, sideworkers or schedules of its own", () => {

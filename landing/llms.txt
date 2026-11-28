@@ -94,7 +94,7 @@ Install the `household` skill too, for running Household afterwards:
 ## Everyday commands
 
 `house status`, `house ls`, `house bot …`, `house channel …`, `house secret …`, `house volume …`,
-`house scout …`, `house capability …`, `house features <workspace> scouts|preview|sideworkers=on|off`,
+`house scout …`, `house capability …`, `house features <workspace> scouts|preview|sideworkers|inboxes=on|off`,
 `house export` / `house import` (config with keys, database, bots' homes), `house update`, `house doctor`.
 `house --help` and `--help` on every group list the rest.
 

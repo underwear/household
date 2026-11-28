@@ -3,7 +3,7 @@ import { Lifecycles, nextRestart } from "../../src/app/lifecycle";
 import { DEFAULT_LIFECYCLE, DEFAULT_SHUTDOWN_MESSAGE, DEFAULT_WAKE_UP_MESSAGE, describeLifecycle, lifecycleCron, normalLifecycle, type PetLifecycle } from "../../src/core/lifecycle";
 import { systemPrompt } from "../../src/core/prompts";
 
-const features = { scouts: false, preview: false, sideworkers: false };
+const features = { scouts: false, preview: false, sideworkers: false, inboxes: false };
 
 test("a schedule as cron and in words; days the schedule does not use are dropped, default messages left out", () => {
   expect(lifecycleCron(DEFAULT_LIFECYCLE)).toBe("0 4 * * *");

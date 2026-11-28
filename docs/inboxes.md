@@ -6,6 +6,7 @@ You don't need an inbox for a bot to check something now and then: it can do tha
 
 ## How it works
 
+- **Off until you turn it on,** under **Workspace → Settings → Features → Inboxes**. Turned off, Household stops checking and delivering; your inboxes, histories and undelivered events wait until you turn it back on.
 - **Household checks the source** from its own computer, every 5 minutes by default. Passwords and tokens never reach a bot's VM.
 - **Sources stay as they are.** IMAP leaves messages unread, POP3 never deletes, a watched Telegram bot never sends.
 - **Each new event is saved, then delivered** to the subscribed bots. A stopped bot gets a short catch-up summary later.

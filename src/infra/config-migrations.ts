@@ -25,6 +25,7 @@ export const CONFIG_MIGRATIONS: readonly ConfigMigration[] = [
   { id: 4, store: "config", name: "secrets belong to individual houses", change: migrateHouseSecrets },
   { id: 5, store: "config", name: "workspace CPU/RAM budgets replace helper count limits", change: migrateResourceBudgets },
   { id: 6, store: "config", name: "sideworkers' default VM size is dropped: bots size each one", change: (doc) => { for (const house of houseNames(doc)) doc.deleteIn(["houses", house, "sideworkerLimits"]); } },
+  { id: 7, store: "config", name: "inboxes become a workspace feature, on where a workspace has inboxes", change: migrateInboxesFeature },
 ];
 
 /** The houses the config names. */
@@ -158,5 +159,14 @@ function migrateResourceBudgets(doc: Document): void {
       if (doc.getIn([...path, field!, count!]) === 0) setIn(doc, [...path, "features", feature!], doc.createNode(false));
       if (doc.hasIn([...path, field!, count!])) doc.deleteIn([...path, field!, count!]);
     }
+  }
+}
+
+/** Inboxes are off by default now: a workspace that already has inboxes keeps them working (unless it says otherwise). */
+export function migrateInboxesFeature(doc: Document): void {
+  for (const house of houseNames(doc)) {
+    const inboxes = doc.getIn(["houses", house, "inboxes"]);
+    if (!isSeq(inboxes) || !inboxes.items.length || doc.hasIn(["houses", house, "features", "inboxes"])) continue;
+    setIn(doc, ["houses", house, "features", "inboxes"], doc.createNode(true));
   }
 }

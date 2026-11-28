@@ -12,25 +12,27 @@ const house: WorkspaceView = { name: "work", allow: [], owners: [], channels: []
 const settings = (view: WorkspaceView) => renderToStaticMarkup(<WorkspaceFeatureSettings house={view} refresh={async () => {}} notify={() => {}} />);
 
 test("workspace features: a switch each, with a line on what it does; one that is on leads to its own page", () => {
-  const off = settings({ ...house, features: { scouts: false, preview: false, sideworkers: false } });
-  expect(off.match(/role="switch"/g)).toHaveLength(3);
+  const off = settings({ ...house, features: { scouts: false, preview: false, sideworkers: false, inboxes: false } });
+  expect(off.match(/role="switch"/g)).toHaveLength(4);
   expect(off).toContain(">Sideworkers<");
+  expect(off).toContain(">Inboxes<");
   expect(off).toContain(">HTTP previews<");
   expect(off).not.toContain("Sideworker settings"); // off: nowhere to go
   expect(off).not.toContain("Preview settings");
   expect(off).not.toContain("Who can open"); // reach lives on the Previews page now
-  const on = settings({ ...house, features: { scouts: false, preview: true, sideworkers: true } });
+  const on = settings({ ...house, features: { scouts: false, preview: true, sideworkers: true, inboxes: true } });
   expect(on).toContain('href="/workspaces/work/sideworkers" class="text-link">Sideworker settings</a>');
+  expect(on).toContain('href="/workspaces/work/inboxes" class="text-link">Inboxes</a>');
   expect(on).toContain('href="/workspaces/work/previews" class="text-link">Preview settings</a>');
 });
 
 test("preview reach: this computer only by default, addresses only for another one", () => {
   const reach = (view: WorkspaceView) => renderToStaticMarkup(<PreviewReachSettings house={view} refresh={async () => {}} notify={() => {}} />);
-  const local = reach({ ...house, features: { scouts: false, preview: true, sideworkers: true } });
+  const local = reach({ ...house, features: { scouts: false, preview: true, sideworkers: true, inboxes: false } });
   expect(local).toContain("This computer only");
   expect(local).not.toContain(">Listen on<"); // the default reach needs no addresses
   expect(local).toContain("Links have no login");
-  const custom = reach({ ...house, features: { scouts: false, preview: true, sideworkers: true }, preview: { bindAddress: "0.0.0.0", publicHost: "mac-mini.local" } });
+  const custom = reach({ ...house, features: { scouts: false, preview: true, sideworkers: true, inboxes: false }, preview: { bindAddress: "0.0.0.0", publicHost: "mac-mini.local" } });
   expect(custom).toContain(">Listen on<");
   expect(custom).toContain('value="mac-mini.local"');
 });
@@ -50,7 +52,7 @@ test("a bot's previews: one list with each link, its port and state; none at all
 });
 
 test("with sideworkers off, the workspace's Sideworkers page says so above everything, with the way back on", () => {
-  const html = renderToStaticMarkup(<WorkspacePage house={{ ...house, features: { scouts: false, preview: false, sideworkers: false } }} tab="sideworkers" known={{ agents: [] } as never} keys={[]} capacity={{ host: { cpus: 8, memoryMiB: 16384 } } as never} refresh={async () => {}} notify={() => {}} />);
+  const html = renderToStaticMarkup(<WorkspacePage house={{ ...house, features: { scouts: false, preview: false, sideworkers: false, inboxes: false } }} tab="sideworkers" known={{ agents: [] } as never} keys={[]} capacity={{ host: { cpus: 8, memoryMiB: 16384 } } as never} refresh={async () => {}} notify={() => {}} />);
   expect(html).toContain('<div class="bot-off" role="status">');
   expect(html).toContain("bots cannot start new ones");
   expect(html).toContain('href="/workspaces/work/settings" class="btn small">Turn on in Settings</a>');
@@ -60,14 +62,14 @@ test("with sideworkers off, the workspace's Sideworkers page says so above every
 
 test("a workspace's Previews page: every bot's previews with whose each is, then who can open the links; off, only that it is off", () => {
   const owl = { name: "owl", title: "Owl", emoji: "🦉" } as WorkspaceView["pets"][number];
-  const on = { ...house, pets: [owl], features: { scouts: false, preview: true, sideworkers: true } };
+  const on = { ...house, pets: [owl], features: { scouts: false, preview: true, sideworkers: true, inboxes: false } };
   const preview: PreviewView = { id: "p1", house: "work", pet: "owl", port: 5173, title: "Landing", status: "pending", requested_at: new Date().toISOString() };
   const list = renderToStaticMarkup(<WorkspacePreviews house={on} initial={[preview]} />);
   expect(list).toContain(">Bot<");
   expect(list).toContain('<a href="/workspaces/work/bots/owl" class="row-link ellipsis">Owl</a>');
   const page = (view: WorkspaceView) => renderToStaticMarkup(<WorkspacePage house={view} tab="previews" known={{ agents: [] } as never} keys={[]} capacity={{ host: { cpus: 8, memoryMiB: 16384 } } as never} refresh={async () => {}} notify={() => {}} />);
   expect(page(on)).toContain("Who can open the links");
-  const off = page({ ...on, features: { scouts: false, preview: false, sideworkers: true } });
+  const off = page({ ...on, features: { scouts: false, preview: false, sideworkers: true, inboxes: false } });
   expect(off).toContain("Bots cannot show you web apps");
   expect(off).not.toContain("Who can open the links");
   expect(routeOf("/workspaces/work/previews")).toEqual({ page: "workspace", name: "work", tab: "previews" });
@@ -77,10 +79,18 @@ test("the sidebar leaves out a feature the workspace has off; its address still 
   const shell = (features: WorkspaceView["features"]) => renderToStaticMarkup(
     <Shell me={{} as never} houses={[{ ...house, features }]} house="work" path="/workspaces/work" theme="dark" onToggleTheme={() => {}} onSignOut={() => {}} onNewWorkspace={() => {}}>{null}</Shell>,
   );
-  const on = shell({ scouts: false, preview: true, sideworkers: true });
+  const on = shell({ scouts: false, preview: true, sideworkers: true, inboxes: true });
   expect(on).toContain('href="/workspaces/work/sideworkers"');
+  expect(on).toContain('href="/workspaces/work/inboxes"');
   expect(on).toContain('href="/workspaces/work/previews"');
-  const off = shell({ scouts: false, preview: false, sideworkers: false });
+  const off = shell({ scouts: false, preview: false, sideworkers: false, inboxes: false });
   expect(off).not.toContain('href="/workspaces/work/sideworkers"');
   expect(off).not.toContain('href="/workspaces/work/previews"');
+  expect(off).not.toContain('href="/workspaces/work/inboxes"');
+});
+
+test("with inboxes off, the workspace's Inboxes page says so, with the way back on", () => {
+  const html = renderToStaticMarkup(<WorkspacePage house={{ ...house, features: { scouts: false, preview: false, sideworkers: true, inboxes: false } }} tab="inboxes" known={{ agents: [] } as never} keys={[]} capacity={{ host: { cpus: 8, memoryMiB: 16384 } } as never} refresh={async () => {}} notify={() => {}} />);
+  expect(html).toContain("Household checks no sources");
+  expect(html).toContain('href="/workspaces/work/settings"');
 });

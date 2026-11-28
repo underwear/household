@@ -11,6 +11,7 @@ import { written } from "./section";
 const FEATURES: { value: keyof WorkspaceFeatures; label: string; description: string; page: WorkspaceTab; pageLabel: string }[] = [
   { value: "sideworkers", label: "Sideworkers", description: "A bot can start helper harnesses in VMs of their own. Off pauses the running ones.", page: "sideworkers", pageLabel: "Sideworker settings" },
   { value: "scouts", label: "Scouts", description: "Bots can call specialists with their own access. You review everything that passes between them.", page: "scouts", pageLabel: "Scout settings" },
+  { value: "inboxes", label: "Inboxes", description: "Household watches mail, feeds, alerts and other sources, and brings new events to the bots you subscribe. Off stops checking; settings and undelivered events wait.", page: "inboxes", pageLabel: "Inboxes" },
   { value: "preview", label: "HTTP previews", description: "A bot can show you a web app from its VM by a link, for 15 minutes, once you approve it. Off closes open links.", page: "previews", pageLabel: "Preview settings" },
 ];
 

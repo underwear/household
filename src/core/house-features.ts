@@ -5,6 +5,7 @@ export const HOUSE_FEATURES = {
   scouts: { label: "Scouts", description: "Call workspace specialists with their own access; messages between them and bots require owner approval.", default: false },
   preview: { label: "HTTP previews", description: "Publish an application from your VM for up to 15 minutes, with owner approval for every publication.", default: false },
   sideworkers: { label: "Sideworkers", description: "Delegate work to additional harness VMs within the workspace's resource limits.", default: true },
+  inboxes: { label: "Inboxes", description: "Household watches outside sources (mail, feeds, alerts) and delivers their events to subscribed bots.", default: false },
 } as const;
 export type HouseFeatures = { -readonly [K in keyof typeof HOUSE_FEATURES]: boolean };
 export interface PreviewSettings { bindAddress: string; publicHost: string }
@@ -13,9 +14,10 @@ export const houseFeatures = (house: { features?: Partial<HouseFeatures> }): Hou
   scouts: house.features?.scouts ?? HOUSE_FEATURES.scouts.default,
   preview: house.features?.preview ?? HOUSE_FEATURES.preview.default,
   sideworkers: house.features?.sideworkers ?? HOUSE_FEATURES.sideworkers.default,
+  inboxes: house.features?.inboxes ?? HOUSE_FEATURES.inboxes.default,
 });
 export const previewSettings = (house: { preview?: PreviewSettings }): PreviewSettings => ({ ...DEFAULT_PREVIEW_SETTINGS, ...house.preview });
-export const houseFeaturesSchema = z.strictObject({ scouts: z.boolean().optional(), preview: z.boolean().optional(), sideworkers: z.boolean().optional() });
+export const houseFeaturesSchema = z.strictObject({ scouts: z.boolean().optional(), preview: z.boolean().optional(), sideworkers: z.boolean().optional(), inboxes: z.boolean().optional() });
 // Owner-selected hostname or IP only: no scheme, path, credentials or port. IPv6 is entered without brackets.
 const host = z.string().trim().min(1).max(253).refine(value => {
   if (value.includes(":")) {

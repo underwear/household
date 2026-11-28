@@ -10,7 +10,7 @@ import { api, follow, lineCount, textFrom } from "./commands";
  * its agent's screen). `--json` prints what the API answered, for scripts and agents.
  */
 
-export const FEATURES_USAGE = `  house features <workspace> [scouts|preview|sideworkers=on|off …]
+export const FEATURES_USAGE = `  house features <workspace> [scouts|preview|sideworkers|inboxes=on|off …]
                                  the workspace's features: show them, or turn some on or off (scouts on for the first
                                  time: the capabilities browser, media, dev and the General scout made of them)`;
 

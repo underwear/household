@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { houseFeatures, previewSettings, previewSettingsSchema } from "../../src/core/house-features";
 
 test("feature defaults keep previews off", () => {
-  expect(houseFeatures({})).toEqual({ preview: false, sideworkers: true, scouts: false });
+  expect(houseFeatures({})).toEqual({ preview: false, sideworkers: true, scouts: false, inboxes: false });
   expect(previewSettings({})).toEqual({ bindAddress: "127.0.0.1", publicHost: "127.0.0.1" });
 });
 

@@ -31,7 +31,7 @@ test("migration drops counts, preserves zero-count off switches, persists a budg
   expect(raw.features).toEqual({ scouts: false, sideworkers: false });
   expect(raw.scoutLimits).toEqual({ cpus: 1 });
   expect(raw.sideworkerLimits).toBeUndefined(); // bots size each sideworker (migration 6)
-  expect(parse(await Bun.file(path).text()).version).toBe(6);
+  expect(parse(await Bun.file(path).text()).version).toBe(7);
 });
 
 test("an unmigrated config with sideworkers' old default size still loads, without it", async () => {

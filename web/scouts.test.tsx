@@ -21,7 +21,7 @@ const scout: ScoutView = {
   name: "prod-ops", title: "Prod Ops", emoji: "🛠️", description: "Production incidents", instructions: "Read first.", capabilities: ["browser"], own,
   network: { open: false, allow: ["api.heroku.com"], limitedBy: ["prod-ops"] }, keysInVm: [{ capability: "prod-ops", env: "HEROKU_API_KEY" }], problems: [],
 };
-const house: WorkspaceView = { name: "work", owners: [], pets: [{ name: "sibling", title: "Sibling", emoji: "🤖", display: "🤖 Sibling" } as WorkspaceView["pets"][number], { name: "helper", title: "Helper", emoji: "🐾", display: "🐾 Helper", sideworker: { parent: "sibling", cwd: "/w" } } as WorkspaceView["pets"][number]], channels: [], allow: [], features: { scouts: true, preview: false, sideworkers: true } };
+const house: WorkspaceView = { name: "work", owners: [], pets: [{ name: "sibling", title: "Sibling", emoji: "🤖", display: "🤖 Sibling" } as WorkspaceView["pets"][number], { name: "helper", title: "Helper", emoji: "🐾", display: "🐾 Helper", sideworker: { parent: "sibling", cwd: "/w" } } as WorkspaceView["pets"][number]], channels: [], allow: [], features: { scouts: true, preview: false, sideworkers: true, inboxes: false } };
 const limits = { maxScouts: 2, cpus: 2, memoryMiB: 2048 };
 const initial: ScoutDetailView = { scout, capabilities: [heroku, browser], runs: [], defaults: { agent: null, limits } };
 const list = (extra: Partial<ScoutListView> = {}): ScoutListView => ({ scouts: [scout], capabilities: [heroku, browser], runs: [], limits, agent: null, ...extra });

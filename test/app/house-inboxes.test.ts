@@ -12,7 +12,7 @@ function setup(poll: Poller, initial: "new" | "latest" = "new", store = new Sqli
   const posted: InboxItem[] = [], delivered: string[] = [];
   let fail: string | undefined;
   const source = { ...inbox(), initial };
-  const house: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "alice" }, { name: "bob" }], channels: [], people: { owners: [] }, inboxes: [source] };
+  const house: House = { name: "work", network: { kind: "allowlist", allow: [] }, pets: [{ name: "alice" }, { name: "bob" }], channels: [], people: { owners: [] }, features: { inboxes: true }, inboxes: [source] };
   const service = new HouseInboxes(store, {
     post: async (_h, _i, e) => { if (fail === "post") throw Error("private token"); posted.push(e); },
     pet: (_h, _i, p) => { if (fail === p) throw Error("private token"); delivered.push(p); },
@@ -282,4 +282,35 @@ test("mail TLS mode and certificate changes preserve legacy cursor and pending e
     s.source.source = { ...s.source.source, port: 993 } as typeof s.source.source;
     expect(s.service.list("work")[0]!.status.initialized).toBe(false);
   }
+});
+
+test("with inboxes off in the workspace nothing is checked, a manual check is refused, and switching off stops a running check", async () => {
+  let release!: () => void;
+  let polls = 0;
+  const poll: Poller = async (_s, _c, _i, signal) => {
+    polls++;
+    await new Promise<void>((resolve, reject) => { release = resolve; signal?.addEventListener("abort", () => reject(signal.reason)); });
+    return { items: [event("one")] };
+  };
+  const s = setup(poll);
+  const running = s.service.run("work", "mail");
+  await Bun.sleep(0);
+  expect(polls).toBe(1);
+  const off = { ...s.house, features: { inboxes: false } };
+  s.service.setHouses([off]);
+  await running;
+  expect(s.posted).toHaveLength(0);
+  s.advance(); s.advance();
+  s.service.tick();
+  await Bun.sleep(0);
+  expect(polls).toBe(1);
+  await expect(s.service.run("work", "mail")).rejects.toThrow("Inboxes are off");
+  s.service.setHouses([{ ...s.house, features: {} }]);
+  await expect(s.service.run("work", "mail")).rejects.toThrow("Inboxes are off"); // off by default
+  s.service.setHouses([s.house]);
+  s.service.tick();
+  await Bun.sleep(0);
+  expect(polls).toBe(2);
+  release();
+  await s.service.stop();
 });
