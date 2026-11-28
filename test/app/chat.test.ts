@@ -121,6 +121,29 @@ function setup({ records = new SqliteStore(":memory:"), replyChars = 100, stopWa
   return { chat, calls, opened, byKey, lines, records, stops, headers };
 }
 
+test("a group without topics: every message reaches a bot, marked as a group's; addressed when it names the bot or tags it", async () => {
+  const GROUP: ChannelConfig = { kind: "telegram-plain-group", token: "telegram-work", chat: "-5560911573", pets: ["sibling", "chair"], default: "sibling" };
+  const { chat, opened, headers, calls } = setup();
+  await chat.setHouses([work([GROUP])]);
+  const [channel] = opened;
+  await channel!.say(text("anyone hungry?", { from: { ref: "telegram.user.5" as SenderRef, name: "Anna" } }));
+  await channel!.say(text("Chair, plan dinner"));
+  await channel!.say(text("@fake_bot what is for dinner?", { tagsBot: true }));
+  await channel!.say(text("pasta again"));
+  expect(calls.filter(call => call.startsWith("send ")).map(call => call.split(" ")[1])).toEqual(["work/sibling", "work/chair", "work/sibling", "work/sibling"]);
+  expect(headers.map(header => [header.channel.audience, header.from.trust, header.group])).toEqual([
+    ["group", "guest", { addressed: false }],
+    ["group", "owner", { addressed: true }],
+    ["group", "owner", { addressed: true }],
+    ["group", "owner", { addressed: false }],
+  ]);
+  // A private chat's messages carry no such mark.
+  const { chat: dm, opened: dmOpened, headers: dmHeaders } = setup();
+  await dm.setHouses([work()]);
+  await dmOpened[0]!.say(text("in General"));
+  expect(dmHeaders[0]!.group).toBeUndefined();
+});
+
 test("the owner's messages go to their pet under Household's header: General to the default pet, a thread to its pet", async () => {
   const { chat, calls, opened } = setup();
   await chat.setHouses([work()]);

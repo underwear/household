@@ -201,12 +201,17 @@ const telegramGroup = telegramPrivate.extend({
   kind: z.literal("telegram-group"),
   chat: z.union([z.string(), z.number().int().safe()]).transform(String).refine(value => /^-100[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)), "must be a Telegram supergroup id (-100…)"),
 });
+// A group or supergroup without topics: any negative chat id (a basic group's -5…, a supergroup's -100…).
+const telegramPlainGroup = telegramPrivate.extend({
+  kind: z.literal("telegram-plain-group"),
+  chat: z.union([z.string(), z.number().int().safe()]).transform(String).refine(value => /^-[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)), "must be a Telegram group id (a negative number)"),
+});
 const slackPrivate = telegramPrivate.extend({
   kind: z.literal("slack-private"),
   chat: z.string().regex(/^T[A-Z0-9]+:D[A-Z0-9]+$/, "Slack private address must be T…:D… (workspace:DM)"),
   appToken: credential("a Socket Mode app token"),
 });
-const kinds = z.discriminatedUnion("kind", [telegramThreaded, telegramDm, telegramGroup, slackPrivate]);
+const kinds = z.discriminatedUnion("kind", [telegramThreaded, telegramDm, telegramGroup, telegramPlainGroup, slackPrivate]);
 const channel = kinds;
 
 const houseNames = z.array(name).min(1).optional();

@@ -9,7 +9,8 @@ const house = (owners: House["people"]["owners"], channels = [dm]): House => ({ 
 
 test("the kinds' descriptors are the one source of a kind: its platform and audience; each platform a kind is on is described once", () => {
   const kinds = knownChannelKinds();
-  expect([...kinds.keys()]).toEqual(["telegram-dm", "telegram-group", "slack-private", "telegram-private"]);
+  expect([...kinds.keys()]).toEqual(["telegram-dm", "telegram-group", "telegram-plain-group", "slack-private", "telegram-private"]);
+  expect(audienceOf(kinds, "telegram-plain-group")).toBe("group");
   expect(platformOf(kinds, "telegram-private")).toBe("telegram");
   expect(audienceOf(kinds, "telegram-private")).toBe("private");
   expect(audienceOf(kinds, "telegram-group")).toBe("group"); // unknown: the safer guess

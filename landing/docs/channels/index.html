@@ -192,12 +192,14 @@
 <tr><td><strong>Telegram group with topics</strong></td><td>its own topic</td><td>several bots, each in its own place</td></tr>
 <tr><td><strong>Telegram private chat, threaded</strong></td><td>its own thread</td><td>the same, without a group</td></tr>
 <tr><td><strong>Telegram private chat, plain</strong></td><td>a share of one conversation</td><td>a single bot</td></tr>
+<tr><td><strong>Telegram group, plain</strong></td><td>a seat in the group’s conversation</td><td>bots among people: a family or team chat</td></tr>
 <tr><td><strong>Slack DM</strong></td><td>the default in Messages, others in threads</td><td>you live in Slack</td></tr>
 </tbody>
 </table>
 <p>Several bots share one channel. Talk to one in its topic or thread, by name (<code>Chef, plan dinner</code>), or by replying to it; the <strong>default</strong> bot gets the rest. <strong>Stop</strong> on a bot's message, or <code>/stop</code>, stops it. <a href="../sideworkers/">Sideworkers</a> and <a href="../scouts/">scouts</a> report in their bot's channel, each in a topic or thread of its own.</p>
 <h2 id="telegram">Telegram</h2>
 <p>One Telegram bot from <a href="https://t.me/BotFather">@BotFather</a> speaks for all the workspace's bots, in that workspace only. For a group, see <a href="../start/#before-you-connect-telegram">Before you connect Telegram</a>. For a threaded chat, turn on <strong>Threaded Mode</strong> in BotFather's Mini App and stop users from creating threads. For a plain chat, press <strong>Start</strong>.</p>
+<p>In a plain group, bots read the whole conversation and step in when you tag the bot, name them or reply to them, or when they have something you need; the rest they leave to the people. Turn the bot’s <strong>Group Privacy</strong> off in BotFather or make it an admin, or Telegram shows it only what is addressed to it.</p>
 <p>Bots send formatting, buttons and files up to 20 MB. In private chats they also send small widgets, such as a checklist you tap; a tap is never your approval. To revoke, remove the channel and <code>/revoke</code> the token in BotFather.</p>
 <h2 id="slack">Slack</h2>
 <p>Bots see only your DM with the app, not your Slack channels, and the app's tokens never reach a bot. Slack keeps slash commands, so type <code>!stop</code> and <code>!secret</code>, and delete your <code>!secret</code> message yourself.</p>

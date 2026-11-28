@@ -19,6 +19,7 @@ You are its **owner**: setup adds your messenger id, and bots take orders and ap
 | **Telegram group with topics** | its own topic | several bots, each in its own place |
 | **Telegram private chat, threaded** | its own thread | the same, without a group |
 | **Telegram private chat, plain** | a share of one conversation | a single bot |
+| **Telegram group, plain** | a seat in the group's conversation | bots among people: a family or team chat |
 | **Slack DM** | the default in Messages, others in threads | you live in Slack |
 
 Several bots share one channel. Talk to one in its topic or thread, by name (`Chef, plan dinner`), or by replying to it; the **default** bot gets the rest. **Stop** on a bot's message, or `/stop`, stops it. [Sideworkers](../sideworkers/) and [scouts](../scouts/) report in their bot's channel, each in a topic or thread of its own.
@@ -26,6 +27,8 @@ Several bots share one channel. Talk to one in its topic or thread, by name (`Ch
 ## Telegram
 
 One Telegram bot from [@BotFather](https://t.me/BotFather) speaks for all the workspace's bots, in that workspace only. For a group, see [Before you connect Telegram](../start/#before-you-connect-telegram). For a threaded chat, turn on **Threaded Mode** in BotFather's Mini App and stop users from creating threads. For a plain chat, press **Start**.
+
+In a plain group, bots read the whole conversation and step in when you tag the bot, name them or reply to them, or when they have something you need; the rest they leave to the people. Turn the bot's **Group Privacy** off in BotFather or make it an admin, or Telegram shows it only what is addressed to it.
 
 Bots send formatting, buttons and files up to 20 MB. In private chats they also send small widgets, such as a checklist you tap; a tap is never your approval. To revoke, remove the channel and `/revoke` the token in BotFather.
 

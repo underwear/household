@@ -3,7 +3,7 @@ import { tagFreeJson } from "../core/tags";
 import type { SecretRequests } from "./secret-requests";
 import { withFiles, type OutgoingAttachment, type Attachment } from "../core/attachment";
 import { DownloadRefused, type Channel, type Choices, type ReplyMode, type InboundMessage, type Place, type MessageRef, type SenderRef, type PostRef } from "../core/channel";
-import { defaultPet, inboxKey, channelKey, channelName, channelsOf, parsePlaceKey, petPlaceKey, type ChannelConfig } from "../core/channels";
+import { audienceOf, defaultPet, inboxKey, channelKey, channelName, channelsOf, parsePlaceKey, petPlaceKey, type ChannelConfig } from "../core/channels";
 import type { DialogAnswer, DialogQuestion } from "../core/dialog";
 import { HouseholdError } from "../core/errors";
 import { headAndTail } from "../core/excerpt";
@@ -11,7 +11,7 @@ import type { Header, HeaderEvent } from "../core/header";
 import { petDisplay, petPlace, petTitle, type House } from "../core/household";
 import { expectId } from "../core/ids";
 import { batchable, type ChannelFacts, type ChatRecord, type ChatSender, type Message, type NewChatMessage } from "../core/message";
-import { addressee, routedPet } from "../core/routing";
+import { addressee, namedPet, routedPet } from "../core/routing";
 import { carriesHouseholdTag } from "../core/tags";
 import type { EventLog } from "../infra/event-log";
 import type { ChatIds, ChatRecords, KeyValueStore } from "../infra/sqlite-store";
@@ -934,13 +934,14 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const addressed = shared && message.kind === "text" && !message.relayed ? addressee(message.text, occupants)?.name : undefined;
     const sharedQuoted = shared && quoted && quoted.place === placeId && occupants.some(p => p.name === quoted.pet) ? quoted.pet : undefined;
     const topic = written?.channel === key && written.topic ? channel.listPlaces?.().find(p => p.id === placeId) : undefined;
-    const pet = routedPet(config, configured.pets, topic ? {} : {
+    const facts = topic ? {} : {
       about: (message.kind === "text" && message.interaction ? quoted?.pet : undefined) ?? on?.pet ?? original?.pet ?? addressed ?? sharedQuoted,
       thread: thread?.name,
       // The conversation of the line it quotes, when that line is in this channel.
       quoted: quoted && parsePlaceKey(quoted.place)?.channel === key ? quoted.pet : undefined,
       text: message.kind === "text" && !message.relayed ? message.text : undefined,
-    });
+    };
+    const pet = routedPet(config, configured.pets, facts);
     if (topic && (!pet || !this.channels.canUseTopics(house, pet.name, key))) {
       return message.kind === "text" && !message.interaction ? this.misdirected(house, key, channel, config, configured, message) : undefined;
     }
@@ -982,10 +983,14 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     // A reaction on a message Household has no record of: where it was is not known.
     const unplaced = message.kind === "reaction" && !on;
     const shown = Object.keys(message.external).length > 0 ? message.external : undefined;
+    // A group's shared conversation (no topic or thread of a bot's): every message reaches a bot, which steps in when it is its turn.
+    const group = audienceOf(knownChannelKinds(), config.kind) === "group" && place.id === inbox.id && pet
+      ? { addressed: namedPet(config, configured.pets, facts)?.name === pet.name || (message.kind === "text" && message.tagsBot === true) } : undefined;
     const envelope: Envelope = {
       from: { id: this.records.personId(house, message.from.ref), name: message.from.name, trust },
       channel: this.channels.headerChannel(house, config, shown),
       ...(unplaced ? {} : { place: this.channels.publicPlace(house, place) }),
+      ...(group ? { group } : {}),
     };
     const where = { ...(unplaced ? {} : { place: place.id }), ...(message.kept && Object.keys(message.kept).length > 0 ? { facts: message.kept } : {}) };
     // A press goes by the post pressed, so a channel without pets resolves them too.
@@ -1073,7 +1078,7 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
    */
   private async misdirected(house: string, key: string, channel: Channel, config: ChannelConfig, configured: House, message: InboundMessage & { kind: "text" }): Promise<void> {
     if (!channel.answer || message.edits !== undefined || message.relayed) return;
-    if (config.kind === "telegram-group" && this.channels.trust(house, message.from.ref) !== "owner") return;
+    if (audienceOf(knownChannelKinds(), config.kind) === "group" && this.channels.trust(house, message.from.ref) !== "owner") return;
     const name = `${house}/${key}/${message.from.ref}`;
     const last = this.misdirectedAt.get(name);
     if (last !== undefined && Date.now() - last < MISDIRECTED_EVERY_MS) return;

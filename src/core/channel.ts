@@ -56,7 +56,7 @@ export type ReplyMode = "regular" | "rich";
  * ids); `kept`: all of its facts, stored with the message for debugging, never shown.
  */
 export type InboundMessage = { ref: MessageRef; place?: string; from: Sender; external: External; kept?: External } & (
-  | { kind: "text"; text: string; edits?: MessageRef; relayed?: true; replyTo?: MessageRef | PostRef; interaction?: true; attachments?: Attachment[] }
+  | { kind: "text"; text: string; edits?: MessageRef; relayed?: true; replyTo?: MessageRef | PostRef; interaction?: true; attachments?: Attachment[]; /** It tags the channel's own bot (Telegram's @username): it is meant for the bot it reaches. */ tagsBot?: true }
   | { kind: "unsupported"; what: string }
   | { kind: "choice"; answersTo: PostRef; index: number; label: string }
   | { kind: "reaction"; on: MessageRef | PostRef; added: string[]; removed: string[] }

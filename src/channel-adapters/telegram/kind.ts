@@ -59,3 +59,18 @@ export const telegramDm: ChannelKindSpec = {
   description: "Your private chat with the workspace's bot, without threads. Reply to a bot's message or address it by name; otherwise the default bot answers.",
   fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather. Threaded Mode is not required." }],
 };
+
+/**
+ * A group without topics, people talking among themselves too: one conversation, every message delivered (to the bot
+ * it names or replies to, else the default one), each marked as a group's, so a bot steps in only when it is its turn.
+ */
+export const telegramPlainGroup: ChannelKindSpec = {
+  ...withoutGeneral,
+  kind: "telegram-plain-group",
+  audience: "group",
+  label: "Telegram Bot Group",
+  description: "A group without topics: the bots read the whole conversation and step in when they are addressed or have something to add. Everyone in the group sees their replies; only owners can command them.",
+  replyFormat: { name: telegramPrivate.replyFormat!.name, instructions: telegramPrivate.replyFormat!.instructions },
+  chat: { key: "chat", label: "Group chat id", placeholder: "-5560911573", mono: true, hint: "A negative number.", help: { title: "Where do I find it?", steps: ["Open https://web.telegram.org/a in a browser and sign in.", "Open your group: the address now ends in #-…", "Copy everything after #, the minus too, and paste it here."] } },
+  fields: [{ key: "token", label: "Bot token", mono: true, wide: true, placeholder: "123456789:AAH4x…from @BotFather", hint: "From @BotFather. Add the bot to the group, and turn its Group Privacy off (Bot Settings) or make it an admin: otherwise Telegram shows it only messages addressed to it." }],
+};

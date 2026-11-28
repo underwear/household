@@ -693,6 +693,16 @@ test("Telegram forum groups persist negative supergroup ids and reject private/b
   }
 });
 
+test("Telegram groups without topics take any group id, basic or supergroup, and no private one", async () => {
+  const {config} = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {}\n");
+  await config.addChannel("work", {kind:"telegram-plain-group", token:"123456:fake-token", chat:"-5560911573", pets:["sibling"]});
+  expect((await config.load()).houses[0]!.channels[0]).toMatchObject({kind:"telegram-plain-group",chat:"-5560911573",pets:["sibling"]});
+  await config.addChannel("work", {kind:"telegram-plain-group", token:"123456:fake-token", chat:"-1001234567890", pets:[]});
+  for (const chat of ["1234567890", "-0123", "-9007199254740993", "group"]) {
+    await expect(config.addChannel("work", {kind:"telegram-plain-group", token:"123456:fake-token", chat, pets:[]})).rejects.toThrow();
+  }
+});
+
 test("another harness drops the settings of the one before; the same harness keeps them", async () => {
   const { config, text } = store("houses:\n  work:\n    network: {allow: []}\n    pets:\n      sibling: {agent: codex-app-server, settings: {chatgptApps: \"true\"}}\n");
   await config.updatePet("work", "sibling", { agent: "codex-app-server", model: "gpt-6" });

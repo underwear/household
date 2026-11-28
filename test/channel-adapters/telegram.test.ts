@@ -1392,6 +1392,37 @@ test("ordinary DM keeps replies, files, buttons and status in the chat without t
   expect(api.calls.every(call => call.params.message_thread_id === undefined)).toBe(true);
 });
 
+test("a group without topics: one conversation, no topic operations, no rich replies; a tag of the bot is marked, a migration logged", async () => {
+  const { api, bot, listen, received, lines } = setup();
+  const GROUP = -5560911573;
+  const channel = new TelegramChannel(bot(), GROUP, "plain group", "group-chat");
+  stops.push(() => channel.stop());
+  listen(channel);
+  expect(channel.ignoreInboxMessages).toBe(false);
+  expect(channel.inInbox(sibling)).toBe(true);
+  expect(channel.inbox).toBe("Chat");
+  expect(channel.removePlace).toBeUndefined();
+  expect(channel.createPlace).toBeUndefined();
+  expect(channel.tools()).toEqual([]);
+  expect(await channel.placeLink(sibling)).toBeUndefined();
+  await channel.ensurePlace(sibling);
+  await channel.post(sibling, "<b>Hello</b>");
+  expect(api.sent("sendMessage").at(-1)).toMatchObject({ chat_id: GROUP, text: "🐾 Sibling: Hello" });
+  await expect(channel.post(sibling, "# Report", undefined, "rich")).rejects.toThrow("not supported in Telegram groups");
+  const said = (text: string, id: number, from = OLEG) => ({ message: { message_id: id, chat: { id: GROUP }, from, text } });
+  api.push(said("anyone hungry?", 10, { id: 5, is_bot: false, first_name: "Anna", username: "anna" }));
+  api.push(said("@fake_bot what is for dinner?", 11));
+  api.push(said("ask @fake_botany or mail@fake_bot.com", 12));
+  api.push({ message: { message_id: 13, chat: { id: GROUP }, from: OLEG, migrate_to_chat_id: -1005560911573 } });
+  await waitFor(() => received.length === 3);
+  expect(received.map(message => message.kind === "text" ? [message.text, message.tagsBot ?? false] : [])).toEqual([
+    ["anyone hungry?", false], ["@fake_bot what is for dinner?", true], ["ask @fake_botany or mail@fake_bot.com", false],
+  ]);
+  await waitFor(() => lines.some(line => line.includes("supergroup with id -1005560911573")));
+  expect(api.calls.some(call => /ForumTopic/.test(call.method))).toBe(false);
+  expect(api.calls.every(call => call.params.message_thread_id === undefined)).toBe(true);
+});
+
 test("private widgets send state, update only mapped widgets, and route clicks after restart", async () => {
   const { api, open, listen, received, bot } = setup();
   const channel = open();

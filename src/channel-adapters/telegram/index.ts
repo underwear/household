@@ -13,7 +13,7 @@ import { renderStatus } from "./status";
 import { inboundMessage, messageIdOf, postRef, senderRef, type Parsed, type Update, type TelegramMessage } from "./updates";
 
 export { TelegramBot, type TelegramBotOptions, type TelegramState } from "./bot";
-export { isTelegramId, telegram, telegramPrivate, telegramDm, telegramGroup } from "./kind";
+export { isTelegramId, telegram, telegramPrivate, telegramDm, telegramGroup, telegramPlainGroup } from "./kind";
 export { getMe, isBotToken, isRefusedToken, telegramBotToken, type BotInfo } from "./token";
 export { checkGroup, groupProblems, watchSetup, type Contact, type FoundGroup } from "./first-contact";
 
@@ -59,12 +59,14 @@ const looksLikeNotice = (text: string) => /^[^\p{L}\p{N}]*(⚠|household)/iu.tes
  * multiple bots talk there; temporary helpers always keep their titles. Pet HTML is decoded into native entities, cut to Telegram's limit.
  */
 export class TelegramChannel implements Channel, BotChat {
-  get inbox(): string { return this.mode === "dm" ? "Chat" : "General"; }
-  get ignoreInboxMessages(): boolean { return this.mode !== "dm" && !this.forwardGeneral; }
+  /** One conversation, no threads: a plain DM, or a group without topics. */
+  private get flat(): boolean { return this.mode === "dm" || this.mode === "group-chat"; }
+  get inbox(): string { return this.flat ? "Chat" : "General"; }
+  get ignoreInboxMessages(): boolean { return !this.flat && !this.forwardGeneral; }
   get forwardsInbox(): boolean { return this.forwardGeneral; }
-  get stopDefaultPet(): boolean { return this.mode === "dm"; }
+  get stopDefaultPet(): boolean { return this.flat; }
   readonly removePlace?: (place: Place) => Promise<boolean>;
-  inInbox(place: Place): boolean { return this.mode === "dm" || place.kind === "house-inbox"; }
+  inInbox(place: Place): boolean { return this.flat || place.kind === "house-inbox"; }
   readonly createPlace?: (title: string) => Promise<Place>;
   private onMessage?: (message: InboundMessage) => Promise<string | void>;
   /** Threads being created, so that posts at the same moment make one. */
@@ -90,23 +92,23 @@ export class TelegramChannel implements Channel, BotChat {
   /** Refreshed on every config reload, including when the channel connection is reused. */
   setSoloPlace(id?: string): void { this.soloPlace = id; }
   /** Refreshed on every config reload, like `setSoloPlace`. */
-  setForwardGeneral(on: boolean): void { this.forwardGeneral = this.mode !== "dm" && on; }
+  setForwardGeneral(on: boolean): void { this.forwardGeneral = !this.flat && on; }
 
   private attributeDm(place: Place): boolean {
     const solo = this.soloPlace !== undefined && (place.id === this.soloPlace || place.kind === "house-inbox");
-    return this.mode === "dm" && (place.forceAttribution === true || !solo);
+    return this.flat && (place.forceAttribution === true || !solo);
   }
   private readonly keys: { creation: (place: string) => string; thread: (place: string) => string; title: (place: string) => string; place: (thread: number) => string };
 
   constructor(
     private readonly bot: TelegramBot,
-    /** Positive user id for private chats; negative -100… id for forum supergroups. */
+    /** Positive user id for private chats; negative for groups (-100… for supergroups, forums among them). */
     readonly chat: number,
     /** For log lines, e.g. `house work DM`. */
     private readonly name: string,
-    private readonly mode: "private" | "group" | "dm" = "private",
+    private readonly mode: "private" | "group" | "dm" | "group-chat" = "private",
   ) {
-    if (mode !== "dm") this.removePlace = (place) => this.removeThread(place);
+    if (!this.flat) this.removePlace = (place) => this.removeThread(place);
     this.prefix = `telegram.${bot.id}.${chat}`;
     if (mode === "group") this.createPlace = async title => {
       if (!title.trim() || title.trim().length > 128) throw new Error("Topic title must contain 1–128 characters");
@@ -220,8 +222,8 @@ export class TelegramChannel implements Channel, BotChat {
   }
 
   private async postRich(place: Place, text: string, choices?: Choices): Promise<PostRef[]> {
-    if (this.mode === "group") throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
-    const markdown = richMarkdown(place, text, this.mode !== "dm" || this.attributeDm(place));
+    if (this.chat < 0) throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
+    const markdown = richMarkdown(place, text, !this.flat || this.attributeDm(place));
     const where = await this.where(place);
     const sent = await this.sendPiece({ chat_id: this.chat, ...where, rich_message: { markdown }, ...(choices ? { reply_markup: keyboard(choices) } : {}) }, "sendRichMessage");
     if (choices) this.remember(sent.message_id, { text: markdown, rich: true });
@@ -235,8 +237,8 @@ export class TelegramChannel implements Channel, BotChat {
     let content: object;
     let shown: Shown;
     if (format === "rich") {
-      if (this.mode === "group") throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
-      const markdown = richMarkdown(place, text, this.mode !== "dm" || this.attributeDm(place));
+      if (this.chat < 0) throw new Error("Rich replies are not supported in Telegram groups; use regular Telegram HTML");
+      const markdown = richMarkdown(place, text, !this.flat || this.attributeDm(place));
       content = { rich_message: { markdown } };
       shown = { text: markdown, rich: true };
     } else {
@@ -314,7 +316,7 @@ export class TelegramChannel implements Channel, BotChat {
   async answer(message: InboundMessage, text: string): Promise<PostRef[]> {
     const id = messageIdOf(this.prefix, message.ref);
     if (id === undefined) return [];
-    const thread = this.mode === "dm" ? undefined : message.kept?.thread;
+    const thread = this.flat ? undefined : message.kept?.thread;
     const sent = await this.sendPiece({
       chat_id: this.chat,
       ...(typeof thread === "number" ? { message_thread_id: thread } : {}),
@@ -449,13 +451,13 @@ export class TelegramChannel implements Channel, BotChat {
    * under another title (see `rename`); a thread made later gets it anyway.
    */
   retitle(place: Place): Promise<void> {
-    if (this.mode === "dm" || place.kind !== "pet-thread") return Promise.resolve();
+    if (this.flat || place.kind !== "pet-thread") return Promise.resolve();
     this.wanted.set(place.id, place.title);
     return this.queueRename(place.id);
   }
 
   async ensurePlace(place: Place): Promise<void> {
-    if (this.mode === "dm" || place.kind === "house-inbox") return;
+    if (this.flat || place.kind === "house-inbox") return;
     this.wanted.set(place.id, place.title);
     await this.thread(place);
   }
@@ -467,7 +469,7 @@ export class TelegramChannel implements Channel, BotChat {
    * `t.me/<bot>/<message>` goes to General, and `t.me/c/…` is refused for a private chat.
    */
   async placeLink(place: Place, { create = true }: { create?: boolean } = {}): Promise<string | undefined> {
-    if (this.mode === "dm" || place.kind === "house-inbox") return undefined;
+    if (this.flat || place.kind === "house-inbox") return undefined;
     // Asked not to make one: only a thread there is already.
     if (!create && !this.bot.options.state.get(this.keys.thread(place.id))) return undefined;
     if (this.mode === "group") return `https://t.me/c/${String(this.chat).slice(4)}/${await this.thread(place)}`;
@@ -578,7 +580,7 @@ export class TelegramChannel implements Channel, BotChat {
   /** A person's message of General, forwarded into a place's thread (made if it is not yet). */
   async forward(ref: MessageRef, place: Place): Promise<PostRef[]> {
     const messageId = messageIdOf(this.prefix, ref);
-    if (messageId === undefined || this.mode === "dm" || place.kind === "house-inbox") return [];
+    if (messageId === undefined || this.flat || place.kind === "house-inbox") return [];
     const where = await this.where(place);
     const sent = await this.sendPiece({ chat_id: this.chat, from_chat_id: this.chat, message_id: messageId, ...where }, "forwardMessage");
     return [postRef(this.prefix, sent.message_id)];
@@ -616,7 +618,7 @@ export class TelegramChannel implements Channel, BotChat {
 
   /** Where in the chat a place is: its thread, or General (no thread) for the inbox. */
   private async where(place: Place): Promise<{ message_thread_id?: number }> {
-    return this.mode === "dm" || place.kind === "house-inbox" ? {} : { message_thread_id: await this.thread(place) };
+    return this.flat || place.kind === "house-inbox" ? {} : { message_thread_id: await this.thread(place) };
   }
 
   private thread(place: Place): Promise<number> {
@@ -706,6 +708,11 @@ export class TelegramChannel implements Channel, BotChat {
    */
   private async ownCommand(message: InboundMessage): Promise<InboundMessage> {
     if (message.kind !== "text") return message;
+    // In a group's shared conversation, a message that tags this bot (@its_username) is meant for it.
+    if (this.mode === "group-chat" && !message.relayed) {
+      const own = await this.bot.username();
+      if (own && new RegExp(`(?:^|[^\\w@])@${own}(?!\\w)`, "iu").test(message.text)) message = { ...message, tagsBot: true };
+    }
     const named = /^(\/\w+)@(\w+)(\s[^]*)?$/.exec(message.text);
     if (!named) return message;
     const own = await this.bot.username();
@@ -727,9 +734,12 @@ export class TelegramChannel implements Channel, BotChat {
     const { name, onMessage } = this;
     let parsed: Parsed | undefined;
     let answer: string | void = undefined;
+    // A group Telegram turned into a supergroup (turning on Topics does) has a new id: this one hears no more.
+    const moved = (update.message as { migrate_to_chat_id?: unknown } | undefined)?.migrate_to_chat_id;
+    if (typeof moved === "number" && Number.isSafeInteger(moved)) log.error(`telegram ${name}: Telegram turned this group into a supergroup with id ${moved}; change the channel's group chat id to ${moved} to keep it connected`);
     try {
       this.discoverTopic(update.message ?? update.edited_message ?? update.callback_query?.message);
-      parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => this.mode === "dm" ? undefined : state.get(this.keys.place(thread)) || undefined });
+      parsed = inboundMessage(update, { chat: this.chat, prefix: this.prefix, placeOf: (thread) => this.flat ? undefined : state.get(this.keys.place(thread)) || undefined });
       if ("message" in parsed && parsed.message.kind === "unsupported") {
         const message = update.edited_message ?? update.message;
         log.info(`telegram ${name}: update ${update.update_id} unsupported (${parsed.message.what}); update fields: ${Object.keys(update).sort().join(", ")}; message fields: ${Object.keys(message ?? {}).sort().join(", ")}`);

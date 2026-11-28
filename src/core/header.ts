@@ -64,6 +64,11 @@ export interface Header {
   from: { id: string; name: string; trust: Trust };
   channel: HeaderChannel;
   place?: { id: string; kind: string; title: string };
+  /**
+   * A group's shared conversation, where people also talk to each other and every message reaches a bot:
+   * `addressed`, it names you, replies to you or is about your post; otherwise it is nobody's in particular.
+   */
+  group?: { addressed: boolean };
 }
 
 
@@ -136,12 +141,13 @@ export function cleanChannel({ id, kind, name, audience, meta, replyFormat }: He
 /**
  * The header block: the tags, and one line of compact JSON between them, which never holds a tag (`tagFreeJson`).
  */
-export function renderHeader({ event: what, from, channel, place }: Header): string {
+export function renderHeader({ event: what, from, channel, place, group }: Header): string {
   const json = {
     event: event(what),
     from: { id: from.id, name: clean(from.name), trust: from.trust },
     channel: cleanChannel(channel),
     ...(place ? { place: { id: place.id, kind: place.kind, title: clean(place.title) } } : {}),
+    ...(group ? { group: { addressed: group.addressed } } : {}),
   };
   return block(HEADER_TAG, [tagFreeJson(json)]);
 }

@@ -2,10 +2,10 @@ import type { House, Pet } from "./household";
 import { petTitle } from "./household";
 
 /**
- * The chats a house is in. Ordinary Telegram DMs share one conversation; threaded DMs and
- * forum groups give pets dedicated topics. Unaddressed ordinary-DM messages go to the default pet.
+ * The chats a house is in. Ordinary Telegram DMs and groups without topics share one conversation; threaded DMs and
+ * forum groups give pets dedicated topics. Unaddressed messages there go to the default pet.
  */
-export const CHANNEL_KINDS = ["telegram-private", "telegram-dm", "telegram-group", "slack-private"] as const;
+export const CHANNEL_KINDS = ["telegram-private", "telegram-dm", "telegram-group", "telegram-plain-group", "slack-private"] as const;
 export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 
 /**
