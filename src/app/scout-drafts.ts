@@ -7,7 +7,7 @@ import type { House, Household } from "../core/household";
 import { houseFeatures } from "../core/house-features";
 import { NAME_PATTERN } from "../core/names";
 import { blueprintCapabilities, blueprintInstallHosts, blueprintNetwork, routineBlocker, routineFor, scoutBase, scoutBaseChanges, scoutKeys, scoutNetworkWords, scoutProblems, staleDraftMessage, type CapabilityDefinition, type ScoutBase, type ScoutDefinition } from "../core/scouts";
-import { formatAllowEntry } from "../core/network-policy";
+import { formatAllowEntry, isAllowed, type AllowEntry } from "../core/network-policy";
 import type { PetIdentity } from "../infra/agent-api";
 import { capabilityDefinitionSchema, scoutDefinitionSchema } from "../infra/config-schema";
 import { capabilityDefinitionInput, NotFoundError, ScoutRevisionError, scoutDefinitionInput, type ConfigStore } from "../infra/config-store";
@@ -215,9 +215,11 @@ export class ScoutDrafts {
       if (fresh.length) reasons.push(`it would reach new hosts: ${fresh.join(", ")}`);
     }
     if (ownChanges(draft.own, composed.currentOwn).includes("install")) reasons.push("its own install script changes");
-    // Its install scripts run beside the keys: a host they may download from is a way out while they run.
+    // Its install scripts run beside the keys: a host they may download from is a way out while they run, unless the
+    // scout reached it already (on the open internet, through its network, or while it installed).
     const installedFrom = new Set(blueprintInstallHosts(current, house.capabilities ?? []).map(formatAllowEntry));
-    const freshInstalls = blueprintInstallHosts(composed.definition, composed.capabilities).map(formatAllowEntry).filter(host => !installedFrom.has(host));
+    const reachedBefore = (entry: AllowEntry) => before.open || installedFrom.has(formatAllowEntry(entry)) || isAllowed({ kind: "allowlist", allow: before.allow }, { host: entry.host, port: entry.port as number });
+    const freshInstalls = blueprintInstallHosts(composed.definition, composed.capabilities).filter(entry => !reachedBefore(entry)).map(formatAllowEntry);
     if (freshInstalls.length) reasons.push(`its install scripts would download from new hosts: ${freshInstalls.join(", ")}`);
     for (const name of composed.definition.capabilities.filter(name => !current.capabilities.includes(name))) {
       const brought = keys.filter(key => key.source === name);
@@ -275,8 +277,8 @@ export class ScoutDrafts {
           install: draftText(setup.install, "setup.install", 100_000, currentOwn?.install ?? ""), network: draftNetwork(setup.network, currentOwn?.network),
           keys: currentOwn?.keys ?? [], owner: name,
         };
-        const installHosts = draftInstallHosts(setup.install_hosts, currentOwn?.installHosts);
-        if (installHosts?.length || currentOwn?.installHosts?.length) own.installHosts = installHosts ?? [];
+        // Only what the bot said ([] too): left out, the ones its own setup has when the owner applies it (`compose`).
+        if (setup.install_hosts !== undefined) own.installHosts = draftInstallHosts(setup.install_hosts, undefined) ?? [];
         needsKeys = draftKeys(setup.needs_keys);
       }
 

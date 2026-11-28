@@ -373,6 +373,33 @@ test("a stale draft: what the owner changed since is named, and apply refuses it
   expect((await f.house()).scouts![0]!.capabilities).toEqual(["browser"]); // the owner said so
 });
 
+test("install hosts the owner changes after a draft that names none are theirs: the draft is stale, and applying it keeps them", async () => {
+  const yaml = "    capabilities:\n      - { name: meter, owner: meter, install: v1, network: { any: false, allow: [meter.example.com] }, installHosts: [deb.debian.org:80] }\n    scouts:\n      - { name: meter, description: Readings }\n";
+  const f = await fixture(yaml);
+  await f.drafts.draft(sibling, { name: "meter", description: "Readings", instructions: "x", reason: "r", setup: { install: "v2" } });
+  const [draft] = await f.drafts.list("work");
+  expect(await (await f.call("GET", `scout-drafts/${draft!.id}`)).json()).toMatchObject({ stale: false, own: { installHosts: ["deb.debian.org:80"] } });
+  expect((await f.call("PUT", "capabilities/meter", { name: "meter", install: "v1", network: { any: false, allow: ["meter.example.com"] }, installHosts: ["registry.npmjs.org"] })).status).toBe(200);
+  expect(await (await f.call("GET", `scout-drafts/${draft!.id}`)).json()).toMatchObject({ stale: true, changedSince: ["own setup's install hosts"], own: { installHosts: ["registry.npmjs.org"] } });
+  expect((await f.decide(draft!.id, {})).status).toBe(409);
+  expect((await f.decide(draft!.id, { force: true })).status).toBe(200);
+  expect((await f.house()).capabilities![0]).toMatchObject({ install: "v2", installHosts: [{ host: "registry.npmjs.org", port: 443 }] }); // the bot named none: the owner's stay
+});
+
+test("the key gate counts a host as new only where the scout could not reach it before", async () => {
+  // Its own setup reaches deb.debian.org:80 through its network already; the browser installs from it.
+  const yaml = "    secrets:\n      meter-pass: { value: synthetic, hosts: [meter.example.com], env: METER_PASSWORD, onlyForCapabilities: [meter] }\n    capabilities:\n      - { name: browser, installHosts: [deb.debian.org:80] }\n      - { name: meter, owner: meter, install: v1, network: { any: false, allow: [meter.example.com, deb.debian.org:80] }, keys: [{ secret: meter-pass, via: vm, env: METER_PASSWORD }] }\n    scouts:\n      - { name: meter, description: Readings, capabilities: [browser] }\n";
+  const f = await fixture(yaml);
+  await f.drafts.draft(sibling, { name: "meter", description: "Readings", instructions: "x", reason: "r", setup: { network: { any: false, allow: ["meter.example.com"] } } });
+  const [draft] = await f.drafts.list("work");
+  expect((await (await f.call("GET", `scout-drafts/${draft!.id}`)).json()).keyGate).toBeNull(); // fewer hosts, nothing new
+  // An open scout that gets a limit of its own: the browser's install hosts were on the open internet all along.
+  const g = await fixture("    secrets:\n      dd: { value: synthetic, hosts: [api.datadoghq.eu], env: DD_API_KEY, onlyForCapabilities: [datadog] }\n    capabilities:\n      - { name: browser, installHosts: [deb.debian.org:80] }\n      - { name: datadog, keys: [{ secret: dd, via: vm, env: DD_API_KEY }] }\n    scouts:\n      - { name: meter, description: Readings, capabilities: [browser, datadog] }\n");
+  await g.drafts.draft(sibling, { name: "meter", description: "Readings", instructions: "x", reason: "r", setup: { network: { any: false, allow: ["meter.example.com"] } } });
+  const [narrowed] = await g.drafts.list("work");
+  expect((await (await g.call("GET", `scout-drafts/${narrowed!.id}`)).json()).keyGate?.reasons ?? []).not.toContainEqual(expect.stringContaining("download from new hosts"));
+});
+
 test("a draft of a new scout is stale once the owner made one by that name", async () => {
   const f = await fixture();
   await f.drafts.draft(sibling, meter({ routine: undefined }));

@@ -151,14 +151,15 @@ export function routineFor(scout: Pick<ScoutDefinition, "name" | "capabilities" 
  */
 export interface ScoutBase {
   scout: Record<string, unknown> | null;
-  own: { install: string; network: { any: boolean; allow: string[] }; keys: CapabilityKey[] } | null;
+  /** `installHosts` is missing from a base stored before it was part of one: none, then. */
+  own: { install: string; network: { any: boolean; allow: string[] }; installHosts?: string[]; keys: CapabilityKey[] } | null;
 }
 export function scoutBase(house: { scouts?: readonly ScoutDefinition[]; capabilities?: readonly CapabilityDefinition[] }, name: string): ScoutBase {
   const scout = (house.scouts ?? []).find(each => each.name === name), own = (house.capabilities ?? []).find(each => each.owner === name);
   const kept = scout && Object.fromEntries(Object.entries(scout).filter(([field]) => !["routine", "workspace", "agent", "resources"].includes(field)));
   return JSON.parse(JSON.stringify({
     scout: kept ?? null,
-    own: own ? { install: own.install, network: { any: own.network.any, allow: own.network.allow.map(formatAllowEntry) }, keys: own.keys } : null,
+    own: own ? { install: own.install, network: { any: own.network.any, allow: own.network.allow.map(formatAllowEntry) }, installHosts: (own.installHosts ?? []).map(formatAllowEntry), keys: own.keys } : null,
   }));
 }
 /** What changed from one base to another, in the owner's words; none: the same. */
@@ -169,7 +170,10 @@ export function scoutBaseChanges(then: ScoutBase, now: ScoutBase, name: string):
   else if (then.scout && now.scout) for (const field of new Set([...Object.keys(then.scout), ...Object.keys(now.scout)])) if (!same(then.scout[field], now.scout[field])) changes.push(field);
   if (!then.own && now.own) changes.push("own setup (added)");
   else if (then.own && !now.own) changes.push("own setup (removed)");
-  else if (then.own && now.own) for (const field of ["install", "network", "keys"] as const) if (!same(then.own[field], now.own[field])) changes.push(`own setup's ${field}`);
+  else if (then.own && now.own) {
+    for (const field of ["install", "network", "keys"] as const) if (!same(then.own[field], now.own[field])) changes.push(`own setup's ${field}`);
+    if (!same(then.own.installHosts ?? [], now.own.installHosts ?? [])) changes.push("own setup's install hosts");
+  }
   return changes;
 }
 /** Why a draft made against an older base is not applied as it is. */
