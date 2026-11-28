@@ -1413,10 +1413,11 @@ test("a group without topics: one conversation, no topic operations, no rich rep
   api.push(said("anyone hungry?", 10, { id: 5, is_bot: false, first_name: "Anna", username: "anna" }));
   api.push(said("@fake_bot what is for dinner?", 11));
   api.push(said("ask @fake_botany or mail@fake_bot.com", 12));
+  api.push(said("/menu@fake_bot", 14));
   api.push({ message: { message_id: 13, chat: { id: GROUP }, from: OLEG, migrate_to_chat_id: -1005560911573 } });
-  await waitFor(() => received.length === 3);
+  await waitFor(() => received.length === 4);
   expect(received.map(message => message.kind === "text" ? [message.text, message.tagsBot ?? false] : [])).toEqual([
-    ["anyone hungry?", false], ["@fake_bot what is for dinner?", true], ["ask @fake_botany or mail@fake_bot.com", false],
+    ["anyone hungry?", false], ["@fake_bot what is for dinner?", true], ["ask @fake_botany or mail@fake_bot.com", false], ["/menu", true],
   ]);
   await waitFor(() => lines.some(line => line.includes("supergroup with id -1005560911573")));
   expect(api.calls.some(call => /ForumTopic/.test(call.method))).toBe(false);

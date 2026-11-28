@@ -121,7 +121,7 @@ export function openChannels({ state, events, telegramApi }: ChannelDeps): OpenC
           }
           const address = `${id}/${config.chat}`;
           if (telegramChats.has(address)) {
-            refuse("this Telegram chat is already connected; choose either ordinary DM or threaded mode");
+            refuse("this Telegram chat is already connected in another mode; choose one mode for it");
             continue;
           }
           telegramChats.add(address);

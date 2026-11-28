@@ -8,10 +8,10 @@ import type { DialogAnswer, DialogQuestion } from "../core/dialog";
 import { HouseholdError } from "../core/errors";
 import { headAndTail } from "../core/excerpt";
 import type { Header, HeaderEvent } from "../core/header";
-import { petDisplay, petPlace, petTitle, type House } from "../core/household";
+import { petDisplay, petPlace, petTitle, type House, type Pet } from "../core/household";
 import { expectId } from "../core/ids";
 import { batchable, type ChannelFacts, type ChatRecord, type ChatSender, type Message, type NewChatMessage } from "../core/message";
-import { addressee, namedPet, routedPet } from "../core/routing";
+import { addressee, routedPet } from "../core/routing";
 import { carriesHouseholdTag } from "../core/tags";
 import type { EventLog } from "../infra/event-log";
 import type { ChatIds, ChatRecords, KeyValueStore } from "../infra/sqlite-store";
@@ -100,6 +100,23 @@ type Reaction = Extract<InboundMessage, { kind: "reaction" }>;
 
 /** A message's header but its event: who wrote, the channel and its facts. */
 type Envelope = Omit<Header, "event">;
+
+/** A line of a group's shared conversation that is nobody's in particular (its header says so). */
+const unaddressed = (message: Message) => message.header?.group?.addressed === false;
+
+/**
+ * Whether a message in a group's shared conversation is meant for `pet` by what it is: a press on its post, a reaction
+ * to it, a reply to its line, a message that starts with its name or tags the bot. A reply to a person, an edit of an
+ * unaddressed line or a reaction to someone else's is nobody's in particular, whichever bot the conversation reached.
+ */
+function addressedTo(pet: string, message: InboundMessage, quoted: ChatRecord | undefined, on: ChatRecord | undefined, placed: Pet[]): boolean {
+  const its = (record: ChatRecord | undefined) => record?.sender.kind === "pet" && record.sender.name === pet;
+  if (message.kind === "choice") return true;
+  if (message.kind === "reaction") return its(on);
+  if (message.kind !== "text") return false;
+  return message.interaction === true || message.tagsBot === true || its(quoted) || (!message.relayed && addressee(message.text, placed)?.name === pet);
+}
+
 
 /**
  * One of Household's own posts with choices (a dialog's card): what a press on it does, given the choice's index
@@ -835,10 +852,12 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     const fromChat = messages.filter((message) => message.origin === "chat");
     if (fromChat.length === 0) return;
     let last: Spot | undefined;
-    for (const { ref, place } of fromChat) {
+    for (const message of fromChat) {
+      const { ref, place } = message;
       const at = place === undefined ? undefined : this.channels.spotAt(house, place);
       if (!at) continue;
-      if (ref !== undefined && at.channel) this.seen(house, at.channel, ref);
+      // A group's line that is nobody's in particular gets no mark: the bot may well say nothing to it.
+      if (ref !== undefined && at.channel && !unaddressed(message)) this.seen(house, at.channel, ref);
       // Written in a channel's inbox, it was delivered in the pet's own place of that channel.
       last = this.channels.spotOfMessage(house, pet, place!).spot ?? last;
     }
@@ -866,7 +885,10 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     // Delegated work has no chat-origin place. A worker's own thread still shows its native progress;
     // internal reminders delivered to ordinary pets and scheduled tasks remain silent.
     const internalWork = (found.sideworker || found.scout) && messages.some(message => message.origin === "internal");
-    const spot = at ? this.currentTarget(house, pet).spot : internalWork ? this.currentTarget(house, pet).spot : undefined;
+    // Only lines of a group's that are nobody's in particular: the bot reads, and may say nothing; no live message,
+    // no typing in the group for that.
+    const quiet = messages.every(unaddressed);
+    const spot = quiet ? undefined : at ? this.currentTarget(house, pet).spot : internalWork ? this.currentTarget(house, pet).spot : undefined;
     this.live.start(house, pet, turn, spot?.channel ? { channel: spot.channel, place: { ...spot.place, ...petPlace(found, spot.place.id), kind: spot.place.kind } } : undefined);
   }
 
@@ -983,9 +1005,10 @@ ${escape(item.text)}${item.url ? "\n\n" + escape(item.url) : ""}`, undefined, "h
     // A reaction on a message Household has no record of: where it was is not known.
     const unplaced = message.kind === "reaction" && !on;
     const shown = Object.keys(message.external).length > 0 ? message.external : undefined;
-    // A group's shared conversation (no topic or thread of a bot's): every message reaches a bot, which steps in when it is its turn.
-    const group = audienceOf(knownChannelKinds(), config.kind) === "group" && place.id === inbox.id && pet
-      ? { addressed: namedPet(config, configured.pets, facts)?.name === pet.name || (message.kind === "text" && message.tagsBot === true) } : undefined;
+    // A group's shared conversation (a group without topics: no General to forward): every message reaches a bot, which
+    // steps in when it is its turn. Addressed only by what names it: never by the conversation a message continues.
+    const spec = knownChannelKinds().get(config.kind);
+    const group = spec?.audience === "group" && !spec.forwardsGeneral && place.id === inbox.id && pet ? { addressed: addressedTo(pet.name, message, quoted, on, configured.pets.filter(p => config.pets.includes(p.name))) } : undefined;
     const envelope: Envelope = {
       from: { id: this.records.personId(house, message.from.ref), name: message.from.name, trust },
       channel: this.channels.headerChannel(house, config, shown),

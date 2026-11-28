@@ -211,17 +211,18 @@ export const petNames = (pet: Pet) => [...new Set([pet.name, petTitle(pet), ...(
 export function channelProblems(house: House): string[] {
   const problems: string[] = [];
   const seen = new Set<string>();
-  const privateChats = new Map<string, ChannelKind>();
+  const telegramChats = new Map<string, ChannelKind>();
   house.channels.forEach((channel, index) => {
     const at = `houses.${house.name}.channels[${index}]`;
     const key = channelKey(channel);
     if (seen.has(key)) problems.push(`${at}: the same chat as an earlier channel (${channel.kind}, chat ${channel.chat})`);
     seen.add(key);
-    if (channel.kind === "telegram-private" || channel.kind === "telegram-dm") {
+    // One Telegram chat, one mode: a DM threaded or plain, a group with topics or without.
+    if (channel.kind !== "slack-private") {
       const address = `${channel.token.split(":")[0]}/${channel.chat}`;
-      const previous = privateChats.get(address);
-      if (previous && previous !== channel.kind) problems.push(`${at}: this Telegram chat already uses ${previous}; choose one private-chat mode`);
-      privateChats.set(address, channel.kind);
+      const previous = telegramChats.get(address);
+      if (previous && previous !== channel.kind) problems.push(`${at}: this Telegram chat already uses ${previous}; choose one mode for it`);
+      telegramChats.set(address, channel.kind);
     }
     const listed = new Set<string>();
     for (const name of channel.pets) {

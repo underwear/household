@@ -716,7 +716,8 @@ export class TelegramChannel implements Channel, BotChat {
     const named = /^(\/\w+)@(\w+)(\s[^]*)?$/.exec(message.text);
     if (!named) return message;
     const own = await this.bot.username();
-    return own?.toLowerCase() === named[2]!.toLowerCase() ? { ...message, text: `${named[1]}${named[3] ?? ""}` } : message;
+    // `/cmd@this_bot` is the command, and in a group a tag of this bot too.
+    return own?.toLowerCase() === named[2]!.toLowerCase() ? { ...message, text: `${named[1]}${named[3] ?? ""}`, ...(this.mode === "group-chat" ? { tagsBot: true as const } : {}) } : message;
   }
 
   /**

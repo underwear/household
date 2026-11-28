@@ -35,12 +35,13 @@ export function addressee(text: string, pets: Pet[]): Pet | undefined {
  * channel count (`pets`: the house's). Undefined only for a channel without pets.
  */
 export function routedPet(channel: ChannelConfig, pets: Pet[], facts: RouteFacts): Pet | undefined {
-  return namedPet(channel, pets, facts) ?? pets.find((pet) => channel.pets.includes(pet.name) && pet.name === defaultPet(channel));
-}
-
-/** The pet a message is meant for by what it says or where it is (`routedPet` without the default): none, it is nobody's in particular. */
-export function namedPet(channel: ChannelConfig, pets: Pet[], facts: RouteFacts): Pet | undefined {
   const placed = pets.filter((pet) => channel.pets.includes(pet.name));
   const named = (name: string | undefined) => (name === undefined ? undefined : placed.find((pet) => pet.name === name));
-  return named(facts.about) ?? named(facts.thread) ?? named(facts.quoted) ?? (facts.text === undefined ? undefined : addressee(facts.text, placed));
+  return (
+    named(facts.about) ??
+    named(facts.thread) ??
+    named(facts.quoted) ??
+    (facts.text === undefined ? undefined : addressee(facts.text, placed)) ??
+    named(defaultPet(channel))
+  );
 }

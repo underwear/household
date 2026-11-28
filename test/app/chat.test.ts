@@ -121,27 +121,40 @@ function setup({ records = new SqliteStore(":memory:"), replyChars = 100, stopWa
   return { chat, calls, opened, byKey, lines, records, stops, headers };
 }
 
-test("a group without topics: every message reaches a bot, marked as a group's; addressed when it names the bot or tags it", async () => {
+test("a group without topics: every message reaches a bot, marked as a group's; addressed only by what names that bot", async () => {
   const GROUP: ChannelConfig = { kind: "telegram-plain-group", token: "telegram-work", chat: "-5560911573", pets: ["sibling", "chair"], default: "sibling" };
   const { chat, opened, headers, calls } = setup();
   await chat.setHouses([work([GROUP])]);
   const [channel] = opened;
-  await channel!.say(text("anyone hungry?", { from: { ref: "telegram.user.5" as SenderRef, name: "Anna" } }));
-  await channel!.say(text("Chair, plan dinner"));
-  await channel!.say(text("@fake_bot what is for dinner?", { tagsBot: true }));
-  await channel!.say(text("pasta again"));
-  expect(calls.filter(call => call.startsWith("send ")).map(call => call.split(" ")[1])).toEqual(["work/sibling", "work/chair", "work/sibling", "work/sibling"]);
-  expect(headers.map(header => [header.channel.audience, header.from.trust, header.group])).toEqual([
-    ["group", "guest", { addressed: false }],
-    ["group", "owner", { addressed: true }],
-    ["group", "owner", { addressed: true }],
-    ["group", "owner", { addressed: false }],
+  const anna = { ref: "fake.user.5" as SenderRef, name: "Anna" };
+  await channel!.say(text("anyone hungry?", { from: anna }));                          // nobody's
+  await channel!.say(text("Chair, plan dinner"));                                     // names chair
+  await channel!.say(text("@fake_bot what is for dinner?", { tagsBot: true }));        // tags the bot
+  await channel!.say(text("me!", { replyTo: ref("anyone hungry?") }));                 // a reply to Anna
+  await channel!.say(text("anyone hungry??", { from: anna, edits: ref("anyone hungry?") })); // Anna edits her line
+  await channel!.say({ kind: "reaction", ref: ref("r1"), from: { ref: OWNER, name: "Oleg" }, external: {}, on: ref("anyone hungry?"), added: ["👍"], removed: [] });
+  await chat.reply("work", "chair", "pasta or soup?", [["Pasta", "Soup"]]);
+  const posted = channel!.calls.find(call => call.includes("pasta or soup?"))!;
+  expect(posted).toBeDefined();
+  await channel!.say(text("soup", { replyTo: "post-1" as PostRef }));                  // a reply to chair's line
+  await channel!.press("post-1", 0, "Pasta");                                          // a press on chair's post
+  const sent = headers.map(header => [header.event.kind, header.group?.addressed]);
+  expect(sent).toEqual([
+    ["message", false], ["message", true], ["message", true], ["message", false], ["edit", false], ["reaction", false],
+    ["message", true], ["button", true],
   ]);
-  // A private chat's messages carry no such mark.
+  // A private chat's messages carry no such mark, nor a forum's General forwarded to its default bot.
   const { chat: dm, opened: dmOpened, headers: dmHeaders } = setup();
   await dm.setHouses([work()]);
+  Object.assign(dmOpened[0]!, { forwardsInbox: true, forward: async () => [], answer: async () => [] });
   await dmOpened[0]!.say(text("in General"));
   expect(dmHeaders[0]!.group).toBeUndefined();
+  const FORUM: ChannelConfig = { kind: "telegram-group", token: "telegram-work", chat: "-1001234567890", pets: ["sibling", "chair"], default: "sibling", forwardGeneral: true } as ChannelConfig;
+  const { chat: forum, opened: forumOpened, headers: forumHeaders } = setup();
+  await forum.setHouses([work([FORUM])]);
+  Object.assign(forumOpened[0]!, { forwardsInbox: true, forward: async () => [], answer: async () => [] });
+  await forumOpened[0]!.say(text("in General"));
+  expect(forumHeaders[0]!.group).toBeUndefined();
 });
 
 test("the owner's messages go to their pet under Household's header: General to the default pet, a thread to its pet", async () => {
@@ -447,6 +460,35 @@ test("a reply goes to the pet's place and answers what it was given; it fails, w
   opened[0]!.failure = "sendMessage: 400 Bad Request: chat not found";
   await expect(chat.reply("work", "sibling", "x")).rejects.toThrow("chat not found");
   expect(calls).toEqual(["answered work/chair"]);
+  await chat.stop();
+});
+
+test("a group's line that is nobody's in particular is not marked seen: the bot may say nothing to it", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const group = (addressed: boolean) => ({ ...message().header!, group: { addressed } });
+  chat.onDelivery({ kind: "delivered", house: "work", pet: "sibling", messages: [message({ ref: ref("7"), header: group(false) }), message({ id: 2, ref: ref("8"), header: group(true) })] });
+  await Bun.sleep(30);
+  expect(channel.calls).toEqual(["seen 8"]);
+  await chat.stop();
+});
+
+test("a turn on group lines that are nobody's in particular shows no live message there; one with an addressed line does", async () => {
+  const { chat, opened } = setup();
+  await chat.setHouses([work()]);
+  const channel = opened[0]!;
+  const group = (addressed: boolean) => ({ ...message().header!, group: { addressed } });
+  const step = (turn: string, call: string) =>
+    chat.onDelivery({ kind: "progress", house: "work", pet: "sibling", event: { kind: "tool-started", tool: "Bash", summary: "Reads", action: { kind: "run", says: "Reads" }, turn, call } });
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "t1", messages: [message({ header: group(false) }, INBOX)] });
+  step("t1", "c1");
+  await Bun.sleep(80);
+  expect(channel.statuses).toEqual([]);
+  chat.onDelivery({ kind: "turn-finished", house: "work", pet: "sibling", turn: "t1" });
+  chat.onDelivery({ kind: "turn-started", house: "work", pet: "sibling", turn: "t2", messages: [message({ header: group(false) }, INBOX), message({ id: 2, ref: ref("8"), header: group(true) }, INBOX)] });
+  step("t2", "c2");
+  await waitFor(() => channel.statuses.length === 1);
   await chat.stop();
 });
 
